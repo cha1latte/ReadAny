@@ -9,6 +9,7 @@
  * Falls back to react-native-tcp-socket JS-layer server if the native static
  * server module is not available (e.g. during development without a rebuild).
  */
+import { NativeModules, TurboModuleRegistry } from "react-native";
 import { File } from "expo-file-system";
 
 // --- State ---
@@ -17,6 +18,18 @@ let _tcpServer: any | null = null;
 let _serverUrl: string | null = null;
 let _serverDocRoot: string | null = null;
 let _useNative: boolean | null = null; // null = not yet determined
+
+// @dr.pogodin/react-native-static-server depends on @dr.pogodin/react-native-fs whose
+// JS spec calls TurboModuleRegistry.getEnforcing("ReactNativeFs") at top-level — when
+// the native pod isn't linked, that throws synchronously at module evaluation, escaping
+// any try/catch around a later dynamic import. .get() is the non-throwing variant.
+function _detectNativeFsAvailable(): boolean {
+  try {
+    if (TurboModuleRegistry.get?.("ReactNativeFs")) return true;
+  } catch {}
+  if (NativeModules?.ReactNativeFs) return true;
+  return false;
+}
 
 /**
  * Start a local file server serving files from `docRoot`.
@@ -47,16 +60,19 @@ export async function startFileServer(docRoot: string): Promise<string> {
 
   // Determine which backend to use (once)
   if (_useNative === null) {
-    try {
-      await import("@dr.pogodin/react-native-static-server");
-      _useNative = true;
-    } catch {
-      _useNative = false;
+    _useNative = _detectNativeFsAvailable();
+    if (!_useNative) {
+      console.log("[FileServer] ReactNativeFs native module not registered; using TCP fallback");
     }
   }
 
   if (_useNative) {
-    return _startNativeServer(cleanRoot);
+    try {
+      return await _startNativeServer(cleanRoot);
+    } catch (e) {
+      console.warn("[FileServer] Native server failed to start; falling back to TCP:", e);
+      _useNative = false;
+    }
   }
   return _startTcpFallback(cleanRoot);
 }

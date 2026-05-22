@@ -1,192 +1,324 @@
-# 自定义主题系统 - 改造梳理
+# 自定义主题系统 - 详细设计方案
 
-## 一、当前需要主题变量控制的位置
+## 一、设计理念（参考 Reeden）
 
-### 1. 桌面端 App UI (`packages/app/src/styles/globals.css`)
-**当前方案**: `data-theme` 属性 + CSS 变量  
-**变量数量**: ~27 个颜色变量 + 5 个高亮色 + 阴影/圆角  
-**主题数**: light / dark / sepia（3 套硬编码）
+**核心原则**：主题 = 配色 + 背景图 + 圆角 + 阴影 + 阅读器样式，作为一个整体打包。
 
-需要控制的变量：
-- `--background` / `--foreground` — 页面底色/文字色
-- `--card` / `--card-foreground` — 卡片背景/文字
-- `--primary` / `--primary-foreground` — 主色调/主色上文字
-- `--secondary` / `--secondary-foreground`
-- `--muted` / `--muted-foreground` — 弱调背景/弱调文字
-- `--accent` / `--accent-foreground`
-- `--destructive` / `--destructive-foreground`
-- `--border` / `--input` / `--ring`
-- `--sidebar` / `--sidebar-foreground`
-- `--color-highlight-*`（5 色高亮）
-- **新增**: `--background-image` — App 背景图
-
-### 2. 桌面端阅读器 (`packages/app/src/components/reader/FoliateViewer.tsx`)
-**当前方案**: `THEME_COLORS` 硬编码对象 + inline CSS 注入 iframe  
-**变量**: bg / fg / link（3 个颜色 × 3 个主题）
-
-需要控制的变量：
-- 阅读器背景色
-- 阅读器文字色
-- 链接色
-- **新增**: 阅读器背景图（texture/pattern）
-
-### 3. 移动端 App UI (`packages/app-expo/src/styles/ThemeContext.tsx`)
-**当前方案**: React Context + 硬编码 `ThemeColors` 对象  
-**变量数量**: ~33 个颜色属性 × 3 套主题
-
-需要控制的变量（同 `ThemeColors` 接口）：
-- background / foreground / card / cardForeground
-- muted / mutedForeground / border
-- primary / primaryForeground
-- destructive / accent 等
-- highlight 颜色 × 5
-- stone 渐变 × 5
-- **新增**: backgroundImage
-
-### 4. 移动端阅读器 (`packages/app-expo/assets/reader/reader.template.html`)
-**当前方案**: postMessage 传颜色 → `document.documentElement.style.setProperty`  
-**变量**: `--bg` / `--fg` / `--muted` / `--primary`（4 个）
-
-需要控制的变量：
-- 阅读器背景色 (`--bg`)
-- 阅读器文字色 (`--fg`)
-- 弱调文字 (`--muted`)
-- 主色 (`--primary`)
-- **新增**: 阅读器背景图 (`--reader-bg-image`)
+**架构分层**：
+```
+亮度模式 (light / dark / system)
+    ↓ 决定使用哪套色值
+主题风格 (default / sepia / nord / paper / ocean / dracula / custom...)
+    ↓ 每个风格包含 light + dark 两套色值
+阅读器主题 (跟随 App / 独立设置 / 单本书独立)
+```
 
 ---
 
-## 二、新增功能需求
+## 二、数据结构设计
 
-### A. App 背景图
-- 整个应用的底层背景可以设置图片/纹理
-- 需要半透明的 card/sidebar 来透出背景
-- 移动端和桌面端都要支持
-- 内置几套纹理 + 用户自定义上传
-
-### B. 阅读器背景图
-- 阅读器独立于 App 背景，可以单独设置纸张纹理
-- 比如：牛皮纸、宣纸、羊皮纸等质感
-- 需要同时适配 iframe（桌面）和 WebView（移动端）
-- 注意不能影响文字可读性（需要 overlay 叠加）
-
-### C. 悬浮 Tab 栏
-- 当前 TabBar 是固定在顶部的 absolute 定位
-- 改为悬浮式：毛玻璃效果 + 圆角 + 阴影
-- 在阅读器模式下自动隐藏（hover 顶部唤出）
-- 位置可能调整为居中悬浮（类 Arc 浏览器风格）
-
----
-
-## 三、目标数据结构
+### ThemeDefinition（核心类型）
 
 ```typescript
-interface ThemeDefinition {
+// packages/core/src/theme/theme-schema.ts
+
+export interface ThemeColorSet {
+  // 基础色
+  background: string;
+  foreground: string;
+  // 卡片
+  card: string;
+  cardForeground: string;
+  // 主色
+  primary: string;
+  primaryForeground: string;
+  // 次要色
+  secondary: string;
+  secondaryForeground: string;
+  // 弱调
+  muted: string;
+  mutedForeground: string;
+  // 强调
+  accent: string;
+  accentForeground: string;
+  // 警示
+  destructive: string;
+  destructiveForeground: string;
+  // 边框/输入
+  border: string;
+  input: string;
+  ring: string;
+  // 侧栏
+  sidebar: string;
+  sidebarForeground: string;
+  // Popover
+  popover: string;
+  popoverForeground: string;
+}
+
+export interface ReaderColorSet {
+  background: string;
+  foreground: string;
+  linkColor: string;
+}
+
+export interface HighlightColors {
+  yellow: string;
+  green: string;
+  blue: string;
+  pink: string;
+  purple: string;
+}
+
+export interface ThemeStyle {
+  /** 全局圆角基础值 (rem) */
+  radius: number;
+  /** 卡片阴影强度: 'none' | 'sm' | 'md' | 'lg' */
+  shadowLevel: 'none' | 'sm' | 'md' | 'lg';
+  /** 边框风格: 'none' | 'subtle' | 'normal' */
+  borderStyle: 'none' | 'subtle' | 'normal';
+  /** 背景模糊度（用于毛玻璃效果）*/
+  backdropBlur: number;
+}
+
+export interface ThemeBackground {
+  /** 图片 URL（内置资源路径或用户上传的本地路径）*/
+  image?: string;
+  /** 背景图透明度 0-1 */
+  opacity?: number;
+  /** 背景图模糊度 px */
+  blur?: number;
+  /** 背景图填充模式 */
+  fillMode?: 'cover' | 'contain' | 'tile' | 'stretch';
+}
+
+export interface ThemeDefinition {
   id: string;
   name: string;
+  nameEn?: string;
   builtIn: boolean;
-  
-  // 两套色值：light 和 dark（system 模式下根据系统选择）
+  createdAt: number;
+  updatedAt: number;
+
+  // 两套色值
   light: ThemeColorSet;
   dark: ThemeColorSet;
-  
-  // 阅读器专用（可选，不设置则跟随 App 主题）
+
+  // 阅读器颜色（可选，不设则从 light/dark 推导）
   reader?: {
     light: ReaderColorSet;
     dark: ReaderColorSet;
   };
-  
-  // 背景图（可选）
-  backgroundImage?: {
-    app?: string;       // App 背景图 URL/asset
-    reader?: string;    // 阅读器背景纹理 URL/asset
-    opacity?: number;   // 背景图透明度 0-1
-  };
-}
 
-interface ThemeColorSet {
-  background: string;
-  foreground: string;
-  card: string;
-  cardForeground: string;
-  primary: string;
-  primaryForeground: string;
-  secondary: string;
-  secondaryForeground: string;
-  muted: string;
-  mutedForeground: string;
-  accent: string;
-  accentForeground: string;
-  destructive: string;
-  destructiveForeground: string;
-  border: string;
-  input: string;
-  ring: string;
-  sidebar: string;
-  sidebarForeground: string;
-  // 高亮色
-  highlightYellow: string;
-  highlightGreen: string;
-  highlightBlue: string;
-  highlightPink: string;
-  highlightPurple: string;
-}
+  // 高亮色（可选，不设则用默认）
+  highlights?: HighlightColors;
 
-interface ReaderColorSet {
-  background: string;
-  foreground: string;
-  linkColor: string;
+  // 界面风格
+  style: ThemeStyle;
+
+  // 背景图
+  appBackground?: ThemeBackground;
+  readerBackground?: ThemeBackground;
 }
 ```
 
 ---
 
-## 四、改造步骤（按优先级）
+## 三、现有代码改造点
 
-### Phase 1: 基础架构
-1. `packages/core/src/theme/` — 新建主题模块
-   - `theme-schema.ts` — 类型定义
-   - `builtin-themes.ts` — 内置主题（default, sepia, nord, paper, ocean, forest, rosepine, dracula）
-   - `theme-store.ts` — zustand store（当前主题、亮暗模式、自定义列表）
-2. 迁移现有 3 套主题为 ThemeDefinition 格式
+### 3.1 桌面端 App UI
 
-### Phase 2: 桌面端接入
-3. `globals.css` — 改为动态注入（JS 读取 theme store → 写 CSS 变量）
-4. `FoliateViewer.tsx` — 从 theme store 读阅读器颜色
-5. 设置页 UI — 主题选择器（预览卡片 + 颜色球）
+**文件**: `packages/app/src/styles/globals.css`  
+**当前**: 硬编码 3 套主题（:root / [data-theme="dark"] / [data-theme="sepia"]）  
+**改造**:
+- 保留 `:root` 中的 CSS 变量声明（作为 fallback）
+- 移除 `[data-theme="dark"]` 和 `[data-theme="sepia"]` 硬编码块
+- 新建 `packages/app/src/lib/theme-injector.ts`：从 theme store 读取当前色值 → 批量 `document.documentElement.style.setProperty('--xxx', value)`
+- 新增 CSS 变量:
+  - `--radius` → 从 `theme.style.radius` 读取
+  - `--app-bg-image` → 背景图
+  - `--app-bg-opacity` → 背景图透明度
+  - `--app-bg-blur` → 背景图模糊度
 
-### Phase 3: 移动端接入
-6. `ThemeContext.tsx` — 从 theme store 读颜色
-7. `reader.template.html` — 通过 postMessage 接收完整主题色
+**新增背景图层** (`AppLayout.tsx`):
+```tsx
+{/* 背景图层 — 在所有内容后面 */}
+<div
+  className="fixed inset-0 -z-10 bg-cover bg-center"
+  style={{
+    backgroundImage: theme.appBackground?.image ? `url(${theme.appBackground.image})` : 'none',
+    opacity: theme.appBackground?.opacity ?? 1,
+    filter: `blur(${theme.appBackground?.blur ?? 0}px)`,
+  }}
+/>
+```
 
-### Phase 4: 背景图
-8. App 背景图系统 — 桌面/移动端实现
-9. 阅读器纹理 — iframe/WebView 注入
-10. 内置纹理资源
+### 3.2 桌面端阅读器
 
-### Phase 5: 悬浮 Tab 栏
-11. `TabBar.tsx` 改造 — 居中悬浮 + 毛玻璃 + 圆角
-12. 阅读器模式自动隐藏交互
+**文件**: `packages/app/src/components/reader/FoliateViewer.tsx`  
+**当前**: `THEME_COLORS` 硬编码 3 色 × 3 主题  
+**改造**:
+- 删除 `THEME_COLORS` 常量
+- 从 theme store 读取 `theme.reader?.light/dark` 或从 `theme.light/dark` 推导
+- 阅读器背景纹理：通过 CSS `background-image` 注入到 iframe body
 
-### Phase 6: 自定义 & 社区
-13. 颜色编辑器 UI
-14. 主题导入/导出（JSON）
-15. 可选：主题分享/社区
+```typescript
+function getReaderColors(): { bg: string; fg: string; link: string } {
+  const theme = useThemeStore.getState().currentTheme;
+  const isDark = useThemeStore.getState().resolvedMode === 'dark';
+  const readerColors = theme.reader?.[isDark ? 'dark' : 'light'];
+  if (readerColors) return readerColors;
+  // 从 app 色值推导
+  const colors = isDark ? theme.dark : theme.light;
+  return { bg: colors.background, fg: colors.foreground, link: colors.primary };
+}
+```
+
+### 3.3 移动端 App UI
+
+**文件**: `packages/app-expo/src/styles/ThemeContext.tsx`  
+**当前**: 硬编码 `lightColors` / `darkColors` / `sepiaColors` 对象  
+**改造**:
+- `ThemeProvider` 从 theme store 读取颜色
+- `ThemeColors` 接口保持不变（向后兼容）
+- 颜色值改为动态计算而非硬编码
+
+```typescript
+// ThemeProvider 内部
+const theme = useThemeStore((s) => s.currentTheme);
+const resolvedMode = useThemeStore((s) => s.resolvedMode);
+const colorSet = resolvedMode === 'dark' ? theme.dark : theme.light;
+const colors: ThemeColors = mapColorSetToThemeColors(colorSet, theme.highlights);
+```
+
+### 3.4 移动端阅读器
+
+**文件**: `packages/app-expo/assets/reader/reader.template.html`  
+**当前**: postMessage 传入 `{ background, foreground, muted, primary }`  
+**改造**:
+- 扩展传入字段：加 `linkColor`, `readerBgImage`, `readerBgOpacity`
+- 阅读器 body 支持 `background-image` 设置
+
+### 3.5 悬浮 Tab 栏
+
+**文件**: `packages/app/src/components/layout/TabBar.tsx`  
+**当前**: `h-8 bg-muted` 固定顶部条  
+**改造**:
+```tsx
+// 从固定顶部条 → 居中悬浮胶囊
+<div className={cn(
+  "flex h-9 items-center gap-1 rounded-full",
+  "bg-background/80 backdrop-blur-md",
+  "border border-border/50 shadow-lg",
+  "px-3 mx-auto w-fit",
+  // 过渡动画
+  "transition-all duration-300",
+  isHidden && "-translate-y-full opacity-0"
+)}>
+```
 
 ---
 
-## 五、文件改动清单
+## 四、内置主题列表
 
-| 文件 | 改动 |
-|------|------|
-| `packages/core/src/theme/` (新建) | 主题模块 |
-| `packages/core/src/stores/settings-store.ts` | 集成 theme store |
-| `packages/app/src/styles/globals.css` | 移除硬编码，改为 JS 动态注入 |
-| `packages/app/src/main.tsx` | 启动时应用主题 |
-| `packages/app/src/components/settings/GeneralSettings.tsx` | 主题选择器 UI |
-| `packages/app/src/components/reader/FoliateViewer.tsx` | 读 theme store |
-| `packages/app/src/components/layout/TabBar.tsx` | 悬浮改造 |
-| `packages/app/src/components/layout/AppLayout.tsx` | 背景图层 |
-| `packages/app-expo/src/styles/ThemeContext.tsx` | 从 theme store 读取 |
-| `packages/app-expo/assets/reader/reader.template.html` | 接收完整主题 |
-| `packages/app-expo/src/screens/ProfileScreen.tsx` | 外观设置入口 |
+| ID | 名称 | 类型 | 说明 |
+|---|---|---|---|
+| `default` | Default | 通用 | 当前的 light/dark |
+| `sepia` | Warm Paper | 护眼 | 当前的 sepia（同时有暖色 dark 版） |
+| `nord` | Nord | 冷色 | 北欧蓝调 |
+| `paper` | Paper | 极简 | 纯白/纯黑，无彩色 |
+| `ocean` | Ocean | 冷色 | 深海蓝绿调 |
+| `forest` | Forest | 暖色 | 森林绿调 |
+| `rosepine` | Rosé Pine | 流行 | 社区流行配色 |
+| `dracula` | Dracula | 流行 | 经典暗色主题 |
+
+---
+
+## 五、内置纹理/背景图列表
+
+| ID | 名称 | 适用 | 说明 |
+|---|---|---|---|
+| `paper-light` | 浅色纸张 | App/Reader | 轻微纸张纹理 |
+| `paper-dark` | 深色纸张 | App/Reader | 暗色纸张质感 |
+| `kraft` | 牛皮纸 | Reader | 棕色牛皮纸 |
+| `parchment` | 羊皮纸 | Reader | 古典羊皮纸 |
+| `linen` | 亚麻布 | App | 细腻布纹 |
+| `concrete` | 水泥 | App | 工业风 |
+| `wood` | 木纹 | App | 温暖木纹 |
+
+---
+
+## 六、Theme Store 设计
+
+```typescript
+// packages/core/src/theme/theme-store.ts
+
+interface ThemeState {
+  // 当前选中的主题 ID
+  activeThemeId: string;
+  // 亮暗模式: light | dark | system
+  mode: 'light' | 'dark' | 'system';
+  // 解析后的实际模式（system 会根据系统决定）
+  resolvedMode: 'light' | 'dark';
+  // 当前主题定义（计算属性）
+  currentTheme: ThemeDefinition;
+  // 用户自定义主题列表
+  customThemes: ThemeDefinition[];
+  // 单本书阅读主题覆盖 (bookId → themeId)
+  bookThemeOverrides: Record<string, string>;
+
+  // Actions
+  setTheme: (themeId: string) => void;
+  setMode: (mode: 'light' | 'dark' | 'system') => void;
+  addCustomTheme: (theme: ThemeDefinition) => void;
+  updateCustomTheme: (id: string, updates: Partial<ThemeDefinition>) => void;
+  deleteCustomTheme: (id: string) => void;
+  setBookTheme: (bookId: string, themeId: string | null) => void;
+  exportTheme: (themeId: string) => string; // JSON string
+  importTheme: (json: string) => ThemeDefinition;
+}
+```
+
+---
+
+## 七、实现分 Phase
+
+### Phase 1: 核心架构 + 配色切换（1 周）
+- [ ] `packages/core/src/theme/` 模块：schema + store + builtin themes
+- [ ] 桌面端 theme-injector：动态写入 CSS 变量
+- [ ] 移动端 ThemeContext 对接 theme store
+- [ ] 设置页主题选择器 UI（预览卡片）
+- [ ] 迁移：现有 light/dark/sepia 无感迁移
+
+### Phase 2: 阅读器主题 + 背景图（1 周）
+- [ ] 阅读器从 theme store 读取颜色
+- [ ] App 背景图层实现（桌面 + 移动）
+- [ ] 阅读器背景纹理注入
+- [ ] 内置纹理资源打包
+- [ ] 单本书主题覆盖
+
+### Phase 3: 悬浮 Tab 栏 + 风格参数（1 周）
+- [ ] TabBar 改造为居中悬浮胶囊
+- [ ] 圆角/阴影/边框风格从 theme store 读取
+- [ ] 毛玻璃效果适配
+- [ ] 主题联动（App → Reader 联动开关）
+
+### Phase 4: 自定义 + 导入导出（1 周）
+- [ ] 自定义主题编辑器（颜色选择器 + 实时预览）
+- [ ] 主题导出 JSON / 导入 JSON
+- [ ] 同步：主题配置纳入 WebDAV 同步
+- [ ] 内置 8 个预设主题精调
+
+---
+
+## 八、关键设计决策
+
+1. **护眼（sepia）不再是独立模式** — 它是一个主题风格，同时有 light 和 dark 两个版本。light 版就是现在的护眼色；dark 版是暖黑底 + 米黄字。
+
+2. **阅读器主题可独立也可跟随** — 默认跟随 App 主题，用户可以手动设置"阅读时使用 XX 主题"。还支持单本书独立主题。
+
+3. **背景图和颜色绑定在主题中** — 不是单独的"壁纸"设置，而是主题的一部分。切换主题时背景图一起换。
+
+4. **向后兼容** — 老版本设置的 `readany-theme: "sepia"` 自动映射到新的 `activeThemeId: "sepia"` + `mode: "light"`。
+
+5. **CSS 变量是唯一的注入点** — 所有平台最终都通过 CSS 变量消费颜色（RN 端通过 JS 对象中转，但数据来源是同一个 theme store）。

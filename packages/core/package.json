@@ -43,6 +43,8 @@
     "./reader/*": "./src/reader/*.ts",
     "./stores": "./src/stores/index.ts",
     "./stores/*": "./src/stores/*.ts",
+    "./theme": "./src/theme/index.ts",
+    "./theme/*": "./src/theme/*.ts",
     "./hooks": "./src/hooks/index.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./hooks/reader": "./src/hooks/reader/index.ts",

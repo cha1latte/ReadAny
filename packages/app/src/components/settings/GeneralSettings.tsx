@@ -42,6 +42,7 @@ export function GeneralSettings() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingThemeId, setEditingThemeId] = useState<string | undefined>(undefined);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const [currentLibraryRoot, setCurrentLibraryRoot] = useState("");
   const [defaultLibraryRoot, setDefaultLibraryRoot] = useState("");
@@ -216,11 +217,11 @@ export function GeneralSettings() {
 
         {/* Import Button */}
         <button
-          onClick={() => { setEditingThemeId(undefined); setEditorOpen(true); }}
+          onClick={() => setImportDialogOpen(true)}
           className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <Download className="h-3 w-3" />
-          {t("settings.importTheme", "Import Theme")}
+          {t("settings.importTheme")}
         </button>
       </section>
 
@@ -229,6 +230,12 @@ export function GeneralSettings() {
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         editThemeId={editingThemeId}
+      />
+      {/* Import Dialog */}
+      <ThemeEditorDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        initialImport
       />
 
       {/* Language Section */}

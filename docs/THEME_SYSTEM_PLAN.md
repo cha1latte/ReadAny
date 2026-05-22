@@ -284,30 +284,30 @@ interface ThemeState {
 ## 七、实现分 Phase
 
 ### Phase 1: 核心架构 + 配色切换（1 周）
-- [ ] `packages/core/src/theme/` 模块：schema + store + builtin themes
-- [ ] 桌面端 theme-injector：动态写入 CSS 变量
-- [ ] 移动端 ThemeContext 对接 theme store
-- [ ] 设置页主题选择器 UI（预览卡片）
-- [ ] 迁移：现有 light/dark/sepia 无感迁移
+- [x] `packages/core/src/theme/` 模块：schema + store + builtin themes
+- [x] 桌面端 theme-injector：动态写入 CSS 变量
+- [x] 移动端 ThemeContext 对接 theme store
+- [x] 设置页主题选择器 UI（预览卡片）
+- [x] 迁移：现有 light/dark/sepia 无感迁移
 
 ### Phase 2: 阅读器主题 + 背景图（1 周）
-- [ ] 阅读器从 theme store 读取颜色
-- [ ] App 背景图层实现（桌面 + 移动）
-- [ ] 阅读器背景纹理注入
-- [ ] 内置纹理资源打包
-- [ ] 单本书主题覆盖
+- [x] 阅读器从 theme store 读取颜色
+- [x] App 背景图层实现（桌面 + 移动）
+- [x] 阅读器背景纹理注入
+- [x] 内置纹理资源打包
+- [x] 单本书主题覆盖
 
 ### Phase 3: 悬浮 Tab 栏 + 风格参数（1 周）
-- [ ] TabBar 改造为居中悬浮胶囊
-- [ ] 圆角/阴影/边框风格从 theme store 读取
-- [ ] 毛玻璃效果适配
-- [ ] 主题联动（App → Reader 联动开关）
+- [x] TabBar 改造为居中悬浮胶囊
+- [x] 圆角/阴影/边框风格从 theme store 读取
+- [x] 毛玻璃效果适配
+- [x] 主题联动（App → Reader 联动开关）
 
 ### Phase 4: 自定义 + 导入导出（1 周）
-- [ ] 自定义主题编辑器（颜色选择器 + 实时预览）
-- [ ] 主题导出 JSON / 导入 JSON
+- [x] 自定义主题编辑器（颜色选择器 + 实时预览）
+- [x] 主题导出 JSON / 导入 JSON
 - [ ] 同步：主题配置纳入 WebDAV 同步
-- [ ] 内置 8 个预设主题精调
+- [x] 内置 8 个预设主题精调
 
 ---
 

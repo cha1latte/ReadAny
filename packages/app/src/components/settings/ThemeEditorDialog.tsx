@@ -29,12 +29,14 @@ import { Slider } from "@/components/ui/slider";
 import { applyThemeToDOM } from "@/lib/theme-injector";
 import {
   BUILTIN_THEMES,
+  BUILTIN_TEXTURES,
   generateThemeId,
   useThemeStore,
 } from "@readany/core/theme";
 import type {
   BorderStyle,
   ShadowLevel,
+  ThemeBackground,
   ThemeColorSet,
   ThemeDefinition,
 } from "@readany/core/theme";
@@ -50,9 +52,11 @@ interface Props {
   open: boolean;
   onClose: () => void;
   editThemeId?: string;
+  /** Open directly in import mode */
+  initialImport?: boolean;
 }
 
-type ColorTab = "light" | "dark" | "reader" | "style";
+type ColorTab = "light" | "dark" | "reader" | "style" | "background";
 
 interface ColorField {
   key: keyof ThemeColorSet;
@@ -112,7 +116,7 @@ const COLOR_GROUPS: ColorGroup[] = [
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
+export function ThemeEditorDialog({ open, onClose, editThemeId, initialImport }: Props) {
   const { t } = useTranslation();
   const customThemes = useThemeStore((s) => s.customThemes);
 
@@ -128,7 +132,11 @@ export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
   // Initialize draft when dialog opens
   useEffect(() => {
     if (!open) return;
-    if (editThemeId) {
+    if (initialImport) {
+      setImportMode(true);
+      setStep("pick-base");
+      setDraft(null);
+    } else if (editThemeId) {
       const existing = customThemes.find((th) => th.id === editThemeId);
       if (existing) {
         setDraft(structuredClone(existing));
@@ -230,6 +238,22 @@ export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
 
   const handleNameChange = useCallback((name: string) => {
     setDraft((prev) => (prev ? { ...prev, name, nameEn: name, updatedAt: Date.now() } : prev));
+  }, []);
+
+  const handleAppBackgroundChange = useCallback((updates: Partial<ThemeBackground> | null) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      if (updates === null) return { ...prev, appBackground: undefined, updatedAt: Date.now() };
+      return { ...prev, appBackground: { ...prev.appBackground, ...updates }, updatedAt: Date.now() };
+    });
+  }, []);
+
+  const handleReaderBackgroundChange = useCallback((updates: Partial<ThemeBackground> | null) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      if (updates === null) return { ...prev, readerBackground: undefined, updatedAt: Date.now() };
+      return { ...prev, readerBackground: { ...prev.readerBackground, ...updates }, updatedAt: Date.now() };
+    });
   }, []);
 
   const handleSave = useCallback(() => {
@@ -378,6 +402,7 @@ export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
     { id: "dark", labelKey: "settings.dark" },
     { id: "reader", labelKey: "settings.themeReader" },
     { id: "style", labelKey: "settings.themeStyle" },
+    { id: "background", labelKey: "settings.themeBackground" },
   ];
 
   return (
@@ -530,6 +555,34 @@ export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
               </div>
             </div>
           )}
+
+          {activeTab === "background" && (
+            <div className="space-y-6">
+              {/* App Background */}
+              <div>
+                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("settings.themeAppBackground", "App Background")}
+                </h3>
+                <BackgroundPicker
+                  value={draft.appBackground}
+                  scope="app"
+                  onChange={handleAppBackgroundChange}
+                />
+              </div>
+
+              {/* Reader Background */}
+              <div>
+                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("settings.themeReaderBackground", "Reader Background")}
+                </h3>
+                <BackgroundPicker
+                  value={draft.readerBackground}
+                  scope="reader"
+                  onChange={handleReaderBackgroundChange}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -544,5 +597,122 @@ export function ThemeEditorDialog({ open, onClose, editThemeId }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── BackgroundPicker Sub-Component ─────────────────────────────────────────
+
+function BackgroundPicker({
+  value,
+  scope,
+  onChange,
+}: {
+  value?: ThemeBackground;
+  scope: "app" | "reader";
+  onChange: (updates: Partial<ThemeBackground> | null) => void;
+}) {
+  const { t } = useTranslation();
+  const textures = BUILTIN_TEXTURES.filter((tx) => tx.scope === scope || tx.scope === "both");
+
+  return (
+    <div className="space-y-4">
+      {/* Texture Selection */}
+      <div className="grid grid-cols-4 gap-2">
+        {/* None option */}
+        <button
+          onClick={() => onChange(null)}
+          className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-[10px] transition-all ${
+            !value?.image
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/40"
+          }`}
+        >
+          <div className="flex h-8 w-full items-center justify-center rounded bg-muted">
+            <span className="text-muted-foreground text-[10px]">—</span>
+          </div>
+          <span className="text-muted-foreground">{t("settings.themeShadowNone")}</span>
+        </button>
+        {textures.map((tx) => {
+          const isSelected = value?.image === tx.path;
+          return (
+            <button
+              key={tx.id}
+              onClick={() => onChange({ image: tx.path, opacity: tx.defaultOpacity, fillMode: "cover" })}
+              className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-[10px] transition-all ${
+                isSelected
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/40"
+              }`}
+            >
+              <div
+                className="h-8 w-full rounded bg-muted"
+                style={{
+                  backgroundImage: `url(${tx.path})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              />
+              <span className="truncate text-muted-foreground">{tx.nameEn}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Controls (only visible when a texture is selected) */}
+      {value?.image && (
+        <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+          {/* Opacity */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-foreground">{t("settings.themeOpacity", "Opacity")}</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                {Math.round((value.opacity ?? 0.1) * 100)}%
+              </span>
+            </div>
+            <Slider
+              min={0.02}
+              max={0.5}
+              step={0.02}
+              value={[value.opacity ?? 0.1]}
+              onValueChange={([v]) => onChange({ opacity: v })}
+            />
+          </div>
+          {/* Blur */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-foreground">{t("settings.themeBlur", "Blur")}</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                {value.blur ?? 0}px
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={16}
+              step={1}
+              value={[value.blur ?? 0]}
+              onValueChange={([v]) => onChange({ blur: v })}
+            />
+          </div>
+          {/* Fill Mode */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-foreground">{t("settings.themeFillMode", "Fill Mode")}</span>
+            <Select
+              value={value.fillMode ?? "cover"}
+              onValueChange={(v) => onChange({ fillMode: v as ThemeBackground["fillMode"] })}
+            >
+              <SelectTrigger className="w-24 h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cover">Cover</SelectItem>
+                <SelectItem value="contain">Contain</SelectItem>
+                <SelectItem value="tile">Tile</SelectItem>
+                <SelectItem value="stretch">Stretch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

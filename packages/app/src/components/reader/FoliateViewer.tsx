@@ -2277,6 +2277,21 @@ function getRendererStyles(settings: ViewSettings, theme: AppTheme): string {
   const fgColor = colors.fg;
   const linkColor = colors.link;
 
+  // Reader background texture from theme store
+  const readerBg = useThemeStore.getState().getReaderBackground();
+  let bgImageCSS = "";
+  if (readerBg?.image) {
+    const fillModeMap: Record<string, string> = { cover: "cover", contain: "contain", tile: "auto", stretch: "100% 100%" };
+    const size = fillModeMap[readerBg.fillMode ?? "cover"] ?? "cover";
+    const repeat = readerBg.fillMode === "tile" ? "repeat" : "no-repeat";
+    bgImageCSS = `
+  background-image: url('${readerBg.image}');
+  background-size: ${size};
+  background-position: center;
+  background-repeat: ${repeat};
+  background-blend-mode: multiply;`;
+  }
+
   // Get font theme
   const fontTheme = getFontTheme(settings.fontTheme);
 
@@ -2308,7 +2323,7 @@ html, body {
   font-family: var(--readany-font-family) !important;
   font-size: ${settings.fontSize}px !important;
   -webkit-text-size-adjust: none;
-  text-size-adjust: none;
+  text-size-adjust: none;${bgImageCSS}
 }
 
 body *:not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *) {

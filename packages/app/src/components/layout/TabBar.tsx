@@ -1,14 +1,16 @@
 import { evictBlobCache } from "@/components/reader/ReaderView";
 import { DesktopWindowControls } from "@/components/layout/DesktopWindowControls";
 /**
- * TabBar — draggable tab bar
- * macOS: native traffic lights (left), can optionally preview custom controls on the right
- * Windows/Linux: custom window controls (right), system decorations disabled in Tauri setup
+ * TabBar — floating capsule tab bar with backdrop blur.
+ *
+ * macOS: native traffic lights (left), tabs in center capsule
+ * Windows/Linux: custom window controls (right), tabs in center capsule
  */
 import { type Tab, useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSyncStore } from "@/stores/sync-store";
+import { useThemeStore } from "@readany/core/theme";
 import { BookOpen, Home, MessageSquare, NotebookPen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -60,6 +62,7 @@ export function TabBar() {
   const { isMac, isTauri } = usePlatformInfo();
   const isFullscreen = useIsFullscreen();
   const headerRef = useRef<HTMLDivElement | null>(null);
+  const backdropBlur = useThemeStore((s) => s.getCurrentTheme().style.backdropBlur);
 
   const visibleTabs = tabs.filter((t) => t.type !== "home");
 
@@ -82,13 +85,13 @@ export function TabBar() {
   return (
     <div
       ref={headerRef}
-      className="flex h-8 shrink-0 select-none items-center border-neutral-200 bg-muted"
+      className="flex h-8 shrink-0 select-none items-center"
     >
-      {/* macOS: space for native traffic lights (hidden in reader mode) */}
+      {/* macOS: space for native traffic lights */}
       <div className="flex h-full shrink-0 items-center" style={{ paddingLeft: (isMac && !isFullscreen) ? 68 : 4 }}>
         <button
           type="button"
-          className="flex items-center justify-center rounded-md p-1 text-neutral-500 transition-colors hover:bg-neutral-200/60 hover:text-neutral-800"
+          className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           style={NO_DRAG_STYLE}
           data-no-window-drag
           onClick={() => setActiveTab("home")}
@@ -97,22 +100,27 @@ export function TabBar() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div
-        className="flex h-full flex-1 items-center gap-0.5 overflow-x-auto px-1"
-      >
-        {visibleTabs.map((tab) => (
-          <TabItem
-            key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            onActivate={() => setActiveTab(tab.id)}
-            onClose={() => handleTabClose(tab.id)}
-          />
-        ))}
+      {/* Floating Capsule Tabs */}
+      <div className="flex h-full flex-1 items-center justify-center px-2">
+        {visibleTabs.length > 0 && (
+          <div
+            className="flex h-7 items-center gap-0.5 rounded-full border border-border/50 bg-background/80 px-1.5 shadow-sm"
+            style={{ backdropFilter: `blur(${backdropBlur}px)`, WebkitBackdropFilter: `blur(${backdropBlur}px)` }}
+          >
+            {visibleTabs.map((tab) => (
+              <TabItem
+                key={tab.id}
+                tab={tab}
+                isActive={tab.id === activeTabId}
+                onActivate={() => setActiveTab(tab.id)}
+                onClose={() => handleTabClose(tab.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Desktop: custom window controls on right; macOS keeps native traffic lights only */}
+      {/* Desktop: custom window controls on right */}
       {isTauri && <DesktopWindowControls headerRef={headerRef} />}
     </div>
   );
@@ -133,24 +141,24 @@ function TabItem({
 
   return (
     <div
-      className={`group flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-xs transition-all ${
+      className={`group flex h-5.5 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-all duration-200 ${
         isActive
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+          ? "bg-primary/10 text-foreground shadow-xs"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       }`}
       style={NO_DRAG_STYLE}
       data-no-window-drag
       onClick={onActivate}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[120px] truncate">{tab.title}</span>
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="max-w-[100px] truncate">{tab.title}</span>
       <button
         type="button"
-        className="ml-0.5 hidden h-4 w-4 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-neutral-200/80 hover:text-foreground group-hover:flex"
+        className="ml-0.5 hidden h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:flex"
         data-no-window-drag
         onClick={(e) => { e.stopPropagation(); onClose(); }}
       >
-        <X className="h-3 w-3" />
+        <X className="h-2.5 w-2.5" />
       </button>
     </div>
   );

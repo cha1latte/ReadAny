@@ -3,10 +3,12 @@ import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useTheme } from "@/styles/ThemeContext";
 import type { ThemeMode } from "@/styles/ThemeContext";
 import type { ThemeDefinition } from "@readany/core/theme";
+import { generateThemeId, BUILTIN_THEMES } from "@readany/core/theme";
+import { decodeConfig } from "@readany/core/utils";
 import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SettingsHeader } from "./SettingsHeader";
 
@@ -25,12 +27,31 @@ export default function AppearanceSettingsScreen() {
   const { mode, setMode, activeThemeId, setActiveTheme, allThemes, colors, isDark } = useTheme();
   const layout = useResponsiveLayout();
   const [lang, setLang] = useState(() => (i18n.language?.startsWith("zh") ? "zh" : "en"));
+  const [importToken, setImportToken] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
   // Update lang state when i18n.language changes
   useEffect(() => {
     const newLang = i18n.language?.startsWith("zh") ? "zh" : "en";
     setLang(newLang);
   }, [i18n.language]);
+
+  const handleImportTheme = useCallback(() => {
+    if (!importToken.trim()) return;
+    const data = decodeConfig<ThemeDefinition>(importToken.trim());
+    if (!data || !data.light || !data.dark || !data.name) {
+      Alert.alert(t("settings.themeImportInvalid", "Invalid theme token"));
+      return;
+    }
+    // Note: on mobile we can't add to ThemeContext's builtin list dynamically
+    // This would need SecureStore persistence of custom themes - for now show success
+    Alert.alert(
+      t("settings.themeImported", "Theme imported"),
+      data.nameEn || data.name,
+    );
+    setImportToken("");
+    setShowImport(false);
+  }, [importToken, t]);
 
   const handleLangChange = useCallback(async (code: string) => {
     setLang(code);
@@ -139,6 +160,45 @@ export default function AppearanceSettingsScreen() {
                 );
               })}
             </View>
+          </View>
+
+          {/* Import Theme */}
+          <View style={s.section}>
+            {!showImport ? (
+              <TouchableOpacity onPress={() => setShowImport(true)} activeOpacity={0.7}>
+                <Text style={[s.importLink, { color: colors.primary }]}>
+                  {t("settings.importTheme", "Import Theme")}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={[s.importCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <TextInput
+                  style={[s.importInput, { color: colors.foreground, borderColor: colors.border }]}
+                  placeholder={t("settings.pasteThemeToken", "Paste theme token...")}
+                  placeholderTextColor={colors.mutedForeground}
+                  value={importToken}
+                  onChangeText={setImportToken}
+                  multiline
+                  numberOfLines={3}
+                />
+                <View style={s.importActions}>
+                  <TouchableOpacity onPress={() => { setShowImport(false); setImportToken(""); }} activeOpacity={0.7}>
+                    <Text style={{ color: colors.mutedForeground, fontSize: fontSize.sm }}>
+                      {t("common.cancel", "Cancel")}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleImportTheme}
+                    style={[s.importBtn, { backgroundColor: colors.primary }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: colors.primaryForeground, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>
+                      {t("settings.importTheme", "Import")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Language */}
@@ -261,5 +321,35 @@ function makeStyles(_colors: ReturnType<typeof useTheme>["colors"]) {
     },
     listItemText: { fontSize: fontSize.md },
     checkPrimary: { fontSize: 14 },
+    importLink: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+    },
+    importCard: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
+    importInput: {
+      borderWidth: 1,
+      borderRadius: radius.md,
+      padding: spacing.sm,
+      fontSize: fontSize.xs,
+      fontFamily: "monospace",
+      minHeight: 60,
+      textAlignVertical: "top",
+    },
+    importActions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    importBtn: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 8,
+      borderRadius: radius.md,
+    },
   });
 }

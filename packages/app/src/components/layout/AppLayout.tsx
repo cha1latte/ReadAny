@@ -31,6 +31,7 @@ import { useLibraryStore } from "@/stores/library-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
 import { useFontStore } from "@readany/core/stores";
+import { useThemeStore } from "@readany/core/theme";
 import { BookOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -315,6 +316,8 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-muted">
+      {/* App Background Image Layer */}
+      <AppBackgroundLayer />
       {_hasHydrated && <OnboardingModal />}
       <div
         data-tab-bar
@@ -424,5 +427,34 @@ function HibernatedPlaceholder({
         {t("reader.resumeReading") || "Resume Reading"}
       </button>
     </div>
+  );
+}
+
+
+// ─── App Background Image Layer ─────────────────────────────────────────────
+
+function AppBackgroundLayer() {
+  const appBackground = useThemeStore((s) => s.getAppBackground());
+  if (!appBackground?.image) return null;
+
+  const fillModeMap: Record<string, string> = {
+    cover: "cover",
+    contain: "contain",
+    tile: "auto",
+    stretch: "100% 100%",
+  };
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-0 -z-10"
+      style={{
+        backgroundImage: `url(${appBackground.image})`,
+        backgroundSize: fillModeMap[appBackground.fillMode ?? "cover"] ?? "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: appBackground.fillMode === "tile" ? "repeat" : "no-repeat",
+        opacity: appBackground.opacity ?? 0.15,
+        filter: appBackground.blur ? `blur(${appBackground.blur}px)` : undefined,
+      }}
+    />
   );
 }

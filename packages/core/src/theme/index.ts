@@ -20,5 +20,8 @@ export { DEFAULT_HIGHLIGHTS, DEFAULT_STYLE, generateThemeId } from "./theme-sche
 
 export { BUILTIN_THEMES, getBuiltinTheme, getDefaultTheme } from "./builtin-themes";
 
+export { BUILTIN_TEXTURES, getTextureById } from "./builtin-textures";
+export type { TexturePreset } from "./builtin-textures";
+
 export { useThemeStore } from "./theme-store";
 export type { ThemeState } from "./theme-store";

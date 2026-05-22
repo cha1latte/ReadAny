@@ -1,8 +1,9 @@
 import { DarkModeSvg } from "@/components/DarkModeSvg";
 import { type ThemeMode, useTheme } from "@/styles/ThemeContext";
+import type { ThemeDefinition } from "@readany/core/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Coffee, Moon, Sun } from "lucide-react-native";
+import { Moon, Sun } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { SlideInRight } from "react-native-reanimated";
@@ -15,13 +16,13 @@ type NavProp = NativeStackNavigationProp<OnboardingStackParamList, "Appearance">
 export function AppearancePage() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavProp>();
-  const { mode: currentTheme, setMode: setTheme, colors, isDark } = useTheme();
+  const { mode, setMode, activeThemeId, setActiveTheme, allThemes, colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const handleNext = () => navigation.navigate("AI");
   const handlePrev = () => navigation.goBack();
 
-  const themes: { id: ThemeMode; name: string; icon: React.ReactNode }[] = [
+  const modes: { id: ThemeMode; name: string; icon: React.ReactNode }[] = [
     {
       id: "light",
       name: t("settings.light", "Light"),
@@ -31,11 +32,6 @@ export function AppearancePage() {
       id: "dark",
       name: t("settings.dark", "Dark"),
       icon: <Moon size={24} color={colors.foreground} />,
-    },
-    {
-      id: "sepia",
-      name: t("settings.sepia", "Sepia"),
-      icon: <Coffee size={24} color={colors.foreground} />,
     },
   ];
 
@@ -73,18 +69,19 @@ export function AppearancePage() {
           </View>
 
           <View style={styles.grid}>
+            {/* Mode Toggle */}
             <View
               style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
               <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>
-                {t("settings.theme", "Theme")}
+                {t("settings.themeMode", "Mode")}
               </Text>
-              <View style={styles.themeGrid}>
-                {themes.map((theme) => {
-                  const isActive = currentTheme === theme.id;
+              <View style={styles.modeGrid}>
+                {modes.map((m) => {
+                  const isActive = mode === m.id;
                   return (
                     <Pressable
-                      key={theme.id}
+                      key={m.id}
                       style={[
                         styles.themeBtn,
                         {
@@ -93,16 +90,16 @@ export function AppearancePage() {
                         },
                         isActive && styles.themeBtnActive,
                       ]}
-                      onPress={() => setTheme(theme.id)}
+                      onPress={() => setMode(m.id)}
                     >
-                      <View style={{ marginBottom: 6 }}>{theme.icon}</View>
+                      <View style={{ marginBottom: 6 }}>{m.icon}</View>
                       <Text
                         style={[
                           styles.themeName,
                           { color: isActive ? colors.primary : colors.foreground },
                         ]}
                       >
-                        {theme.name}
+                        {m.name}
                       </Text>
                     </Pressable>
                   );
@@ -110,6 +107,48 @@ export function AppearancePage() {
               </View>
             </View>
 
+            {/* Theme Selection */}
+            <View
+              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>
+                {t("settings.theme", "Theme")}
+              </Text>
+              <View style={styles.themeSelectionGrid}>
+                {allThemes.map((theme: ThemeDefinition) => {
+                  const previewColors = isDark ? theme.dark : theme.light;
+                  const isActive = activeThemeId === theme.id;
+                  return (
+                    <Pressable
+                      key={theme.id}
+                      style={[
+                        styles.themePreviewBtn,
+                        {
+                          borderColor: isActive ? colors.primary : colors.border,
+                          backgroundColor: isActive ? `${colors.primary}10` : "transparent",
+                        },
+                      ]}
+                      onPress={() => setActiveTheme(theme.id)}
+                    >
+                      <View
+                        style={[styles.colorPreview, { backgroundColor: previewColors.background }]}
+                      >
+                        <View style={[styles.colorDot, { backgroundColor: previewColors.primary }]} />
+                        <View style={[styles.colorDot, { backgroundColor: previewColors.muted }]} />
+                      </View>
+                      <Text
+                        style={[styles.themePreviewName, { color: isActive ? colors.primary : colors.foreground }]}
+                        numberOfLines={1}
+                      >
+                        {theme.nameEn || theme.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Language */}
             <View
               style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
@@ -220,7 +259,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 12,
   },
-  themeGrid: { flexDirection: "row", gap: 8 },
+  modeGrid: { flexDirection: "row", gap: 8 },
   themeBtn: {
     flex: 1,
     alignItems: "center",
@@ -236,6 +275,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   themeName: { fontSize: 13, fontWeight: "500" },
+  themeSelectionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  themePreviewBtn: {
+    width: "23%",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1.5,
+  },
+  colorPreview: {
+    width: "100%",
+    height: 24,
+    borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    marginBottom: 4,
+  },
+  colorDot: { width: 10, height: 10, borderRadius: 3 },
+  themePreviewName: { fontSize: 10, fontWeight: "500", textAlign: "center" },
   langGrid: { gap: 8 },
   langBtn: {
     flexDirection: "row",

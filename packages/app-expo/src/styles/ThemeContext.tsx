@@ -1,13 +1,16 @@
+import { BUILTIN_THEMES } from "@readany/core/theme";
+import type { ThemeColorSet, ThemeDefinition } from "@readany/core/theme";
 import * as SecureStore from "expo-secure-store";
 /**
- * ThemeContext — provides light / dark / sepia theme support matching Tauri mobile.
+ * ThemeContext — provides theme support for React Native / Expo.
  *
- * oklch values from globals.css are converted to hex.
+ * Reads color definitions from @readany/core/theme builtin themes.
+ * Persistence is local (SecureStore), NOT synced cross-platform.
  */
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-export type ThemeMode = "light" | "dark" | "sepia";
+export type ThemeMode = "light" | "dark";
 
 export interface ThemeColors {
   background: string;
@@ -43,31 +46,13 @@ export interface ThemeColors {
   stone500: string;
 }
 
-// ── Light theme (from :root in globals.css) ──
-const lightColors: ThemeColors = {
-  background: "#faf9f5",
-  foreground: "#1c1c1e",
-  card: "#ffffff",
-  cardForeground: "#1c1c1e",
-  muted: "#f2f1ed",
-  mutedForeground: "#7c7c82",
-  border: "#e5e5e5",
-  primary: "#2d2d30",
-  primaryForeground: "#fafafa",
-  destructive: "#e53935",
-  destructiveForeground: "#fafafa",
-  accent: "#f5f5f5",
-  accentForeground: "#2d2d30",
+// Functional & stone colors that don't come from the theme definition
+const FUNCTIONAL_COLORS = {
   indigo: "#6366f1",
   emerald: "#10b981",
   amber: "#f59e0b",
   blue: "#3b82f6",
   violet: "#7c3aed",
-  highlightYellow: "#fef08a",
-  highlightGreen: "#bbf7d0",
-  highlightBlue: "#bfdbfe",
-  highlightPink: "#fbcfe8",
-  highlightPurple: "#e9d5ff",
   stone100: "#f5f5f4",
   stone200: "#e7e5e4",
   stone300: "#d6d3d1",
@@ -75,105 +60,104 @@ const lightColors: ThemeColors = {
   stone500: "#78716c",
 };
 
-// ── Dark theme (from .dark in globals.css) ──
-const darkColors: ThemeColors = {
-  background: "#1c1c1e",
-  foreground: "#e8e8ed",
-  card: "#2c2c2e",
-  cardForeground: "#e8e8ed",
-  muted: "#333336",
-  mutedForeground: "#7c7c82",
-  border: "#3d3d40",
-  primary: "#e0e0e6",
-  primaryForeground: "#1c1c1e",
-  destructive: "#e53935",
-  destructiveForeground: "#ffffff",
-  accent: "#363638",
-  accentForeground: "#e0e0e6",
-  indigo: "#6366f1",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  blue: "#3b82f6",
-  violet: "#a78bfa",
+// Default highlight colors for light / dark
+const LIGHT_HIGHLIGHTS = {
+  highlightYellow: "#fef08a",
+  highlightGreen: "#bbf7d0",
+  highlightBlue: "#bfdbfe",
+  highlightPink: "#fbcfe8",
+  highlightPurple: "#e9d5ff",
+};
+
+const DARK_HIGHLIGHTS = {
   highlightYellow: "#854d0e",
   highlightGreen: "#166534",
   highlightBlue: "#1e40af",
   highlightPink: "#9d174d",
   highlightPurple: "#6b21a8",
-  stone100: "#f5f5f4",
-  stone200: "#e7e5e4",
-  stone300: "#d6d3d1",
-  stone400: "#a8a29e",
-  stone500: "#78716c",
 };
 
-// ── Sepia theme (from [data-theme="sepia"] in globals.css) ──
-const sepiaColors: ThemeColors = {
-  background: "#f0e6d2",
-  foreground: "#3d2b1f",
-  card: "#f5ebd7",
-  cardForeground: "#3d2b1f",
-  muted: "#e6d9c3",
-  mutedForeground: "#7a6652",
-  border: "#d4c4a8",
-  primary: "#6b4c2a",
-  primaryForeground: "#f5ebd7",
-  destructive: "#e53935",
-  destructiveForeground: "#fafafa",
-  accent: "#e6d9c3",
-  accentForeground: "#4a3728",
-  indigo: "#6366f1",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  blue: "#3b82f6",
-  violet: "#7c3aed",
-  highlightYellow: "#fef08a",
-  highlightGreen: "#bbf7d0",
-  highlightBlue: "#bfdbfe",
-  highlightPink: "#fbcfe8",
-  highlightPurple: "#e9d5ff",
-  stone100: "#f5f5f4",
-  stone200: "#e7e5e4",
-  stone300: "#d6d3d1",
-  stone400: "#a8a29e",
-  stone500: "#78716c",
-};
-
-const THEME_MAP: Record<ThemeMode, ThemeColors> = {
-  light: lightColors,
-  dark: darkColors,
-  sepia: sepiaColors,
-};
+/** Convert a ThemeColorSet to mobile ThemeColors */
+function colorSetToThemeColors(colorSet: ThemeColorSet, mode: ThemeMode): ThemeColors {
+  const highlights = mode === "dark" ? DARK_HIGHLIGHTS : LIGHT_HIGHLIGHTS;
+  return {
+    background: colorSet.background,
+    foreground: colorSet.foreground,
+    card: colorSet.card,
+    cardForeground: colorSet.cardForeground,
+    muted: colorSet.muted,
+    mutedForeground: colorSet.mutedForeground,
+    border: colorSet.border,
+    primary: colorSet.primary,
+    primaryForeground: colorSet.primaryForeground,
+    destructive: colorSet.destructive,
+    destructiveForeground: colorSet.destructiveForeground,
+    accent: colorSet.accent,
+    accentForeground: colorSet.accentForeground,
+    ...FUNCTIONAL_COLORS,
+    ...highlights,
+  };
+}
 
 const STORAGE_KEY = "readany-theme";
+const STORAGE_THEME_ID_KEY = "readany-theme-id";
+
+export interface ReaderColors {
+  background: string;
+  foreground: string;
+  linkColor: string;
+}
 
 interface ThemeContextValue {
   mode: ThemeMode;
+  activeThemeId: string;
   colors: ThemeColors;
+  readerColors: ReaderColors;
+  allThemes: ThemeDefinition[];
   setMode: (mode: ThemeMode) => void;
+  setActiveTheme: (themeId: string) => void;
   isDark: boolean;
 }
 
+const defaultTheme = BUILTIN_THEMES.find((t) => t.id === "sepia") ?? BUILTIN_THEMES[0];
+
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: "sepia",
-  colors: sepiaColors,
+  mode: "light",
+  activeThemeId: "sepia",
+  colors: colorSetToThemeColors(defaultTheme.light, "light"),
+  readerColors: defaultTheme.reader?.light ?? { background: "#ffffff", foreground: "#1a1a1a", linkColor: "#2563eb" },
+  allThemes: BUILTIN_THEMES,
   setMode: () => {},
+  setActiveTheme: () => {},
   isDark: false,
 });
 
 export function ThemeProvider({
   children,
-  initialMode = "sepia",
+  initialMode = "light",
 }: {
   children: ReactNode;
   initialMode?: ThemeMode;
 }) {
   const [mode, setModeState] = useState<ThemeMode>(initialMode);
+  const [activeThemeId, setActiveThemeId] = useState("sepia");
 
   useEffect(() => {
-    SecureStore.getItemAsync(STORAGE_KEY).then((saved) => {
-      if (saved === "light" || saved === "dark" || saved === "sepia") {
-        setModeState(saved);
+    Promise.all([
+      SecureStore.getItemAsync(STORAGE_KEY),
+      SecureStore.getItemAsync(STORAGE_THEME_ID_KEY),
+    ]).then(([savedMode, savedThemeId]) => {
+      if (savedMode === "light" || savedMode === "dark") {
+        setModeState(savedMode);
+      } else if (savedMode === "sepia") {
+        // Migration: old "sepia" mode → light mode + sepia theme
+        setModeState("light");
+        setActiveThemeId("sepia");
+        SecureStore.setItemAsync(STORAGE_KEY, "light");
+        SecureStore.setItemAsync(STORAGE_THEME_ID_KEY, "sepia");
+      }
+      if (savedThemeId && BUILTIN_THEMES.some((t) => t.id === savedThemeId)) {
+        setActiveThemeId(savedThemeId);
       }
     });
   }, []);
@@ -183,12 +167,29 @@ export function ThemeProvider({
     SecureStore.setItemAsync(STORAGE_KEY, m);
   }, []);
 
-  const value: ThemeContextValue = {
-    mode,
-    colors: THEME_MAP[mode],
-    setMode,
-    isDark: mode === "dark",
-  };
+  const setActiveTheme = useCallback((themeId: string) => {
+    setActiveThemeId(themeId);
+    SecureStore.setItemAsync(STORAGE_THEME_ID_KEY, themeId);
+  }, []);
+
+  const value: ThemeContextValue = useMemo(() => {
+    const themeDef = BUILTIN_THEMES.find((t) => t.id === activeThemeId) ?? defaultTheme;
+    const colorSet = mode === "dark" ? themeDef.dark : themeDef.light;
+    // Derive reader colors: from theme.reader if present, otherwise fallback to main colors
+    const readerColorSet = themeDef.reader
+      ? (mode === "dark" ? themeDef.reader.dark : themeDef.reader.light)
+      : { background: colorSet.background, foreground: colorSet.foreground, linkColor: colorSet.primary };
+    return {
+      mode,
+      activeThemeId,
+      colors: colorSetToThemeColors(colorSet, mode),
+      readerColors: readerColorSet,
+      allThemes: BUILTIN_THEMES,
+      setMode,
+      setActiveTheme,
+      isDark: mode === "dark",
+    };
+  }, [mode, activeThemeId, setMode, setActiveTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
@@ -198,7 +199,25 @@ export function useTheme(): ThemeContextValue {
 }
 
 /**
- * Helper: get the initial theme synchronously for static styles.
- * Components that need reactive theme should use useTheme() instead.
+ * Backward-compatible exports.
+ * Components that used lightColors/darkColors/sepiaColors can still import them.
  */
+const lightColors: ThemeColors = colorSetToThemeColors(
+  (BUILTIN_THEMES.find((t) => t.id === "default") ?? BUILTIN_THEMES[0]).light,
+  "light",
+);
+const darkColors: ThemeColors = colorSetToThemeColors(
+  (BUILTIN_THEMES.find((t) => t.id === "default") ?? BUILTIN_THEMES[0]).dark,
+  "dark",
+);
+const sepiaColors: ThemeColors = colorSetToThemeColors(
+  (BUILTIN_THEMES.find((t) => t.id === "sepia") ?? BUILTIN_THEMES[0]).light,
+  "light",
+);
+const THEME_MAP: Record<string, ThemeColors> = {
+  light: lightColors,
+  dark: darkColors,
+  sepia: sepiaColors,
+};
+
 export { lightColors, darkColors, sepiaColors, THEME_MAP };

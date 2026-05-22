@@ -1,5 +1,6 @@
 import { type SettingsTab, useAppStore } from "@/stores/app-store";
 import { cn } from "@readany/core/utils";
+import { useThemeStore } from "@readany/core/theme";
 import {
   BookOpen,
   Brain,
@@ -236,8 +237,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         category: "actions",
         icon: Sun,
         action: () => {
-          document.documentElement.setAttribute("data-theme", "light");
-          localStorage.setItem("readany-theme", "light");
+          useThemeStore.getState().setMode("light");
           onClose();
         },
       },
@@ -248,20 +248,18 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         category: "actions",
         icon: Moon,
         action: () => {
-          document.documentElement.setAttribute("data-theme", "dark");
-          localStorage.setItem("readany-theme", "dark");
+          useThemeStore.getState().setMode("dark");
           onClose();
         },
       },
       {
-        id: "action.theme.sepia",
-        label: `${t("settings.theme")}: ${t("settings.sepia")}`,
-        keywords: ["theme", "sepia", "eye", "warm"],
+        id: "action.theme.system",
+        label: `${t("settings.theme")}: ${t("settings.system")}`,
+        keywords: ["theme", "system", "auto"],
         category: "actions",
         icon: Sun,
         action: () => {
-          document.documentElement.setAttribute("data-theme", "sepia");
-          localStorage.setItem("readany-theme", "sepia");
+          useThemeStore.getState().setMode("system");
           onClose();
         },
       },

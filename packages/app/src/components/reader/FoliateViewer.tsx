@@ -31,24 +31,27 @@ import { marked } from "marked";
  * which is created by DocumentLoader.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useThemeStore } from "@readany/core/theme";
 
-type AppTheme = "light" | "dark" | "sepia";
-
-const THEME_COLORS: Record<AppTheme, { bg: string; fg: string; link: string }> = {
-  light: { bg: "#ffffff", fg: "#1a1a1a", link: "#2563eb" },
-  dark: { bg: "#121212", fg: "#f5f5f5", link: "#60a5fa" },
-  sepia: { bg: "#f0e6d2", fg: "#3d2b1f", link: "#6b4c2a" },
-};
-
-function getAppTheme(): AppTheme {
-  if (typeof document === "undefined") return "dark";
-  const theme = document.documentElement.getAttribute("data-theme") as AppTheme | null;
-  return theme && THEME_COLORS[theme] ? theme : "dark";
+function getReaderColorsFromStore(): { bg: string; fg: string; link: string } {
+  const store = useThemeStore.getState();
+  const readerColors = store.getReaderColors();
+  return {
+    bg: readerColors.background,
+    fg: readerColors.foreground,
+    link: readerColors.linkColor,
+  };
 }
 
-function getThemeColors(theme: AppTheme) {
-  return THEME_COLORS[theme];
+function getAppTheme(): "light" | "dark" {
+  return useThemeStore.getState().resolvedMode;
 }
+
+function getThemeColors(_theme?: string) {
+  return getReaderColorsFromStore();
+}
+
+type AppTheme = "light" | "dark";
 
 function getActiveContentDocument(view: FoliateView | null): Document | null {
   const contents = view?.renderer?.getContents?.();
@@ -389,9 +392,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       color: "rgba(96, 165, 250, 0.35)",
     });
 
-    // Listen for theme changes
+    // Listen for theme changes via store subscription
     useEffect(() => {
-      const observer = new MutationObserver(() => {
+      const unsubscribe = useThemeStore.subscribe(() => {
         const newTheme = getAppTheme();
         setAppTheme((prev) => {
           if (prev !== newTheme) {
@@ -402,16 +405,16 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             }
             return newTheme;
           }
+          // Even if mode didn't change, colors might have (different theme selected)
+          const view = viewRef.current;
+          if (view && viewReady) {
+            applyRendererStyles(view, viewSettings, isFixedLayout, prev);
+          }
           return prev;
         });
       });
 
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["data-theme"],
-      });
-
-      return () => observer.disconnect();
+      return () => unsubscribe();
     }, [viewSettings, isFixedLayout, viewReady]);
 
     const ttsHighlightKeyRef = useRef<string | null>(null);

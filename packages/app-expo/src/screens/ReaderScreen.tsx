@@ -200,7 +200,7 @@ function buildCustomFontFaceCSS(
 // ──────────────────────────── ReaderScreen ────────────────────────────
 export function ReaderScreen({ route, navigation }: Props) {
   const colors = useColors();
-  const { mode: themeMode } = useTheme();
+  const { mode: themeMode, activeThemeId, readerColors } = useTheme();
   const s = makeStyles(colors);
   const { bookId, cfi, highlight: shouldHighlight, openTTS } = route.params;
   const { t, i18n } = useTranslation();
@@ -1063,10 +1063,11 @@ export function ReaderScreen({ route, navigation }: Props) {
         });
 
         bridge.setThemeColors({
-          background: colors.background,
-          foreground: colors.foreground,
+          background: readerColors.background,
+          foreground: readerColors.foreground,
           muted: colors.mutedForeground,
           primary: colors.primary,
+          linkColor: readerColors.linkColor,
         });
       } catch (err: any) {
         console.error("[ReaderScreen] Failed to load book:", err);
@@ -1140,12 +1141,13 @@ export function ReaderScreen({ route, navigation }: Props) {
   useEffect(() => {
     if (!webViewReady) return;
     bridge.setThemeColors({
-      background: colors.background,
-      foreground: colors.foreground,
+      background: readerColors.background,
+      foreground: readerColors.foreground,
       muted: colors.mutedForeground,
       primary: colors.primary,
+      linkColor: readerColors.linkColor,
     });
-  }, [themeMode, webViewReady]);
+  }, [themeMode, activeThemeId, webViewReady]);
 
   // Re-apply font settings when custom fonts or selected font changes
   useEffect(() => {

@@ -6,40 +6,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Coffee, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useThemeStore, BUILTIN_THEMES } from "@readany/core/theme";
+import type { ThemeDefinition } from "@readany/core/theme";
+import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
-
-type ThemeMode = "light" | "dark" | "sepia";
-
-const THEME_CONFIG: Record<ThemeMode, { icon: typeof Sun; labelKey: string }> = {
-  light: { icon: Sun, labelKey: "settings.light" },
-  dark: { icon: Moon, labelKey: "settings.dark" },
-  sepia: { icon: Coffee, labelKey: "settings.sepia" },
-};
 
 import { OnboardingLayout } from "../OnboardingLayout";
 
 export function AppearancePage({ onNext, onPrev, step, totalSteps }: any) {
   const { t, i18n } = useTranslation();
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("readany-theme") as ThemeMode | null;
-    if (saved && THEME_CONFIG[saved]) {
-      setThemeState(saved);
-    }
-  }, []);
+  const activeThemeId = useThemeStore((s) => s.activeThemeId);
+  const themeMode = useThemeStore((s) => s.mode);
+  const resolvedMode = useThemeStore((s) => s.resolvedMode);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const setMode = useThemeStore((s) => s.setMode);
 
   const handleLanguageChange = async (lang: string) => {
     const { changeAndPersistLanguage } = await import("@readany/core/i18n");
     await changeAndPersistLanguage(lang);
-  };
-
-  const handleThemeChange = (newTheme: ThemeMode) => {
-    setThemeState(newTheme);
-    document.documentElement.setAttribute("data-theme", newTheme);
-    localStorage.setItem("readany-theme", newTheme);
   };
 
   return (
@@ -73,23 +57,62 @@ export function AppearancePage({ onNext, onPrev, step, totalSteps }: any) {
             <h3 className="mb-3 text-xs font-medium text-foreground uppercase tracking-wide">
               {t("settings.theme", "Theme")}
             </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(THEME_CONFIG) as ThemeMode[]).map((mode) => {
-                const config = THEME_CONFIG[mode];
-                const Icon = config.icon;
-                const isActive = theme === mode;
+
+            {/* Mode Toggle */}
+            <div className="mb-3 flex gap-1.5">
+              {([
+                { mode: "system" as const, icon: Monitor },
+                { mode: "light" as const, icon: Sun },
+                { mode: "dark" as const, icon: Moon },
+              ]).map(({ mode, icon: Icon }) => {
+                const isActive = themeMode === mode;
                 return (
                   <button
                     key={mode}
-                    onClick={() => handleThemeChange(mode)}
-                    className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border py-3 transition-all duration-300 ${
+                    onClick={() => setMode(mode)}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
                       isActive
-                        ? "border-primary bg-primary/10 text-primary shadow-[0_0_15px_rgba(var(--primary),0.2)]"
-                        : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:bg-muted"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-background/80"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-xs font-medium">{t(config.labelKey)}</span>
+                    <Icon className="h-3 w-3" />
+                    {t(`settings.${mode}`)}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Theme Grid */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {BUILTIN_THEMES.map((theme: ThemeDefinition) => {
+                const colors = resolvedMode === "dark" ? theme.dark : theme.light;
+                const isActive = activeThemeId === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    onClick={() => setTheme(theme.id)}
+                    className={`relative flex flex-col items-center gap-1 rounded-md border p-1.5 transition-all ${
+                      isActive
+                        ? "border-primary ring-1 ring-primary/20"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <div
+                      className="flex h-6 w-full items-center justify-center gap-0.5 rounded"
+                      style={{ backgroundColor: colors.background }}
+                    >
+                      <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.primary }} />
+                      <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.muted }} />
+                    </div>
+                    <span className="text-[10px] leading-tight text-foreground">
+                      {theme.nameEn || theme.name}
+                    </span>
+                    {isActive && (
+                      <div className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-2 w-2 text-primary-foreground" />
+                      </div>
+                    )}
                   </button>
                 );
               })}

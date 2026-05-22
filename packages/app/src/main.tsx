@@ -16,6 +16,7 @@ import { setPlatformService } from "@readany/core/services";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
 import { syncLegacyDesktopLibraryRootConfig } from "./lib/storage/desktop-library-root";
+import { initDesktopTheme } from "./lib/theme-injector";
 import { TauriVectorDB } from "./lib/tauri-vector-db";
 import { useLibraryStore } from "./stores/library-store";
 import { flushAllWrites } from "./stores/persist";
@@ -79,17 +80,8 @@ const desktopDataRootReady = syncLegacyDesktopLibraryRootConfig().catch(console.
 i18nReady.then(() => {
   desktopDataRootReady.catch(console.error);
 
-  // Restore saved theme from localStorage
-  const savedTheme = localStorage.getItem("readany-theme");
-  if (savedTheme === "system") {
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
-  } else if (savedTheme && ["light", "dark", "sepia"].includes(savedTheme)) {
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  } else {
-    // Default to sepia theme
-    document.documentElement.setAttribute("data-theme", "sepia");
-  }
+  // Initialize the theme system (loads persisted theme, applies CSS vars, listens for changes)
+  initDesktopTheme();
 
   // Restore saved language from platform KV storage
   initI18nLanguage().catch(console.error);

@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useSettingsStore } from "@/stores/settings-store";
+import { BUILTIN_THEMES, useThemeStore } from "@readany/core/theme";
+import type { ThemeDefinition } from "@readany/core/theme";
 import { useFontStore } from "@readany/core/stores";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 export function ReadSettingsPanel() {
@@ -19,6 +22,12 @@ export function ReadSettingsPanel() {
   const customFonts = useFontStore((s) => s.fonts);
   const selectedFontId = useFontStore((s) => s.selectedFontId);
   const setSelectedFont = useFontStore((s) => s.setSelectedFont);
+
+  const activeThemeId = useThemeStore((s) => s.activeThemeId);
+  const customThemes = useThemeStore((s) => s.customThemes);
+  const resolvedMode = useThemeStore((s) => s.resolvedMode);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const allThemes = useMemo(() => [...BUILTIN_THEMES, ...customThemes], [customThemes]);
 
   const currentFontValue = selectedFontId ?? "system";
 
@@ -32,6 +41,39 @@ export function ReadSettingsPanel() {
 
   return (
     <div className="space-y-6 p-4 pt-3">
+      {/* Reader Theme */}
+      <section className="rounded-lg bg-muted/60 p-4">
+        <h2 className="mb-3 text-sm font-medium text-foreground">{t("settings.theme")}</h2>
+        <div className="grid grid-cols-4 gap-1.5">
+          {allThemes.map((theme: ThemeDefinition) => {
+            const colors = resolvedMode === "dark" ? theme.dark : theme.light;
+            const isActive = activeThemeId === theme.id;
+            return (
+              <button
+                key={theme.id}
+                onClick={() => setTheme(theme.id)}
+                className={`relative flex flex-col items-center gap-1 rounded-md border p-1.5 transition-all ${
+                  isActive
+                    ? "border-primary ring-1 ring-primary/20"
+                    : "border-border hover:border-primary/50"
+                }`}
+              >
+                <div
+                  className="flex h-6 w-full items-center justify-center gap-0.5 rounded"
+                  style={{ backgroundColor: colors.background }}
+                >
+                  <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.primary }} />
+                  <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.muted }} />
+                </div>
+                <span className="text-[10px] leading-tight text-foreground">
+                  {theme.nameEn || theme.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="rounded-lg bg-muted/60 p-4">
         <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.reading_title")}</h2>
         <p className="mb-2 text-xs text-muted-foreground">{t("settings.reading_desc")}</p>

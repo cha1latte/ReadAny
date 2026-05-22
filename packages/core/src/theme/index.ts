@@ -16,7 +16,7 @@ export type {
   BackgroundFillMode,
 } from "./theme-schema";
 
-export { DEFAULT_HIGHLIGHTS, DEFAULT_STYLE } from "./theme-schema";
+export { DEFAULT_HIGHLIGHTS, DEFAULT_STYLE, generateThemeId } from "./theme-schema";
 
 export { BUILTIN_THEMES, getBuiltinTheme, getDefaultTheme } from "./builtin-themes";
 

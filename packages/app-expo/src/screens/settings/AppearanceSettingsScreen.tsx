@@ -1,7 +1,8 @@
-import { BookOpenIcon, MoonIcon, SunIcon } from "@/components/ui/Icon";
+import { MoonIcon, SunIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useTheme } from "@/styles/ThemeContext";
 import type { ThemeMode } from "@/styles/ThemeContext";
+import type { ThemeDefinition } from "@readany/core/theme";
 import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,10 +10,9 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SettingsHeader } from "./SettingsHeader";
 
-const THEMES: { id: ThemeMode; labelKey: string; fallback: string; Icon: typeof SunIcon }[] = [
+const MODES: { id: ThemeMode; labelKey: string; fallback: string; Icon: typeof SunIcon }[] = [
   { id: "light", labelKey: "settings.light", fallback: "Light", Icon: SunIcon },
   { id: "dark", labelKey: "settings.dark", fallback: "Dark", Icon: MoonIcon },
-  { id: "sepia", labelKey: "settings.sepia", fallback: "Sepia", Icon: BookOpenIcon },
 ];
 
 const LANGUAGES = [
@@ -22,7 +22,7 @@ const LANGUAGES = [
 
 export default function AppearanceSettingsScreen() {
   const { t, i18n } = useTranslation();
-  const { mode, setMode, colors } = useTheme();
+  const { mode, setMode, activeThemeId, setActiveTheme, allThemes, colors, isDark } = useTheme();
   const layout = useResponsiveLayout();
   const [lang, setLang] = useState(() => (i18n.language?.startsWith("zh") ? "zh" : "en"));
 
@@ -53,19 +53,19 @@ export default function AppearanceSettingsScreen() {
 
       <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { alignItems: "center" }]}>
         <View style={{ width: "100%", maxWidth: layout.centeredContentWidth, gap: 24 }}>
-          {/* Theme */}
+          {/* Mode Toggle */}
           <View style={s.section}>
             <Text style={[s.sectionTitle, { color: colors.mutedForeground }]}>
-              {t("settings.theme", "主题")}
+              {t("settings.themeMode", "模式")}
             </Text>
             <View style={s.themeGrid}>
-              {THEMES.map((item) => {
+              {MODES.map((item) => {
                 const active = mode === item.id;
                 return (
                   <TouchableOpacity
                     key={item.id}
                     style={[
-                      s.themeCard,
+                      s.modeCard,
                       { borderColor: colors.border, backgroundColor: colors.card },
                       active && {
                         borderColor: colors.primary,
@@ -88,6 +88,51 @@ export default function AppearanceSettingsScreen() {
                     {active && (
                       <View style={s.checkBadge}>
                         <Text style={[s.checkMark, { color: colors.primary }]}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Theme Selection Grid */}
+          <View style={s.section}>
+            <Text style={[s.sectionTitle, { color: colors.mutedForeground }]}>
+              {t("settings.theme", "主题")}
+            </Text>
+            <View style={s.themeSelectionGrid}>
+              {allThemes.map((theme: ThemeDefinition) => {
+                const previewColors = isDark ? theme.dark : theme.light;
+                const active = activeThemeId === theme.id;
+                return (
+                  <TouchableOpacity
+                    key={theme.id}
+                    style={[
+                      s.themePreviewCard,
+                      { borderColor: colors.border, backgroundColor: colors.card },
+                      active && { borderColor: colors.primary, borderWidth: 2 },
+                    ]}
+                    onPress={() => setActiveTheme(theme.id)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Color preview strip */}
+                    <View
+                      style={[s.colorStrip, { backgroundColor: previewColors.background }]}
+                    >
+                      <View style={[s.colorDot, { backgroundColor: previewColors.primary }]} />
+                      <View style={[s.colorDot, { backgroundColor: previewColors.accent }]} />
+                      <View style={[s.colorDot, { backgroundColor: previewColors.muted }]} />
+                    </View>
+                    <Text
+                      style={[s.themePreviewLabel, { color: colors.foreground }]}
+                      numberOfLines={1}
+                    >
+                      {theme.nameEn || theme.name}
+                    </Text>
+                    {active && (
+                      <View style={[s.activeIndicator, { backgroundColor: colors.primary }]}>
+                        <Text style={{ color: "#fff", fontSize: 10 }}>✓</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -147,7 +192,7 @@ function makeStyles(_colors: ReturnType<typeof useTheme>["colors"]) {
       fontWeight: fontWeight.semibold,
     },
     themeGrid: { flexDirection: "row", gap: 12 },
-    themeCard: {
+    modeCard: {
       flex: 1,
       alignItems: "center",
       gap: 8,
@@ -159,6 +204,49 @@ function makeStyles(_colors: ReturnType<typeof useTheme>["colors"]) {
     themeLabel: { fontSize: fontSize.sm },
     checkBadge: { position: "absolute", top: 8, right: 8 },
     checkMark: { fontSize: 14 },
+    themeSelectionGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    themePreviewCard: {
+      width: "22%",
+      minWidth: 72,
+      alignItems: "center",
+      gap: 6,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      padding: 8,
+      position: "relative",
+    },
+    colorStrip: {
+      width: "100%",
+      height: 32,
+      borderRadius: radius.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+    },
+    colorDot: {
+      width: 14,
+      height: 14,
+      borderRadius: 4,
+    },
+    themePreviewLabel: {
+      fontSize: fontSize.xs,
+      textAlign: "center",
+    },
+    activeIndicator: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     listCard: {
       borderRadius: radius.xl,
       borderWidth: 1,

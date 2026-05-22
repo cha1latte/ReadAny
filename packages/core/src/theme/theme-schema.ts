@@ -128,3 +128,8 @@ export const DEFAULT_STYLE: ThemeStyle = {
   borderStyle: "normal",
   backdropBlur: 8,
 };
+
+/** Generate a unique ID for a custom theme */
+export function generateThemeId(): string {
+  return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}

@@ -3,7 +3,9 @@
  */
 import { XIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { useTheme } from "@/styles/ThemeContext";
 import { useColors } from "@/styles/theme";
+import type { ThemeDefinition } from "@readany/core/theme";
 import type { ReadSettings } from "@readany/core/types";
 import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +22,7 @@ interface Props {
 
 export function ReaderSettingsPanel({ visible, readSettings, onClose, onUpdateSetting }: Props) {
   const colors = useColors();
+  const { activeThemeId, setActiveTheme, allThemes, isDark } = useTheme();
   const s = makeStyles(colors);
   const insets = useSafeAreaInsets();
   const layout = useResponsiveLayout();
@@ -178,6 +181,44 @@ export function ReaderSettingsPanel({ visible, readSettings, onClose, onUpdateSe
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            </ScrollView>
+          </View>
+          {/* Theme */}
+          <View style={s.settingRow}>
+            <Text style={s.settingLabel}>{t("settings.theme", "主题")}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.themeScroll}>
+              <View style={s.themeRow}>
+                {allThemes.map((theme: ThemeDefinition) => {
+                  const previewColors = isDark ? theme.dark : theme.light;
+                  const isActive = activeThemeId === theme.id;
+                  return (
+                    <TouchableOpacity
+                      key={theme.id}
+                      style={[
+                        s.themeBtn,
+                        isActive && s.themeBtnActive,
+                        { borderColor: isActive ? colors.primary : colors.border },
+                      ]}
+                      onPress={() => setActiveTheme(theme.id)}
+                    >
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          backgroundColor: previewColors.background,
+                          borderWidth: 1,
+                          borderColor: previewColors.border,
+                          marginBottom: 2,
+                        }}
+                      />
+                      <Text style={[s.themeBtnText, isActive && s.themeBtnTextActive]}>
+                        {theme.nameEn || theme.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </ScrollView>
           </View>

@@ -1381,19 +1381,21 @@
       const fg = colors.foreground || '#e8e8ed';
       const muted = colors.muted || '#7c7c82';
       const primary = colors.primary || '#3b82f6';
+      const linkColor = colors.linkColor || primary;
 
-      currentThemeColors = { bg, fg, muted, primary };
+      currentThemeColors = { bg, fg, muted, primary, linkColor };
 
       document.documentElement.style.setProperty('--bg', bg);
       document.documentElement.style.setProperty('--fg', fg);
       document.documentElement.style.setProperty('--muted', muted);
       document.documentElement.style.setProperty('--primary', primary);
+      document.documentElement.style.setProperty('--link-color', linkColor);
       document.body.style.backgroundColor = bg;
       document.body.style.color = fg;
 
       if (view && view.renderer && view.renderer.setStyles) {
         const currentStyles = lastRendererStyles || '';
-        const themedStyles = injectThemeIntoStyles(currentStyles, bg, fg, primary);
+        const themedStyles = injectThemeIntoStyles(currentStyles, bg, fg, linkColor);
         view.renderer.setStyles(themedStyles);
       }
 
@@ -1402,7 +1404,7 @@
       }
     }
 
-    function injectThemeIntoStyles(baseStyles, bg, fg, primary) {
+    function injectThemeIntoStyles(baseStyles, bg, fg, linkColor) {
       const cleaned = baseStyles.replace(
         /\/\* __theme_colors__ \*\/[\s\S]*?\/\* __end_theme_colors__ \*\//g,
         '',
@@ -1415,7 +1417,7 @@ html, body {
 p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label, a {
   color: inherit !important;
 }
-a { color: ${primary} !important; }
+a { color: ${linkColor} !important; }
 ::selection { background: rgba(59, 130, 246, 0.3) !important; }
 /* __end_theme_colors__ */`;
       return themeBlock + '\n' + cleaned;
@@ -1429,12 +1431,12 @@ a { color: ${primary} !important; }
         img.style.height = 'auto';
       }
       const style = doc.createElement('style');
-      const { bg, fg, primary } = currentThemeColors;
+      const { bg, fg, linkColor } = currentThemeColors;
       style.textContent = `
         * { -webkit-touch-callout: none !important; -webkit-user-select: text !important; user-select: text !important; }
         html, body { background-color: ${bg} !important; color: ${fg} !important; }
         p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label { color: inherit !important; }
-        a { color: ${primary} !important; }
+        a { color: ${linkColor} !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
       `;
       doc.head.appendChild(style);

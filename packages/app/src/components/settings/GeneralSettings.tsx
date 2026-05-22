@@ -13,50 +13,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Coffee, FolderOpen, HardDrive, Monitor, Moon, RotateCcw, Sun } from "lucide-react";
+import { ThemeEditorDialog } from "./ThemeEditorDialog";
+import { useThemeStore, BUILTIN_THEMES } from "@readany/core/theme";
+import type { ThemeDefinition, ThemeMode } from "@readany/core/theme";
+import { Check, Download, FolderOpen, HardDrive, Monitor, Moon, Pencil, Plus, RotateCcw, Sun, Trash2 } from "lucide-react";
 /**
  * GeneralSettings — app-level settings
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-type ThemeMode = "light" | "dark" | "sepia" | "system";
-
-const THEME_CONFIG: Record<ThemeMode, { icon: typeof Sun; labelKey: string }> = {
-  system: { icon: Monitor, labelKey: "settings.system" },
-  light: { icon: Sun, labelKey: "settings.light" },
-  dark: { icon: Moon, labelKey: "settings.dark" },
-  sepia: { icon: Coffee, labelKey: "settings.sepia" },
-};
+const MODE_CONFIG: { mode: ThemeMode; icon: typeof Sun; labelKey: string }[] = [
+  { mode: "system", icon: Monitor, labelKey: "settings.system" },
+  { mode: "light", icon: Sun, labelKey: "settings.light" },
+  { mode: "dark", icon: Moon, labelKey: "settings.dark" },
+];
 
 export function GeneralSettings() {
   const { t, i18n } = useTranslation();
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const activeThemeId = useThemeStore((s) => s.activeThemeId);
+  const themeMode = useThemeStore((s) => s.mode);
+  const customThemes = useThemeStore((s) => s.customThemes);
+  const allThemes = useMemo(() => [...BUILTIN_THEMES, ...customThemes], [customThemes]);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const setMode = useThemeStore((s) => s.setMode);
+  const deleteCustomTheme = useThemeStore((s) => s.deleteCustomTheme);
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingThemeId, setEditingThemeId] = useState<string | undefined>(undefined);
+
   const [currentLibraryRoot, setCurrentLibraryRoot] = useState("");
   const [defaultLibraryRoot, setDefaultLibraryRoot] = useState("");
   const [targetLibraryRoot, setTargetLibraryRoot] = useState("");
   const [migratingLibrary, setMigratingLibrary] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("readany-theme") as ThemeMode | null;
-    if (saved && THEME_CONFIG[saved]) {
-      setThemeState(saved);
-    }
-  }, []);
-
-  // Listen for system theme changes when in "system" mode
-  useEffect(() => {
-    if (theme !== "system") return;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
-    };
-    // Apply immediately
-    document.documentElement.setAttribute("data-theme", mediaQuery.matches ? "dark" : "light");
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,17 +72,6 @@ export function GeneralSettings() {
   const handleLanguageChange = async (lang: string) => {
     const { changeAndPersistLanguage } = await import("@readany/core/i18n");
     await changeAndPersistLanguage(lang);
-  };
-
-  const handleThemeChange = (newTheme: ThemeMode) => {
-    setThemeState(newTheme);
-    localStorage.setItem("readany-theme", newTheme);
-    if (newTheme === "system") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
-    } else {
-      document.documentElement.setAttribute("data-theme", newTheme);
-    }
   };
 
   const handleChooseLibraryFolder = async () => {
@@ -184,34 +163,73 @@ export function GeneralSettings() {
       {/* Theme Section */}
       <section className="rounded-lg bg-muted/60 p-4">
         <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.theme")}</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-sm text-foreground">{t("settings.theme")}</span>
-            <p className="mt-1 text-xs text-muted-foreground">{t("settings.themeDesc")}</p>
-          </div>
-          <div className="flex gap-2">
-            {(Object.keys(THEME_CONFIG) as ThemeMode[]).map((mode) => {
-              const config = THEME_CONFIG[mode];
-              const Icon = config.icon;
-              const isActive = theme === mode;
+
+        {/* Mode Toggle: System / Light / Dark */}
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-sm text-foreground">{t("settings.themeMode", "Mode")}</span>
+          <div className="flex gap-1.5">
+            {MODE_CONFIG.map(({ mode, icon: Icon, labelKey }) => {
+              const isActive = themeMode === mode;
               return (
                 <button
                   key={mode}
-                  onClick={() => handleThemeChange(mode)}
+                  onClick={() => setMode(mode)}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
                     isActive
                       ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      : "bg-background text-muted-foreground hover:bg-background/80"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  {t(config.labelKey)}
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(labelKey)}
                 </button>
               );
             })}
           </div>
         </div>
+
+        {/* Theme Grid */}
+        <div className="grid grid-cols-4 gap-2">
+          {allThemes.map((theme: ThemeDefinition) => (
+            <ThemeCard
+              key={theme.id}
+              theme={theme}
+              isActive={activeThemeId === theme.id}
+              isCustom={!theme.builtIn}
+              onSelect={() => setTheme(theme.id)}
+              onEdit={() => { setEditingThemeId(theme.id); setEditorOpen(true); }}
+              onDelete={() => {
+                deleteCustomTheme(theme.id);
+                toast.success(t("settings.themeDeleted", "Theme deleted"));
+              }}
+            />
+          ))}
+          {/* Create New Theme Button */}
+          <button
+            onClick={() => { setEditingThemeId(undefined); setEditorOpen(true); }}
+            className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-2 transition-all hover:border-primary/50 hover:bg-muted/50"
+          >
+            <Plus className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{t("settings.newTheme", "New")}</span>
+          </button>
+        </div>
+
+        {/* Import Button */}
+        <button
+          onClick={() => { setEditingThemeId(undefined); setEditorOpen(true); }}
+          className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Download className="h-3 w-3" />
+          {t("settings.importTheme", "Import Theme")}
+        </button>
       </section>
+
+      {/* Theme Editor Dialog */}
+      <ThemeEditorDialog
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        editThemeId={editingThemeId}
+      />
 
       {/* Language Section */}
       <section className="rounded-lg bg-muted/60 p-4">
@@ -294,6 +312,93 @@ export function GeneralSettings() {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+// ─── ThemeCard ─────────────────────────────────────────────────────────────────
+
+function ThemeCard({
+  theme,
+  isActive,
+  isCustom,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  theme: ThemeDefinition;
+  isActive: boolean;
+  isCustom?: boolean;
+  onSelect: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const resolvedMode = useThemeStore((s) => s.resolvedMode);
+  const colors = resolvedMode === "dark" ? theme.dark : theme.light;
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`group relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border p-1.5 transition-all duration-200 ${
+        isActive
+          ? "border-primary shadow-sm ring-2 ring-primary/20"
+          : "border-border hover:border-primary/40 hover:shadow-xs"
+      }`}
+    >
+      {/* Mini App Mockup */}
+      <div
+        className="flex h-12 w-full flex-col overflow-hidden rounded-md"
+        style={{ backgroundColor: colors.background }}
+      >
+        {/* Mini sidebar + content mockup */}
+        <div className="flex flex-1">
+          <div className="w-[30%] border-r" style={{ backgroundColor: colors.sidebar, borderColor: colors.border }}>
+            <div className="mx-1 mt-1.5 h-1 w-3 rounded-sm" style={{ backgroundColor: colors.sidebarForeground, opacity: 0.4 }} />
+            <div className="mx-1 mt-1 h-1 w-4 rounded-sm" style={{ backgroundColor: colors.primary, opacity: 0.8 }} />
+          </div>
+          <div className="flex-1 p-1">
+            <div className="h-1 w-full rounded-sm" style={{ backgroundColor: colors.foreground, opacity: 0.15 }} />
+            <div className="mt-1 flex gap-0.5">
+              <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: colors.primary }} />
+              <div className="h-2.5 flex-1 rounded-sm" style={{ backgroundColor: colors.muted }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Theme Name */}
+      <span className="max-w-full truncate text-[11px] font-medium text-foreground">
+        {theme.nameEn || theme.name}
+      </span>
+
+      {/* Active Check */}
+      {isActive && (
+        <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary shadow-sm">
+          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+        </div>
+      )}
+
+      {/* Custom Theme Actions (visible on hover) */}
+      {isCustom && (
+        <div className="absolute -top-2 left-1/2 hidden -translate-x-1/2 gap-1 group-hover:flex">
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-colors hover:bg-muted"
+            >
+              <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-destructive/30 bg-background shadow-sm transition-colors hover:bg-destructive/10"
+            >
+              <Trash2 className="h-2.5 w-2.5 text-destructive" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

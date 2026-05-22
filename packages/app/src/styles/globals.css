@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@custom-variant dark (&[data-theme="dark"]);
+@custom-variant dark (&[data-mode="dark"]);
 @custom-variant sepia (&[data-theme="sepia"]);
 
 :root {

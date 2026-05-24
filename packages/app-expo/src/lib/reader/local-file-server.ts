@@ -199,21 +199,45 @@ async function _startTcpFallback(cleanRoot: string): Promise<string> {
       socket.on("error", () => socket.destroy());
     });
 
-    server.on("error", (err: Error) => reject(err));
+    // Without a timeout, if the tcp-socket native module isn't linked into the
+    // dev client, `listen`'s callback never fires and the reader sits on a
+    // spinner forever with no error. Cap it so ReaderScreen can surface a real
+    // failure (Lighttpd already has the same safety net at 8s).
+    let settled = false;
+    const finish = (work: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      work();
+    };
+    const timeoutHandle = setTimeout(() => {
+      finish(() => {
+        try { server.close(); } catch {}
+        reject(
+          new Error(
+            "TCP fallback listen timeout (5s) — react-native-tcp-socket native module likely not linked into the dev client. Rebuild with `expo run:ios`.",
+          ),
+        );
+      });
+    }, 5000);
+
+    server.on("error", (err: Error) => finish(() => reject(err)));
 
     server.listen({ port: 0, host: "127.0.0.1" }, () => {
-      const addr = server.address();
-      const port = addr && typeof addr === "object" && "port" in addr ? addr.port : null;
-      if (!port) {
-        reject(new Error("Server address unavailable"));
-        return;
-      }
-      const url = `http://127.0.0.1:${port}`;
-      _tcpServer = server;
-      _serverDocRoot = cleanRoot;
-      _serverUrl = url;
-      console.log(`[FileServer] TCP fallback started: ${url} (root: ${cleanRoot})`);
-      resolve(url);
+      finish(() => {
+        const addr = server.address();
+        const port = addr && typeof addr === "object" && "port" in addr ? addr.port : null;
+        if (!port) {
+          reject(new Error("Server address unavailable"));
+          return;
+        }
+        const url = `http://127.0.0.1:${port}`;
+        _tcpServer = server;
+        _serverDocRoot = cleanRoot;
+        _serverUrl = url;
+        console.log(`[FileServer] TCP fallback started: ${url} (root: ${cleanRoot})`);
+        resolve(url);
+      });
     });
   });
 }

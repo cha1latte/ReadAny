@@ -342,6 +342,12 @@ interface FoliateViewerProps {
   onTocReady?: (toc: TOCItem[]) => void;
   onLoaded?: () => void;
   onSectionLoad?: (index: number) => void;
+  /** Called once foliate-js has created the overlayer for a section.
+   *  Distinct from onSectionLoad (which fires earlier on `load`, before the
+   *  overlayer exists). Use this for highlight remounting / annotation work
+   *  that needs the overlayer to be ready.
+   */
+  onOverlayerReady?: (index: number) => void;
   onError?: (error: Error) => void;
   onSelection?: (selection: BookSelection | null) => void;
   onShowAnnotation?: (cfi: string, range: Range, index: number) => void;
@@ -363,6 +369,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       onTocReady,
       onLoaded,
       onSectionLoad,
+      onOverlayerReady,
       onError,
       onSelection,
       onShowAnnotation,
@@ -1314,6 +1321,20 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     const docLoadHandlerRef = useRef(docLoadHandlerImpl);
     docLoadHandlerRef.current = docLoadHandlerImpl;
 
+    // --- Overlay-ready handler ---
+    // Fires after foliate-js's #createOverlayer finishes. The overlayer for
+    // this section now exists in view.js's internal map, so addAnnotation()
+    // calls for CFIs in this section will take effect (vs. silently no-op).
+    const overlayReadyHandlerImpl = useCallback(
+      (event: Event) => {
+        const detail = (event as CustomEvent).detail as { index?: number };
+        if (detail.index !== undefined) onOverlayerReady?.(detail.index);
+      },
+      [onOverlayerReady],
+    );
+    const overlayReadyHandlerRef = useRef(overlayReadyHandlerImpl);
+    overlayReadyHandlerRef.current = overlayReadyHandlerImpl;
+
     // --- Relocate handler ---
     const relocateHandlerImpl = useCallback(
       (event: Event) => {
@@ -1378,6 +1399,10 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     // Stable wrapper functions that delegate to latest impl via ref
     const docLoadHandler = useCallback((event: Event) => docLoadHandlerRef.current(event), []);
     const relocateHandler = useCallback((event: Event) => relocateHandlerRef.current(event), []);
+    const overlayReadyHandler = useCallback(
+      (event: Event) => overlayReadyHandlerRef.current(event),
+      [],
+    );
 
     // --- Draw annotation handler ---
     // This is called by foliate-js when an annotation needs to be rendered
@@ -1926,6 +1951,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       onRelocate: relocateHandler,
       onDrawAnnotation: drawAnnotationHandler,
       onShowAnnotation: showAnnotationHandler,
+      onCreateOverlay: overlayReadyHandler,
     });
 
     // --- Open book ---
@@ -2005,6 +2031,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           view.addEventListener("draw-annotation", drawAnnotationHandler);
           view.addEventListener("delete-annotation", deleteAnnotationHandler);
           view.addEventListener("show-annotation", showAnnotationHandler);
+          view.addEventListener("create-overlay", overlayReadyHandler);
           setViewReady(true);
 
           // Navigate to last location or start

@@ -1169,46 +1169,67 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     }
   }, [isLoading]);
 
-  // Handle section load (chapter change) - re-render all highlights
-  // This is critical: when foliate-js loads a new section (chapter),
-  // it replaces the iframe content and all previously added annotations are lost.
-  // We need to re-add all highlights for the current book.
+  // Handle section load (chapter change) — section-state resets only.
+  // The actual highlight re-mount happens in handleOverlayerReady once
+  // foliate-js has created the overlayer for the new section; doing it here
+  // would no-op because addAnnotation needs the overlayer to exist.
   const handleSectionLoad = useCallback(
     (sectionIndex: number) => {
-      // Reset chapter translation on section change
       setCurrentSectionIndex(sectionIndex);
       setTranslationReady(false);
       chapterTranslation.reset();
+    },
+    [chapterTranslation.reset],
+  );
 
-      // Delay slightly to ensure foliate view is ready
-      setTimeout(() => {
+  // Re-attach highlights for the new section once its overlayer is ready.
+  // We filter highlights by resolving each CFI's section index up front, so
+  // we only iterate the (typically small) set in the current section instead
+  // of every highlight in the book. Highlights for other sections are left
+  // alone; they'll be remounted when the user navigates into those sections.
+  //
+  // The microtask defer is load-bearing: foliate's paginator emits
+  // `create-overlay` synchronously *before* assigning its internal `#view` to
+  // the newly-loaded view (see paginator.js #display, where the
+  // dispatchEvent runs before `this.#view = view`). Calling addAnnotation
+  // inside the synchronous handler would route through the stale `#view`,
+  // write to an orphan overlayer, and the highlight would never appear in
+  // the new section's iframe. Waiting one microtask lets the assignment
+  // settle, after which `view.addAnnotation` lands on the right overlayer.
+  const handleOverlayerReady = useCallback(
+    (sectionIndex: number) => {
+      queueMicrotask(() => {
         if (!foliateRef.current) return;
+        const view = foliateRef.current.getView();
+        if (!view) return;
 
-        // Get all highlights for this book
-        const bookHighlights = highlights.filter((h) => h.bookId === bookId);
-
-        // Clear tracking since we're reloading
-        renderedHighlightsRef.current.clear();
-
-        // Re-add all highlights
-        for (const h of bookHighlights) {
-          if (h.cfi) {
-            foliateRef.current.addAnnotation({
-              value: h.cfi,
-              type: "highlight",
-              color: h.color || "yellow",
-              note: h.note, // Pass note for wavy underline + tooltip
-            });
-            renderedHighlightsRef.current.set(h.id, { cfi: h.cfi, hasNote: !!h.note });
+        let count = 0;
+        for (const h of highlights) {
+          if (h.bookId !== bookId || !h.cfi) continue;
+          let resolvedIndex: number | undefined;
+          try {
+            resolvedIndex = view.resolveCFI(h.cfi)?.index;
+          } catch {
+            continue;
           }
+          if (resolvedIndex !== sectionIndex) continue;
+
+          foliateRef.current.addAnnotation({
+            value: h.cfi,
+            type: "highlight",
+            color: h.color || "yellow",
+            note: h.note,
+          });
+          renderedHighlightsRef.current.set(h.id, { cfi: h.cfi, hasNote: !!h.note });
+          count++;
         }
 
         console.log(
-          `[ReaderView] Section ${sectionIndex} loaded, re-rendered ${bookHighlights.length} highlights`,
+          `[ReaderView] Overlayer ready for section ${sectionIndex}, mounted ${count} highlights`,
         );
-      }, 100);
+      });
     },
-    [highlights, bookId, chapterTranslation.reset],
+    [highlights, bookId],
   );
 
   const handleError = useCallback((err: Error) => {
@@ -2630,6 +2651,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
                 onTocReady={handleTocReady}
                 onLoaded={handleLoaded}
                 onSectionLoad={handleSectionLoad}
+                onOverlayerReady={handleOverlayerReady}
                 onError={handleError}
                 onSelection={handleSelection}
                 onShowAnnotation={handleShowAnnotation}

@@ -863,6 +863,17 @@ class Resources {
 
 class Loader {
   #cache = new Map();
+  /**
+   * Stores the decoded XHTML/HTML source for each cached resource.
+   * Letting the paginator hand this string to `iframe.srcdoc` (instead of
+   * making the iframe re-fetch the blob URL) eliminates a fetch round-trip
+   * inside the webview on every cross-section navigation, which is the
+   * difference between our cross-chapter latency and readest's.
+   *
+   * Keyed by the blob URL so it can be invalidated together with `#cache`
+   * in `unref()`.
+   */
+  #cacheXHTMLContent = new Map();
   #children = new Map();
   #refCount = new Map();
   eventTarget = new EventTarget();
@@ -885,6 +896,9 @@ class Loader {
     const url = URL.createObjectURL(new Blob([newData], { type: newType }));
     this.#cache.set(href, url);
     this.#refCount.set(href, 1);
+    if (newType === MIME.XHTML || newType === MIME.HTML) {
+      this.#cacheXHTMLContent.set(url, { href, type: newType, data: newData });
+    }
     if (parent) {
       const childList = this.#children.get(parent);
       if (childList) childList.push(href);
@@ -908,8 +922,10 @@ class Loader {
     //console.log(`unreferencing ${href}, now ${count}`)
     if (count < 1) {
       //console.log(`unloading ${href}`)
-      URL.revokeObjectURL(this.#cache.get(href));
+      const url = this.#cache.get(href);
+      URL.revokeObjectURL(url);
       this.#cache.delete(href);
+      this.#cacheXHTMLContent.delete(url);
       this.#refCount.delete(href);
       // unref children
       const childList = this.#children.get(href);
@@ -940,6 +956,16 @@ class Loader {
     // NOTE: this can be replaced with `Promise.try()`
     const tryLoadBlob = Promise.resolve().then(() => this.loadBlob(href));
     return this.createURL(href, tryLoadBlob, mediaType, parent);
+  }
+  /**
+   * Return the decoded XHTML/HTML string for a section item, populating the
+   * blob-URL cache as a side effect. Paginator uses this to feed
+   * `iframe.srcdoc` directly, skipping the in-iframe fetch of the blob URL.
+   */
+  async loadItemXHTMLContent(item, parents = []) {
+    const url = await this.loadItem(item, parents);
+    if (url) return this.#cacheXHTMLContent.get(url)?.data;
+    return null;
   }
   async loadHref(href, base, parents = []) {
     if (isExternal(href)) return href;
@@ -1154,6 +1180,7 @@ ${doc.querySelector("parsererror").innerText}`);
         return {
           id: item.href,
           load: () => this.#loader.loadItem(item),
+          loadContent: () => this.#loader.loadItemXHTMLContent(item),
           unload: () => this.#loader.unloadItem(item),
           createDocument: () => this.loadDocument(item),
           size: this.getSize(item.href),

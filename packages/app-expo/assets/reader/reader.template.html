@@ -964,16 +964,29 @@
           attachSelectionListener(doc);
           attachNoteLongPress(doc);
           attachContinuousScrollListener(doc);
-          // Re-add all user annotations for this page
-          // foliate-view will only render those that belong to current section
-          for (const [cfi, annotation] of userAnnotations) {
-            view.addAnnotation(annotation).catch(err => {
-              // Ignore errors for annotations not on current page
-            });
-          }
-          if (ttsHighlightState.cfi) {
-            setTTSHighlight(ttsHighlightState.cfi, ttsHighlightState.color);
-          }
+          // Re-attach user annotations + TTS highlight after paginator has
+          // wired up the new view's overlayer. Doing this synchronously in
+          // `load` races with paginator's `this.#view = view` assignment
+          // (which runs *after* the create-overlay event dispatch returns),
+          // so addAnnotation would route through a stale overlayer and the
+          // new section's iframe would never show the highlights. We also
+          // filter by section index up front so we only iterate the small
+          // set of annotations actually in this section.
+          queueMicrotask(() => {
+            for (const [cfi, annotation] of userAnnotations) {
+              let resolvedIndex;
+              try {
+                resolvedIndex = view.resolveCFI(cfi)?.index;
+              } catch (_) {
+                continue;
+              }
+              if (resolvedIndex !== index) continue;
+              view.addAnnotation(annotation).catch(() => {});
+            }
+            if (ttsHighlightState.cfi) {
+              setTTSHighlight(ttsHighlightState.cfi, ttsHighlightState.color);
+            }
+          });
         });
 
         var snippetTimer = null;

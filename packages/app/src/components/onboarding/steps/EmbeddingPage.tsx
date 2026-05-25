@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Switch } from "@/components/ui/switch";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
+import { detectRemoteEmbeddingDimension } from "@readany/core/rag";
 import type { VectorModelConfig } from "@readany/core/types";
 import { Check, Download, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -12,7 +12,14 @@ import { useTranslation } from "react-i18next";
 
 import { OnboardingLayout } from "../OnboardingLayout";
 
-export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
+interface EmbeddingPageProps {
+  onNext: () => void;
+  onPrev: () => void;
+  step: number;
+  totalSteps: number;
+}
+
+export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: EmbeddingPageProps) {
   const { t } = useTranslation();
   const {
     vectorModelMode,
@@ -70,23 +77,8 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
     async (model: VectorModelConfig) => {
       setTestingId(model.id);
       try {
-        const testUrl = model.url.replace(/\/$/, "");
-        const isOllama = testUrl.endsWith("/api/embed");
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (model.apiKey?.trim()) headers.Authorization = `Bearer ${model.apiKey}`;
-
-        const requestBody = isOllama
-          ? { model: model.modelId, input: "test" }
-          : { input: ["test"], model: model.modelId, encoding_format: "float" };
-
-        const res = await fetch(testUrl, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(requestBody),
-        });
-        if (res.ok) {
-          setSelectedVectorModelId(model.id);
-        }
+        await detectRemoteEmbeddingDimension(model);
+        setSelectedVectorModelId(model.id);
       } catch (err) {
         console.warn("[Onboarding] Embedding model test failed:", err);
       } finally {
@@ -141,8 +133,9 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
         </div>
 
         <div className="grid grid-cols-2 gap-4 mt-6">
-          <div
-            className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-colors ${vectorModelMode === "remote" ? "border-primary bg-primary/5" : "border-border bg-muted/30"}`}
+          <button
+            type="button"
+            className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-colors text-left ${vectorModelMode === "remote" ? "border-primary bg-primary/5" : "border-border bg-muted/30"}`}
             onClick={() => setVectorModelMode("remote")}
           >
             <div className="flex-1">
@@ -153,14 +146,19 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
                 {t("onboarding.embedding.remoteDesc", "Connect to external embedding API.")}
               </p>
             </div>
-            <Switch
-              checked={vectorModelMode === "remote"}
-              onCheckedChange={(c) => setVectorModelMode(c ? "remote" : "builtin")}
-            />
-          </div>
+            <span
+              aria-hidden="true"
+              className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent shadow-sm transition-colors ${vectorModelMode === "remote" ? "bg-primary" : "bg-input"}`}
+            >
+              <span
+                className={`block h-4 w-4 rounded-full bg-background shadow-lg transition-transform ${vectorModelMode === "remote" ? "translate-x-4" : "translate-x-0"}`}
+              />
+            </span>
+          </button>
 
-          <div
-            className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-colors ${vectorModelMode === "builtin" ? "border-primary bg-primary/5" : "border-border bg-muted/30"}`}
+          <button
+            type="button"
+            className={`flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-colors text-left ${vectorModelMode === "builtin" ? "border-primary bg-primary/5" : "border-border bg-muted/30"}`}
             onClick={() => setVectorModelMode("builtin")}
           >
             <div className="flex-1">
@@ -171,11 +169,15 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
                 {t("onboarding.embedding.localDesc", "Run embeddings safely on your device.")}
               </p>
             </div>
-            <Switch
-              checked={vectorModelMode === "builtin"}
-              onCheckedChange={(c) => setVectorModelMode(c ? "builtin" : "remote")}
-            />
-          </div>
+            <span
+              aria-hidden="true"
+              className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent shadow-sm transition-colors ${vectorModelMode === "builtin" ? "bg-primary" : "bg-input"}`}
+            >
+              <span
+                className={`block h-4 w-4 rounded-full bg-background shadow-lg transition-transform ${vectorModelMode === "builtin" ? "translate-x-4" : "translate-x-0"}`}
+              />
+            </span>
+          </button>
         </div>
 
         {vectorModelMode === "remote" && (
@@ -204,20 +206,28 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">
+                    <label
+                      className="text-xs text-muted-foreground mb-1 block"
+                      htmlFor="onboarding-embedding-name"
+                    >
                       {t("settings.vm_name", "Name")} *
                     </label>
                     <Input
+                      id="onboarding-embedding-name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="OpenAI Embedding"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">
+                    <label
+                      className="text-xs text-muted-foreground mb-1 block"
+                      htmlFor="onboarding-embedding-model-id"
+                    >
                       {t("settings.vm_modelId", "Model ID")} *
                     </label>
                     <Input
+                      id="onboarding-embedding-model-id"
                       value={formData.modelId}
                       onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
                       placeholder="text-embedding-3-small"
@@ -226,10 +236,14 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
+                  <label
+                    className="text-xs text-muted-foreground mb-1 block"
+                    htmlFor="onboarding-embedding-url"
+                  >
                     {t("settings.vm_url", "URL")} *
                   </label>
                   <Input
+                    id="onboarding-embedding-url"
                     value={formData.url}
                     onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                     placeholder="https://api.openai.com/v1/embeddings"
@@ -237,10 +251,14 @@ export function EmbeddingPage({ onNext, onPrev, step, totalSteps }: any) {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
+                  <label
+                    className="text-xs text-muted-foreground mb-1 block"
+                    htmlFor="onboarding-embedding-api-key"
+                  >
                     {t("settings.vm_apiKey", "API Key")}
                   </label>
                   <PasswordInput
+                    id="onboarding-embedding-api-key"
                     value={formData.apiKey}
                     onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                     placeholder="sk-..."

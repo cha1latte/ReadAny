@@ -3,6 +3,7 @@
  */
 import type { EmbeddingModel } from "../types";
 
+import { getPlatformService } from "../services";
 import { buildOpenAICompatibleUrl } from "../utils/api";
 
 export interface EmbeddingConfig {
@@ -67,7 +68,7 @@ export class EmbeddingService {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const response = await fetch(url, options);
+        const response = await this.performFetch(url, options);
         return response;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
@@ -89,6 +90,21 @@ export class EmbeddingService {
     }
 
     throw lastError || new Error("Fetch failed");
+  }
+
+  private async performFetch(url: string, options: RequestInit): Promise<Response> {
+    try {
+      return await getPlatformService().fetch(url, {
+        ...options,
+        timeoutMs: 60000,
+        responseType: "text",
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("PlatformService not initialized")) {
+        return fetch(url, options);
+      }
+      throw error;
+    }
   }
 
   private async callOpenAI(texts: string[]): Promise<number[][]> {

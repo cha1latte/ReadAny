@@ -8,18 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
-import { ConfigTransfer } from "./ConfigTransfer";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import { clearModelCache, loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
+import { detectRemoteEmbeddingDimension } from "@readany/core/rag";
 import type { VectorModelConfig } from "@readany/core/types";
 import { Check, Download, Edit2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-
-function normalizeEmbeddingsUrl(url: string): string {
-  return url.replace(/\/$/, "");
-}
+import { ConfigTransfer } from "./ConfigTransfer";
 
 /* ------------------------------------------------------------------ */
 /*  Built-in Models Section                                           */
@@ -266,26 +263,7 @@ function RemoteModelsSection() {
       setTestingId(model.id);
       setTestResults((prev) => ({ ...prev, [model.id]: t("settings.vm_testing") }));
       try {
-        const testUrl = normalizeEmbeddingsUrl(model.url);
-        const isOllama = testUrl.endsWith("/api/embed");
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (model.apiKey.trim()) headers.Authorization = `Bearer ${model.apiKey}`;
-
-        const requestBody = isOllama
-          ? { model: model.modelId, input: "test" }
-          : { input: ["test"], model: model.modelId, encoding_format: "float" };
-
-        const res = await fetch(testUrl, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(requestBody),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        const json = await res.json();
-        const len = isOllama
-          ? (json?.embeddings?.[0]?.length ?? 0)
-          : (json?.data?.[0]?.embedding?.length ?? 0);
-
+        const len = await detectRemoteEmbeddingDimension(model);
         updateVectorModel(model.id, { dimension: len });
         setTestResults((prev) => ({
           ...prev,
@@ -432,10 +410,11 @@ function RemoteModelsSection() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">
+              <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vm-name">
                 {t("settings.vm_name")} *
               </label>
               <Input
+                id="vm-name"
                 value={formData.name}
                 onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
                 placeholder="OpenAI Embedding"
@@ -443,10 +422,11 @@ function RemoteModelsSection() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">
+              <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vm-model-id">
                 {t("settings.vm_modelId")} *
               </label>
               <Input
+                id="vm-model-id"
                 value={formData.modelId}
                 onChange={(e) => setFormData((p) => ({ ...p, modelId: e.target.value }))}
                 placeholder="text-embedding-3-small"
@@ -456,10 +436,11 @@ function RemoteModelsSection() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vm-url">
               {t("settings.vm_url")} *
             </label>
             <Input
+              id="vm-url"
               value={formData.url}
               onChange={(e) => setFormData((p) => ({ ...p, url: e.target.value }))}
               placeholder="https://api.openai.com/v1/embeddings"
@@ -469,10 +450,11 @@ function RemoteModelsSection() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vm-api-key">
               {t("settings.vm_apiKey")}
             </label>
             <PasswordInput
+              id="vm-api-key"
               value={formData.apiKey}
               onChange={(e) => setFormData((p) => ({ ...p, apiKey: e.target.value }))}
               placeholder="sk-..."
@@ -481,10 +463,11 @@ function RemoteModelsSection() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="mb-1 block text-xs text-muted-foreground" htmlFor="vm-description">
               {t("settings.vm_description")}
             </label>
             <Input
+              id="vm-description"
               value={formData.description}
               onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
               placeholder={t("settings.vm_descriptionPlaceholder")}
@@ -603,14 +586,16 @@ export function VectorModelSettings() {
                 store.addVectorModel(m);
               }
             }
-            if (d.selectedVectorModelId) store.setSelectedVectorModelId(d.selectedVectorModelId as string);
-            if (typeof d.vectorModelEnabled === "boolean") store.setVectorModelEnabled(d.vectorModelEnabled);
-            if (d.vectorModelMode === "remote" || d.vectorModelMode === "builtin") store.setVectorModelMode(d.vectorModelMode);
-            if (d.selectedBuiltinModelId) store.setSelectedBuiltinModelId(d.selectedBuiltinModelId as string);
+            if (d.selectedVectorModelId)
+              store.setSelectedVectorModelId(d.selectedVectorModelId as string);
+            if (typeof d.vectorModelEnabled === "boolean")
+              store.setVectorModelEnabled(d.vectorModelEnabled);
+            if (d.vectorModelMode === "remote" || d.vectorModelMode === "builtin")
+              store.setVectorModelMode(d.vectorModelMode);
+            if (d.selectedBuiltinModelId)
+              store.setSelectedBuiltinModelId(d.selectedBuiltinModelId as string);
           }}
-          validate={(d) =>
-            typeof d === "object" && d !== null && "vectorModels" in d
-          }
+          validate={(d) => typeof d === "object" && d !== null && "vectorModels" in d}
         />
       </section>
     </div>

@@ -13,6 +13,7 @@ import type { VectorizeProgress } from "../types";
  */
 import { eventBus } from "../utils/event-bus";
 import { chunkContent } from "./chunker";
+import { requestRemoteEmbeddings } from "./embedding-request";
 import type { ChapterData } from "./rag-types";
 import { invalidateChunkCache } from "./search";
 import { getVectorDB, hasVectorDB } from "./vector-db";
@@ -167,11 +168,14 @@ export async function triggerVectorizeBook(
           await vectorDB.deleteByBookId(bookId);
 
           const vectorRecords: VectorRecord[] = allChunks
-            .filter((c) => c.embedding && c.embedding.length > 0)
+            .filter(
+              (c): c is typeof c & { embedding: number[] } =>
+                Array.isArray(c.embedding) && c.embedding.length > 0,
+            )
             .map((c) => ({
               id: c.id,
               bookId: c.bookId,
-              embedding: c.embedding!,
+              embedding: c.embedding,
             }));
 
           if (vectorRecords.length > 0) {
@@ -283,49 +287,12 @@ async function generateRemoteEmbeddings(
     );
   }
 
-  const isOllama = selectedModel.url.endsWith("/api/embed");
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (selectedModel.apiKey.trim()) {
-    headers.Authorization = `Bearer ${selectedModel.apiKey}`;
-  }
-
   const batchSize = 20;
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
     const texts = batch.map((c) => c.content);
 
-    const requestBody = isOllama
-      ? { model: selectedModel.modelId, input: texts }
-      : {
-          input: texts,
-          model: selectedModel.modelId,
-          encoding_format: "float",
-        };
-
-    const res = await fetch(selectedModel.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Embedding API error (${res.status}): ${errorText}`);
-    }
-
-    const json = await res.json();
-    const embeddings: number[][] = isOllama
-      ? (json?.embeddings ?? [])
-      : (
-          (json?.data ?? []) as Array<{
-            embedding: number[];
-            index: number;
-          }>
-        )
-          .sort((a: any, b: any) => a.index - b.index)
-          .map((d: any) => d.embedding);
+    const embeddings = await requestRemoteEmbeddings(selectedModel, texts);
 
     for (let j = 0; j < batch.length; j++) {
       batch[j].embedding = embeddings[j] ?? [];

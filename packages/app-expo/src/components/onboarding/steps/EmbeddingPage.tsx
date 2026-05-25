@@ -4,18 +4,12 @@ import { useVectorModelStore } from "@/stores/vector-model-store";
 import { useTheme } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { detectRemoteEmbeddingDimension } from "@readany/core/rag";
 import type { VectorModelConfig } from "@readany/core/types";
 import { Check, Cloud, Plus, Trash2, X } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { SlideInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SearchSvg from "../../../../assets/illustrations/search.svg";
@@ -26,15 +20,11 @@ type NavProp = NativeStackNavigationProp<OnboardingStackParamList, "Embedding">;
 export function EmbeddingPage() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavProp>();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const {
-    vectorModels,
-    addVectorModel,
-    deleteVectorModel,
-    setSelectedVectorModelId,
-  } = useVectorModelStore();
+  const { vectorModels, addVectorModel, deleteVectorModel, setSelectedVectorModelId } =
+    useVectorModelStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({ name: "", url: "", modelId: "", apiKey: "" });
@@ -54,23 +44,8 @@ export function EmbeddingPage() {
   const testRemoteModel = async (model: VectorModelConfig) => {
     setTestingId(model.id);
     try {
-      const testUrl = model.url.replace(/\/$/, "");
-      const isOllama = testUrl.endsWith("/api/embed");
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (model.apiKey?.trim()) headers.Authorization = `Bearer ${model.apiKey}`;
-
-      const requestBody = isOllama
-        ? { model: model.modelId, input: "test" }
-        : { input: ["test"], model: model.modelId, encoding_format: "float" };
-
-      const res = await fetch(testUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-      if (res.ok) {
-        setSelectedVectorModelId(model.id);
-      }
+      await detectRemoteEmbeddingDimension(model);
+      setSelectedVectorModelId(model.id);
     } catch (err) {
       console.warn("[Onboarding] Embedding model test failed:", err);
     } finally {
@@ -273,9 +248,7 @@ export function EmbeddingPage() {
                 ]}
               >
                 <View style={styles.modelItemInfo}>
-                  <Text style={[styles.modelItemName, { color: colors.foreground }]}>
-                    {m.name}
-                  </Text>
+                  <Text style={[styles.modelItemName, { color: colors.foreground }]}>{m.name}</Text>
                   <Text style={[styles.modelItemMeta, { color: colors.mutedForeground }]}>
                     {m.modelId}
                   </Text>

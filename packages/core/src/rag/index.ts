@@ -7,6 +7,13 @@ export { EmbeddingService } from "./embedding-service";
 export type { EmbeddingConfig } from "./embedding-service";
 
 export {
+  detectRemoteEmbeddingDimension,
+  normalizeEmbeddingsUrl,
+  requestRemoteEmbeddings,
+} from "./embedding-request";
+export type { RemoteEmbeddingModel } from "./embedding-request";
+
+export {
   getEmbeddingModels,
   getDefaultModel,
   getEmbedding,

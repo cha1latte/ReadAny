@@ -75,12 +75,36 @@ setFeedbackWorkerUrl(feedbackWorkerUrl);
 // Keep the native splash screen visible while we bootstrap
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+/**
+ * Race a promise against a timeout. Resolves to the promise result, or rejects
+ * with a labeled timeout error after `ms`. Used to keep individual bootstrap
+ * steps from hanging the entire app start (e.g. native modules that block
+ * waiting on system services when offline — see #205).
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 export default function App() {
   const [ready, setReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Belt-and-braces: even if a step inside bootstrap hangs without resolving
+    // and without timing out (unforeseen native lockup), force the app into the
+    // ready state after 15s so users can at least see the UI instead of a
+    // permanent splash screen. Reported by #205 (no-network startup deadlock).
+    const bootstrapFallback = setTimeout(() => {
+      console.warn("[App] Bootstrap exceeded 15s — forcing ready=true to escape splash");
+      setReady(true);
+    }, 15000);
+
     async function bootstrap() {
       try {
         console.log("[App] bootstrap: register platform service");
@@ -121,30 +145,49 @@ export default function App() {
         // singleton is still alive — so setupPlayer() throws
         // "The player has already been initialized via setupPlayer".
         // Treat that specific error as success so bootstrap can continue.
+        //
+        // Separately (#205): in some no-network Android scenarios setupPlayer
+        // never returns at all. Race it against an 8s timeout so a hung native
+        // module can't pin the whole app on the splash screen. TTS may be
+        // unavailable in that session, but the rest of the app still boots.
         try {
-          await TrackPlayer.setupPlayer();
+          await withTimeout(TrackPlayer.setupPlayer(), 8000, "TrackPlayer.setupPlayer");
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          if (!/already been initialized/i.test(msg)) throw e;
-          console.log("[App] TrackPlayer already initialized — reusing existing native instance");
+          if (/already been initialized/i.test(msg)) {
+            console.log("[App] TrackPlayer already initialized — reusing existing native instance");
+          } else if (/timed out/i.test(msg)) {
+            console.warn(`[App] ${msg} — continuing without TrackPlayer; TTS playback may be unavailable`);
+          } else {
+            throw e;
+          }
         }
-        await TrackPlayer.updateOptions({
-          capabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.Stop,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-          ],
-          compactCapabilities: [Capability.Play, Capability.Pause],
-          notificationCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.Stop,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-          ],
-        });
+        try {
+          await withTimeout(
+            TrackPlayer.updateOptions({
+              capabilities: [
+                Capability.Play,
+                Capability.Pause,
+                Capability.Stop,
+                Capability.SkipToNext,
+                Capability.SkipToPrevious,
+              ],
+              compactCapabilities: [Capability.Play, Capability.Pause],
+              notificationCapabilities: [
+                Capability.Play,
+                Capability.Pause,
+                Capability.Stop,
+                Capability.SkipToNext,
+                Capability.SkipToPrevious,
+              ],
+            }),
+            5000,
+            "TrackPlayer.updateOptions",
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(`[App] TrackPlayer.updateOptions failed (${msg}) — continuing`);
+        }
 
         // Remote event → TTS store bridge
         const { useTTSStore: ttsStore } = await import("@/stores/tts-store");
@@ -173,16 +216,19 @@ export default function App() {
         });
 
         console.log("[App] bootstrap: done");
+        clearTimeout(bootstrapFallback);
         setReady(true);
         // Hide native splash now — our animated splash takes over
         await SplashScreen.hideAsync();
       } catch (error) {
         console.error("[App] bootstrap failed:", error);
+        clearTimeout(bootstrapFallback);
         setBootError(error instanceof Error ? error.message : String(error));
         await SplashScreen.hideAsync();
       }
     }
     bootstrap();
+    return () => clearTimeout(bootstrapFallback);
   }, []);
 
   const handleSplashFinish = useCallback(() => {

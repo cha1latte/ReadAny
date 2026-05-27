@@ -531,11 +531,10 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
       total: this._chunks.length,
     });
 
-    // On iOS, keep the audio session alive by inserting a silent track.
-    // This prevents the OS from suspending JS when audio stops between real tracks.
-    if (Platform.OS === "ios") {
-      void this._insertSilenceKeepAlive();
-    }
+    // Keep the audio session alive by inserting a silent track.
+    // iOS: Prevents OS from suspending JS when audio stops between real tracks.
+    // Android: Maintains audio focus and prevents system from killing playback during network stalls.
+    void this._insertSilenceKeepAlive();
   }
 
   private async _insertSilenceKeepAlive(): Promise<void> {

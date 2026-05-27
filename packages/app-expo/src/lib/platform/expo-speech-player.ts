@@ -7,7 +7,7 @@ import type { ITTSPlayer, TTSConfig } from "@readany/core/tts";
  * the system kills it.
  */
 import * as Speech from "expo-speech";
-import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
+import { AppState, type AppStateStatus, type NativeEventSubscription, Platform } from "react-native";
 
 export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
@@ -20,7 +20,9 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   private _appStateSubscription: NativeEventSubscription | null = null;
 
   private _handleAppStateChange = (nextAppState: AppStateStatus): void => {
-    if (nextAppState === "background") {
+    // Only stop on iOS — Apple's TextToSpeech.framework crashes if speech is
+    // active when backgrounded. Android handles background speech fine.
+    if (Platform.OS === "ios" && nextAppState === "background") {
       if (!this._stopped) {
         this.stop();
       }

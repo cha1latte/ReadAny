@@ -39,7 +39,9 @@ module.exports = {
       permissions: [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK",
         "android.permission.MODIFY_AUDIO_SETTINGS",
       ],
     },

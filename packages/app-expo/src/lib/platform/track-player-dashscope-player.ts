@@ -519,10 +519,9 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
       },
     );
 
-    // On iOS, keep the audio session alive by inserting a silent track.
-    if (Platform.OS === "ios") {
-      void this._insertSilenceKeepAlive();
-    }
+    // Keep the audio session alive by inserting a silent track.
+    // Prevents OS from killing playback during network stalls on both platforms.
+    void this._insertSilenceKeepAlive();
   }
 
   private async _insertSilenceKeepAlive(): Promise<void> {

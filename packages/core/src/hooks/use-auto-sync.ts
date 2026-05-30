@@ -7,7 +7,9 @@
 import { useEffect, useRef } from "react";
 import { useSyncStore } from "../stores/sync-store";
 
-function hasAutoSync(config: unknown): config is { autoSync: boolean; syncIntervalMins?: number } {
+function hasAutoSync(
+  config: unknown,
+): config is { autoSync: boolean; syncOnStartup?: boolean; syncIntervalMins?: number } {
   return typeof config === "object" && config !== null && "autoSync" in config;
 }
 
@@ -27,6 +29,8 @@ export function useAutoSync(onSyncComplete?: () => void) {
   const statusRef = useRef(status);
   statusRef.current = status;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupSyncAttemptedRef = useRef(false);
   const lastErrorRef = useRef<string | null>(null);
   lastErrorRef.current = error;
 
@@ -45,7 +49,49 @@ export function useAutoSync(onSyncComplete?: () => void) {
     }
   }, [lastResult, onSyncComplete]);
 
-  // Delayed startup sync + periodic sync
+  // Optional one-shot startup sync
+  useEffect(() => {
+    const startupSyncEnabled = hasAutoSync(config) && config.syncOnStartup === true;
+
+    if (!isConfigured || !startupSyncEnabled || startupSyncAttemptedRef.current) {
+      if (startupTimerRef.current) {
+        clearTimeout(startupTimerRef.current);
+        startupTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (
+      lastErrorRef.current?.includes("connect") ||
+      lastErrorRef.current?.includes("Unauthorized")
+    ) {
+      console.log("[AutoSync] Skipping startup sync due to connection/auth error");
+      return;
+    }
+
+    let cancelled = false;
+    startupTimerRef.current = setTimeout(
+      async () => {
+        if (cancelled) return;
+        startupSyncAttemptedRef.current = true;
+
+        if (statusRef.current === "idle" && !lastErrorRef.current) {
+          await syncNow();
+        }
+      },
+      withJitter(10_000, 10_000),
+    );
+
+    return () => {
+      cancelled = true;
+      if (startupTimerRef.current) {
+        clearTimeout(startupTimerRef.current);
+        startupTimerRef.current = null;
+      }
+    };
+  }, [isConfigured, config, syncNow]);
+
+  // Periodic sync
   useEffect(() => {
     const autoSyncEnabled = hasAutoSync(config) && config.autoSync;
 
@@ -58,7 +104,10 @@ export function useAutoSync(onSyncComplete?: () => void) {
     }
 
     // Don't auto-sync if last error was auth-related
-    if (lastErrorRef.current?.includes("connect") || lastErrorRef.current?.includes("Unauthorized")) {
+    if (
+      lastErrorRef.current?.includes("connect") ||
+      lastErrorRef.current?.includes("Unauthorized")
+    ) {
       console.log("[AutoSync] Skipping auto-sync due to connection/auth error");
       return;
     }
@@ -80,7 +129,12 @@ export function useAutoSync(onSyncComplete?: () => void) {
       }, delayMs);
     };
 
-    scheduleNext(withJitter(10_000, 10_000));
+    const startupSyncEnabled = hasAutoSync(config) && config.syncOnStartup === true;
+    scheduleNext(
+      startupSyncEnabled
+        ? withJitter(intervalMs, Math.min(60_000, Math.floor(intervalMs * 0.1)))
+        : withJitter(10_000, 10_000),
+    );
 
     return () => {
       cancelled = true;

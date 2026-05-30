@@ -258,6 +258,8 @@
     "syncFilesPartialFailed": "⚠️ 部分文件未同步成功（上传失败 {{uploadFailed}}，下载失败 {{downloadFailed}}）。常见原因：WebDAV 服务器拒绝建新目录、网络中断或权限不足。下次同步会自动重试。",
     "syncAutoSync": "自动同步",
     "syncAutoSyncDesc": "在后台自动同步数据",
+    "syncOnStartup": "启动时同步",
+    "syncOnStartupDesc": "每次打开应用后自动同步一次",
     "syncInterval": "同步间隔",
     "syncIntervalDesc": "自动同步开启后，每隔多少分钟检查一次",
     "syncIntervalMinutes": "{{count}} 分钟",

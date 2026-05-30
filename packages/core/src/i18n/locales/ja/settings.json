@@ -255,6 +255,8 @@
     "syncFilesPartialFailed": "⚠️ 一部のファイルの同期に失敗しました（{{uploadFailed}}件のアップロード失敗、{{downloadFailed}}件のダウンロード失敗）。原因: リモートがフォルダ作成を拒否した、ネットワークの一時的な問題、またはアクセス拒否。次回の同期で自動的に再試行されます。",
     "syncAutoSync": "自動同期",
     "syncAutoSyncDesc": "バックグラウンドで自動的にデータを同期",
+    "syncOnStartup": "起動時に同期",
+    "syncOnStartupDesc": "アプリを開いた後に自動で1回同期します",
     "syncInterval": "同期間隔",
     "syncIntervalDesc": "自動同期が有効な場合、N分ごとに更新を確認します",
     "syncIntervalMinutes": "{{count}}分",

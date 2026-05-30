@@ -5,7 +5,7 @@ import type { CitationPart } from "@readany/core/types/message";
 import * as Clipboard from "expo-clipboard";
 import { Fragment, type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Markdown, { type RenderRules, type ASTNode } from "react-native-markdown-display";
 
 interface MarkdownRendererProps {
@@ -128,8 +128,11 @@ function renderTextWithCitations(
 
   const parts = text.split(/(\[\d+\])/g);
   const result: React.ReactNode[] = [];
+  let offset = 0;
 
-  parts.forEach((part, i) => {
+  for (const part of parts) {
+    const keyOffset = offset;
+    offset += part.length;
     const match = part.match(/\[(\d+)\]/);
     if (match) {
       const num = Number.parseInt(match[1]);
@@ -137,27 +140,26 @@ function renderTextWithCitations(
       if (citation) {
         result.push(
           <CitationLink
-            key={`citation-${i}`}
+            key={`citation-${keyOffset}-${num}`}
             num={num}
             citation={citation}
             onCitationClick={onCitationClick}
             colors={colors}
           />,
         );
-        return;
+        continue;
       }
     }
     if (part) {
-      result.push(<Fragment key={`text-${i}`}>{part}</Fragment>);
+      result.push(<Fragment key={`text-${keyOffset}-${part.length}`}>{part}</Fragment>);
     }
-  });
+  }
 
   return result;
 }
 
 export function MarkdownRenderer({
   content,
-  isStreaming,
   styleOverrides,
   citations,
   onCitationClick,
@@ -170,7 +172,7 @@ export function MarkdownRenderer({
 
   const rules = useMemo<RenderRules>(
     () => ({
-      fence: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
+      fence: (node: ASTNode, _children: ReactNode[], _parentNodes: ASTNode[], style: any) => {
         const code = node.content || "";
         const lang = getCodeLanguage(node);
 
@@ -180,7 +182,7 @@ export function MarkdownRenderer({
 
         return <CodeBlockWithCopy key={node.key} code={code} style={style.fence} colors={colors} />;
       },
-      code_block: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
+      code_block: (node: ASTNode, _children: ReactNode[], _parentNodes: ASTNode[], style: any) => {
         const code = node.content || "";
         const lang = getCodeLanguage(node);
 
@@ -192,17 +194,29 @@ export function MarkdownRenderer({
           <CodeBlockWithCopy key={node.key} code={code} style={style.code_block} colors={colors} />
         );
       },
-      text: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
+      text: (
+        node: ASTNode,
+        _children: ReactNode[],
+        _parentNodes: ASTNode[],
+        style: any,
+        inheritedStyles: any = {},
+      ) => {
         const text = node.content || "";
+        const textStyle = [inheritedStyles, style.text];
+        const resolvedTextStyle = StyleSheet.flatten(textStyle);
+        const themedTextStyle = resolvedTextStyle?.color
+          ? textStyle
+          : [...textStyle, { color: colors.foreground }];
+
         if (citations && citations.length > 0 && /\[\d+\]/.test(text)) {
           return (
-            <Text key={node.key} style={style}>
+            <Text key={node.key} style={themedTextStyle}>
               {renderTextWithCitations(text, citations, onCitationClick, colors)}
             </Text>
           );
         }
         return (
-          <Text key={node.key} style={style}>
+          <Text key={node.key} style={themedTextStyle}>
             {text}
           </Text>
         );
@@ -226,6 +240,14 @@ const makeMarkdownStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       fontSize: fs.sm,
       lineHeight: 20,
+    },
+    text: {
+      color: colors.foreground,
+      fontSize: fs.sm,
+      lineHeight: 20,
+    },
+    textgroup: {
+      color: colors.foreground,
     },
     heading1: {
       color: colors.foreground,

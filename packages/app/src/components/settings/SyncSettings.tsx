@@ -35,6 +35,7 @@ export function SyncSettings() {
     syncNow,
     forceFullSync,
     setAutoSync,
+    setSyncOnStartup,
     setSyncIntervalMins,
     resetSync,
   } = useSyncStore();
@@ -339,6 +340,7 @@ export function SyncSettings() {
       <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.syncBackendType")}</h2>
       <div className="grid grid-cols-3 gap-3">
         <button
+          type="button"
           onClick={() => setSelectedBackend("webdav")}
           className={`rounded-lg border p-3 text-left transition-colors ${
             selectedBackend === "webdav"
@@ -351,6 +353,7 @@ export function SyncSettings() {
           <div className="text-xs text-muted-foreground mt-0.5">{t("settings.syncWebdavDesc")}</div>
         </button>
         <button
+          type="button"
           onClick={() => setSelectedBackend("s3")}
           className={`rounded-lg border p-3 text-left transition-colors ${
             selectedBackend === "s3"
@@ -363,6 +366,7 @@ export function SyncSettings() {
           <div className="text-xs text-muted-foreground mt-0.5">{t("settings.syncS3Desc")}</div>
         </button>
         <button
+          type="button"
           onClick={() => setSelectedBackend("lan")}
           className={`rounded-lg border p-3 text-left transition-colors ${
             selectedBackend === "lan"
@@ -383,8 +387,11 @@ export function SyncSettings() {
       <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.syncWebDavConfig")}</h2>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-sm text-foreground">{t("settings.syncUrl")}</label>
+          <label htmlFor="webdavUrl" className="mb-1 block text-sm text-foreground">
+            {t("settings.syncUrl")}
+          </label>
           <input
+            id="webdavUrl"
             type="url"
             value={webdavUrl}
             onChange={(e) => setWebdavUrl(e.target.value)}
@@ -394,10 +401,11 @@ export function SyncSettings() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="webdavUsername" className="mb-1 block text-sm text-foreground">
               {t("settings.syncUsername")}
             </label>
             <input
+              id="webdavUsername"
               type="text"
               value={webdavUsername}
               onChange={(e) => setWebdavUsername(e.target.value)}
@@ -405,10 +413,11 @@ export function SyncSettings() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="webdavPassword" className="mb-1 block text-sm text-foreground">
               {t("settings.syncPassword")}
             </label>
             <PasswordInput
+              id="webdavPassword"
               value={webdavPassword}
               onChange={(e) => setWebdavPassword(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
@@ -416,8 +425,11 @@ export function SyncSettings() {
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-sm text-foreground">{t("settings.syncRemoteRoot")}</label>
+          <label htmlFor="webdavRemoteRoot" className="mb-1 block text-sm text-foreground">
+            {t("settings.syncRemoteRoot")}
+          </label>
           <input
+            id="webdavRemoteRoot"
             type="text"
             value={webdavRemoteRoot}
             onChange={(e) => setWebdavRemoteRoot(e.target.value)}
@@ -429,7 +441,9 @@ export function SyncSettings() {
         <div className="flex items-center justify-between pt-1">
           <div>
             <span className="text-sm text-foreground">{t("settings.syncAllowInsecure")}</span>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.syncAllowInsecureDesc")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t("settings.syncAllowInsecureDesc")}
+            </p>
           </div>
           <Switch
             checked={webdavAllowInsecure}
@@ -439,6 +453,7 @@ export function SyncSettings() {
         <div className="space-y-2 pt-1">
           <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={handleTestWebDav}
               disabled={testing || !webdavUrl}
               className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
@@ -446,6 +461,7 @@ export function SyncSettings() {
               {testing ? t("settings.syncTesting") : t("settings.syncTestConnection")}
             </button>
             <button
+              type="button"
               onClick={handleSaveWebDav}
               disabled={saving || !webdavUrl || !webdavUsername}
               className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
@@ -472,10 +488,11 @@ export function SyncSettings() {
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="s3Endpoint" className="mb-1 block text-sm text-foreground">
               {t("settings.syncS3Endpoint")}
             </label>
             <input
+              id="s3Endpoint"
               type="url"
               value={s3Endpoint}
               onChange={(e) => setS3Endpoint(e.target.value)}
@@ -484,10 +501,11 @@ export function SyncSettings() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="s3Region" className="mb-1 block text-sm text-foreground">
               {t("settings.syncS3Region")}
             </label>
             <input
+              id="s3Region"
               type="text"
               value={s3Region}
               onChange={(e) => setS3Region(e.target.value)}
@@ -497,8 +515,11 @@ export function SyncSettings() {
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-sm text-foreground">{t("settings.syncS3Bucket")}</label>
+          <label htmlFor="s3Bucket" className="mb-1 block text-sm text-foreground">
+            {t("settings.syncS3Bucket")}
+          </label>
           <input
+            id="s3Bucket"
             type="text"
             value={s3Bucket}
             onChange={(e) => setS3Bucket(e.target.value)}
@@ -508,10 +529,11 @@ export function SyncSettings() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="s3AccessKeyId" className="mb-1 block text-sm text-foreground">
               {t("settings.syncS3AccessKeyId")}
             </label>
             <input
+              id="s3AccessKeyId"
               type="text"
               value={s3AccessKeyId}
               onChange={(e) => setS3AccessKeyId(e.target.value)}
@@ -519,10 +541,11 @@ export function SyncSettings() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-foreground">
+            <label htmlFor="s3SecretAccessKey" className="mb-1 block text-sm text-foreground">
               {t("settings.syncS3SecretAccessKey")}
             </label>
             <PasswordInput
+              id="s3SecretAccessKey"
               value={s3SecretAccessKey}
               onChange={(e) => setS3SecretAccessKey(e.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
@@ -543,6 +566,7 @@ export function SyncSettings() {
         </div>
         <div className="flex items-center gap-2 pt-1">
           <button
+            type="button"
             onClick={handleTestS3}
             disabled={testing || !s3Endpoint || !s3Bucket}
             className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
@@ -550,6 +574,7 @@ export function SyncSettings() {
             {testing ? t("settings.syncTesting") : t("settings.syncTestConnection")}
           </button>
           <button
+            type="button"
             onClick={handleSaveS3}
             disabled={saving || !s3Endpoint || !s3Bucket || !s3AccessKeyId}
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
@@ -576,6 +601,7 @@ export function SyncSettings() {
         <p className="text-sm text-muted-foreground">{t("settings.syncLANDescFull")}</p>
         <div className="grid grid-cols-2 gap-3">
           <button
+            type="button"
             className="rounded-lg border border-input bg-background p-4 text-left transition-colors hover:bg-muted/50"
             onClick={() => {
               setLanDialogMode("server");
@@ -589,6 +615,7 @@ export function SyncSettings() {
             </div>
           </button>
           <button
+            type="button"
             className="rounded-lg border border-input bg-background p-4 text-left transition-colors hover:bg-muted/50"
             onClick={() => {
               setLanDialogMode("client");
@@ -639,6 +666,7 @@ export function SyncSettings() {
           </div>
           {!isLanContext && (
             <button
+              type="button"
               onClick={handleSync}
               disabled={isBusy}
               className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
@@ -698,20 +726,41 @@ export function SyncSettings() {
             <div className="flex items-center justify-between pt-1">
               <div>
                 <span className="text-sm text-foreground">{t("settings.syncAutoSync")}</span>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.syncAutoSyncDesc")}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t("settings.syncAutoSyncDesc")}
+                </p>
               </div>
               <Switch
-                checked={config?.type === "webdav" || config?.type === "s3" ? config.autoSync : false}
+                checked={
+                  config?.type === "webdav" || config?.type === "s3" ? config.autoSync : false
+                }
                 onCheckedChange={(checked) => setAutoSync(checked)}
               />
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
               <div>
+                <span className="text-sm text-foreground">{t("settings.syncOnStartup")}</span>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t("settings.syncOnStartupDesc")}
+                </p>
+              </div>
+              <Switch
+                checked={
+                  config?.type === "webdav" || config?.type === "s3" ? config.syncOnStartup : false
+                }
+                onCheckedChange={(checked) => setSyncOnStartup(checked)}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+              <div>
                 <span className="text-sm text-foreground">{t("settings.syncInterval")}</span>
-                <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.syncIntervalDesc")}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t("settings.syncIntervalDesc")}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <input
+                  id="syncIntervalMins"
                   type="number"
                   min={5}
                   max={720}
@@ -726,7 +775,11 @@ export function SyncSettings() {
                   }}
                   className="w-20 rounded-md border border-input bg-background px-3 py-1.5 text-right text-sm text-foreground outline-none focus:border-primary"
                 />
-                <span className="text-xs text-muted-foreground">{t("settings.syncIntervalMinutes", { count: Number.parseInt(syncIntervalInput || "30", 10) || 30 })}</span>
+                <label htmlFor="syncIntervalMins" className="text-xs text-muted-foreground">
+                  {t("settings.syncIntervalMinutes", {
+                    count: Number.parseInt(syncIntervalInput || "30", 10) || 30,
+                  })}
+                </label>
               </div>
             </div>
           </>
@@ -757,12 +810,14 @@ export function SyncSettings() {
           <p className="mb-3 text-xs text-muted-foreground">{t("settings.syncConflictDesc")}</p>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => handleConflict("upload")}
               className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {t("settings.syncConflictUpload")}
             </button>
             <button
+              type="button"
               onClick={() => handleConflict("download")}
               className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted"
             >
@@ -778,6 +833,7 @@ export function SyncSettings() {
       {isConfigured && selectedBackend !== "lan" && (
         <section className="rounded-lg bg-muted/60 p-4">
           <button
+            type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="mb-2 text-sm font-medium text-foreground"
           >
@@ -788,6 +844,7 @@ export function SyncSettings() {
             <div className="space-y-3">
               <div className="grid gap-3 md:grid-cols-2">
                 <button
+                  type="button"
                   onClick={handleForceFullUpload}
                   disabled={isBusy}
                   className="rounded-lg border border-input bg-background p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
@@ -801,6 +858,7 @@ export function SyncSettings() {
                   </p>
                 </button>
                 <button
+                  type="button"
                   onClick={handleForceFullDownload}
                   disabled={isBusy}
                   className="rounded-lg border border-input bg-background p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
@@ -816,6 +874,7 @@ export function SyncSettings() {
               </div>
               <div className="pt-2">
                 <button
+                  type="button"
                   onClick={handleReset}
                   className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10"
                 >
@@ -860,9 +919,7 @@ export function SyncSettings() {
               saveS3Config(d.config as never, (d.secretAccessKey as string) || "");
             }
           }}
-          validate={(d) =>
-            typeof d === "object" && d !== null && "backendType" in d
-          }
+          validate={(d) => typeof d === "object" && d !== null && "backendType" in d}
         />
       </section>
 

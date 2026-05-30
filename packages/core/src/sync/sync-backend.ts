@@ -33,7 +33,10 @@ export interface ISyncBackend {
   get(path: string): Promise<Uint8Array>;
 
   /** Download data with progress reporting (optional — falls back to get() if not implemented) */
-  getWithProgress?(path: string, onProgress?: (loaded: number, total: number) => void): Promise<Uint8Array>;
+  getWithProgress?(
+    path: string,
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<Uint8Array>;
 
   /** Get JSON data from a path, returns null if not found */
   getJSON<T>(path: string): Promise<T | null>;
@@ -75,6 +78,7 @@ export interface WebDavConfig {
   remoteRoot?: string;
   allowInsecure?: boolean;
   autoSync: boolean;
+  syncOnStartup: boolean;
   syncIntervalMins: number;
   wifiOnly: boolean;
   notifyOnComplete: boolean;
@@ -89,6 +93,7 @@ export interface S3Config {
   accessKeyId: string;
   pathStyle?: boolean;
   autoSync: boolean;
+  syncOnStartup: boolean;
   syncIntervalMins: number;
   wifiOnly: boolean;
   notifyOnComplete: boolean;
@@ -105,6 +110,7 @@ export type SyncConfig = WebDavConfig | S3Config | LANConfig;
 /** Default configuration values */
 export const DEFAULT_SYNC_CONFIG = {
   autoSync: false,
+  syncOnStartup: false,
   syncIntervalMins: 30,
   wifiOnly: false,
   notifyOnComplete: true,

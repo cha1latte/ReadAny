@@ -255,6 +255,8 @@
     "syncFilesPartialFailed": "⚠️ Algunos archivos no se sincronizaron ({{uploadFailed}} errores de subida, {{downloadFailed}} errores de descarga). Causas probables: el servidor rechazó crear una carpeta, problema de red o permiso denegado. La próxima sincronización reintentará automáticamente.",
     "syncAutoSync": "Sincronización automática",
     "syncAutoSyncDesc": "Sincronizar datos automáticamente en segundo plano",
+    "syncOnStartup": "Sincronizar al iniciar",
+    "syncOnStartupDesc": "Sincronizar automáticamente una vez al abrir la app",
     "syncInterval": "Intervalo de sincronización",
     "syncIntervalDesc": "Cuando la sincronización automática está habilitada, buscar actualizaciones cada N minutos",
     "syncIntervalMinutes": "{{count}} min",

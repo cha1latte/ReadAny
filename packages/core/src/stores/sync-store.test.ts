@@ -68,6 +68,7 @@ const baseConfig: SyncConfig = {
   username: "alice",
   remoteRoot: "readany",
   autoSync: false,
+  syncOnStartup: false,
   syncIntervalMins: 30,
   wifiOnly: false,
   notifyOnComplete: true,
@@ -279,6 +280,22 @@ describe("useSyncStore", () => {
 
     await useSyncStore.getState().setSyncIntervalMins(999);
     expect(getWebDavConfigFromState().syncIntervalMins).toBe(720);
+  });
+
+  it("updates startup sync preference", async () => {
+    useSyncStore.setState({
+      config: baseConfig,
+      isConfigured: true,
+      backendType: "webdav",
+    });
+
+    await useSyncStore.getState().setSyncOnStartup(true);
+
+    expect(getWebDavConfigFromState().syncOnStartup).toBe(true);
+    expect(mockPlatformService.kvSetItem).toHaveBeenCalledWith(
+      "sync_config",
+      expect.stringContaining('"syncOnStartup":true'),
+    );
   });
 
   it("syncSimple success updates runtime state and emits completion", async () => {

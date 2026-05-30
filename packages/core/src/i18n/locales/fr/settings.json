@@ -255,6 +255,8 @@
     "syncFilesPartialFailed": "⚠️ Certains fichiers n'ont pas été synchronisés ({{uploadFailed}} échecs d'envoi, {{downloadFailed}} échecs de téléchargement). Causes probables : le serveur distant a refusé de créer un nouveau dossier, coupure réseau ou accès refusé. La prochaine synchronisation réessaiera automatiquement.",
     "syncAutoSync": "Synchronisation automatique",
     "syncAutoSyncDesc": "Synchroniser automatiquement les données en arrière-plan",
+    "syncOnStartup": "Synchroniser au démarrage",
+    "syncOnStartupDesc": "Synchroniser automatiquement une fois à l'ouverture de l'app",
     "syncInterval": "Intervalle de synchronisation",
     "syncIntervalDesc": "Lorsque la synchronisation auto est activée, vérifier les mises à jour toutes les N minutes",
     "syncIntervalMinutes": "{{count}} min",

@@ -1,11 +1,12 @@
+import { GroupPickerSheet } from "@/components/library/GroupPickerSheet";
 import {
   CheckIcon,
   DatabaseIcon,
   FolderInputIcon,
   HashIcon,
+  RotateCcwIcon,
   Trash2Icon,
 } from "@/components/ui/Icon";
-import { GroupPickerSheet } from "@/components/library/GroupPickerSheet";
 import { useLibraryStore } from "@/stores/library-store";
 import { type ThemeColors, fontSize, fontWeight, radius, spacing, useColors } from "@/styles/theme";
 import type { Book } from "@readany/core/types";
@@ -31,6 +32,7 @@ interface BookCardActionSheetProps {
   onManageTags?: (book: Book) => void;
   onVectorize?: (book: Book) => void;
   onDelete: (bookId: string, options?: { preserveData?: boolean }) => void;
+  onResetReadingData?: (bookId: string) => void;
 }
 
 export function BookCardActionSheet({
@@ -41,12 +43,14 @@ export function BookCardActionSheet({
   onManageTags,
   onVectorize,
   onDelete,
+  onResetReadingData,
 }: BookCardActionSheetProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { t } = useTranslation();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [preserveDataOnDelete, setPreserveDataOnDelete] = useState(true);
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const groups = useLibraryStore((state) => state.groups);
@@ -91,7 +95,10 @@ export function BookCardActionSheet({
             if (book.isVectorized) {
               Alert.alert(
                 t("home.vec_reindex", "重新索引"),
-                t("home.vec_reindexConfirm", "该书已完成索引，重新索引将重置现有数据，确定继续吗？"),
+                t(
+                  "home.vec_reindexConfirm",
+                  "该书已完成索引，重新索引将重置现有数据，确定继续吗？",
+                ),
                 [
                   { text: t("common.cancel"), style: "cancel" },
                   { text: t("common.confirm"), onPress: () => onVectorize(book) },
@@ -100,6 +107,18 @@ export function BookCardActionSheet({
             } else {
               onVectorize(book);
             }
+          },
+        }
+      : null,
+    onResetReadingData
+      ? {
+          key: "reset-reading-data",
+          icon: <RotateCcwIcon size={18} color={colors.destructive} />,
+          label: t("library.resetReadingData", "重置阅读数据"),
+          destructive: true,
+          onPress: () => {
+            onClose();
+            setShowResetConfirm(true);
           },
         }
       : null,
@@ -224,6 +243,45 @@ export function BookCardActionSheet({
                 }}
               >
                 <Text style={styles.confirmDangerText}>{t("common.remove", "删除")}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showResetConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowResetConfirm(false)}
+      >
+        <Pressable style={styles.confirmOverlay} onPress={() => setShowResetConfirm(false)}>
+          <Pressable style={styles.confirmCard} onPress={() => {}}>
+            <Text style={styles.confirmTitle}>
+              {t("library.resetReadingDataTitle", "重置阅读数据？")}
+            </Text>
+            <Text style={styles.confirmDescription}>
+              {t(
+                "library.resetReadingDataDescription",
+                "这会清空本书的阅读进度、当前位置和阅读字数统计，但不会删除书籍、笔记、高亮或书签。",
+              )}
+            </Text>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmSecondary}
+                onPress={() => setShowResetConfirm(false)}
+              >
+                <Text style={styles.confirmSecondaryText}>{t("common.cancel", "取消")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDanger}
+                onPress={() => {
+                  setShowResetConfirm(false);
+                  onResetReadingData?.(book.id);
+                }}
+              >
+                <Text style={styles.confirmDangerText}>{t("common.reset", "重置")}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

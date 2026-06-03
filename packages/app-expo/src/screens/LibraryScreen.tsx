@@ -197,6 +197,7 @@ export function LibraryScreen() {
     loadBooks,
     importBooks,
     removeBook,
+    resetBookReadingData,
     setFilter,
     setGroupView,
     setActiveGroupId,
@@ -685,6 +686,7 @@ export function LibraryScreen() {
             cardWidth={gridItemWidth}
             onOpen={handleOpen}
             onDelete={removeBook}
+            onResetReadingData={resetBookReadingData}
             onManageTags={handleManageTags}
             onVectorize={handleVectorize}
             isVectorizing={vectorizingBookId === item.book.id}
@@ -707,6 +709,7 @@ export function LibraryScreen() {
       handleOpen,
       handleVectorize,
       removeBook,
+      resetBookReadingData,
       s.gridItem,
       selectedBookIds,
       selectionMode,

@@ -1,5 +1,5 @@
-import type { ReadingSession } from "../../types/reading";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReadingSession } from "../../types/reading";
 
 const mockExecute = vi.fn();
 const mockSelect = vi.fn();
@@ -8,6 +8,7 @@ const mockDb = { execute: mockExecute, select: mockSelect, close: vi.fn() };
 const coreMocks = vi.hoisted(() => ({
   getDB: vi.fn(),
   getDeviceId: vi.fn(),
+  insertTombstone: vi.fn(),
   nextSyncVersion: vi.fn(),
   nextUpdatedAt: vi.fn(),
 }));
@@ -20,6 +21,7 @@ const {
   getReadingSessionsByDateRange,
   insertReadingSession,
   updateReadingSession,
+  deleteReadingSessionsForBook,
 } = await import("../session-queries");
 
 const sampleSession: ReadingSession = {
@@ -38,6 +40,7 @@ describe("session-queries", () => {
     vi.clearAllMocks();
     coreMocks.getDB.mockResolvedValue(mockDb);
     coreMocks.getDeviceId.mockResolvedValue("device-1");
+    coreMocks.insertTombstone.mockResolvedValue(undefined);
     coreMocks.nextSyncVersion.mockResolvedValue(1);
     coreMocks.nextUpdatedAt.mockResolvedValue(3000);
   });
@@ -162,8 +165,8 @@ describe("session-queries", () => {
       expect(params[1]).toBe("book-1");
       expect(params[2]).toBe(1000); // startedAt
       expect(params[3]).toBe(2000); // endedAt
-      expect(params[4]).toBe(900);  // totalActiveTime
-      expect(params[5]).toBe(10);   // pagesRead
+      expect(params[4]).toBe(900); // totalActiveTime
+      expect(params[5]).toBe(10); // pagesRead
       expect(params[6]).toBe(15000); // charactersRead
       expect(params[7]).toBe("STOPPED"); // state
     });
@@ -212,6 +215,32 @@ describe("session-queries", () => {
       expect(sql).toContain("updated_at = ?");
       expect(sql).toContain("sync_version = ?");
       expect(sql).toContain("last_modified_by = ?");
+    });
+  });
+
+  describe("deleteReadingSessionsForBook", () => {
+    it("creates tombstones and deletes sessions for a book", async () => {
+      mockSelect.mockResolvedValue([{ id: "session-1" }, { id: "session-2" }]);
+      mockExecute.mockResolvedValue(undefined);
+
+      await deleteReadingSessionsForBook("book-1");
+
+      expect(mockSelect).toHaveBeenCalledWith("SELECT id FROM reading_sessions WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+        mockDb,
+        "session-1",
+        "reading_sessions",
+      );
+      expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+        mockDb,
+        "session-2",
+        "reading_sessions",
+      );
+      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM reading_sessions WHERE book_id = ?", [
+        "book-1",
+      ]);
     });
   });
 });

@@ -1,5 +1,5 @@
 import type { ReadingSession } from "../types/reading";
-import { getDB, getDeviceId, nextSyncVersion, nextUpdatedAt } from "./db-core";
+import { getDB, getDeviceId, insertTombstone, nextSyncVersion, nextUpdatedAt } from "./db-core";
 
 type ReadingSessionRow = {
   id: string;
@@ -120,4 +120,18 @@ export async function updateReadingSession(
 
   values.push(id);
   await database.execute(`UPDATE reading_sessions SET ${sets.join(", ")} WHERE id = ?`, values);
+}
+
+export async function deleteReadingSessionsForBook(bookId: string): Promise<void> {
+  const database = await getDB();
+  const sessionRows = await database.select<{ id: string }>(
+    "SELECT id FROM reading_sessions WHERE book_id = ?",
+    [bookId],
+  );
+
+  for (const row of sessionRows) {
+    await insertTombstone(database, row.id, "reading_sessions");
+  }
+
+  await database.execute("DELETE FROM reading_sessions WHERE book_id = ?", [bookId]);
 }

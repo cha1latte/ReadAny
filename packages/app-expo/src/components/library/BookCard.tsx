@@ -50,6 +50,7 @@ interface BookCardProps {
   book: Book;
   onOpen: (book: Book) => void;
   onDelete: (bookId: string, options?: { preserveData?: boolean }) => void;
+  onResetReadingData?: (bookId: string) => void;
   onManageTags?: (book: Book) => void;
   onVectorize?: (book: Book) => void;
   isVectorizing?: boolean;
@@ -67,6 +68,7 @@ export const BookCard = memo(function BookCard({
   book,
   onOpen,
   onDelete,
+  onResetReadingData,
   onManageTags,
   onVectorize,
   isVectorizing,
@@ -115,8 +117,6 @@ export const BookCard = memo(function BookCard({
   }, [book.meta.coverUrl]);
 
   const progressPct = Math.round(book.progress * 100);
-  const hasCover = resolvedCoverUrl && !imageError;
-
   const vecPct = vectorProgress
     ? vectorProgress.totalChunks > 0
       ? Math.round((vectorProgress.processedChunks / vectorProgress.totalChunks) * 100)
@@ -405,6 +405,7 @@ export const BookCard = memo(function BookCard({
         onManageTags={onManageTags}
         onVectorize={onVectorize}
         onDelete={onDelete}
+        onResetReadingData={onResetReadingData}
       />
     </>
   );

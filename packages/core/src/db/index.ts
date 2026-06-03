@@ -27,6 +27,7 @@ export {
   insertBook,
   updateBook,
   setBookSyncStatus,
+  resetBookReadingData,
   deleteBook,
   // Group queries
   getGroups,
@@ -67,6 +68,7 @@ export {
   getReadingSessionsByDateRange,
   insertReadingSession,
   updateReadingSession,
+  deleteReadingSessionsForBook,
   // Chunk queries
   getChunks,
   insertChunks,

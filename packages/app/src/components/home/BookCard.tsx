@@ -1,3 +1,4 @@
+import { GroupPickerPopover } from "@/components/home/GroupPickerPopover";
 import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
 import {
   Dialog,
@@ -7,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { GroupPickerPopover } from "@/components/home/GroupPickerPopover";
 import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
 import { openDesktopBook } from "@/lib/library/open-book";
 /**
@@ -30,6 +30,7 @@ import {
   Loader2,
   MoreVertical,
   Plus,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -50,6 +51,7 @@ export const BookCard = memo(function BookCard({
 }: BookCardProps) {
   const { t } = useTranslation();
   const removeBook = useLibraryStore((s) => s.removeBook);
+  const resetBookReadingData = useLibraryStore((s) => s.resetBookReadingData);
   const closeAppTab = useAppStore((s) => s.removeTab);
   const closeReaderTab = useReaderStore((s) => s.removeTab);
   const allTags = useLibraryStore((s) => s.allTags);
@@ -71,6 +73,7 @@ export const BookCard = memo(function BookCard({
   const [vectorProgress, setVectorProgress] = useState<VectorizeProgress | null>(null);
   const [configGuide, setConfigGuide] = useState<ConfigGuideType>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showResetReadingDataDialog, setShowResetReadingDataDialog] = useState(false);
   const [showReindexConfirm, setShowReindexConfirm] = useState(false);
   const [preserveDataOnDelete, setPreserveDataOnDelete] = useState(true);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -100,7 +103,13 @@ export const BookCard = memo(function BookCard({
       onSelect?.(book.id);
       return;
     }
-    if (showMenu || showDeleteDialog || showReindexConfirm || Date.now() < suppressOpenUntilRef.current) {
+    if (
+      showMenu ||
+      showDeleteDialog ||
+      showResetReadingDataDialog ||
+      showReindexConfirm ||
+      Date.now() < suppressOpenUntilRef.current
+    ) {
       return;
     }
     await openDesktopBook({ book, t });
@@ -113,6 +122,14 @@ export const BookCard = memo(function BookCard({
     setMenuPos(null);
     setPreserveDataOnDelete(true);
     setShowDeleteDialog(true);
+  }, []);
+
+  const handleResetReadingData = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    suppressOpenUntilRef.current = Date.now() + 600;
+    setShowMenu(false);
+    setMenuPos(null);
+    setShowResetReadingDataDialog(true);
   }, []);
 
   const doVectorize = useCallback(async () => {
@@ -153,16 +170,13 @@ export const BookCard = memo(function BookCard({
     [book.isVectorized, hasVectorCapability, vectorizing, doVectorize],
   );
 
-  const handleMoveGroup = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      suppressOpenUntilRef.current = Date.now() + 300;
-      setShowMenu(false);
-      setMenuPos(null);
-      setShowGroupPicker(true);
-    },
-    [],
-  );
+  const handleMoveGroup = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    suppressOpenUntilRef.current = Date.now() + 300;
+    setShowMenu(false);
+    setMenuPos(null);
+    setShowGroupPicker(true);
+  }, []);
 
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
     setImageLoaded(event.currentTarget.naturalWidth > 0);
@@ -486,7 +500,15 @@ export const BookCard = memo(function BookCard({
                 </div>
               )}
             </div>
-            {/* Delete button */}
+            {/* Destructive actions */}
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+              onClick={handleResetReadingData}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              {t("library.resetReadingData", "重置阅读数据")}
+            </button>
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
@@ -618,20 +640,68 @@ export const BookCard = memo(function BookCard({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showResetReadingDataDialog} onOpenChange={setShowResetReadingDataDialog}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{t("library.resetReadingDataTitle", "重置阅读数据？")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "library.resetReadingDataDescription",
+                "这会清空本书的阅读进度、当前位置和阅读字数统计，但不会删除书籍、笔记、高亮或书签。",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowResetReadingDataDialog(false);
+              }}
+            >
+              {t("common.cancel", "取消")}
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.stopPropagation();
+                suppressOpenUntilRef.current = Date.now() + 600;
+                setShowResetReadingDataDialog(false);
+                const matchingTabIds = useAppStore
+                  .getState()
+                  .tabs.filter((tab) => tab.bookId === book.id)
+                  .map((tab) => tab.id);
+                for (const tabId of matchingTabIds) {
+                  closeAppTab(tabId);
+                  closeReaderTab(tabId);
+                }
+                await resetBookReadingData(book.id);
+              }}
+            >
+              {t("common.reset", "重置")}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Re-index confirmation dialog */}
       <Dialog open={showReindexConfirm} onOpenChange={setShowReindexConfirm}>
         <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle>{t("home.vec_reindex")}</DialogTitle>
-            <DialogDescription>
-              {t("home.vec_reindexConfirm")}
-            </DialogDescription>
+            <DialogDescription>{t("home.vec_reindexConfirm")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               type="button"
               className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
-              onClick={(e) => { e.stopPropagation(); setShowReindexConfirm(false); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowReindexConfirm(false);
+              }}
             >
               {t("common.cancel")}
             </button>

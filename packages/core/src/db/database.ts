@@ -41,6 +41,7 @@ export {
   insertBook,
   updateBook,
   setBookSyncStatus,
+  resetBookReadingData,
   deleteBook,
 } from "./book-queries";
 
@@ -96,6 +97,7 @@ export {
   getReadingSessionsByDateRange,
   insertReadingSession,
   updateReadingSession,
+  deleteReadingSessionsForBook,
 } from "./session-queries";
 
 export {

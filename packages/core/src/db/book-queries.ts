@@ -8,6 +8,7 @@ import {
   nextUpdatedAt,
   parseJSON,
 } from "./db-core";
+import { deleteReadingSessionsForBook } from "./session-queries";
 import { deleteThreadsByBookId } from "./thread-queries";
 
 interface BookRow {
@@ -304,6 +305,11 @@ export async function setBookSyncStatus(id: string, syncStatus: Book["syncStatus
   await database.execute("UPDATE books SET sync_status = ? WHERE id = ?", [syncStatus, id]);
 }
 
+export async function resetBookReadingData(id: string): Promise<void> {
+  await updateBook(id, { progress: 0, currentCfi: "" });
+  await deleteReadingSessionsForBook(id);
+}
+
 export async function deleteBook(id: string, options: DeleteBookOptions = {}): Promise<void> {
   const database = await getDB();
   const preserveData = options.preserveData ?? false;
@@ -348,7 +354,7 @@ export async function deleteBook(id: string, options: DeleteBookOptions = {}): P
   await database.execute("DELETE FROM highlights WHERE book_id = ?", [id]);
   await database.execute("DELETE FROM notes WHERE book_id = ?", [id]);
   await database.execute("DELETE FROM bookmarks WHERE book_id = ?", [id]);
-  await database.execute("DELETE FROM reading_sessions WHERE book_id = ?", [id]);
+  await deleteReadingSessionsForBook(id);
   await deleteThreadsByBookId(id);
   await deleteChunks(id);
   await insertTombstone(database, id, "books");

@@ -11,6 +11,7 @@ export {
   getDeletedBookByTitle,
   insertBook,
   updateBook,
+  resetBookReadingData,
   deleteBook,
   getGroups,
   insertGroup,

@@ -69,6 +69,7 @@ export interface LibraryState {
   setActiveGroupId: (groupId: string) => void;
   addBook: (book: Book) => Promise<void>;
   removeBook: (bookId: string, options?: RemoveBookOptions) => Promise<void>;
+  resetBookReadingData: (bookId: string) => Promise<void>;
   updateBook: (bookId: string, updates: Partial<Book>) => void;
   setFilter: (filter: Partial<LibraryFilter>) => void;
   setViewMode: (mode: LibraryViewMode) => void;
@@ -802,6 +803,23 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       } catch {
         /* file may not exist */
       }
+    }
+    debouncedSave("library-books", get().books);
+  },
+
+  resetBookReadingData: async (bookId) => {
+    set((state) => ({
+      books: state.books.map((book) =>
+        book.id === bookId ? { ...book, progress: 0, currentCfi: undefined } : book,
+      ),
+    }));
+    try {
+      await db.initDatabase();
+      await db.resetBookReadingData(bookId);
+    } catch (err) {
+      console.error("Failed to reset book reading data:", err);
+      await get().loadBooks();
+      return;
     }
     debouncedSave("library-books", get().books);
   },

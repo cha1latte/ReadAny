@@ -1,5 +1,5 @@
-import type { Book } from "../../types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Book } from "../../types";
 
 // --- Mock db-core ---
 const mockExecute = vi.fn();
@@ -16,7 +16,11 @@ const coreMocks = vi.hoisted(() => ({
   insertTombstone: vi.fn(),
   parseJSON: vi.fn((str: string | null | undefined, fallback: unknown) => {
     if (!str) return fallback;
-    try { return JSON.parse(str); } catch { return fallback; }
+    try {
+      return JSON.parse(str);
+    } catch {
+      return fallback;
+    }
   }),
 }));
 
@@ -26,7 +30,9 @@ const dependencyMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../db-core", () => coreMocks);
-vi.mock("../thread-queries", () => ({ deleteThreadsByBookId: dependencyMocks.deleteThreadsByBookId }));
+vi.mock("../thread-queries", () => ({
+  deleteThreadsByBookId: dependencyMocks.deleteThreadsByBookId,
+}));
 vi.mock("../chunk-queries", () => ({ deleteChunks: dependencyMocks.deleteChunks }));
 
 const {
@@ -35,6 +41,7 @@ const {
   getDeletedBookByFileHash,
   insertBook,
   updateBook,
+  resetBookReadingData,
   deleteBook,
 } = await import("../book-queries");
 
@@ -166,7 +173,7 @@ describe("book-queries", () => {
 
       const book = await getBook("book-1");
       expect(book).not.toBeNull();
-      expect(book!.id).toBe("book-1");
+      expect(book?.id).toBe("book-1");
       expect(mockSelect).toHaveBeenCalledWith(
         "SELECT * FROM books WHERE id = ? AND deleted_at IS NULL",
         ["book-1"],
@@ -256,24 +263,67 @@ describe("book-queries", () => {
     });
   });
 
+  describe("resetBookReadingData", () => {
+    it("resets book progress and deletes reading sessions", async () => {
+      mockExecute.mockResolvedValue(undefined);
+      mockSelect.mockResolvedValueOnce([{ id: "session-1" }]);
+
+      await resetBookReadingData("book-1");
+
+      expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("UPDATE books SET"), [
+        0,
+        "",
+        3000,
+        1,
+        "device-1",
+        "book-1",
+      ]);
+      expect(mockSelect).toHaveBeenCalledWith("SELECT id FROM reading_sessions WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+        mockDb,
+        "session-1",
+        "reading_sessions",
+      );
+      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM reading_sessions WHERE book_id = ?", [
+        "book-1",
+      ]);
+    });
+  });
+
   describe("deleteBook", () => {
     it("soft-deletes book and preserves notes + reading stats when requested", async () => {
       mockExecute.mockResolvedValue(undefined);
 
       await deleteBook("book-1", { preserveData: true });
 
-      expect(mockSelect).not.toHaveBeenCalledWith("SELECT id FROM highlights WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM highlights WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM notes WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM bookmarks WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM reading_sessions WHERE book_id = ?", ["book-1"]);
+      expect(mockSelect).not.toHaveBeenCalledWith("SELECT id FROM highlights WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM highlights WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM notes WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM bookmarks WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(mockExecute).not.toHaveBeenCalledWith(
+        "DELETE FROM reading_sessions WHERE book_id = ?",
+        ["book-1"],
+      );
       expect(mockExecute).not.toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
       expect(dependencyMocks.deleteThreadsByBookId).toHaveBeenCalledWith("book-1");
       expect(dependencyMocks.deleteChunks).toHaveBeenCalledWith("book-1");
-      expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE books"),
-        [expect.any(Number), 3000, 1, "device-1", "book-1"],
-      );
+      expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("UPDATE books"), [
+        expect.any(Number),
+        3000,
+        1,
+        "device-1",
+        "book-1",
+      ]);
     });
 
     it("hard-deletes everything when preserveData is not requested", async () => {
@@ -281,18 +331,30 @@ describe("book-queries", () => {
       mockSelect
         .mockResolvedValueOnce([{ id: "hl-1" }])
         .mockResolvedValueOnce([{ id: "note-1" }])
-        .mockResolvedValueOnce([{ id: "bm-1" }]);
+        .mockResolvedValueOnce([{ id: "bm-1" }])
+        .mockResolvedValueOnce([{ id: "session-1" }]);
 
       await deleteBook("book-1");
 
-      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM highlights WHERE book_id = ?", ["book-1"]);
+      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM highlights WHERE book_id = ?", [
+        "book-1",
+      ]);
       expect(mockExecute).toHaveBeenCalledWith("DELETE FROM notes WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM bookmarks WHERE book_id = ?", ["book-1"]);
-      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM reading_sessions WHERE book_id = ?", ["book-1"]);
+      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM bookmarks WHERE book_id = ?", [
+        "book-1",
+      ]);
+      expect(mockExecute).toHaveBeenCalledWith("DELETE FROM reading_sessions WHERE book_id = ?", [
+        "book-1",
+      ]);
       expect(mockExecute).toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
       expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "hl-1", "highlights");
       expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "note-1", "notes");
       expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "bm-1", "bookmarks");
+      expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+        mockDb,
+        "session-1",
+        "reading_sessions",
+      );
       expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "book-1", "books");
     });
   });

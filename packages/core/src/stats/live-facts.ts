@@ -1,5 +1,10 @@
 import type { Book, ReadingSession } from "../types";
 import type { DailyBookBreakdown, DailyReadingFact } from "./schema";
+import {
+  createStatsBookIdentity,
+  getCanonicalStatsBook,
+  getCanonicalStatsBookId,
+} from "./book-identity";
 import { getMonthKey, getWeekKey, getYearKey, toLocalDateKey } from "./period-utils";
 
 function toMinutes(milliseconds: number): number {
@@ -67,11 +72,12 @@ export function mergeCurrentSessionIntoDailyFacts(
     return dailyFacts;
   }
 
-  const bookIndex = books instanceof Map ? books : new Map(books.map((book) => [book.id, book]));
+  const bookIdentity = createStatsBookIdentity(books);
+  const statsBookId = getCanonicalStatsBookId(bookIdentity, currentSession.bookId);
   const sessionDate = toLocalDateKey(currentSession.startedAt);
   const sessionMinutes = toMinutes(currentSession.totalActiveTime);
   const sessionHour = new Date(currentSession.startedAt).getHours();
-  const book = bookIndex.get(currentSession.bookId);
+  const book = getCanonicalStatsBook(bookIdentity, currentSession.bookId);
 
   const nextFacts = dailyFacts.map((fact) => ({
     ...fact,
@@ -100,9 +106,9 @@ export function mergeCurrentSessionIntoDailyFacts(
   target.hourlyDistribution[sessionHour] = (target.hourlyDistribution[sessionHour] ?? 0) + sessionMinutes;
   target.peakHour = getPeakHour(target.hourlyDistribution);
 
-  let targetBook = target.bookBreakdown.find((item) => item.bookId === currentSession.bookId);
+  let targetBook = target.bookBreakdown.find((item) => item.bookId === statsBookId);
   if (!targetBook) {
-    targetBook = createBookBreakdown(currentSession, book);
+    targetBook = createBookBreakdown({ ...currentSession, bookId: statsBookId }, book);
     target.bookBreakdown.push(targetBook);
   }
 

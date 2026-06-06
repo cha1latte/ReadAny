@@ -157,4 +157,56 @@ describe("buildDailyReadingFacts", () => {
       totalTime: 15,
     });
   });
+
+  it("merges sessions from deleted duplicate records into the active book by file hash", () => {
+    const renamedBook: Book = {
+      ...books[0],
+      id: "book-active",
+      fileHash: "same-file",
+      meta: {
+        ...books[0].meta,
+        title: "如何成为不完美主义者",
+      },
+      updatedAt: 10,
+    };
+    const deletedOldTitle: Book = {
+      ...books[0],
+      id: "book-deleted",
+      fileHash: "same-file",
+      deletedAt: 20,
+      meta: {
+        ...books[0].meta,
+        title: "如何成为不完美主义者（改变无数人...",
+      },
+      updatedAt: 5,
+    };
+
+    const sessions: ReadingSession[] = [
+      createSession({
+        id: "old-title-session",
+        bookId: "book-deleted",
+        totalActiveTime: 11 * 60 * 1000,
+        pagesRead: 4,
+      }),
+      createSession({
+        id: "renamed-session",
+        bookId: "book-active",
+        totalActiveTime: 89 * 60 * 1000,
+        pagesRead: 8,
+      }),
+    ];
+
+    const [fact] = buildDailyReadingFacts(sessions, [deletedOldTitle, renamedBook]);
+
+    expect(fact.booksTouched).toBe(1);
+    expect(fact.bookBreakdown).toEqual([
+      expect.objectContaining({
+        bookId: "book-active",
+        title: "如何成为不完美主义者",
+        totalTime: 100,
+        pagesRead: 12,
+        sessionsCount: 2,
+      }),
+    ]);
+  });
 });

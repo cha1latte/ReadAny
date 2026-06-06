@@ -1,6 +1,11 @@
 import type { Book, ReadingSession } from "../types";
 import type { DailyBookBreakdown, DailyReadingFact } from "./schema";
 import {
+  createStatsBookIdentity,
+  getCanonicalStatsBook,
+  getCanonicalStatsBookId,
+} from "./book-identity";
+import {
   getMonthKey,
   getWeekKey,
   getYearKey,
@@ -80,7 +85,7 @@ export function buildDailyReadingFacts(
   sessions: ReadingSession[],
   books: Book[] | Map<string, Book> = [],
 ): DailyReadingFact[] {
-  const bookIndex = books instanceof Map ? books : createBookIndex(books);
+  const bookIdentity = createStatsBookIdentity(books);
   const days = new Map<string, DayAccumulator>();
 
   for (const session of sessions) {
@@ -101,12 +106,13 @@ export function buildDailyReadingFacts(
       day.lastSessionAt === undefined ? sessionEndAt : Math.max(day.lastSessionAt, sessionEndAt);
     day.hourBuckets.set(sessionHour, (day.hourBuckets.get(sessionHour) ?? 0) + totalTime);
 
-    const book = bookIndex.get(session.bookId);
+    const statsBookId = getCanonicalStatsBookId(bookIdentity, session.bookId);
+    const book = getCanonicalStatsBook(bookIdentity, session.bookId);
     const existingBook =
-      day.books.get(session.bookId) ??
+      day.books.get(statsBookId) ??
       (book
         ? {
-            bookId: session.bookId,
+            bookId: statsBookId,
             title: book.meta.title,
             author: book.meta.author,
             coverUrl: book.meta.coverUrl,
@@ -126,7 +132,7 @@ export function buildDailyReadingFacts(
     existingBook.charactersRead = (existingBook.charactersRead ?? 0) + (session.charactersRead ?? 0);
     existingBook.sessionsCount += 1;
 
-    day.books.set(session.bookId, existingBook);
+    day.books.set(statsBookId, existingBook);
     days.set(date, day);
   }
 

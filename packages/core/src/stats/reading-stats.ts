@@ -2,6 +2,11 @@
  * Reading Stats service — computes reading statistics from session data
  */
 import { getBooks, getReadingSessions, getReadingSessionsByDateRange } from "../db/database";
+import {
+  createStatsBookIdentity,
+  getCanonicalStatsBook,
+  getCanonicalStatsBookId,
+} from "./book-identity";
 
 export interface DailyStats {
   date: string; // YYYY-MM-DD
@@ -95,14 +100,19 @@ export class ReadingStatsService {
 
   /** Get stats for a specific book */
   async getBookStats(bookId: string): Promise<BookStats> {
-    const sessions = await getReadingSessions(bookId);
     const books = await getBooks({ includeDeleted: true });
-    const book = books.find((b) => b.id === bookId);
+    const bookIdentity = createStatsBookIdentity(books);
+    const statsBookId = getCanonicalStatsBookId(bookIdentity, bookId);
+    const book = getCanonicalStatsBook(bookIdentity, bookId);
+    const bookIds = books
+      .filter((candidate) => getCanonicalStatsBookId(bookIdentity, candidate.id) === statsBookId)
+      .map((candidate) => candidate.id);
+    const sessions = (await Promise.all((bookIds.length > 0 ? bookIds : [bookId]).map((id) => getReadingSessions(id)))).flat();
 
     const totalTime = sessions.reduce((sum, s) => sum + s.totalActiveTime, 0);
 
     return {
-      bookId,
+      bookId: statsBookId,
       bookTitle: book?.meta.title || "Unknown",
       totalTime: totalTime / 60000,
       sessions: sessions.length,
@@ -115,6 +125,7 @@ export class ReadingStatsService {
   /** Get overall reading statistics */
   async getOverallStats(): Promise<OverallStats> {
     const books = await getBooks({ includeDeleted: true });
+    const bookIdentity = createStatsBookIdentity(books);
 
     let totalTime = 0;
     let totalSessions = 0;
@@ -125,7 +136,7 @@ export class ReadingStatsService {
 
     for (const book of books) {
       if (book.progress > 0) {
-        readBookIds.add(book.id);
+        readBookIds.add(getCanonicalStatsBookId(bookIdentity, book.id));
       }
 
       const sessions = await getReadingSessions(book.id);
@@ -135,7 +146,7 @@ export class ReadingStatsService {
         totalPages += session.pagesRead;
         totalCharactersRead += session.charactersRead ?? 0;
         readingDays.add(new Date(session.startedAt).toISOString().split("T")[0]);
-        readBookIds.add(book.id);
+        readBookIds.add(getCanonicalStatsBookId(bookIdentity, book.id));
       }
     }
 
@@ -177,22 +188,23 @@ export class ReadingStatsService {
   async getBookStatsForPeriod(start: Date, end: Date): Promise<PeriodBookStats[]> {
     const sessions = await getReadingSessionsByDateRange(start, end);
     const books = await getBooks({ includeDeleted: true });
-    const bookMap = new Map(books.map((b) => [b.id, b]));
+    const bookIdentity = createStatsBookIdentity(books);
 
     // Group reading time by book
     const timeByBook = new Map<string, number>();
     for (const session of sessions) {
-      const existing = timeByBook.get(session.bookId) || 0;
-      timeByBook.set(session.bookId, existing + session.totalActiveTime);
+      const statsBookId = getCanonicalStatsBookId(bookIdentity, session.bookId);
+      const existing = timeByBook.get(statsBookId) || 0;
+      timeByBook.set(statsBookId, existing + session.totalActiveTime);
     }
 
     // Build results sorted by total time descending
     const results: PeriodBookStats[] = [];
     for (const [bookId, totalMs] of timeByBook) {
-      const book = bookMap.get(bookId);
+      const book = getCanonicalStatsBook(bookIdentity, bookId);
       if (!book) continue;
       results.push({
-        bookId,
+        bookId: book.id,
         title: book.meta.title,
         author: book.meta.author,
         coverUrl: book.meta.coverUrl,

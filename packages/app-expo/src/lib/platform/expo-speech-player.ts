@@ -7,7 +7,12 @@ import type { ITTSPlayer, TTSConfig } from "@readany/core/tts";
  * the system kills it.
  */
 import * as Speech from "expo-speech";
-import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
+import {
+  AppState,
+  type AppStateStatus,
+  type NativeEventSubscription,
+  Platform,
+} from "react-native";
 
 export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
@@ -17,6 +22,8 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   private _chunks: string[] = [];
   private _currentIndex = 0;
   private _stopped = false;
+  private _paused = false;
+  private _config: TTSConfig | null = null;
   private _appStateSubscription: NativeEventSubscription | null = null;
 
   private _handleAppStateChange = (nextAppState: AppStateStatus): void => {
@@ -32,6 +39,8 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
     this._appStateSubscription?.remove();
     this._appStateSubscription = AppState.addEventListener("change", this._handleAppStateChange);
     this._stopped = false;
+    this._paused = false;
+    this._config = config;
 
     // Split long text into chunks (expo-speech works best with shorter segments)
     this._chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text, 200);
@@ -42,6 +51,9 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   }
 
   private async _speakChunk(config: TTSConfig): Promise<void> {
+    if (this._paused) {
+      return;
+    }
     if (this._stopped || this._currentIndex >= this._chunks.length) {
       if (!this._stopped) {
         // All chunks finished — remove AppState listener and fire callbacks
@@ -62,6 +74,10 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
         pitch: config.pitch,
         ...(config.voiceName ? { voice: config.voiceName } : { language: guessLanguage(chunk) }),
         onDone: () => {
+          if (this._stopped || this._paused) {
+            resolve();
+            return;
+          }
           this._currentIndex++;
           this._speakChunk(config).then(resolve);
         },
@@ -69,6 +85,10 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
           resolve();
         },
         onError: () => {
+          if (this._stopped || this._paused) {
+            resolve();
+            return;
+          }
           this._currentIndex++;
           this._speakChunk(config).then(resolve);
         },
@@ -77,17 +97,33 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
   }
 
   pause(): void {
-    Speech.pause();
+    if (this._stopped || this._paused) return;
+    this._paused = true;
+    if (Platform.OS === "android") {
+      Speech.stop();
+    } else {
+      Speech.pause();
+    }
     this.onStateChange?.("paused");
   }
 
   resume(): void {
-    Speech.resume();
+    if (this._stopped || !this._paused) return;
+    this._paused = false;
     this.onStateChange?.("playing");
+    if (Platform.OS === "android") {
+      const config = this._config;
+      if (!config) return;
+      void this._speakChunk(config);
+      return;
+    }
+    Speech.resume();
   }
 
   stop(): void {
     this._stopped = true;
+    this._paused = false;
+    this._config = null;
     Speech.stop();
     this._appStateSubscription?.remove();
     this._appStateSubscription = null;

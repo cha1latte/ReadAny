@@ -1,4 +1,8 @@
 import {
+  MobileKnowledgeEditor,
+  type MobileKnowledgeEditorValue,
+} from "@/components/knowledge/MobileKnowledgeEditor";
+import {
   BookOpenIcon,
   CheckCheckIcon,
   ChevronLeftIcon,
@@ -11,7 +15,6 @@ import {
   XIcon,
 } from "@/components/ui/Icon";
 import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
@@ -30,7 +33,11 @@ import {
   type KnowledgeExportFormat,
   knowledgeExporter,
 } from "@readany/core/export";
-import { markdownToBasicTiptap } from "@readany/core/knowledge";
+import {
+  markdownToBasicTiptap,
+  normalizeTiptapDocument,
+  renderKnowledgeJsonToMarkdown,
+} from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type { Highlight, KnowledgeDocument } from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -77,6 +84,44 @@ function createKnowledgeExcerpt(markdown: string): string | undefined {
   return text ? text.slice(0, 220) : undefined;
 }
 
+function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
+  return {
+    contentJson: { type: "doc", content: [] },
+    contentMd: "",
+    plainText: "",
+  };
+}
+
+function isEmptyTiptapDocument(contentJson: KnowledgeDocument["contentJson"]): boolean {
+  const doc = normalizeTiptapDocument(contentJson);
+  return !doc.content || doc.content.length === 0;
+}
+
+function createKnowledgeValue(document: KnowledgeDocument): MobileKnowledgeEditorValue {
+  const contentJson =
+    document.contentMd.trim() && isEmptyTiptapDocument(document.contentJson)
+      ? (markdownToBasicTiptap(document.contentMd) as unknown as KnowledgeDocument["contentJson"])
+      : (normalizeTiptapDocument(
+          document.contentJson,
+        ) as unknown as KnowledgeDocument["contentJson"]);
+  const contentMd = document.contentMd || renderKnowledgeJsonToMarkdown(contentJson);
+  return {
+    contentJson,
+    contentMd,
+    plainText: contentMd
+      .replace(/[#>*_`~\-[\]()]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  };
+}
+
+function knowledgeValueFingerprint(value: MobileKnowledgeEditorValue): string {
+  return JSON.stringify({
+    contentJson: value.contentJson,
+    contentMd: value.contentMd,
+  });
+}
+
 export function NotesView({
   initialBookId,
   showBackButton,
@@ -112,11 +157,19 @@ export function NotesView({
   const [editNote, setEditNote] = useState("");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [knowledgeHome, setKnowledgeHome] = useState<KnowledgeDocument | null>(null);
-  const [knowledgeContent, setKnowledgeContent] = useState("");
-  const [savedKnowledgeContent, setSavedKnowledgeContent] = useState("");
+  const [knowledgeValue, setKnowledgeValue] = useState<MobileKnowledgeEditorValue>(() =>
+    createEmptyKnowledgeValue(),
+  );
+  const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(() =>
+    knowledgeValueFingerprint(createEmptyKnowledgeValue()),
+  );
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const knowledgeSaveVersionRef = useRef(0);
+  const currentKnowledgeFingerprint = useMemo(
+    () => knowledgeValueFingerprint(knowledgeValue),
+    [knowledgeValue],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -278,9 +331,10 @@ export function NotesView({
       knowledgeSaveVersionRef.current += 1;
 
       if (!selectedKnowledgeBookId) {
+        const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeHome(null);
-        setKnowledgeContent("");
-        setSavedKnowledgeContent("");
+        setKnowledgeValue(emptyValue);
+        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(emptyValue));
         setIsKnowledgeSaving(false);
         return;
       }
@@ -293,9 +347,10 @@ export function NotesView({
           selectedKnowledgeBookTitle,
         );
         if (cancelled) return;
+        const nextValue = createKnowledgeValue(document);
         setKnowledgeHome(document);
-        setKnowledgeContent(document.contentMd);
-        setSavedKnowledgeContent(document.contentMd);
+        setKnowledgeValue(nextValue);
+        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(nextValue));
       } catch (error) {
         console.error("[Notes] Failed to load knowledge home:", error);
         Alert.alert(t("common.error", "错误"), t("notes.knowledgeLoadFailed", "知识主页加载失败"));
@@ -312,23 +367,22 @@ export function NotesView({
   }, [selectedKnowledgeBookId, selectedKnowledgeBookTitle, t]);
 
   useEffect(() => {
-    if (!knowledgeHome || knowledgeContent === savedKnowledgeContent) return;
+    if (!knowledgeHome || currentKnowledgeFingerprint === savedKnowledgeFingerprint) return;
 
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
+    const valueToSave = knowledgeValue;
 
     const timeout = setTimeout(async () => {
       setIsKnowledgeSaving(true);
       try {
         await updateKnowledgeDocument(knowledgeHome.id, {
-          contentMd: knowledgeContent,
-          contentJson: markdownToBasicTiptap(
-            knowledgeContent,
-          ) as unknown as KnowledgeDocument["contentJson"],
-          excerpt: createKnowledgeExcerpt(knowledgeContent),
+          contentMd: valueToSave.contentMd,
+          contentJson: valueToSave.contentJson,
+          excerpt: createKnowledgeExcerpt(valueToSave.contentMd),
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
-        setSavedKnowledgeContent(knowledgeContent);
+        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(valueToSave));
       } catch (error) {
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         console.error("[Notes] Failed to save knowledge home:", error);
@@ -341,7 +395,7 @@ export function NotesView({
     }, 700);
 
     return () => clearTimeout(timeout);
-  }, [knowledgeHome, knowledgeContent, savedKnowledgeContent, t]);
+  }, [knowledgeHome, knowledgeValue, currentKnowledgeFingerprint, savedKnowledgeFingerprint, t]);
 
   const handleDeleteNote = useCallback(
     (highlight: HighlightWithBook) => {
@@ -436,11 +490,9 @@ export function NotesView({
       const exporter = new AnnotationExporter();
       const liveDocument: KnowledgeDocument = {
         ...knowledgeHome,
-        contentMd: knowledgeContent,
-        contentJson: markdownToBasicTiptap(
-          knowledgeContent,
-        ) as unknown as KnowledgeDocument["contentJson"],
-        excerpt: createKnowledgeExcerpt(knowledgeContent),
+        contentMd: knowledgeValue.contentMd,
+        contentJson: knowledgeValue.contentJson,
+        excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
         updatedAt: Date.now(),
       };
       const files = knowledgeExporter.export(
@@ -462,7 +514,7 @@ export function NotesView({
         Alert.alert(t("common.error", "错误"), t("notes.exportFailed", "导出失败"));
       }
     },
-    [selectedBook, knowledgeHome, knowledgeContent, books, t],
+    [selectedBook, knowledgeHome, knowledgeValue, books, t],
   );
 
   const totalHighlights = stats?.totalHighlights ?? 0;
@@ -605,7 +657,7 @@ export function NotesView({
                     <Text style={s.knowledgeStatusText}>
                       {isKnowledgeSaving
                         ? t("notes.knowledgeSaving", "保存中")
-                        : knowledgeContent === savedKnowledgeContent
+                        : currentKnowledgeFingerprint === savedKnowledgeFingerprint
                           ? t("notes.knowledgeSaved", "已保存")
                           : t("notes.knowledgePending", "待保存")}
                     </Text>
@@ -636,9 +688,9 @@ export function NotesView({
             key={knowledgeHome?.id ?? selectedBook.bookId}
             book={selectedBook}
             document={knowledgeHome}
-            content={knowledgeContent}
+            value={knowledgeValue}
             isLoading={isKnowledgeLoading}
-            onChange={setKnowledgeContent}
+            onChange={setKnowledgeValue}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -832,7 +884,7 @@ export function NotesView({
 function KnowledgeHomePanel({
   book,
   document,
-  content,
+  value,
   isLoading,
   onChange,
   onOpenBook,
@@ -849,9 +901,9 @@ function KnowledgeHomePanel({
     highlightsOnlyCount: number;
   };
   document: KnowledgeDocument | null;
-  content: string;
+  value: MobileKnowledgeEditorValue;
   isLoading: boolean;
-  onChange: (value: string) => void;
+  onChange: (value: MobileKnowledgeEditorValue) => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
@@ -905,8 +957,9 @@ function KnowledgeHomePanel({
       <View style={styles.knowledgeEditorCard}>
         <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeTab", "知识主页")}</Text>
         <View style={styles.knowledgeEditorFrame}>
-          <RichTextEditor
-            initialContent={content}
+          <MobileKnowledgeEditor
+            documentId={document.id}
+            value={value}
             onChange={onChange}
             placeholder={t(
               "notes.knowledgePlaceholder",

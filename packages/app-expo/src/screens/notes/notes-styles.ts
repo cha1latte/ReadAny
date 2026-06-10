@@ -291,7 +291,7 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.semibold,
     },
     knowledgeEditorFrame: {
-      minHeight: 360,
+      minHeight: 0,
       borderRadius: radius.lg,
       borderWidth: 0.5,
       borderColor: colors.border,

@@ -13,6 +13,7 @@ import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
 import type { HighlightWithBook } from "@/lib/db/database";
 import {
+  createKnowledgeDocument,
   ensureBookHomeDocument,
   getBook as getBookRecord,
   getKnowledgeAttachments,
@@ -49,6 +50,7 @@ import {
   FolderUp,
   Highlighter,
   NotebookPen,
+  Plus,
   Save,
   Search,
   Sparkles,
@@ -95,6 +97,26 @@ function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boole
 
 function knowledgeValueFingerprint(value: KnowledgeEditorValue): string {
   return `${value.contentMd}\n${JSON.stringify(value.contentJson)}`;
+}
+
+function knowledgeDocumentFingerprint(title: string, value: KnowledgeEditorValue): string {
+  return `${title.trim()}\n${knowledgeValueFingerprint(value)}`;
+}
+
+function orderKnowledgeDocuments(
+  documents: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeDocument[] {
+  const uniqueDocuments = Array.from(
+    new Map(documents.map((document) => [document.id, document])).values(),
+  );
+  return uniqueDocuments.sort((left, right) => {
+    if (left.id === homeDocumentId) return -1;
+    if (right.id === homeDocumentId) return 1;
+    if (left.type === "book_home") return -1;
+    if (right.type === "book_home") return 1;
+    return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
+  });
 }
 
 function createKnowledgeValueFromDocument(document: KnowledgeDocument): KnowledgeEditorValue {
@@ -257,20 +279,26 @@ export function NotesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNote, setEditNote] = useState("");
   const [knowledgeHome, setKnowledgeHome] = useState<KnowledgeDocument | null>(null);
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<KnowledgeDocument[]>([]);
+  const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string | null>(
+    null,
+  );
+  const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeValue, setKnowledgeValue] =
     useState<KnowledgeEditorValue>(createEmptyKnowledgeValue);
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(
-    knowledgeValueFingerprint(createEmptyKnowledgeValue()),
+    knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const [isKnowledgeVaultExporting, setIsKnowledgeVaultExporting] = useState(false);
   const [knowledgeVaultConflicts, setKnowledgeVaultConflicts] =
     useState<KnowledgeVaultConflictNotice | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
-    () => knowledgeValueFingerprint(knowledgeValue),
-    [knowledgeValue],
+    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue),
+    [knowledgeTitle, knowledgeValue],
   );
 
   useEffect(() => {
@@ -403,9 +431,12 @@ export function NotesPage() {
 
       if (!selectedKnowledgeBookId) {
         setKnowledgeHome(null);
+        setKnowledgeDocuments([]);
+        setSelectedKnowledgeDocumentId(null);
+        setKnowledgeTitle("");
         const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeValue(emptyValue);
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(emptyValue));
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         return;
       }
@@ -413,15 +444,27 @@ export function NotesPage() {
       setIsKnowledgeLoading(true);
       setIsKnowledgeSaving(false);
       try {
-        const document = await ensureBookHomeDocument(
+        const homeDocument = await ensureBookHomeDocument(
           selectedKnowledgeBookId,
           selectedKnowledgeBookTitle,
         );
+        const bookDocuments = await getKnowledgeDocuments({
+          bookId: selectedKnowledgeBookId,
+          limit: 200,
+        });
         if (cancelled) return;
-        const nextValue = createKnowledgeValueFromDocument(document);
-        setKnowledgeHome(document);
+        const nextDocuments = orderKnowledgeDocuments(
+          [homeDocument, ...bookDocuments],
+          homeDocument.id,
+        );
+        const activeDocument = nextDocuments[0] ?? homeDocument;
+        const nextValue = createKnowledgeValueFromDocument(activeDocument);
+        setKnowledgeDocuments(nextDocuments);
+        setSelectedKnowledgeDocumentId(activeDocument.id);
+        setKnowledgeHome(activeDocument);
+        setKnowledgeTitle(activeDocument.title);
         setKnowledgeValue(nextValue);
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(nextValue));
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(activeDocument.title, nextValue));
       } catch (error) {
         console.error("[Notes] Failed to load knowledge home:", error);
         toast.error(t("notes.knowledgeLoadFailed"));
@@ -442,17 +485,39 @@ export function NotesPage() {
 
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
+    const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
 
     const timeout = window.setTimeout(async () => {
+      if (knowledgeSaveVersionRef.current !== saveVersion) return;
       setIsKnowledgeSaving(true);
       try {
         await updateKnowledgeDocument(knowledgeHome.id, {
+          title: normalizedTitle,
           contentMd: knowledgeValue.contentMd,
           contentJson: knowledgeValue.contentJson,
-          excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+          excerpt: nextExcerpt,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(knowledgeValue));
+        const updatedDocument: KnowledgeDocument = {
+          ...knowledgeHome,
+          title: normalizedTitle,
+          contentMd: knowledgeValue.contentMd,
+          contentJson: knowledgeValue.contentJson,
+          excerpt: nextExcerpt,
+          updatedAt: Date.now(),
+        };
+        setKnowledgeHome(updatedDocument);
+        setKnowledgeDocuments((documents) =>
+          orderKnowledgeDocuments(
+            documents.map((document) =>
+              document.id === updatedDocument.id ? updatedDocument : document,
+            ),
+            documents.find((document) => document.type === "book_home")?.id,
+          ),
+        );
+        if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
       } catch (error) {
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         console.error("[Notes] Failed to save knowledge home:", error);
@@ -465,7 +530,120 @@ export function NotesPage() {
     }, 700);
 
     return () => window.clearTimeout(timeout);
-  }, [knowledgeHome, knowledgeValue, currentKnowledgeFingerprint, savedKnowledgeFingerprint, t]);
+  }, [
+    knowledgeHome,
+    knowledgeTitle,
+    knowledgeValue,
+    currentKnowledgeFingerprint,
+    savedKnowledgeFingerprint,
+    t,
+  ]);
+
+  const saveActiveKnowledgeDocumentNow = async (): Promise<boolean> => {
+    if (!knowledgeHome || currentKnowledgeFingerprint === savedKnowledgeFingerprint) return true;
+
+    const saveVersion = knowledgeSaveVersionRef.current + 1;
+    knowledgeSaveVersionRef.current = saveVersion;
+    const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
+
+    setIsKnowledgeSaving(true);
+    try {
+      await updateKnowledgeDocument(knowledgeHome.id, {
+        title: normalizedTitle,
+        contentMd: knowledgeValue.contentMd,
+        contentJson: knowledgeValue.contentJson,
+        excerpt: nextExcerpt,
+      });
+      if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      const updatedDocument: KnowledgeDocument = {
+        ...knowledgeHome,
+        title: normalizedTitle,
+        contentMd: knowledgeValue.contentMd,
+        contentJson: knowledgeValue.contentJson,
+        excerpt: nextExcerpt,
+        updatedAt: Date.now(),
+      };
+      setKnowledgeHome(updatedDocument);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((document) =>
+            document.id === updatedDocument.id ? updatedDocument : document,
+          ),
+          documents.find((document) => document.type === "book_home")?.id,
+        ),
+      );
+      if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
+      return true;
+    } catch (error) {
+      if (knowledgeSaveVersionRef.current === saveVersion) {
+        console.error("[Notes] Failed to save knowledge document:", error);
+        toast.error(t("notes.knowledgeSaveFailed"));
+      }
+      return false;
+    } finally {
+      if (knowledgeSaveVersionRef.current === saveVersion) {
+        setIsKnowledgeSaving(false);
+      }
+    }
+  };
+
+  const openKnowledgeDocument = async (document: KnowledgeDocument) => {
+    if (document.id === knowledgeHome?.id) return;
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    knowledgeSaveVersionRef.current += 1;
+    const nextValue = createKnowledgeValueFromDocument(document);
+    setSelectedKnowledgeDocumentId(document.id);
+    setKnowledgeHome(document);
+    setKnowledgeTitle(document.title);
+    setKnowledgeValue(nextValue);
+    setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+    setIsKnowledgeSaving(false);
+  };
+
+  const handleCreateKnowledgeDocument = async () => {
+    if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    setIsKnowledgeDocumentCreating(true);
+    try {
+      const document = await createKnowledgeDocument({
+        bookId: selectedKnowledgeBookId,
+        type: "standalone_note",
+        title: t("notes.knowledgeNewDocumentTitle", {
+          count: Math.max(1, knowledgeDocuments.length),
+        }),
+        contentJson: createEmptyKnowledgeValue().contentJson,
+        contentMd: "",
+        excerpt: undefined,
+        tags: [],
+        sourceKind: "book",
+        sourceId: selectedKnowledgeBookId,
+      });
+      const nextValue = createKnowledgeValueFromDocument(document);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          [document, ...documents],
+          documents.find((item) => item.type === "book_home")?.id,
+        ),
+      );
+      setSelectedKnowledgeDocumentId(document.id);
+      setKnowledgeHome(document);
+      setKnowledgeTitle(document.title);
+      setKnowledgeValue(nextValue);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+      toast.success(t("notes.knowledgeDocumentCreated"));
+    } catch (error) {
+      console.error("[Notes] Failed to create knowledge document:", error);
+      toast.error(t("notes.knowledgeDocumentCreateFailed"));
+    } finally {
+      setIsKnowledgeDocumentCreating(false);
+    }
+  };
 
   const handleOpenBook = async (bookId: string, _title: string, cfi?: string) => {
     const book =
@@ -539,6 +717,7 @@ export function NotesPage() {
     try {
       const liveDocument: KnowledgeDocument = {
         ...knowledgeHome,
+        title: knowledgeTitle.trim() || knowledgeHome.title,
         contentJson: knowledgeValue.contentJson,
         contentMd: knowledgeValue.contentMd,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
@@ -580,6 +759,7 @@ export function NotesPage() {
 
       const liveDocument: KnowledgeDocument = {
         ...knowledgeHome,
+        title: knowledgeTitle.trim() || knowledgeHome.title,
         contentJson: knowledgeValue.contentJson,
         contentMd: knowledgeValue.contentMd,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
@@ -927,11 +1107,18 @@ export function NotesPage() {
               <KnowledgeHomePanel
                 book={selectedBook}
                 document={knowledgeHome}
+                documents={knowledgeDocuments}
+                activeDocumentId={selectedKnowledgeDocumentId}
+                title={knowledgeTitle}
                 value={knowledgeValue}
                 isLoading={isKnowledgeLoading}
                 isSaving={isKnowledgeSaving}
+                isCreatingDocument={isKnowledgeDocumentCreating}
                 isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
+                onTitleChange={setKnowledgeTitle}
                 onChange={setKnowledgeValue}
+                onSelectDocument={openKnowledgeDocument}
+                onCreateDocument={handleCreateKnowledgeDocument}
                 onExport={handleKnowledgeExport}
                 onExportVault={handleKnowledgeVaultExport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
@@ -1017,11 +1204,18 @@ interface KnowledgeHomePanelProps {
     highlightsOnlyCount: number;
   };
   document: KnowledgeDocument | null;
+  documents: KnowledgeDocument[];
+  activeDocumentId: string | null;
+  title: string;
   value: KnowledgeEditorValue;
   isLoading: boolean;
   isSaving: boolean;
+  isCreatingDocument: boolean;
   isSaved: boolean;
+  onTitleChange: (title: string) => void;
   onChange: (value: KnowledgeEditorValue) => void;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  onCreateDocument: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
   onOpenBook: (cfi?: string) => void;
@@ -1034,11 +1228,18 @@ interface KnowledgeHomePanelProps {
 function KnowledgeHomePanel({
   book,
   document,
+  documents,
+  activeDocumentId,
+  title,
   value,
   isLoading,
   isSaving,
+  isCreatingDocument,
   isSaved,
+  onTitleChange,
   onChange,
+  onSelectDocument,
+  onCreateDocument,
   onExport,
   onExportVault,
   onOpenBook,
@@ -1072,7 +1273,14 @@ function KnowledgeHomePanel({
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 {t("notes.knowledgeEyebrow")}
               </p>
-              <h3 className="mt-1 truncate text-lg font-semibold text-foreground">{book.title}</h3>
+              <input
+                value={title}
+                onChange={(event) => onTitleChange(event.target.value)}
+                aria-label={t("notes.knowledgeDocumentTitle")}
+                placeholder={t("notes.knowledgeUntitledDocument")}
+                className="mt-1 w-full min-w-0 truncate bg-transparent text-lg font-semibold text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
+              />
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.title}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -1111,6 +1319,15 @@ function KnowledgeHomePanel({
         </section>
 
         <aside className="space-y-3">
+          <KnowledgeDocumentList
+            documents={documents}
+            activeDocumentId={activeDocumentId}
+            isCreating={isCreatingDocument}
+            onSelect={onSelectDocument}
+            onCreate={onCreateDocument}
+            t={t}
+          />
+
           <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -1167,6 +1384,94 @@ function KnowledgeHomePanel({
             )}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function knowledgeDocumentTypeLabel(
+  document: KnowledgeDocument,
+  t: (key: string) => string,
+): string {
+  if (document.type === "book_home") return t("notes.knowledgeDocumentHome");
+  if (document.type === "review") return t("notes.knowledgeDocumentReview");
+  if (document.type === "summary") return t("notes.knowledgeDocumentSummary");
+  if (document.type === "highlight_note") return t("notes.knowledgeDocumentHighlight");
+  return t("notes.knowledgeDocumentNote");
+}
+
+function KnowledgeDocumentList({
+  documents,
+  activeDocumentId,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+}: {
+  documents: KnowledgeDocument[];
+  activeDocumentId: string | null;
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
+        <button
+          type="button"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={onCreate}
+          disabled={isCreating}
+          aria-label={t("notes.knowledgeNewDocument")}
+          title={t("notes.knowledgeNewDocument")}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        {documents.map((document) => {
+          const isActive = document.id === activeDocumentId;
+          const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
+
+          return (
+            <button
+              key={document.id}
+              type="button"
+              className={cn(
+                "group w-full rounded-md border px-2.5 py-2 text-left transition-colors",
+                isActive
+                  ? "border-primary/30 bg-primary/10"
+                  : "border-transparent hover:border-border/60 hover:bg-muted/45",
+              )}
+              onClick={() => onSelect(document)}
+            >
+              <div className="flex items-start gap-2">
+                <FileText
+                  className={cn(
+                    "mt-0.5 h-3.5 w-3.5 shrink-0",
+                    isActive ? "text-primary" : "text-muted-foreground",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "truncate text-xs font-medium",
+                      isActive ? "text-primary" : "text-foreground",
+                    )}
+                  >
+                    {title}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {knowledgeDocumentTypeLabel(document, t)}
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@
  * - Annotation Tools: getAnnotations, addCitation
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
+ * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap
  * - Context Tools: getCurrentChapter, getSelection, getReadingProgress, getRecentHighlights, getSurroundingContext
@@ -27,6 +28,7 @@ import {
   createFallbackSearchTool,
   createFallbackTocTool,
 } from "./fallback-content-tools";
+import { createGetBookKnowledgeTool, createSearchKnowledgeBaseTool } from "./knowledge-tools";
 import {
   createClassifyBooksTool,
   createListBooksTool,
@@ -53,6 +55,7 @@ function getGeneralTools(): ToolDefinition[] {
     createListBooksTool(),
     createSearchAllHighlightsTool(),
     createSearchAllNotesTool(),
+    createSearchKnowledgeBaseTool(),
     createReadingStatsTool(),
     createGetSkillsTool(),
     createMindmapTool(),
@@ -105,7 +108,11 @@ export function getAvailableTools(options: {
 
     // Citations are available for indexed chunks and for fallback sources that
     // can be validated against concrete reader segments.
-    tools.push(createGetAnnotationsTool(options.bookId), createAddCitationTool(options.bookId));
+    tools.push(
+      createGetAnnotationsTool(options.bookId),
+      createGetBookKnowledgeTool(options.bookId),
+      createAddCitationTool(options.bookId),
+    );
   }
 
   // Add custom skills

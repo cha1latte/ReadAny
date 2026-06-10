@@ -99,6 +99,9 @@ function buildToolsSection(
   tools.push(
     "- **searchAllNotes**: Get notes across all books (params: reasoning, days, bookTitle, limit)",
   );
+  tools.push(
+    "- **searchKnowledgeBase**: Search durable ReadAny knowledge documents, book home pages, reviews, summaries, and standalone notes (params: reasoning, query, bookId, type, limit)",
+  );
   tools.push("- **getReadingStats**: Get reading statistics (params: reasoning, days)");
   tools.push("- **getSkills**: Query available skills/SOPs for guidance (params: reasoning, task)");
   tools.push(
@@ -168,6 +171,9 @@ function buildToolsSection(
 
   if (hasBookContext) {
     tools.push("- **getAnnotations**: Get user's highlights and notes (params: type)");
+    tools.push(
+      "- **getBookKnowledge**: Get the current book's durable knowledge documents before answering from the user's own notes (params: reasoning, type, includeContent, limit)",
+    );
     if (isVectorized) {
       tools.push(
         "- **addCitation**: CRITICAL - Register a citation with CFI for precise navigation. You MUST extract the 'cfi' field from ragSearch/tool results and pass it here. The citationIndex param determines which [N] marker it maps to (params: citationIndex [REQUIRED - the number N for [N]], chapterTitle, chapterIndex, cfi [REQUIRED from tool results], quotedText, reasoning)",
@@ -219,6 +225,9 @@ function buildWorkflowSection(isVectorized: boolean, hasBookContext: boolean): s
   }
 
   steps.push("   - **getSurroundingContext**: for current page content");
+  steps.push(
+    "   - **getBookKnowledge/searchKnowledgeBase**: for the user's durable notes, reviews, summaries, and book home pages",
+  );
 
   steps.push("3. **Register citations before answering** — If your answer uses book content:");
   steps.push("   - Call **addCitation** before writing the final response body");

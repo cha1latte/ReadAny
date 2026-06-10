@@ -23,6 +23,12 @@ export interface KnowledgeExportOptions {
   includeReadAnyCardMetadata?: boolean;
 }
 
+export interface KnowledgeBundleExportOptions extends KnowledgeExportOptions {
+  title?: string;
+  path?: string;
+  exportedAt?: number;
+}
+
 export interface KnowledgeExportManifestDocument {
   id: string;
   type: KnowledgeDocument["type"];
@@ -452,6 +458,84 @@ function detectConflicts(
   return conflicts;
 }
 
+function removeLeadingDocumentTitle(markdown: string, title: string): string {
+  const lines = markdown.trim().split("\n");
+  if (lines[0]?.trim() === `# ${title.trim()}`) {
+    lines.shift();
+    if (lines[0]?.trim() === "") lines.shift();
+  }
+  return lines.join("\n").trim();
+}
+
+function demoteMarkdownHeadings(markdown: string): string {
+  return markdown.replace(/^(#{1,5})(\s+)/gm, "#$1$2");
+}
+
+function renderBundleFrontmatter(
+  title: string,
+  documentCount: number,
+  exportedAt: number,
+): string[] {
+  return [
+    "---",
+    "type: readany-knowledge-bundle",
+    `title: ${yamlString(title)}`,
+    `exported: ${yamlString(isoDate(exportedAt))}`,
+    `documentCount: ${documentCount}`,
+    "---",
+    "",
+  ];
+}
+
+function createBundleExportFile(
+  input: KnowledgeExportInput,
+  options: ResolvedKnowledgeExportOptions,
+  bundleOptions: KnowledgeBundleExportOptions,
+): KnowledgeExportFile {
+  const title = bundleOptions.title?.trim() || "ReadAny Knowledge Export";
+  const exportedAt = bundleOptions.exportedAt ?? Date.now();
+  const documentFiles = createDocumentExportFiles(input, { ...options, format: "markdown" });
+  const lines = [
+    ...(options.format === "obsidian"
+      ? renderBundleFrontmatter(title, documentFiles.length, exportedAt)
+      : []),
+    `# ${title}`,
+    "",
+    `Exported: ${isoDate(exportedAt)}`,
+    `Documents: ${documentFiles.length}`,
+    "",
+  ];
+
+  for (const file of documentFiles) {
+    const body = demoteMarkdownHeadings(
+      removeLeadingDocumentTitle(file.content, file.document.title),
+    );
+    lines.push(
+      "---",
+      "",
+      `## ${file.document.title || file.document.type}`,
+      "",
+      `_Source: \`${normalizePath(file.path)}\`_`,
+      "",
+    );
+    if (body) lines.push(body, "");
+  }
+
+  const path = normalizePath(
+    bundleOptions.path ?? joinPath(options.rootDir, `${slugPart(title, "ReadAny Knowledge")}.md`),
+  );
+
+  return {
+    path,
+    content: lines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd()
+      .concat("\n"),
+    mimeType: "text/markdown",
+  };
+}
+
 export class KnowledgeExporter {
   export(input: KnowledgeExportInput, options: KnowledgeExportOptions = {}): KnowledgeExportFile[] {
     const opts: ResolvedKnowledgeExportOptions = {
@@ -461,6 +545,19 @@ export class KnowledgeExporter {
       includeReadAnyCardMetadata: options.includeReadAnyCardMetadata ?? false,
     };
     return createDocumentExportFiles(input, opts).map(({ document, documentId, ...file }) => file);
+  }
+
+  exportBundle(
+    input: KnowledgeExportInput,
+    options: KnowledgeBundleExportOptions = {},
+  ): KnowledgeExportFile {
+    const opts: ResolvedKnowledgeExportOptions = {
+      format: options.format ?? "obsidian",
+      rootDir: options.rootDir ?? "",
+      includeDeleted: options.includeDeleted ?? false,
+      includeReadAnyCardMetadata: options.includeReadAnyCardMetadata ?? false,
+    };
+    return createBundleExportFile(input, opts, options);
   }
 
   buildVaultPackage(

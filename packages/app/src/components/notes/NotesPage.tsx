@@ -203,6 +203,30 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
   };
 }
 
+async function collectBookKnowledgeExportInput(
+  bookId: string,
+  liveDocument: KnowledgeDocument,
+  book: Book,
+) {
+  const documents = await getKnowledgeDocuments({ bookId, limit: 500 });
+  const documentMap = new Map(documents.map((document) => [document.id, document]));
+  documentMap.set(liveDocument.id, liveDocument);
+  const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
+  const mergedDocuments = orderKnowledgeDocuments(Array.from(documentMap.values()), homeDocumentId);
+
+  const [linksByDocument, attachmentsByDocument] = await Promise.all([
+    Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
+    Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
+  ]);
+
+  return {
+    documents: mergedDocuments,
+    books: [book],
+    links: linksByDocument.flat(),
+    attachments: attachmentsByDocument.flat(),
+  };
+}
+
 // Helper component to resolve and display cover images
 interface CoverImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   url: string | undefined | null;
@@ -696,12 +720,12 @@ export function NotesPage() {
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
         updatedAt: Date.now(),
       };
-      const files = knowledgeExporter.export(
-        { documents: [liveDocument], books: [book] },
-        { format, rootDir: "ReadAny" },
-      );
-      const file = files[0];
-      if (!file) throw new Error("No knowledge export file generated");
+      const input = await collectBookKnowledgeExportInput(selectedBook.bookId, liveDocument, book);
+      const file = knowledgeExporter.exportBundle(input, {
+        format,
+        rootDir: "ReadAny",
+        title: `${selectedBook.title} Knowledge`,
+      });
 
       const filename =
         file.path.split("/").filter(Boolean).pop() || `${book.meta.title}-knowledge.md`;

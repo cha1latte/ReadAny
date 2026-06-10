@@ -182,6 +182,45 @@ describe("KnowledgeExporter", () => {
     expect(file.content).not.toContain("type: readany-knowledge");
   });
 
+  it("exports multiple documents as a single shareable knowledge bundle", () => {
+    const exporter = new KnowledgeExporter();
+    const bundle = exporter.exportBundle(
+      {
+        books: [baseBook],
+        documents: [
+          knowledgeDocument(),
+          knowledgeDocument({
+            id: "doc-2",
+            type: "standalone_note",
+            title: "Second Note",
+            contentJson: { type: "doc", content: [] },
+            contentMd: "## A nested idea\n\nMore detail.",
+            updatedAt: 1700000300000,
+          }),
+        ],
+      },
+      {
+        format: "obsidian",
+        rootDir: "ReadAny",
+        title: "The Book Knowledge",
+        exportedAt: 1700000400000,
+      },
+    );
+
+    expect(bundle.path).toBe("ReadAny/The Book Knowledge.md");
+    expect(bundle.mimeType).toBe("text/markdown");
+    expect(bundle.content).toContain("type: readany-knowledge-bundle");
+    expect(bundle.content).toContain('title: "The Book Knowledge"');
+    expect(bundle.content).toContain("documentCount: 2");
+    expect(bundle.content).toContain("# The Book Knowledge");
+    expect(bundle.content).toContain("Documents: 2");
+    expect(bundle.content).toContain("## Book Home");
+    expect(bundle.content).toContain("_Source: `ReadAny/Books/The Book A Study/README.md`_");
+    expect(bundle.content).toContain("## Second Note");
+    expect(bundle.content).toContain("### A nested idea");
+    expect(bundle.content.match(/type: readany-knowledge/g)).toHaveLength(1);
+  });
+
   it("builds a vault package with a ReadAny manifest", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage(

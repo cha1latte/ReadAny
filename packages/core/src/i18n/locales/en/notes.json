@@ -51,6 +51,18 @@
     "copiedToClipboard": "Copied to clipboard",
     "downloaded": "Downloaded",
     "deleteHighlightConfirm": "Delete this highlight?",
-    "deleteNoteConfirm": "Delete this note?"
+    "deleteNoteConfirm": "Delete this note?",
+    "knowledgeTab": "Knowledge",
+    "knowledgeEyebrow": "Knowledge Base",
+    "knowledgePlaceholder": "Capture this book's summary, questions, ideas, and lasting knowledge...",
+    "knowledgeSignals": "Signals",
+    "knowledgeSources": "Recent excerpts",
+    "knowledgeNoSources": "No excerpts yet",
+    "knowledgeLoading": "Opening knowledge home...",
+    "knowledgeSaving": "Saving",
+    "knowledgeSaved": "Saved",
+    "knowledgePending": "Pending",
+    "knowledgeLoadFailed": "Failed to load knowledge home",
+    "knowledgeSaveFailed": "Failed to save knowledge home"
   }
 }

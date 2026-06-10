@@ -51,6 +51,18 @@
     "copiedToClipboard": "Copié dans le presse-papiers",
     "downloaded": "Téléchargé",
     "deleteHighlightConfirm": "Supprimer ce surlignage ?",
-    "deleteNoteConfirm": "Supprimer cette note ?"
+    "deleteNoteConfirm": "Supprimer cette note ?",
+    "knowledgeTab": "Savoir",
+    "knowledgeEyebrow": "Base de connaissances",
+    "knowledgePlaceholder": "Notez le résumé, les questions, les idées et les connaissances durables de ce livre...",
+    "knowledgeSignals": "Repères",
+    "knowledgeSources": "Extraits récents",
+    "knowledgeNoSources": "Aucun extrait pour le moment",
+    "knowledgeLoading": "Ouverture de la page de savoir...",
+    "knowledgeSaving": "Enregistrement",
+    "knowledgeSaved": "Enregistré",
+    "knowledgePending": "En attente",
+    "knowledgeLoadFailed": "Impossible de charger la page de savoir",
+    "knowledgeSaveFailed": "Impossible d'enregistrer la page de savoir"
   }
 }

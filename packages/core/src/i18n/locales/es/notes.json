@@ -51,6 +51,18 @@
     "copiedToClipboard": "Copiado al portapapeles",
     "downloaded": "Descargado",
     "deleteHighlightConfirm": "¿Eliminar este subrayado?",
-    "deleteNoteConfirm": "¿Eliminar esta nota?"
+    "deleteNoteConfirm": "¿Eliminar esta nota?",
+    "knowledgeTab": "Conocimiento",
+    "knowledgeEyebrow": "Base de conocimiento",
+    "knowledgePlaceholder": "Guarda el resumen, preguntas, ideas y conocimiento duradero de este libro...",
+    "knowledgeSignals": "Señales",
+    "knowledgeSources": "Extractos recientes",
+    "knowledgeNoSources": "Aún no hay extractos",
+    "knowledgeLoading": "Abriendo página de conocimiento...",
+    "knowledgeSaving": "Guardando",
+    "knowledgeSaved": "Guardado",
+    "knowledgePending": "Pendiente",
+    "knowledgeLoadFailed": "No se pudo cargar la página de conocimiento",
+    "knowledgeSaveFailed": "No se pudo guardar la página de conocimiento"
   }
 }

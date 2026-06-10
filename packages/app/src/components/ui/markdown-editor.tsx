@@ -31,6 +31,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  contentClassName?: string;
   autoFocus?: boolean;
 }
 
@@ -39,6 +40,7 @@ export function MarkdownEditor({
   onChange,
   placeholder,
   className,
+  contentClassName,
   autoFocus = false,
 }: MarkdownEditorProps) {
   const { t } = useTranslation();
@@ -123,7 +125,7 @@ export function MarkdownEditor({
       return;
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
+  }, [editor, t]);
 
   if (!editor) {
     return null;
@@ -271,6 +273,7 @@ export function MarkdownEditor({
           "[&_.is-editor-empty:first-child::before]:float-left",
           "[&_.is-editor-empty:first-child::before]:h-0",
           "[&_.is-editor-empty:first-child::before]:text-[13px]",
+          contentClassName,
         )}
       />
     </div>

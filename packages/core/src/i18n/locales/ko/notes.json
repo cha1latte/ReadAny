@@ -51,6 +51,18 @@
     "copiedToClipboard": "클립보드에 복사됨",
     "downloaded": "다운로드 완료",
     "deleteHighlightConfirm": "이 하이라이트를 삭제할까요?",
-    "deleteNoteConfirm": "이 노트를 삭제할까요?"
+    "deleteNoteConfirm": "이 노트를 삭제할까요?",
+    "knowledgeTab": "지식 홈",
+    "knowledgeEyebrow": "지식 베이스",
+    "knowledgePlaceholder": "이 책의 요약, 질문, 생각, 오래 남길 지식을 기록하세요...",
+    "knowledgeSignals": "단서",
+    "knowledgeSources": "최근 발췌",
+    "knowledgeNoSources": "아직 발췌가 없어요",
+    "knowledgeLoading": "지식 홈을 여는 중...",
+    "knowledgeSaving": "저장 중",
+    "knowledgeSaved": "저장됨",
+    "knowledgePending": "저장 대기",
+    "knowledgeLoadFailed": "지식 홈을 불러오지 못했어요",
+    "knowledgeSaveFailed": "지식 홈을 저장하지 못했어요"
   }
 }

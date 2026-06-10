@@ -28,6 +28,22 @@ export {
   insertNote,
   updateNote,
   deleteNote,
+  getKnowledgeDocument,
+  getKnowledgeDocuments,
+  getBookHomeDocument,
+  createKnowledgeDocument,
+  ensureBookHomeDocument,
+  insertKnowledgeDocument,
+  updateKnowledgeDocument,
+  deleteKnowledgeDocument,
+  getKnowledgeLinks,
+  insertKnowledgeLink,
+  deleteKnowledgeLink,
+  getKnowledgeAttachments,
+  insertKnowledgeAttachment,
+  deleteKnowledgeAttachment,
+  getKnowledgeCardTemplates,
+  upsertKnowledgeCardTemplate,
   getBookmarks,
   insertBookmark,
   deleteBookmark,
@@ -53,4 +69,8 @@ export {
   deleteSkill,
 } from "@readany/core/db/database";
 
-export type { HighlightWithBook } from "@readany/core/db/database";
+export type {
+  CreateKnowledgeDocumentInput,
+  HighlightWithBook,
+  KnowledgeDocumentFilters,
+} from "@readany/core/db/database";

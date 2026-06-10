@@ -51,6 +51,18 @@
     "copiedToClipboard": "已复制到剪贴板",
     "downloaded": "已下载",
     "deleteHighlightConfirm": "确定删除此高亮？",
-    "deleteNoteConfirm": "确定删除此笔记？"
+    "deleteNoteConfirm": "确定删除此笔记？",
+    "knowledgeTab": "知识主页",
+    "knowledgeEyebrow": "知识库",
+    "knowledgePlaceholder": "记录这本书的摘要、问题、想法和长期知识...",
+    "knowledgeSignals": "线索",
+    "knowledgeSources": "最近摘录",
+    "knowledgeNoSources": "暂无摘录",
+    "knowledgeLoading": "正在打开知识主页...",
+    "knowledgeSaving": "保存中",
+    "knowledgeSaved": "已保存",
+    "knowledgePending": "待保存",
+    "knowledgeLoadFailed": "知识主页加载失败",
+    "knowledgeSaveFailed": "知识主页保存失败"
   }
 }

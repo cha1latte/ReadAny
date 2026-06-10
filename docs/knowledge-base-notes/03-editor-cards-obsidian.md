@@ -86,96 +86,133 @@ export, sync, and AI all see the same representation.
 ## Rich Text Scope by Scenario
 
 The knowledge editor should not expose every rich-text feature everywhere. Each
-editing surface has a different job, so the toolbar and supported blocks should
-be tiered by scenario.
+editing surface has a different job, so rich text must be tiered by scenario.
+This avoids the worst outcome: every note surface becoming a bloated document
+editor while still failing to support the durable knowledge-base workflows.
+
+### Rich Text Tiers
+
+Use three editor tiers and map every surface to one of them:
+
+| Tier | Purpose | Typical surfaces |
+| --- | --- | --- |
+| `inline_note` | Capture a thought while reading, with almost no interruption. | Reader selection note, quick highlight note, small annotation card. |
+| `knowledge_doc` | Build a durable book-centered or standalone knowledge document. | Book home, standalone note, expanded highlight note. |
+| `publishable_doc` | Write something that exports cleanly to Markdown, Obsidian, and shareable text. | Book review, reading essay, exported summary. |
+
+The tier is part of the editor configuration, not a different storage format.
+All tiers still save canonical Tiptap JSON and derive Markdown from that JSON.
+
+### Baseline Feature Matrix
+
+| Feature | Quick annotation | Knowledge document | Review / export |
+| --- | --- | --- | --- |
+| Paragraphs | Required | Required | Required |
+| Bold, italic, strike | Required | Required | Required |
+| Inline code | Required | Required | Optional |
+| Links | Required | Required | Required |
+| Headings | No | H1-H3 | H1-H3 |
+| Bullet / ordered lists | Required | Required | Required |
+| Task lists | No | Required | Optional |
+| Blockquote | Required | Required | Required |
+| Horizontal rule | No | Required | Required |
+| Code block | No | Optional | Optional |
+| Images / attachments | No | Required | Required |
+| Tables | No | Optional after mobile verification | Optional after mobile verification |
+| Internal links / backlinks | No | Required | Required |
+| Tags | Metadata chip UI, not rich text | Metadata chip UI, not rich text | Metadata chip UI, not rich text |
+| Source citation | Auto-linked to highlight | Source reference card | Footnote-style source reference |
+| ReadAny cards | No large cards | Required | Only export-friendly cards |
+| Mermaid / mindmap | No | Required as cards | Optional as export-friendly cards |
+| AI cards | No | Required | Convert to editable content before final export |
 
 ### Quick Annotation Notes
 
 Used when the user selects text in the reader and quickly adds a note.
 
-Keep this surface lightweight:
+Keep:
 
-- Paragraphs
-- Bold, italic, strikethrough
-- Inline code
-- Links
-- Bullet list
-- Ordered list
-- Blockquote
-- Undo and redo
+- Paragraphs.
+- Bold, italic, strikethrough.
+- Inline code.
+- Links.
+- Bullet list and ordered list.
+- Blockquote.
+- Undo and redo.
 
-Avoid heavy blocks here:
+Avoid:
 
-- Tables
-- Image upload
-- Mermaid and mindmap cards
-- Multi-column layout
-- Large embedded AI cards
+- Headings.
+- Tables.
+- Image upload.
+- Mermaid and mindmap cards.
+- Large embedded AI cards.
+- Multi-column or layout blocks.
 
 Reason:
 
 Quick annotation is an interruption inside reading. The editor should help the
-user capture a thought in seconds and then get out of the way.
+user capture a thought in seconds and then get out of the way. If a quick note
+needs to grow up, it can be opened as a knowledge document.
 
 ### Highlight Note Documents
 
 Used when a highlight note is opened as a richer knowledge document.
 
-Support:
+Keep:
 
-- Everything from quick annotation notes
-- Headings H2/H3
-- Task list
-- Quote/source card linked to the highlight and CFI
-- Callout card
-- Related-note link card
-- Tags
+- Everything from quick annotation notes.
+- Headings H2/H3.
+- Task list.
+- Quote/source card linked to the highlight and CFI.
+- Callout card.
+- Related-note link card.
+- Tags and backlinks outside the text canvas.
 
 Reason:
 
 This is still source-attached, but the user may want to expand a short annotation
-into a reusable note.
+into a reusable note without losing the original quote position.
 
 ### Book Home Documents
 
 Used as the main knowledge page for each book.
 
-Support:
+Keep:
 
-- Headings H1-H3
-- Paragraphs
-- Bold, italic, strikethrough, inline code
-- Links and internal document links
-- Bullet, ordered, and task lists
-- Blockquote
-- Horizontal rule
-- Callout cards
-- Quote cards
-- Book metadata card
-- Highlight collection card
-- AI summary card
-- Review card
-- Mermaid and mindmap cards
-- Image attachments
-- Table blocks, if the table extension is stable on both desktop and mobile
+- Headings H1-H3.
+- Paragraphs and rich inline marks.
+- Links and internal document links.
+- Bullet, ordered, and task lists.
+- Blockquote and horizontal rule.
+- Callout cards.
+- Quote cards.
+- Book metadata card.
+- Highlight collection card.
+- AI summary card.
+- Review card.
+- Mermaid and mindmap cards.
+- Image attachments.
+- Table blocks only after the table extension behaves well in the mobile WebView.
 
 Reason:
 
-The book home document is the user's durable workspace. It should support
-structured reading notes, outlines, summaries, reviews, and visual thinking.
+The book home document is the user's durable workspace. It needs to support
+structured reading notes, outlines, source collections, summaries, reviews, and
+visual thinking. This is the richest default editing surface.
 
 ### Standalone Knowledge Documents
 
 Used for user-created notes that may or may not belong to a book.
 
-Support:
+Keep:
 
-- Same baseline as book home documents
-- Backlinks
-- Internal document links
-- Tags
-- Attachments
-- AI-generated summary card
+- Same baseline as book home documents.
+- Backlinks.
+- Internal document links.
+- Tags.
+- Attachments.
+- AI-generated summary card.
 
 Reason:
 
@@ -186,50 +223,69 @@ powerful without being book-only.
 
 Used for book reviews, reading essays, and polished exports.
 
-Support:
+Keep:
 
-- Headings
-- Rich paragraphs
-- Links
-- Lists
-- Blockquotes
-- Quote cards
-- Footnote-style source references
-- Images
-- Export-friendly callouts
+- Headings.
+- Rich paragraphs.
+- Links.
+- Lists.
+- Blockquotes.
+- Quote cards.
+- Footnote-style source references.
+- Images.
+- Export-friendly callouts.
 
 Avoid by default:
 
-- Highly interactive cards that do not export cleanly
-- Layout-only blocks that degrade poorly to Markdown
+- Highly interactive cards that do not export cleanly.
+- Layout-only blocks that degrade poorly to Markdown.
+- App-only AI controls inside the final exported document.
 
 Reason:
 
-Reviews must export cleanly to Markdown, Obsidian, and shareable text.
+Reviews must export cleanly to Markdown, Obsidian, and shareable text. This
+surface can be rich, but the richness must have a readable fallback.
 
 ### AI-Generated Knowledge Blocks
 
 Used for summaries, Q&A, concept extraction, timelines, and mindmaps.
 
-Support:
+Keep:
 
-- ReadAny AI summary card
-- Q&A card
-- Concept card
-- Timeline card
-- Mermaid and mindmap cards
-- Source quote cards with citations
+- ReadAny AI summary card.
+- Q&A card.
+- Concept card.
+- Timeline card.
+- Mermaid and mindmap cards.
+- Source quote cards with citations.
 
 Rules:
 
 - AI-generated blocks should be clearly marked.
 - The user should be able to convert an AI block into normal editable content.
 - Source citations should remain linked to book CFI, highlight, or document ID.
+- Failed AI/tool blocks should remain visible as failure cards, not disappear or
+  spin forever.
 
 Reason:
 
 AI output often starts structured, but users need ownership and editability after
 insertion.
+
+### Structured Fields Are Not Rich Text
+
+Some book and note fields should stay as structured controls, not editor blocks:
+
+- Book title, author, language, publisher, ISBN, publish date, rating.
+- Tags and groups.
+- Reading status and progress.
+- Source file path, cloud file path, CFI, chapter id, and sync metadata.
+
+Reason:
+
+These fields need reliable sync, filtering, sorting, AI tools, export frontmatter,
+and form validation. Putting them inside the rich editor would make them harder
+to query and easier to corrupt.
 
 ### Mobile Toolbar Scope
 
@@ -238,26 +294,26 @@ insert menu.
 
 Primary toolbar:
 
-- Undo
-- Redo
-- Bold
-- Italic
-- Link
-- Bullet list
-- Ordered list
-- Blockquote
-- Insert menu
+- Undo.
+- Redo.
+- Bold.
+- Italic.
+- Link.
+- Bullet list.
+- Ordered list.
+- Blockquote.
+- Insert menu.
 
 Insert menu:
 
-- Heading
-- Task list
-- Quote card
-- Callout card
-- Image
-- AI card
-- Mermaid or mindmap
-- Related note
+- Heading.
+- Task list.
+- Quote card.
+- Callout card.
+- Image.
+- AI card.
+- Mermaid or mindmap.
+- Related note.
 
 Reason:
 
@@ -268,13 +324,14 @@ should feel native and calm, not like a desktop toolbar squeezed into a phone.
 
 Desktop can expose richer groups:
 
-- History
-- Text style
-- Headings
-- Lists
-- Insert
-- Cards
-- Export/preview
+- History.
+- Text style.
+- Headings.
+- Lists.
+- Insert.
+- Cards.
+- Source/backlink panel.
+- Export/preview.
 
 Reason:
 

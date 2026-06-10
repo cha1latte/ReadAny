@@ -51,6 +51,18 @@
     "copiedToClipboard": "クリップボードにコピーしました",
     "downloaded": "ダウンロードしました",
     "deleteHighlightConfirm": "このハイライトを削除しますか？",
-    "deleteNoteConfirm": "このノートを削除しますか？"
+    "deleteNoteConfirm": "このノートを削除しますか？",
+    "knowledgeTab": "ナレッジ",
+    "knowledgeEyebrow": "ナレッジベース",
+    "knowledgePlaceholder": "この本の要約、問い、考え、残しておきたい知識を記録...",
+    "knowledgeSignals": "手がかり",
+    "knowledgeSources": "最近の抜粋",
+    "knowledgeNoSources": "抜粋はまだありません",
+    "knowledgeLoading": "ナレッジホームを開いています...",
+    "knowledgeSaving": "保存中",
+    "knowledgeSaved": "保存済み",
+    "knowledgePending": "未保存",
+    "knowledgeLoadFailed": "ナレッジホームの読み込みに失敗しました",
+    "knowledgeSaveFailed": "ナレッジホームの保存に失敗しました"
   }
 }

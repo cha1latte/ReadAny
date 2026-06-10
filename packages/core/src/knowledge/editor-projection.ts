@@ -42,7 +42,7 @@ export function isTiptapNode(value: JSONValue | unknown): value is TiptapNode {
 
 export function normalizeTiptapDocument(content: JSONValue | null | undefined): TiptapNode {
   if (isTiptapNode(content)) return content;
-  return EMPTY_TIPTAP_DOCUMENT as TiptapNode;
+  return EMPTY_TIPTAP_DOCUMENT as unknown as TiptapNode;
 }
 
 function escapeMarkdownText(text: string): string {

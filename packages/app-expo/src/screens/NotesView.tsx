@@ -8,6 +8,7 @@ import {
   ChevronLeftIcon,
   HighlighterIcon,
   NotebookPenIcon,
+  PlusIcon,
   ScrollTextIcon,
   SearchIcon,
   ShareIcon,
@@ -24,7 +25,9 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   type HighlightWithBook,
+  createKnowledgeDocument,
   ensureBookHomeDocument,
+  getKnowledgeDocuments,
   updateKnowledgeDocument,
 } from "@readany/core/db/database";
 import {
@@ -122,6 +125,29 @@ function knowledgeValueFingerprint(value: MobileKnowledgeEditorValue): string {
   });
 }
 
+function knowledgeDocumentFingerprint(title: string, value: MobileKnowledgeEditorValue): string {
+  return JSON.stringify({
+    title: title.trim(),
+    value: knowledgeValueFingerprint(value),
+  });
+}
+
+function orderKnowledgeDocuments(
+  documents: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeDocument[] {
+  const uniqueDocuments = Array.from(
+    new Map(documents.map((document) => [document.id, document])).values(),
+  );
+  return uniqueDocuments.sort((left, right) => {
+    if (left.id === homeDocumentId) return -1;
+    if (right.id === homeDocumentId) return 1;
+    if (left.type === "book_home") return -1;
+    if (right.type === "book_home") return 1;
+    return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
+  });
+}
+
 export function NotesView({
   initialBookId,
   showBackButton,
@@ -157,18 +183,24 @@ export function NotesView({
   const [editNote, setEditNote] = useState("");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [knowledgeHome, setKnowledgeHome] = useState<KnowledgeDocument | null>(null);
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<KnowledgeDocument[]>([]);
+  const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string | null>(
+    null,
+  );
+  const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeValue, setKnowledgeValue] = useState<MobileKnowledgeEditorValue>(() =>
     createEmptyKnowledgeValue(),
   );
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(() =>
-    knowledgeValueFingerprint(createEmptyKnowledgeValue()),
+    knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
-    () => knowledgeValueFingerprint(knowledgeValue),
-    [knowledgeValue],
+    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue),
+    [knowledgeTitle, knowledgeValue],
   );
 
   useFocusEffect(
@@ -333,8 +365,11 @@ export function NotesView({
       if (!selectedKnowledgeBookId) {
         const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeHome(null);
+        setKnowledgeDocuments([]);
+        setSelectedKnowledgeDocumentId(null);
+        setKnowledgeTitle("");
         setKnowledgeValue(emptyValue);
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(emptyValue));
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         return;
       }
@@ -342,15 +377,27 @@ export function NotesView({
       setIsKnowledgeLoading(true);
       setIsKnowledgeSaving(false);
       try {
-        const document = await ensureBookHomeDocument(
+        const homeDocument = await ensureBookHomeDocument(
           selectedKnowledgeBookId,
           selectedKnowledgeBookTitle,
         );
+        const bookDocuments = await getKnowledgeDocuments({
+          bookId: selectedKnowledgeBookId,
+          limit: 200,
+        });
         if (cancelled) return;
-        const nextValue = createKnowledgeValue(document);
-        setKnowledgeHome(document);
+        const nextDocuments = orderKnowledgeDocuments(
+          [homeDocument, ...bookDocuments],
+          homeDocument.id,
+        );
+        const activeDocument = nextDocuments[0] ?? homeDocument;
+        const nextValue = createKnowledgeValue(activeDocument);
+        setKnowledgeDocuments(nextDocuments);
+        setSelectedKnowledgeDocumentId(activeDocument.id);
+        setKnowledgeHome(activeDocument);
+        setKnowledgeTitle(activeDocument.title);
         setKnowledgeValue(nextValue);
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(nextValue));
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(activeDocument.title, nextValue));
       } catch (error) {
         console.error("[Notes] Failed to load knowledge home:", error);
         Alert.alert(t("common.error", "错误"), t("notes.knowledgeLoadFailed", "知识主页加载失败"));
@@ -371,18 +418,40 @@ export function NotesView({
 
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
+    const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
     const valueToSave = knowledgeValue;
+    const nextExcerpt = createKnowledgeExcerpt(valueToSave.contentMd);
 
     const timeout = setTimeout(async () => {
+      if (knowledgeSaveVersionRef.current !== saveVersion) return;
       setIsKnowledgeSaving(true);
       try {
         await updateKnowledgeDocument(knowledgeHome.id, {
+          title: normalizedTitle,
           contentMd: valueToSave.contentMd,
           contentJson: valueToSave.contentJson,
-          excerpt: createKnowledgeExcerpt(valueToSave.contentMd),
+          excerpt: nextExcerpt,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
-        setSavedKnowledgeFingerprint(knowledgeValueFingerprint(valueToSave));
+        const updatedDocument: KnowledgeDocument = {
+          ...knowledgeHome,
+          title: normalizedTitle,
+          contentMd: valueToSave.contentMd,
+          contentJson: valueToSave.contentJson,
+          excerpt: nextExcerpt,
+          updatedAt: Date.now(),
+        };
+        setKnowledgeHome(updatedDocument);
+        setKnowledgeDocuments((documents) =>
+          orderKnowledgeDocuments(
+            documents.map((document) =>
+              document.id === updatedDocument.id ? updatedDocument : document,
+            ),
+            documents.find((document) => document.type === "book_home")?.id,
+          ),
+        );
+        if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, valueToSave));
       } catch (error) {
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         console.error("[Notes] Failed to save knowledge home:", error);
@@ -395,7 +464,139 @@ export function NotesView({
     }, 700);
 
     return () => clearTimeout(timeout);
-  }, [knowledgeHome, knowledgeValue, currentKnowledgeFingerprint, savedKnowledgeFingerprint, t]);
+  }, [
+    knowledgeHome,
+    knowledgeTitle,
+    knowledgeValue,
+    currentKnowledgeFingerprint,
+    savedKnowledgeFingerprint,
+    t,
+  ]);
+
+  const saveActiveKnowledgeDocumentNow = useCallback(async (): Promise<boolean> => {
+    if (!knowledgeHome || currentKnowledgeFingerprint === savedKnowledgeFingerprint) return true;
+
+    const saveVersion = knowledgeSaveVersionRef.current + 1;
+    knowledgeSaveVersionRef.current = saveVersion;
+    const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
+
+    setIsKnowledgeSaving(true);
+    try {
+      await updateKnowledgeDocument(knowledgeHome.id, {
+        title: normalizedTitle,
+        contentMd: knowledgeValue.contentMd,
+        contentJson: knowledgeValue.contentJson,
+        excerpt: nextExcerpt,
+      });
+      if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      const updatedDocument: KnowledgeDocument = {
+        ...knowledgeHome,
+        title: normalizedTitle,
+        contentMd: knowledgeValue.contentMd,
+        contentJson: knowledgeValue.contentJson,
+        excerpt: nextExcerpt,
+        updatedAt: Date.now(),
+      };
+      setKnowledgeHome(updatedDocument);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((document) =>
+            document.id === updatedDocument.id ? updatedDocument : document,
+          ),
+          documents.find((document) => document.type === "book_home")?.id,
+        ),
+      );
+      if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
+      return true;
+    } catch (error) {
+      if (knowledgeSaveVersionRef.current === saveVersion) {
+        console.error("[Notes] Failed to save knowledge document:", error);
+        Alert.alert(t("common.error", "错误"), t("notes.knowledgeSaveFailed", "知识主页保存失败"));
+      }
+      return false;
+    } finally {
+      if (knowledgeSaveVersionRef.current === saveVersion) {
+        setIsKnowledgeSaving(false);
+      }
+    }
+  }, [
+    knowledgeHome,
+    knowledgeTitle,
+    knowledgeValue,
+    currentKnowledgeFingerprint,
+    savedKnowledgeFingerprint,
+    t,
+  ]);
+
+  const openKnowledgeDocument = useCallback(
+    async (document: KnowledgeDocument) => {
+      if (document.id === knowledgeHome?.id) return;
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      knowledgeSaveVersionRef.current += 1;
+      const nextValue = createKnowledgeValue(document);
+      setSelectedKnowledgeDocumentId(document.id);
+      setKnowledgeHome(document);
+      setKnowledgeTitle(document.title);
+      setKnowledgeValue(nextValue);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+      setIsKnowledgeSaving(false);
+    },
+    [knowledgeHome?.id, saveActiveKnowledgeDocumentNow],
+  );
+
+  const handleCreateKnowledgeDocument = useCallback(async () => {
+    if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    setIsKnowledgeDocumentCreating(true);
+    try {
+      const emptyValue = createEmptyKnowledgeValue();
+      const document = await createKnowledgeDocument({
+        bookId: selectedKnowledgeBookId,
+        type: "standalone_note",
+        title: t("notes.knowledgeNewDocumentTitle", {
+          count: Math.max(1, knowledgeDocuments.length),
+        }),
+        contentJson: emptyValue.contentJson,
+        contentMd: "",
+        excerpt: undefined,
+        tags: [],
+        sourceKind: "book",
+        sourceId: selectedKnowledgeBookId,
+      });
+      const nextValue = createKnowledgeValue(document);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          [document, ...documents],
+          documents.find((item) => item.type === "book_home")?.id,
+        ),
+      );
+      setSelectedKnowledgeDocumentId(document.id);
+      setKnowledgeHome(document);
+      setKnowledgeTitle(document.title);
+      setKnowledgeValue(nextValue);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+    } catch (error) {
+      console.error("[Notes] Failed to create knowledge document:", error);
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeDocumentCreateFailed", "知识文档创建失败"),
+      );
+    } finally {
+      setIsKnowledgeDocumentCreating(false);
+    }
+  }, [
+    selectedKnowledgeBookId,
+    isKnowledgeDocumentCreating,
+    saveActiveKnowledgeDocumentNow,
+    t,
+    knowledgeDocuments.length,
+  ]);
 
   const handleDeleteNote = useCallback(
     (highlight: HighlightWithBook) => {
@@ -490,6 +691,7 @@ export function NotesView({
       const exporter = new AnnotationExporter();
       const liveDocument: KnowledgeDocument = {
         ...knowledgeHome,
+        title: knowledgeTitle.trim() || knowledgeHome.title,
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
@@ -514,7 +716,7 @@ export function NotesView({
         Alert.alert(t("common.error", "错误"), t("notes.exportFailed", "导出失败"));
       }
     },
-    [selectedBook, knowledgeHome, knowledgeValue, books, t],
+    [selectedBook, knowledgeHome, knowledgeTitle, knowledgeValue, books, t],
   );
 
   const totalHighlights = stats?.totalHighlights ?? 0;
@@ -652,16 +854,9 @@ export function NotesView({
 
               {detailTab === "knowledge" ? (
                 <View style={s.knowledgeStatusBar}>
-                  <View style={s.knowledgeStatusPill}>
-                    <CheckCheckIcon size={13} color={colors.mutedForeground} />
-                    <Text style={s.knowledgeStatusText}>
-                      {isKnowledgeSaving
-                        ? t("notes.knowledgeSaving", "保存中")
-                        : currentKnowledgeFingerprint === savedKnowledgeFingerprint
-                          ? t("notes.knowledgeSaved", "已保存")
-                          : t("notes.knowledgePending", "待保存")}
-                    </Text>
-                  </View>
+                  <Text style={s.knowledgeStatusMeta}>
+                    {knowledgeDocuments.length} {t("notes.knowledgeDocuments", "文档")}
+                  </Text>
                   <Text style={s.knowledgeStatusMeta}>
                     {selectedBook.highlights.length} {t("notes.highlightsCount", "条高亮")}
                   </Text>
@@ -688,9 +883,18 @@ export function NotesView({
             key={knowledgeHome?.id ?? selectedBook.bookId}
             book={selectedBook}
             document={knowledgeHome}
+            documents={knowledgeDocuments}
+            activeDocumentId={selectedKnowledgeDocumentId}
+            title={knowledgeTitle}
             value={knowledgeValue}
             isLoading={isKnowledgeLoading}
+            isCreatingDocument={isKnowledgeDocumentCreating}
+            isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
+            isSaving={isKnowledgeSaving}
+            onTitleChange={setKnowledgeTitle}
             onChange={setKnowledgeValue}
+            onSelectDocument={openKnowledgeDocument}
+            onCreateDocument={handleCreateKnowledgeDocument}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -884,9 +1088,18 @@ export function NotesView({
 function KnowledgeHomePanel({
   book,
   document,
+  documents,
+  activeDocumentId,
+  title,
   value,
   isLoading,
+  isCreatingDocument,
+  isSaved,
+  isSaving,
+  onTitleChange,
   onChange,
+  onSelectDocument,
+  onCreateDocument,
   onOpenBook,
   t,
   styles,
@@ -901,9 +1114,18 @@ function KnowledgeHomePanel({
     highlightsOnlyCount: number;
   };
   document: KnowledgeDocument | null;
+  documents: KnowledgeDocument[];
+  activeDocumentId: string | null;
+  title: string;
   value: MobileKnowledgeEditorValue;
   isLoading: boolean;
+  isCreatingDocument: boolean;
+  isSaved: boolean;
+  isSaving: boolean;
+  onTitleChange: (title: string) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  onCreateDocument: () => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
@@ -955,7 +1177,43 @@ function KnowledgeHomePanel({
       </View>
 
       <View style={styles.knowledgeEditorCard}>
-        <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeTab", "知识主页")}</Text>
+        <View style={styles.knowledgeDocumentHeader}>
+          <View style={styles.knowledgeDocumentTitleBlock}>
+            <Text style={styles.knowledgeDocumentEyebrow}>
+              {t("notes.knowledgeDocuments", "文档")}
+            </Text>
+            <TextInput
+              value={title}
+              onChangeText={onTitleChange}
+              placeholder={t("notes.knowledgeUntitledDocument", "未命名文档")}
+              placeholderTextColor={colors.mutedForeground}
+              style={styles.knowledgeTitleInput}
+              returnKeyType="done"
+            />
+          </View>
+          <View style={styles.knowledgeInlineStatus}>
+            <CheckCheckIcon size={13} color={colors.mutedForeground} />
+            <Text style={styles.knowledgeInlineStatusText}>
+              {isSaving
+                ? t("notes.knowledgeSaving", "保存中")
+                : isSaved
+                  ? t("notes.knowledgeSaved", "已保存")
+                  : t("notes.knowledgePending", "待保存")}
+            </Text>
+          </View>
+        </View>
+
+        <KnowledgeDocumentStrip
+          documents={documents}
+          activeDocumentId={activeDocumentId}
+          isCreating={isCreatingDocument}
+          onSelect={onSelectDocument}
+          onCreate={onCreateDocument}
+          t={t}
+          styles={styles}
+          colors={colors}
+        />
+
         <View style={styles.knowledgeEditorFrame}>
           <MobileKnowledgeEditor
             tier="knowledge_doc"
@@ -1007,6 +1265,86 @@ function KnowledgeHomePanel({
         )}
       </View>
     </KeyboardAwareScrollView>
+  );
+}
+
+function knowledgeDocumentTypeLabel(document: KnowledgeDocument, t: TFunction): string {
+  if (document.type === "book_home") return t("notes.knowledgeDocumentHome", "主页");
+  if (document.type === "review") return t("notes.knowledgeDocumentReview", "书评");
+  if (document.type === "summary") return t("notes.knowledgeDocumentSummary", "摘要");
+  if (document.type === "highlight_note") return t("notes.knowledgeDocumentHighlight", "高亮笔记");
+  return t("notes.knowledgeDocumentNote", "笔记");
+}
+
+function KnowledgeDocumentStrip({
+  documents,
+  activeDocumentId,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+  styles,
+  colors,
+}: {
+  documents: KnowledgeDocument[];
+  activeDocumentId: string | null;
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: () => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={styles.knowledgeDocumentStrip}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.knowledgeDocumentStripContent}
+      >
+        {documents.map((document) => {
+          const isActive = document.id === activeDocumentId;
+          const label = document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
+          return (
+            <TouchableOpacity
+              key={document.id}
+              activeOpacity={0.78}
+              style={[styles.knowledgeDocumentChip, isActive && styles.knowledgeDocumentChipActive]}
+              onPress={() => onSelect(document)}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.knowledgeDocumentChipTitle,
+                  isActive && styles.knowledgeDocumentChipTitleActive,
+                ]}
+              >
+                {label}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.knowledgeDocumentChipMeta,
+                  isActive && styles.knowledgeDocumentChipMetaActive,
+                ]}
+              >
+                {knowledgeDocumentTypeLabel(document, t)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <TouchableOpacity
+        activeOpacity={0.78}
+        style={[styles.knowledgeDocumentCreateButton, isCreating && { opacity: 0.55 }]}
+        onPress={onCreate}
+        disabled={isCreating}
+        accessibilityLabel={t("notes.knowledgeNewDocument", "新建文档")}
+      >
+        <PlusIcon size={17} color={colors.primary} />
+      </TouchableOpacity>
+    </View>
   );
 }
 

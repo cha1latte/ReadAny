@@ -15,6 +15,9 @@ import type { HighlightWithBook } from "@/lib/db/database";
 import {
   ensureBookHomeDocument,
   getBook as getBookRecord,
+  getKnowledgeAttachments,
+  getKnowledgeDocuments,
+  getKnowledgeLinks,
   updateKnowledgeDocument,
 } from "@/lib/db/database";
 import { openDesktopBook } from "@/lib/library/open-book";
@@ -31,7 +34,7 @@ import {
 } from "@readany/core/export";
 import { markdownToBasicTiptap, renderKnowledgeJsonToMarkdown } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Highlight, KnowledgeDocument, Note } from "@readany/core/types";
+import type { Book, Highlight, KnowledgeDocument, Note } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -184,6 +187,25 @@ async function writeKnowledgeVaultFiles(
     }
     await writeTextFile(await joinDesktopPath(rootPath, file.path), file.content);
   }
+}
+
+async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books: Book[]) {
+  const documents = await getKnowledgeDocuments({ limit: 5000 });
+  const documentMap = new Map(documents.map((document) => [document.id, document]));
+  documentMap.set(liveDocument.id, liveDocument);
+  const mergedDocuments = Array.from(documentMap.values());
+
+  const [linksByDocument, attachmentsByDocument] = await Promise.all([
+    Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
+    Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
+  ]);
+
+  return {
+    documents: mergedDocuments,
+    books,
+    links: linksByDocument.flat(),
+    attachments: attachmentsByDocument.flat(),
+  };
 }
 
 // Helper component to resolve and display cover images
@@ -543,8 +565,6 @@ export function NotesPage() {
 
   const handleKnowledgeVaultExport = async () => {
     if (!selectedBook || !knowledgeHome || isKnowledgeVaultExporting) return;
-    const book = books.find((b) => b.id === selectedBook.bookId);
-    if (!book) return;
 
     setIsKnowledgeVaultExporting(true);
     setKnowledgeVaultConflicts(null);
@@ -565,7 +585,7 @@ export function NotesPage() {
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
         updatedAt: Date.now(),
       };
-      const input = { documents: [liveDocument], books: [book] };
+      const input = await collectKnowledgeVaultInput(liveDocument, books);
 
       let previousManifest: KnowledgeExportManifest | undefined;
       try {

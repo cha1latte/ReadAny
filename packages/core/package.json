@@ -47,6 +47,8 @@
     "./hooks/*": "./src/hooks/*.ts",
     "./hooks/reader": "./src/hooks/reader/index.ts",
     "./hooks/reader/*": "./src/hooks/reader/*.ts",
+    "./knowledge": "./src/knowledge/index.ts",
+    "./knowledge/*": "./src/knowledge/*.ts",
     "./events/*": "./src/events/*.ts",
     "./feedback": "./src/feedback/index.ts",
     "./feedback/*": "./src/feedback/*.ts"

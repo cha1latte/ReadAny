@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
-import { KnowledgeExporter } from "./knowledge-exporter";
+import { KnowledgeExporter, createKnowledgeExportHash } from "./knowledge-exporter";
 
 const baseBook: Book = {
   id: "book-1",
@@ -180,5 +180,249 @@ describe("KnowledgeExporter", () => {
     expect(file.content).toContain(':::readany-card type="bookQuote" version="1"');
     expect(file.content).toContain("Reading is thinking.");
     expect(file.content).not.toContain("type: readany-knowledge");
+  });
+
+  it("builds a vault package with a ReadAny manifest", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [knowledgeDocument()],
+      },
+      { rootDir: "ReadAny", exportedAt: 1700000200000 },
+    );
+
+    expect(vault.conflicts).toEqual([]);
+    expect(vault.files.map((file) => file.path)).toEqual([
+      "ReadAny/Books/The Book A Study/README.md",
+      "ReadAny/.readany/manifest.json",
+    ]);
+    expect(vault.files.at(-1)?.mimeType).toBe("application/json");
+    expect(vault.manifest).toMatchObject({
+      version: 1,
+      app: "ReadAny",
+      format: "obsidian",
+      rootDir: "ReadAny",
+      exportedAt: 1700000200000,
+    });
+    expect(vault.manifest.documents["doc-1"]).toMatchObject({
+      id: "doc-1",
+      type: "book_home",
+      title: "Book Home",
+      path: "ReadAny/Books/The Book A Study/README.md",
+      bookId: "book-1",
+      sourceKind: "book",
+      sourceId: "book-1",
+      contentSchemaVersion: 1,
+      updatedAt: 1700000100000,
+    });
+    expect(vault.manifest.documents["doc-1"].hash).toBe(
+      createKnowledgeExportHash(vault.files[0].content),
+    );
+
+    const manifestFile = vault.files.find((file) => file.path.endsWith("manifest.json"));
+    expect(JSON.parse(manifestFile?.content ?? "{}")).toEqual(vault.manifest);
+  });
+
+  it("records attachment metadata in the vault manifest", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      documents: [knowledgeDocument()],
+      attachments: [
+        {
+          id: "att-1",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "cover.png",
+          mimeType: "image/png",
+          localPath: "local/cover.png",
+          size: 42,
+          hash: "sha256:cover",
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ],
+    });
+
+    expect(vault.manifest.attachments["att-1"]).toEqual({
+      id: "att-1",
+      documentId: "doc-1",
+      kind: "image",
+      fileName: "cover.png",
+      mimeType: "image/png",
+      path: "local/cover.png",
+      size: 42,
+      hash: "sha256:cover",
+      updatedAt: 2000,
+    });
+  });
+
+  it("keeps duplicate document paths unique in both files and manifest entries", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      documents: [
+        knowledgeDocument({
+          id: "doc-a",
+          bookId: undefined,
+          type: "standalone_note",
+          title: "Same Name",
+        }),
+        knowledgeDocument({
+          id: "doc-b",
+          bookId: undefined,
+          type: "standalone_note",
+          title: "Same Name",
+        }),
+        knowledgeDocument({
+          id: "doc-c",
+          bookId: undefined,
+          type: "standalone_note",
+          title: "Same Name-2",
+        }),
+      ],
+    });
+
+    expect(vault.files.map((file) => file.path)).toEqual([
+      "Notes/Same Name.md",
+      "Notes/Same Name-2.md",
+      "Notes/Same Name-2-2.md",
+      ".readany/manifest.json",
+    ]);
+    expect(vault.manifest.documents["doc-a"].path).toBe("Notes/Same Name.md");
+    expect(vault.manifest.documents["doc-b"].path).toBe("Notes/Same Name-2.md");
+    expect(vault.manifest.documents["doc-c"].path).toBe("Notes/Same Name-2-2.md");
+  });
+
+  it("reuses previous manifest paths by document id during linked-folder exports", () => {
+    const exporter = new KnowledgeExporter();
+    const first = exporter.buildVaultPackage({
+      documents: [
+        knowledgeDocument({
+          id: "doc-rename",
+          bookId: undefined,
+          type: "standalone_note",
+          title: "Old Title",
+        }),
+      ],
+    });
+    const second = exporter.buildVaultPackage(
+      {
+        documents: [
+          knowledgeDocument({
+            id: "doc-rename",
+            bookId: undefined,
+            type: "standalone_note",
+            title: "New Title",
+          }),
+        ],
+      },
+      { previousManifest: first.manifest },
+    );
+
+    expect(first.manifest.documents["doc-rename"].path).toBe("Notes/Old Title.md");
+    expect(second.files[0].path).toBe("Notes/Old Title.md");
+    expect(second.manifest.documents["doc-rename"]).toMatchObject({
+      id: "doc-rename",
+      title: "New Title",
+      path: "Notes/Old Title.md",
+    });
+  });
+
+  it("detects external edits before overwriting a manifest-tracked file", () => {
+    const exporter = new KnowledgeExporter();
+    const first = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [knowledgeDocument()],
+      },
+      { exportedAt: 1000 },
+    );
+    const next = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [
+          knowledgeDocument({
+            contentMd: "Updated from ReadAny",
+            contentJson: { type: "doc", content: [] },
+            updatedAt: 1700000300000,
+          }),
+        ],
+      },
+      {
+        previousManifest: first.manifest,
+        existingFiles: [
+          {
+            path: "Books/The Book A Study/README.md",
+            content: `${first.files[0].content}\nEdited in Obsidian.\n`,
+          },
+        ],
+      },
+    );
+
+    expect(next.conflicts).toHaveLength(1);
+    expect(next.conflicts[0]).toMatchObject({
+      kind: "external_modified",
+      documentId: "doc-1",
+      path: "Books/The Book A Study/README.md",
+      previousHash: first.manifest.documents["doc-1"].hash,
+      nextHash: next.manifest.documents["doc-1"].hash,
+    });
+  });
+
+  it("does not report conflicts for unchanged or already-updated files", () => {
+    const exporter = new KnowledgeExporter();
+    const first = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [knowledgeDocument()],
+    });
+    const next = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [
+          knowledgeDocument({
+            contentMd: "Updated from ReadAny",
+            contentJson: { type: "doc", content: [] },
+            updatedAt: 1700000300000,
+          }),
+        ],
+      },
+      {
+        previousManifest: first.manifest,
+        existingFiles: [
+          {
+            path: "Books/The Book A Study/README.md",
+            content: first.files[0].content,
+          },
+          {
+            path: "Notes/Missing.md",
+            content: "Unknown file",
+          },
+        ],
+      },
+    );
+    const alreadyUpdated = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [
+          knowledgeDocument({
+            contentMd: "Updated from ReadAny",
+            contentJson: { type: "doc", content: [] },
+            updatedAt: 1700000300000,
+          }),
+        ],
+      },
+      {
+        previousManifest: first.manifest,
+        existingFiles: [
+          {
+            path: "Books/The Book A Study/README.md",
+            content: next.files[0].content,
+          },
+        ],
+      },
+    );
+
+    expect(next.conflicts).toEqual([]);
+    expect(alreadyUpdated.conflicts).toEqual([]);
   });
 });

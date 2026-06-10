@@ -7,12 +7,35 @@
  */
 import { getKnowledgeDocument, getKnowledgeDocuments } from "../../db/database";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
-import type { JSONValue, KnowledgeDocument, KnowledgeDocumentType } from "../../types";
+import type {
+  JSONValue,
+  KnowledgeDocument,
+  KnowledgeDocumentType,
+  KnowledgeLinkRelation,
+  KnowledgeLinkTargetKind,
+} from "../../types";
 import { generateId } from "../../utils/generate-id";
 import type { ToolDefinition } from "./tool-types";
 
 const SEARCH_SCAN_LIMIT = 200;
 const DEFAULT_RESULT_LIMIT = 8;
+const LINK_TARGET_KINDS = new Set<KnowledgeLinkTargetKind>([
+  "book",
+  "highlight",
+  "document",
+  "cfi",
+  "url",
+  "ai_message",
+  "obsidian",
+]);
+const LINK_RELATIONS = new Set<KnowledgeLinkRelation>([
+  "source",
+  "references",
+  "backlink",
+  "related",
+  "contains",
+  "generated_from",
+]);
 
 function asPositiveLimit(value: unknown, fallback: number): number {
   const limit = Number(value);
@@ -41,6 +64,20 @@ function normalizeType(value: unknown): KnowledgeDocumentType | undefined {
 
 function normalizeDocumentType(value: unknown): KnowledgeDocumentType {
   return normalizeType(value) ?? "standalone_note";
+}
+
+function normalizeLinkTargetKind(value: unknown): KnowledgeLinkTargetKind | null {
+  const kind = String(value ?? "").trim();
+  return LINK_TARGET_KINDS.has(kind as KnowledgeLinkTargetKind)
+    ? (kind as KnowledgeLinkTargetKind)
+    : null;
+}
+
+function normalizeLinkRelation(value: unknown): KnowledgeLinkRelation | null {
+  const relation = String(value ?? "").trim();
+  return LINK_RELATIONS.has(relation as KnowledgeLinkRelation)
+    ? (relation as KnowledgeLinkRelation)
+    : null;
 }
 
 function parseTags(value: unknown): string[] | undefined {
@@ -381,6 +418,85 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         current: documentSummary(document, "", false),
         patch,
         changedFields,
+      };
+    },
+  };
+}
+
+export function createProposeKnowledgeLinkCreateTool(): ToolDefinition {
+  return {
+    name: "proposeKnowledgeLinkCreate",
+    description:
+      "Create a confirmation-required draft for linking a ReadAny knowledge document to another document, highlight, CFI, book, URL, Obsidian path, or AI message. This tool NEVER saves data; the user must confirm applying the link.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why this knowledge link is useful",
+        required: true,
+      },
+      fromDocumentId: {
+        type: "string",
+        description: "Source knowledge document id",
+        required: true,
+      },
+      toKind: {
+        type: "string",
+        description: "Target kind: book, highlight, document, cfi, url, ai_message, or obsidian",
+        required: true,
+      },
+      toId: {
+        type: "string",
+        description: "Target id, URL, CFI, or Obsidian path",
+        required: true,
+      },
+      relation: {
+        type: "string",
+        description: "Relation: source, references, backlink, related, contains, or generated_from",
+      },
+      label: {
+        type: "string",
+        description: "Optional human-readable label for the link",
+      },
+      cfi: {
+        type: "string",
+        description: "Optional CFI when linking to an exact book location or highlight",
+      },
+    },
+    execute: async (args) => {
+      const fromDocumentId = String(args.fromDocumentId ?? "").trim();
+      const toId = String(args.toId ?? "").trim();
+      const toKind = normalizeLinkTargetKind(args.toKind);
+      const relation = normalizeLinkRelation(args.relation) ?? "related";
+      const label = String(args.label ?? "").trim() || undefined;
+      const cfi = String(args.cfi ?? "").trim() || undefined;
+
+      if (!fromDocumentId) return { success: false, error: "fromDocumentId is required" };
+      if (!toKind) return { success: false, error: "Invalid toKind" };
+      if (!toId) return { success: false, error: "toId is required" };
+
+      const source = await getKnowledgeDocument(fromDocumentId);
+      if (!source) return { success: false, error: "Source knowledge document not found" };
+
+      if (toKind === "document") {
+        const target = await getKnowledgeDocument(toId);
+        if (!target) return { success: false, error: "Target knowledge document not found" };
+      }
+
+      return {
+        success: true,
+        action: "link",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_link_create",
+        message: "Link draft generated only. No knowledge link has been saved.",
+        link: {
+          id: generateId(),
+          fromDocumentId,
+          toKind,
+          toId,
+          relation,
+          label,
+          cfi,
+        },
       };
     },
   };

@@ -3,10 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dbMocks = vi.hoisted(() => ({
   createKnowledgeDocument: vi.fn(),
   getKnowledgeDocument: vi.fn(),
+  getKnowledgeLinks: vi.fn(),
+  insertKnowledgeLink: vi.fn(),
   updateKnowledgeDocument: vi.fn(),
 }));
 
 vi.mock("../db/database", () => dbMocks);
+
+const idMocks = vi.hoisted(() => ({
+  generateId: vi.fn(() => "generated-link-id"),
+}));
+
+vi.mock("../utils/generate-id", () => idMocks);
 
 const { applyKnowledgeWriteProposal, getKnowledgeWriteProposal } = await import("./proposals");
 
@@ -67,6 +75,44 @@ describe("knowledge write proposals", () => {
         patch: { contentMd: "Markdown without canonical JSON" },
       }),
     ).toBeNull();
+    expect(
+      getKnowledgeWriteProposal({
+        success: true,
+        action: "link",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_link_create",
+        link: { fromDocumentId: "doc-1", toKind: "unknown", toId: "doc-2", relation: "related" },
+      }),
+    ).toBeNull();
+  });
+
+  it("normalizes confirmation-required link proposals", () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      link: {
+        id: "link-1",
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "doc-2",
+        relation: "related",
+        label: "Related idea",
+      },
+    });
+
+    expect(proposal).toMatchObject({
+      action: "link",
+      link: {
+        id: "link-1",
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "doc-2",
+        relation: "related",
+        label: "Related idea",
+      },
+    });
   });
 
   it("applies create proposals once when the draft id already exists", async () => {
@@ -142,6 +188,61 @@ describe("knowledge write proposals", () => {
     expect(dbMocks.updateKnowledgeDocument).toHaveBeenCalledWith("doc-1", {
       title: "Updated",
       tags: ["done"],
+    });
+  });
+
+  it("applies link proposals once and avoids duplicates", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      link: {
+        fromDocumentId: "doc-1",
+        toKind: "highlight",
+        toId: "hl-1",
+        relation: "source",
+        label: "Original highlight",
+        cfi: "epubcfi(/6/2)",
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected link proposal");
+
+    dbMocks.getKnowledgeLinks.mockResolvedValueOnce([]);
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "link",
+      documentId: "doc-1",
+      linkId: "generated-link-id",
+    });
+    expect(dbMocks.insertKnowledgeLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "generated-link-id",
+        fromDocumentId: "doc-1",
+        toKind: "highlight",
+        toId: "hl-1",
+        relation: "source",
+        cfi: "epubcfi(/6/2)",
+      }),
+    );
+
+    dbMocks.getKnowledgeLinks.mockResolvedValueOnce([
+      {
+        id: "existing-link",
+        fromDocumentId: "doc-1",
+        toKind: "highlight",
+        toId: "hl-1",
+        relation: "source",
+        cfi: "epubcfi(/6/2)",
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+    ]);
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "link",
+      documentId: "doc-1",
+      linkId: "existing-link",
+      alreadyApplied: true,
     });
   });
 });

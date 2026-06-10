@@ -170,6 +170,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   getBookKnowledge: "toolLabels.getBookKnowledge",
   proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
+  proposeKnowledgeLinkCreate: "toolLabels.proposeKnowledgeLinkCreate",
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
@@ -334,37 +335,55 @@ function KnowledgeProposalCard({
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
-  const isCreate = proposal.action === "create";
-  const title = isCreate
-    ? proposal.draft.title
-    : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
-  const type = isCreate ? proposal.draft.type : proposal.current?.type;
-  const tags = isCreate
-    ? (proposal.draft.tags ?? [])
-    : (proposal.patch.tags ?? proposal.current?.tags ?? []);
-  const preview = isCreate
-    ? proposal.draft.excerpt || proposal.draft.contentMd
-    : proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
-  const changedFields = proposal.action === "update" ? proposal.changedFields : [];
+  let actionLabel = t("knowledgeProposal.link", "建立知识关联");
+  let title = "";
+  let typeLabel = t("knowledgeProposal.types.knowledgeLink", "知识关联");
+  let tags: string[] = [];
+  let preview = "";
+  let changedFields: string[] = [];
+
+  if (proposal.action === "create") {
+    actionLabel = t("knowledgeProposal.create", "创建知识文档");
+    title = proposal.draft.title ?? "";
+    typeLabel = t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.draft.type], {
+      defaultValue: proposal.draft.type,
+    });
+    tags = proposal.draft.tags ?? [];
+    preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+  } else if (proposal.action === "update") {
+    actionLabel = t("knowledgeProposal.update", "更新知识文档");
+    title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
+    typeLabel = proposal.current?.type
+      ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.current.type], {
+          defaultValue: proposal.current.type,
+        })
+      : t("knowledgeProposal.types.knowledgeDocument", "知识文档");
+    tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
+    preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+    changedFields = proposal.changedFields;
+  } else {
+    title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
+    preview = [
+      `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
+      proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    changedFields = [proposal.link.relation];
+  }
 
   return (
     <View style={s.proposalCard}>
       <View style={s.proposalHeader}>
         <View style={s.proposalTitleWrap}>
-          <Text style={s.proposalActionText}>
-            {isCreate
-              ? t("knowledgeProposal.create", "创建知识文档")
-              : t("knowledgeProposal.update", "更新知识文档")}
-          </Text>
+          <Text style={s.proposalActionText}>{actionLabel}</Text>
           <Text style={s.proposalTitleText} numberOfLines={2}>
             {title}
           </Text>
         </View>
         <View style={s.proposalTypeBadge}>
           <Text style={s.proposalTypeText} numberOfLines={1}>
-            {type
-              ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[type], { defaultValue: type })
-              : t("knowledgeProposal.types.knowledgeDocument", "知识文档")}
+            {typeLabel}
           </Text>
         </View>
       </View>

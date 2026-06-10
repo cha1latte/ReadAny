@@ -227,6 +227,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   getBookKnowledge: "toolLabels.getBookKnowledge",
   proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
+  proposeKnowledgeLinkCreate: "toolLabels.proposeKnowledgeLinkCreate",
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
@@ -417,33 +418,53 @@ function KnowledgeProposalCard({
   onApply: () => void;
 }) {
   const { t } = useTranslation();
-  const isCreate = proposal.action === "create";
-  const title = isCreate
-    ? proposal.draft.title
-    : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
-  const type = isCreate ? proposal.draft.type : proposal.current?.type;
-  const tags = isCreate
-    ? (proposal.draft.tags ?? [])
-    : (proposal.patch.tags ?? proposal.current?.tags ?? []);
-  const preview = isCreate
-    ? proposal.draft.excerpt || proposal.draft.contentMd
-    : proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
-  const changedFields = proposal.action === "update" ? proposal.changedFields : [];
+  let actionLabel = t("knowledgeProposal.link");
+  let title = "";
+  let typeLabel = t("knowledgeProposal.types.knowledgeLink");
+  let tags: string[] = [];
+  let preview = "";
+  let changedFields: string[] = [];
+
+  if (proposal.action === "create") {
+    actionLabel = t("knowledgeProposal.create");
+    title = proposal.draft.title ?? "";
+    typeLabel = t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.draft.type], {
+      defaultValue: proposal.draft.type,
+    });
+    tags = proposal.draft.tags ?? [];
+    preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+  } else if (proposal.action === "update") {
+    actionLabel = t("knowledgeProposal.update");
+    title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
+    typeLabel = proposal.current?.type
+      ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.current.type], {
+          defaultValue: proposal.current.type,
+        })
+      : t("knowledgeProposal.types.knowledgeDocument");
+    tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
+    preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+    changedFields = proposal.changedFields;
+  } else {
+    title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
+    preview = [
+      `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
+      proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    changedFields = [proposal.link.relation];
+  }
 
   return (
     <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
       <div className="border-b border-border/70 bg-primary/[0.04] px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-xs font-medium text-primary">
-              {isCreate ? t("knowledgeProposal.create") : t("knowledgeProposal.update")}
-            </div>
+            <div className="text-xs font-medium text-primary">{actionLabel}</div>
             <div className="truncate text-sm font-semibold text-foreground">{title}</div>
           </div>
           <div className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
-            {type
-              ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[type], { defaultValue: type })
-              : t("knowledgeProposal.types.knowledgeDocument")}
+            {typeLabel}
           </div>
         </div>
       </div>

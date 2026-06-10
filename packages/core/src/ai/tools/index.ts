@@ -33,6 +33,7 @@ import {
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentUpdateTool,
+  createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
 } from "./knowledge-tools";
 import {
@@ -64,6 +65,7 @@ function getGeneralTools(): ToolDefinition[] {
     createSearchKnowledgeBaseTool(),
     createProposeKnowledgeDocumentCreateTool(),
     createProposeKnowledgeDocumentUpdateTool(),
+    createProposeKnowledgeLinkCreateTool(),
     createReadingStatsTool(),
     createGetSkillsTool(),
     createMindmapTool(),

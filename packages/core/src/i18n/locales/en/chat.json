@@ -102,12 +102,14 @@
     "searchKnowledgeBase": "Searching knowledge base",
     "getBookKnowledge": "Reading book knowledge",
     "proposeKnowledgeDocumentCreate": "Drafting knowledge document",
-    "proposeKnowledgeDocumentUpdate": "Drafting document update"
+    "proposeKnowledgeDocumentUpdate": "Drafting document update",
+    "proposeKnowledgeLinkCreate": "Drafting knowledge link"
   },
   "knowledgeProposal": {
     "title": "Knowledge write proposal",
     "create": "Create knowledge document",
     "update": "Update knowledge document",
+    "link": "Create knowledge link",
     "pendingBadge": "Needs confirmation",
     "savedBadge": "Applied",
     "safeHint": "AI has only drafted this. It will write to your knowledge base after confirmation.",
@@ -125,7 +127,8 @@
       "highlightNote": "Highlight note",
       "review": "Review",
       "summary": "Summary",
-      "importedMarkdown": "Imported document"
+      "importedMarkdown": "Imported document",
+      "knowledgeLink": "Knowledge link"
     }
   },
   "mindmap": {

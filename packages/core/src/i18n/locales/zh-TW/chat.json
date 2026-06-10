@@ -102,12 +102,14 @@
     "searchKnowledgeBase": "搜尋知識庫",
     "getBookKnowledge": "讀取本書知識",
     "proposeKnowledgeDocumentCreate": "草擬知識文件",
-    "proposeKnowledgeDocumentUpdate": "草擬文件更新"
+    "proposeKnowledgeDocumentUpdate": "草擬文件更新",
+    "proposeKnowledgeLinkCreate": "草擬知識關聯"
   },
   "knowledgeProposal": {
     "title": "知識庫寫入提案",
     "create": "建立知識文件",
     "update": "更新知識文件",
+    "link": "建立知識關聯",
     "pendingBadge": "待確認",
     "savedBadge": "已套用",
     "safeHint": "AI 只產生了草稿，確認後才會寫入你的知識庫。",
@@ -125,7 +127,8 @@
       "highlightNote": "劃線筆記",
       "review": "書評",
       "summary": "摘要",
-      "importedMarkdown": "匯入文件"
+      "importedMarkdown": "匯入文件",
+      "knowledgeLink": "知識關聯"
     }
   },
   "mindmap": {

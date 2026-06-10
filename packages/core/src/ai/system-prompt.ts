@@ -108,6 +108,9 @@ function buildToolsSection(
   tools.push(
     "- **proposeKnowledgeDocumentUpdate**: Draft a patch for an existing knowledge document for user confirmation only; it does NOT save anything (params: reasoning, documentId, title, contentMd, tags)",
   );
+  tools.push(
+    "- **proposeKnowledgeLinkCreate**: Draft a link between knowledge documents, highlights, CFIs, books, URLs, Obsidian paths, or AI messages for user confirmation only; it does NOT save anything (params: reasoning, fromDocumentId, toKind, toId, relation, label, cfi)",
+  );
   tools.push("- **getReadingStats**: Get reading statistics (params: reasoning, days)");
   tools.push("- **getSkills**: Query available skills/SOPs for guidance (params: reasoning, task)");
   tools.push(
@@ -193,7 +196,7 @@ function buildToolsSection(
 
   tools.push("");
   tools.push(
-    "Knowledge write safety: proposeKnowledgeDocumentCreate and proposeKnowledgeDocumentUpdate only return confirmation-required drafts. Never tell the user a knowledge document was saved or changed until the app has explicitly confirmed applying the proposal.",
+    "Knowledge write safety: proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, and proposeKnowledgeLinkCreate only return confirmation-required drafts. Never tell the user a knowledge document or link was saved or changed until the app has explicitly confirmed applying the proposal.",
   );
 
   // Custom skills

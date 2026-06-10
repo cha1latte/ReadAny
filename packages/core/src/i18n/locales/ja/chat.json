@@ -102,12 +102,14 @@
     "searchKnowledgeBase": "ナレッジベースを検索中",
     "getBookKnowledge": "この本のナレッジを読み取り中",
     "proposeKnowledgeDocumentCreate": "ナレッジ文書を下書き中",
-    "proposeKnowledgeDocumentUpdate": "文書更新を下書き中"
+    "proposeKnowledgeDocumentUpdate": "文書更新を下書き中",
+    "proposeKnowledgeLinkCreate": "ナレッジリンクを下書き中"
   },
   "knowledgeProposal": {
     "title": "ナレッジ書き込み提案",
     "create": "ナレッジ文書を作成",
     "update": "ナレッジ文書を更新",
+    "link": "ナレッジリンクを作成",
     "pendingBadge": "確認待ち",
     "savedBadge": "適用済み",
     "safeHint": "AI は下書きだけを作成しました。確認後にナレッジベースへ保存されます。",
@@ -125,7 +127,8 @@
       "highlightNote": "ハイライトノート",
       "review": "レビュー",
       "summary": "要約",
-      "importedMarkdown": "インポート文書"
+      "importedMarkdown": "インポート文書",
+      "knowledgeLink": "ナレッジリンク"
     }
   },
   "mindmap": {

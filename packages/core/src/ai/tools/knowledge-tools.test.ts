@@ -12,6 +12,7 @@ const {
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentUpdateTool,
+  createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
 } = await import("./knowledge-tools");
 
@@ -193,5 +194,49 @@ describe("knowledge tools", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("No changes were proposed");
+  });
+
+  it("creates confirmation-required link proposals without saving links", async () => {
+    dbMocks.getKnowledgeDocument
+      .mockResolvedValueOnce(doc({ id: "doc-1" }))
+      .mockResolvedValueOnce(doc({ id: "doc-2", title: "Related Idea" }));
+
+    const tool = createProposeKnowledgeLinkCreateTool();
+    const result = (await tool.execute({
+      reasoning: "User wants to connect related notes",
+      fromDocumentId: "doc-1",
+      toKind: "document",
+      toId: "doc-2",
+      relation: "related",
+      label: "Related idea",
+    })) as {
+      success: boolean;
+      requiresConfirmation: boolean;
+      action: string;
+      confirmationKind: string;
+      link: {
+        fromDocumentId: string;
+        toKind: string;
+        toId: string;
+        relation: string;
+        label: string;
+      };
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenNthCalledWith(1, "doc-1");
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenNthCalledWith(2, "doc-2");
+    expect(result).toMatchObject({
+      success: true,
+      requiresConfirmation: true,
+      action: "link",
+      confirmationKind: "knowledge_link_create",
+      link: {
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "doc-2",
+        relation: "related",
+        label: "Related idea",
+      },
+    });
   });
 });

@@ -102,12 +102,14 @@
     "searchKnowledgeBase": "지식 베이스 검색 중",
     "getBookKnowledge": "이 책의 지식 읽는 중",
     "proposeKnowledgeDocumentCreate": "지식 문서 초안 작성 중",
-    "proposeKnowledgeDocumentUpdate": "문서 업데이트 초안 작성 중"
+    "proposeKnowledgeDocumentUpdate": "문서 업데이트 초안 작성 중",
+    "proposeKnowledgeLinkCreate": "지식 링크 초안 작성 중"
   },
   "knowledgeProposal": {
     "title": "지식 베이스 쓰기 제안",
     "create": "지식 문서 만들기",
     "update": "지식 문서 업데이트",
+    "link": "지식 링크 만들기",
     "pendingBadge": "확인 필요",
     "savedBadge": "적용됨",
     "safeHint": "AI는 초안만 만들었어요. 확인 후 지식 베이스에 저장됩니다.",
@@ -125,7 +127,8 @@
       "highlightNote": "하이라이트 노트",
       "review": "리뷰",
       "summary": "요약",
-      "importedMarkdown": "가져온 문서"
+      "importedMarkdown": "가져온 문서",
+      "knowledgeLink": "지식 링크"
     }
   },
   "mindmap": {

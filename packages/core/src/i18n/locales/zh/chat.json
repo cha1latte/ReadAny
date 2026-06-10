@@ -102,12 +102,14 @@
     "searchKnowledgeBase": "搜索知识库",
     "getBookKnowledge": "读取本书知识",
     "proposeKnowledgeDocumentCreate": "草拟知识文档",
-    "proposeKnowledgeDocumentUpdate": "草拟文档更新"
+    "proposeKnowledgeDocumentUpdate": "草拟文档更新",
+    "proposeKnowledgeLinkCreate": "草拟知识关联"
   },
   "knowledgeProposal": {
     "title": "知识库写入提案",
     "create": "创建知识文档",
     "update": "更新知识文档",
+    "link": "建立知识关联",
     "pendingBadge": "待确认",
     "savedBadge": "已应用",
     "safeHint": "AI 只生成了草稿，确认后才会写入你的知识库。",
@@ -125,7 +127,8 @@
       "highlightNote": "高亮笔记",
       "review": "书评",
       "summary": "摘要",
-      "importedMarkdown": "导入文档"
+      "importedMarkdown": "导入文档",
+      "knowledgeLink": "知识关联"
     }
   },
   "mindmap": {

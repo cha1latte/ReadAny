@@ -33,7 +33,13 @@ import {
   annotationExporter,
   knowledgeExporter,
 } from "@readany/core/export";
-import { markdownToBasicTiptap, renderKnowledgeJsonToMarkdown } from "@readany/core/knowledge";
+import {
+  createKnowledgeExcerpt,
+  knowledgeDocumentFingerprint,
+  markdownToBasicTiptap,
+  orderKnowledgeDocuments,
+  renderKnowledgeJsonToMarkdown,
+} from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type { Book, Highlight, KnowledgeDocument, Note } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
@@ -95,30 +101,6 @@ function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boole
   );
 }
 
-function knowledgeValueFingerprint(value: KnowledgeEditorValue): string {
-  return `${value.contentMd}\n${JSON.stringify(value.contentJson)}`;
-}
-
-function knowledgeDocumentFingerprint(title: string, value: KnowledgeEditorValue): string {
-  return `${title.trim()}\n${knowledgeValueFingerprint(value)}`;
-}
-
-function orderKnowledgeDocuments(
-  documents: KnowledgeDocument[],
-  homeDocumentId?: string,
-): KnowledgeDocument[] {
-  const uniqueDocuments = Array.from(
-    new Map(documents.map((document) => [document.id, document])).values(),
-  );
-  return uniqueDocuments.sort((left, right) => {
-    if (left.id === homeDocumentId) return -1;
-    if (right.id === homeDocumentId) return 1;
-    if (left.type === "book_home") return -1;
-    if (right.type === "book_home") return 1;
-    return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
-  });
-}
-
 function createKnowledgeValueFromDocument(document: KnowledgeDocument): KnowledgeEditorValue {
   const shouldImportMarkdown =
     !!document.contentMd.trim() && isEmptyTiptapDocument(document.contentJson);
@@ -132,15 +114,6 @@ function createKnowledgeValueFromDocument(document: KnowledgeDocument): Knowledg
     contentMd,
     plainText: createKnowledgeExcerpt(contentMd) ?? "",
   };
-}
-
-function createKnowledgeExcerpt(markdown: string): string | undefined {
-  const text = markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[#>*_`~\-[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text ? text.slice(0, 220) : undefined;
 }
 
 function normalizeExportPath(path: string): string {

@@ -21,6 +21,13 @@ export type {
   KnowledgeEditorTier,
 } from "./editor-profile";
 export {
+  createKnowledgeExcerpt,
+  knowledgeDocumentFingerprint,
+  knowledgeValueFingerprint,
+  orderKnowledgeDocuments,
+} from "./document-utils";
+export type { KnowledgeDocumentSnapshot } from "./document-utils";
+export {
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,
   getReadAnyCardDefinition,

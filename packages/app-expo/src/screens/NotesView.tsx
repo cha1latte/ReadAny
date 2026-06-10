@@ -37,8 +37,11 @@ import {
   knowledgeExporter,
 } from "@readany/core/export";
 import {
+  createKnowledgeExcerpt,
+  knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
+  orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
@@ -78,15 +81,6 @@ const NOTE_DARK_PNG = require("../../assets/note-dark.png");
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "knowledge" | "notes" | "highlights";
 
-function createKnowledgeExcerpt(markdown: string): string | undefined {
-  const text = markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[#>*_`~\-[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text ? text.slice(0, 220) : undefined;
-}
-
 function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
   return {
     contentJson: { type: "doc", content: [] },
@@ -116,36 +110,6 @@ function createKnowledgeValue(document: KnowledgeDocument): MobileKnowledgeEdito
       .replace(/\s+/g, " ")
       .trim(),
   };
-}
-
-function knowledgeValueFingerprint(value: MobileKnowledgeEditorValue): string {
-  return JSON.stringify({
-    contentJson: value.contentJson,
-    contentMd: value.contentMd,
-  });
-}
-
-function knowledgeDocumentFingerprint(title: string, value: MobileKnowledgeEditorValue): string {
-  return JSON.stringify({
-    title: title.trim(),
-    value: knowledgeValueFingerprint(value),
-  });
-}
-
-function orderKnowledgeDocuments(
-  documents: KnowledgeDocument[],
-  homeDocumentId?: string,
-): KnowledgeDocument[] {
-  const uniqueDocuments = Array.from(
-    new Map(documents.map((document) => [document.id, document])).values(),
-  );
-  return uniqueDocuments.sort((left, right) => {
-    if (left.id === homeDocumentId) return -1;
-    if (right.id === homeDocumentId) return 1;
-    if (left.type === "book_home") return -1;
-    if (right.type === "book_home") return 1;
-    return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
-  });
 }
 
 export function NotesView({

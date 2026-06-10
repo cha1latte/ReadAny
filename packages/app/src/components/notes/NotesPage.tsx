@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,8 @@ import { useLibraryStore } from "@/stores/library-store";
 import {
   type ExportFormat,
   type KnowledgeExportFormat,
+  type KnowledgeExportManifest,
+  type KnowledgeExportObservedFile,
   annotationExporter,
   knowledgeExporter,
 } from "@readany/core/export";
@@ -33,12 +36,14 @@ import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
 import {
+  AlertTriangle,
   BookOpen,
   Check,
   ChevronLeft,
   Download,
   Edit3,
   FileText,
+  FolderUp,
   Highlighter,
   NotebookPen,
   Save,
@@ -60,6 +65,12 @@ import { toast } from "sonner";
 import { ExportDropdown } from "./ExportDropdown";
 
 type DetailTab = "knowledge" | "notes" | "highlights";
+
+interface KnowledgeVaultConflictNotice {
+  rootPath: string;
+  paths: string[];
+  kind: "external_modified" | "untracked_existing_file";
+}
 
 function createEmptyKnowledgeValue(): KnowledgeEditorValue {
   return {
@@ -105,6 +116,74 @@ function createKnowledgeExcerpt(markdown: string): string | undefined {
     .replace(/\s+/g, " ")
     .trim();
   return text ? text.slice(0, 220) : undefined;
+}
+
+function normalizeExportPath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .replace(/\/+/g, "/");
+}
+
+function exportFileDirectory(path: string): string | null {
+  const normalized = normalizeExportPath(path);
+  const index = normalized.lastIndexOf("/");
+  return index > 0 ? normalized.slice(0, index) : null;
+}
+
+function uniqueExportPaths(paths: string[]): string[] {
+  return Array.from(new Set(paths.map(normalizeExportPath))).filter(Boolean);
+}
+
+async function joinDesktopPath(rootPath: string, relativePath: string): Promise<string> {
+  const { join } = await import("@tauri-apps/api/path");
+  const parts = normalizeExportPath(relativePath).split("/").filter(Boolean);
+  return join(rootPath, ...parts);
+}
+
+async function readKnowledgeVaultManifest(
+  rootPath: string,
+): Promise<KnowledgeExportManifest | undefined> {
+  const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
+  const manifestPath = await joinDesktopPath(rootPath, ".readany/manifest.json");
+  if (!(await exists(manifestPath))) return undefined;
+
+  const raw = await readTextFile(manifestPath);
+  return JSON.parse(raw) as KnowledgeExportManifest;
+}
+
+async function readExistingKnowledgeVaultFiles(
+  rootPath: string,
+  paths: string[],
+): Promise<KnowledgeExportObservedFile[]> {
+  const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
+  const existingFiles: KnowledgeExportObservedFile[] = [];
+
+  for (const path of uniqueExportPaths(paths)) {
+    const filePath = await joinDesktopPath(rootPath, path);
+    if (!(await exists(filePath))) continue;
+    existingFiles.push({
+      path,
+      content: await readTextFile(filePath),
+    });
+  }
+
+  return existingFiles;
+}
+
+async function writeKnowledgeVaultFiles(
+  rootPath: string,
+  files: { path: string; content: string }[],
+): Promise<void> {
+  const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+
+  for (const file of files) {
+    const directory = exportFileDirectory(file.path);
+    if (directory) {
+      await mkdir(await joinDesktopPath(rootPath, directory), { recursive: true });
+    }
+    await writeTextFile(await joinDesktopPath(rootPath, file.path), file.content);
+  }
 }
 
 // Helper component to resolve and display cover images
@@ -163,6 +242,9 @@ export function NotesPage() {
   );
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const [isKnowledgeVaultExporting, setIsKnowledgeVaultExporting] = useState(false);
+  const [knowledgeVaultConflicts, setKnowledgeVaultConflicts] =
+    useState<KnowledgeVaultConflictNotice | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeValueFingerprint(knowledgeValue),
@@ -459,6 +541,98 @@ export function NotesPage() {
     }
   };
 
+  const handleKnowledgeVaultExport = async () => {
+    if (!selectedBook || !knowledgeHome || isKnowledgeVaultExporting) return;
+    const book = books.find((b) => b.id === selectedBook.bookId);
+    if (!book) return;
+
+    setIsKnowledgeVaultExporting(true);
+    setKnowledgeVaultConflicts(null);
+
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t("notes.knowledgeVaultSelectFolder"),
+      });
+      if (!selected || Array.isArray(selected)) return;
+
+      const liveDocument: KnowledgeDocument = {
+        ...knowledgeHome,
+        contentJson: knowledgeValue.contentJson,
+        contentMd: knowledgeValue.contentMd,
+        excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+        updatedAt: Date.now(),
+      };
+      const input = { documents: [liveDocument], books: [book] };
+
+      let previousManifest: KnowledgeExportManifest | undefined;
+      try {
+        previousManifest = await readKnowledgeVaultManifest(selected);
+      } catch (error) {
+        toast.error(t("notes.knowledgeVaultManifestInvalid"));
+        console.error("[Notes] Failed to read knowledge vault manifest:", error);
+        return;
+      }
+
+      const draftPackage = knowledgeExporter.buildVaultPackage(input, {
+        format: "obsidian",
+        rootDir: "",
+        previousManifest,
+      });
+      const existingFiles = await readExistingKnowledgeVaultFiles(
+        selected,
+        previousManifest
+          ? [
+              ...Object.values(previousManifest.documents).map((entry) => entry.path),
+              ...Object.values(draftPackage.manifest.documents).map((entry) => entry.path),
+            ]
+          : draftPackage.files.map((file) => file.path),
+      );
+
+      if (!previousManifest && existingFiles.length > 0) {
+        const paths = existingFiles.map((file) => file.path);
+        setKnowledgeVaultConflicts({
+          rootPath: selected,
+          paths,
+          kind: "untracked_existing_file",
+        });
+        toast.error(t("notes.knowledgeVaultConflictToast"));
+        return;
+      }
+
+      const vaultPackage = knowledgeExporter.buildVaultPackage(input, {
+        format: "obsidian",
+        rootDir: "",
+        previousManifest,
+        existingFiles,
+      });
+
+      if (vaultPackage.conflicts.length > 0) {
+        setKnowledgeVaultConflicts({
+          rootPath: selected,
+          paths: vaultPackage.conflicts.map((conflict) => conflict.path),
+          kind: "external_modified",
+        });
+        toast.error(t("notes.knowledgeVaultConflictToast"));
+        return;
+      }
+
+      await writeKnowledgeVaultFiles(selected, vaultPackage.files);
+      toast.success(t("notes.knowledgeVaultExportSuccess"), {
+        description: t("notes.knowledgeVaultExportSuccessDetail", {
+          count: vaultPackage.files.length,
+        }),
+      });
+    } catch (error) {
+      toast.error(t("notes.knowledgeVaultExportFailed"));
+      console.error("[Notes] Knowledge vault export failed:", error);
+    } finally {
+      setIsKnowledgeVaultExporting(false);
+    }
+  };
+
   const handleSingleBookExport = (format: ExportFormat) => {
     if (!selectedBook) return;
     const book = books.find((b) => b.id === selectedBook.bookId);
@@ -739,7 +913,11 @@ export function NotesPage() {
                 isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
                 onChange={setKnowledgeValue}
                 onExport={handleKnowledgeExport}
+                onExportVault={handleKnowledgeVaultExport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
+                isVaultExporting={isKnowledgeVaultExporting}
+                vaultConflicts={knowledgeVaultConflicts}
+                onDismissVaultConflicts={() => setKnowledgeVaultConflicts(null)}
                 t={t}
               />
             ) : currentList.length === 0 ? (
@@ -825,8 +1003,12 @@ interface KnowledgeHomePanelProps {
   isSaved: boolean;
   onChange: (value: KnowledgeEditorValue) => void;
   onExport: (format: KnowledgeExportFormat) => void;
+  onExportVault: () => void;
   onOpenBook: (cfi?: string) => void;
-  t: (key: string) => string;
+  isVaultExporting: boolean;
+  vaultConflicts: KnowledgeVaultConflictNotice | null;
+  onDismissVaultConflicts: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 function KnowledgeHomePanel({
@@ -838,7 +1020,11 @@ function KnowledgeHomePanel({
   isSaved,
   onChange,
   onExport,
+  onExportVault,
   onOpenBook,
+  isVaultExporting,
+  vaultConflicts,
+  onDismissVaultConflicts,
   t,
 }: KnowledgeHomePanelProps) {
   const recentHighlights = useMemo(
@@ -877,9 +1063,22 @@ function KnowledgeHomePanel({
                     ? t("notes.knowledgeSaved")
                     : t("notes.knowledgePending")}
               </div>
-              <KnowledgeExportMenu onExport={onExport} t={t} />
+              <KnowledgeExportMenu
+                onExport={onExport}
+                onExportVault={onExportVault}
+                isVaultExporting={isVaultExporting}
+                t={t}
+              />
             </div>
           </div>
+
+          {vaultConflicts ? (
+            <KnowledgeVaultConflictCard
+              notice={vaultConflicts}
+              onDismiss={onDismissVaultConflicts}
+              t={t}
+            />
+          ) : null}
 
           <KnowledgeEditor
             tier="knowledge_doc"
@@ -953,12 +1152,79 @@ function KnowledgeHomePanel({
   );
 }
 
+function KnowledgeVaultConflictCard({
+  notice,
+  onDismiss,
+  t,
+}: {
+  notice: KnowledgeVaultConflictNotice;
+  onDismiss: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const visiblePaths = notice.paths.slice(0, 4);
+  const hiddenCount = Math.max(0, notice.paths.length - visiblePaths.length);
+
+  return (
+    <div className="mb-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">
+                {notice.kind === "external_modified"
+                  ? t("notes.knowledgeVaultConflictTitle")
+                  : t("notes.knowledgeVaultExistingTitle")}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {notice.kind === "external_modified"
+                  ? t("notes.knowledgeVaultConflictDescription")
+                  : t("notes.knowledgeVaultExistingDescription")}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+              onClick={onDismiss}
+              aria-label={t("common.close")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-2 rounded-md border border-border/50 bg-background/70 px-2.5 py-2">
+            <p className="truncate text-[11px] text-muted-foreground">{notice.rootPath}</p>
+            <div className="mt-1 space-y-1">
+              {visiblePaths.map((path) => (
+                <p key={path} className="truncate font-mono text-[11px] text-foreground/85">
+                  {path}
+                </p>
+              ))}
+              {hiddenCount > 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {t("notes.knowledgeVaultConflictMore", { count: hiddenCount })}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KnowledgeExportMenu({
   onExport,
+  onExportVault,
+  isVaultExporting,
   t,
 }: {
   onExport: (format: KnowledgeExportFormat) => void;
-  t: (key: string) => string;
+  onExportVault: () => void;
+  isVaultExporting: boolean;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
     <DropdownMenu>
@@ -976,6 +1242,11 @@ function KnowledgeExportMenu({
         <DropdownMenuItem onClick={() => onExport("markdown")}>
           <FileText className="mr-2 h-4 w-4" />
           {t("notes.exportMarkdown")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onExportVault} disabled={isVaultExporting}>
+          <FolderUp className="mr-2 h-4 w-4" />
+          {isVaultExporting ? t("notes.knowledgeVaultExporting") : t("notes.knowledgeExportVault")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

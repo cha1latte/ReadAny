@@ -24,7 +24,12 @@ import {
   ensureBookHomeDocument,
   updateKnowledgeDocument,
 } from "@readany/core/db/database";
-import { AnnotationExporter, type ExportFormat } from "@readany/core/export";
+import {
+  AnnotationExporter,
+  type ExportFormat,
+  type KnowledgeExportFormat,
+  knowledgeExporter,
+} from "@readany/core/export";
 import { markdownToBasicTiptap } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type { Highlight, KnowledgeDocument } from "@readany/core/types";
@@ -420,6 +425,46 @@ export function NotesView({
     [selectedBook, books, t],
   );
 
+  const handleKnowledgeExport = useCallback(
+    async (format: KnowledgeExportFormat) => {
+      setShowExportMenu(false);
+      if (!selectedBook || !knowledgeHome) return;
+
+      const book = books.find((b) => b.id === selectedBook.bookId);
+      if (!book) return;
+
+      const exporter = new AnnotationExporter();
+      const liveDocument: KnowledgeDocument = {
+        ...knowledgeHome,
+        contentMd: knowledgeContent,
+        contentJson: markdownToBasicTiptap(
+          knowledgeContent,
+        ) as unknown as KnowledgeDocument["contentJson"],
+        excerpt: createKnowledgeExcerpt(knowledgeContent),
+        updatedAt: Date.now(),
+      };
+      const files = knowledgeExporter.export(
+        { documents: [liveDocument], books: [book] },
+        { format, rootDir: "ReadAny" },
+      );
+      const file = files[0];
+      if (!file) {
+        Alert.alert(t("common.error", "错误"), t("notes.exportFailed", "导出失败"));
+        return;
+      }
+
+      try {
+        const filename =
+          file.path.split("/").filter(Boolean).pop() || `${selectedBook.title}-knowledge.md`;
+        await exporter.downloadAsFile(file.content, filename, format);
+      } catch (err) {
+        console.error("Knowledge export failed:", err);
+        Alert.alert(t("common.error", "错误"), t("notes.exportFailed", "导出失败"));
+      }
+    },
+    [selectedBook, knowledgeHome, knowledgeContent, books, t],
+  );
+
   const totalHighlights = stats?.totalHighlights ?? 0;
   const totalNotes = stats?.highlightsWithNotes ?? 0;
   const totalBooks = stats?.totalBooks ?? 0;
@@ -659,19 +704,37 @@ export function NotesView({
         >
           <Pressable style={s.exportOverlay} onPress={() => setShowExportMenu(false)} />
           <View style={s.exportDropdown}>
-            {(["markdown", "json", "obsidian", "notion"] as const).map((fmt) => (
-              <TouchableOpacity key={fmt} style={s.exportItem} onPress={() => handleExport(fmt)}>
-                <Text style={s.exportItemText}>
-                  {fmt === "markdown"
-                    ? "Markdown"
-                    : fmt === "json"
-                      ? "JSON"
-                      : fmt === "obsidian"
-                        ? "Obsidian"
-                        : "Notion"}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {detailTab === "knowledge"
+              ? (["obsidian", "markdown"] as const).map((fmt) => (
+                  <TouchableOpacity
+                    key={fmt}
+                    style={s.exportItem}
+                    onPress={() => handleKnowledgeExport(fmt)}
+                  >
+                    <Text style={s.exportItemText}>
+                      {fmt === "obsidian"
+                        ? t("notes.exportObsidian", "Obsidian")
+                        : t("notes.exportMarkdown", "Markdown")}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              : (["markdown", "json", "obsidian", "notion"] as const).map((fmt) => (
+                  <TouchableOpacity
+                    key={fmt}
+                    style={s.exportItem}
+                    onPress={() => handleExport(fmt)}
+                  >
+                    <Text style={s.exportItemText}>
+                      {fmt === "markdown"
+                        ? t("notes.exportMarkdown", "Markdown")
+                        : fmt === "json"
+                          ? t("notes.exportJSON", "JSON")
+                          : fmt === "obsidian"
+                            ? t("notes.exportObsidian", "Obsidian")
+                            : t("notes.exportNotion", "Notion")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
           </View>
         </Modal>
       </SafeAreaView>

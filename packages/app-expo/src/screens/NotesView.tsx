@@ -958,6 +958,7 @@ function KnowledgeHomePanel({
         <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeTab", "知识主页")}</Text>
         <View style={styles.knowledgeEditorFrame}>
           <MobileKnowledgeEditor
+            tier="knowledge_doc"
             documentId={document.id}
             value={value}
             onChange={onChange}

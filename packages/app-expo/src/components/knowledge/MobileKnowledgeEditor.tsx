@@ -16,10 +16,17 @@ import {
 } from "@/components/ui/Icon";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
-import { markdownToBasicTiptap, renderKnowledgeJsonToMarkdown } from "@readany/core/knowledge";
+import {
+  type KnowledgeEditorFeature,
+  type KnowledgeEditorTier,
+  getKnowledgeEditorProfile,
+  hasKnowledgeEditorFeature,
+  markdownToBasicTiptap,
+  renderKnowledgeJsonToMarkdown,
+} from "@readany/core/knowledge";
 import type { JSONValue } from "@readany/core/types";
 import { Asset } from "expo-asset";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -47,6 +54,7 @@ interface MobileKnowledgeEditorProps {
   onChange: (value: MobileKnowledgeEditorValue) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  tier?: KnowledgeEditorTier;
 }
 
 interface SelectionState {
@@ -148,6 +156,7 @@ export function MobileKnowledgeEditor({
   onChange,
   placeholder,
   autoFocus = false,
+  tier = "knowledge_doc",
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -170,6 +179,11 @@ export function MobileKnowledgeEditor({
   });
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const editorProfile = useMemo(() => getKnowledgeEditorProfile(tier), [tier]);
+  const canUse = useCallback(
+    (feature: KnowledgeEditorFeature) => hasKnowledgeEditorFeature(editorProfile, feature),
+    [editorProfile],
+  );
 
   const theme = useMemo<EditorTheme>(
     () => ({
@@ -301,9 +315,10 @@ export function MobileKnowledgeEditor({
   );
 
   const openLinkModal = useCallback(() => {
+    if (!canUse("link")) return;
     setLinkUrl(selection.linkHref ?? "");
     setShowLinkModal(true);
-  }, [selection.linkHref]);
+  }, [canUse, selection.linkHref]);
 
   const applyLink = useCallback(() => {
     const href = linkUrl.trim();
@@ -322,6 +337,219 @@ export function MobileKnowledgeEditor({
       });
     },
     [onChange],
+  );
+
+  const toolbarGroupCandidates: ({ key: string; node: React.ReactNode } | null)[] = [
+    canUse("undo") || canUse("redo")
+      ? {
+          key: "history",
+          node: (
+            <Fragment>
+              {canUse("undo") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("undo")}
+                  disabled={!selection.canUndo || !isEditorReady}
+                  styles={styles}
+                >
+                  <Undo2Icon size={15} color={colors.mutedForeground} />
+                </ToolbarButton>
+              ) : null}
+              {canUse("redo") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("redo")}
+                  disabled={!selection.canRedo || !isEditorReady}
+                  styles={styles}
+                >
+                  <Redo2Icon size={15} color={colors.mutedForeground} />
+                </ToolbarButton>
+              ) : null}
+            </Fragment>
+          ),
+        }
+      : null,
+    canUse("heading1") || canUse("heading2") || canUse("heading3")
+      ? {
+          key: "headings",
+          node: (
+            <Fragment>
+              {canUse("heading1") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("heading", { level: 1 })}
+                  isActive={selection.headingLevel === 1}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <Heading1Icon
+                    size={15}
+                    color={selection.headingLevel === 1 ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("heading2") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("heading", { level: 2 })}
+                  isActive={selection.headingLevel === 2}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <Heading2Icon
+                    size={15}
+                    color={selection.headingLevel === 2 ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("heading3") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("heading", { level: 3 })}
+                  isActive={selection.headingLevel === 3}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <Heading3Icon
+                    size={15}
+                    color={selection.headingLevel === 3 ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+            </Fragment>
+          ),
+        }
+      : null,
+    {
+      key: "inline",
+      node: (
+        <Fragment>
+          {canUse("bold") ? (
+            <ToolbarButton
+              onPress={() => runCommand("bold")}
+              isActive={selection.marks.bold}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <BoldIcon
+                size={15}
+                color={selection.marks.bold ? colors.primary : colors.mutedForeground}
+              />
+            </ToolbarButton>
+          ) : null}
+          {canUse("italic") ? (
+            <ToolbarButton
+              onPress={() => runCommand("italic")}
+              isActive={selection.marks.italic}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <ItalicIcon
+                size={15}
+                color={selection.marks.italic ? colors.primary : colors.mutedForeground}
+              />
+            </ToolbarButton>
+          ) : null}
+          {canUse("strike") ? (
+            <ToolbarButton
+              onPress={() => runCommand("strike")}
+              isActive={selection.marks.strike}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <StrikethroughIcon
+                size={15}
+                color={selection.marks.strike ? colors.primary : colors.mutedForeground}
+              />
+            </ToolbarButton>
+          ) : null}
+          {canUse("inlineCode") ? (
+            <ToolbarButton
+              onPress={() => runCommand("code")}
+              isActive={selection.marks.code}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <CodeIcon
+                size={15}
+                color={selection.marks.code ? colors.primary : colors.mutedForeground}
+              />
+            </ToolbarButton>
+          ) : null}
+          {canUse("link") ? (
+            <ToolbarButton
+              onPress={openLinkModal}
+              isActive={selection.marks.link}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <Link2Icon
+                size={15}
+                color={selection.marks.link ? colors.primary : colors.mutedForeground}
+              />
+            </ToolbarButton>
+          ) : null}
+        </Fragment>
+      ),
+    },
+    canUse("bulletList") ||
+    canUse("orderedList") ||
+    canUse("blockquote") ||
+    canUse("horizontalRule")
+      ? {
+          key: "blocks",
+          node: (
+            <Fragment>
+              {canUse("bulletList") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("bulletList")}
+                  isActive={selection.marks.bulletList}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <ListIcon
+                    size={15}
+                    color={selection.marks.bulletList ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("orderedList") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("orderedList")}
+                  isActive={selection.marks.orderedList}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <ListOrderedIcon
+                    size={15}
+                    color={selection.marks.orderedList ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("blockquote") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("blockquote")}
+                  isActive={selection.marks.blockquote}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <QuoteIcon
+                    size={15}
+                    color={selection.marks.blockquote ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("horizontalRule") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("horizontalRule")}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <MinusIcon size={15} color={colors.mutedForeground} />
+                </ToolbarButton>
+              ) : null}
+            </Fragment>
+          ),
+        }
+      : null,
+  ];
+  const toolbarGroups = toolbarGroupCandidates.filter(
+    (group): group is { key: string; node: React.ReactNode } => group !== null,
   );
 
   if (useMarkdownFallback) {
@@ -346,151 +574,12 @@ export function MobileKnowledgeEditor({
         style={styles.toolbar}
         contentContainerStyle={styles.toolbarContent}
       >
-        <ToolbarButton
-          onPress={() => runCommand("undo")}
-          disabled={!selection.canUndo || !isEditorReady}
-          styles={styles}
-        >
-          <Undo2Icon size={15} color={colors.mutedForeground} />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("redo")}
-          disabled={!selection.canRedo || !isEditorReady}
-          styles={styles}
-        >
-          <Redo2Icon size={15} color={colors.mutedForeground} />
-        </ToolbarButton>
-        <ToolbarDivider styles={styles} />
-        <ToolbarButton
-          onPress={() => runCommand("heading", { level: 1 })}
-          isActive={selection.headingLevel === 1}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <Heading1Icon
-            size={15}
-            color={selection.headingLevel === 1 ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("heading", { level: 2 })}
-          isActive={selection.headingLevel === 2}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <Heading2Icon
-            size={15}
-            color={selection.headingLevel === 2 ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("heading", { level: 3 })}
-          isActive={selection.headingLevel === 3}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <Heading3Icon
-            size={15}
-            color={selection.headingLevel === 3 ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarDivider styles={styles} />
-        <ToolbarButton
-          onPress={() => runCommand("bold")}
-          isActive={selection.marks.bold}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <BoldIcon
-            size={15}
-            color={selection.marks.bold ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("italic")}
-          isActive={selection.marks.italic}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <ItalicIcon
-            size={15}
-            color={selection.marks.italic ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("strike")}
-          isActive={selection.marks.strike}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <StrikethroughIcon
-            size={15}
-            color={selection.marks.strike ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("code")}
-          isActive={selection.marks.code}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <CodeIcon
-            size={15}
-            color={selection.marks.code ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={openLinkModal}
-          isActive={selection.marks.link}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <Link2Icon
-            size={15}
-            color={selection.marks.link ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarDivider styles={styles} />
-        <ToolbarButton
-          onPress={() => runCommand("bulletList")}
-          isActive={selection.marks.bulletList}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <ListIcon
-            size={15}
-            color={selection.marks.bulletList ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("orderedList")}
-          isActive={selection.marks.orderedList}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <ListOrderedIcon
-            size={15}
-            color={selection.marks.orderedList ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("blockquote")}
-          isActive={selection.marks.blockquote}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <QuoteIcon
-            size={15}
-            color={selection.marks.blockquote ? colors.primary : colors.mutedForeground}
-          />
-        </ToolbarButton>
-        <ToolbarButton
-          onPress={() => runCommand("horizontalRule")}
-          disabled={!isEditorReady}
-          styles={styles}
-        >
-          <MinusIcon size={15} color={colors.mutedForeground} />
-        </ToolbarButton>
+        {toolbarGroups.map((group, index) => (
+          <Fragment key={group.key}>
+            {index > 0 ? <ToolbarDivider styles={styles} /> : null}
+            {group.node}
+          </Fragment>
+        ))}
       </ScrollView>
 
       <View style={[styles.webViewFrame, { height: editorHeight }]}>

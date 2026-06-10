@@ -9,6 +9,12 @@ export type {
   TiptapMark,
   TiptapNode,
 } from "./editor-projection";
+export { getKnowledgeEditorProfile, hasKnowledgeEditorFeature } from "./editor-profile";
+export type {
+  KnowledgeEditorFeature,
+  KnowledgeEditorProfile,
+  KnowledgeEditorTier,
+} from "./editor-profile";
 export {
   builtInReadAnyCards,
   getReadAnyCardDefinition,

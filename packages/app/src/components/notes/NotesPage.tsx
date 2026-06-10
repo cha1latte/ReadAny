@@ -882,6 +882,7 @@ function KnowledgeHomePanel({
           </div>
 
           <KnowledgeEditor
+            tier="knowledge_doc"
             value={value}
             onChange={onChange}
             placeholder={t("notes.knowledgePlaceholder")}

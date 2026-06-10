@@ -63,6 +63,20 @@
     "knowledgeSaved": "已儲存",
     "knowledgePending": "待儲存",
     "knowledgeLoadFailed": "知識首頁載入失敗",
-    "knowledgeSaveFailed": "知識首頁儲存失敗"
+    "knowledgeSaveFailed": "知識首頁儲存失敗",
+    "knowledgeInsertCard": "插入卡片",
+    "knowledgeCardEmpty": "空卡片，稍後可編輯。",
+    "knowledgeCardSource": "來源",
+    "knowledgeCards": {
+      "bookQuote": "書摘卡",
+      "callout": "提示卡",
+      "bookMetadata": "書籍資訊卡",
+      "aiSummary": "AI 摘要卡",
+      "qa": "問答卡",
+      "review": "書評卡",
+      "mindmap": "心智圖卡",
+      "mermaid": "圖表卡",
+      "relatedNotes": "相關筆記卡"
+    }
   }
 }

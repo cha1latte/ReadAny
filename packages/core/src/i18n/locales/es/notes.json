@@ -63,6 +63,20 @@
     "knowledgeSaved": "Guardado",
     "knowledgePending": "Pendiente",
     "knowledgeLoadFailed": "No se pudo cargar la página de conocimiento",
-    "knowledgeSaveFailed": "No se pudo guardar la página de conocimiento"
+    "knowledgeSaveFailed": "No se pudo guardar la página de conocimiento",
+    "knowledgeInsertCard": "Insertar tarjeta",
+    "knowledgeCardEmpty": "Tarjeta vacía, lista para editar más tarde.",
+    "knowledgeCardSource": "Fuente",
+    "knowledgeCards": {
+      "bookQuote": "Tarjeta de cita",
+      "callout": "Aviso",
+      "bookMetadata": "Datos del libro",
+      "aiSummary": "Resumen IA",
+      "qa": "Preguntas y respuestas",
+      "review": "Reseña",
+      "mindmap": "Mapa mental",
+      "mermaid": "Diagrama",
+      "relatedNotes": "Notas relacionadas"
+    }
   }
 }

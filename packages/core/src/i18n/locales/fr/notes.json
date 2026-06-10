@@ -63,6 +63,20 @@
     "knowledgeSaved": "Enregistré",
     "knowledgePending": "En attente",
     "knowledgeLoadFailed": "Impossible de charger la page de savoir",
-    "knowledgeSaveFailed": "Impossible d'enregistrer la page de savoir"
+    "knowledgeSaveFailed": "Impossible d'enregistrer la page de savoir",
+    "knowledgeInsertCard": "Insérer une carte",
+    "knowledgeCardEmpty": "Carte vide, prête à être modifiée plus tard.",
+    "knowledgeCardSource": "Source",
+    "knowledgeCards": {
+      "bookQuote": "Carte de citation",
+      "callout": "Encadré",
+      "bookMetadata": "Infos du livre",
+      "aiSummary": "Résumé IA",
+      "qa": "Q&R",
+      "review": "Critique",
+      "mindmap": "Carte mentale",
+      "mermaid": "Diagramme",
+      "relatedNotes": "Notes liées"
+    }
   }
 }

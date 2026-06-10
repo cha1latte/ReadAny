@@ -63,6 +63,20 @@
     "knowledgeSaved": "保存済み",
     "knowledgePending": "未保存",
     "knowledgeLoadFailed": "ナレッジホームの読み込みに失敗しました",
-    "knowledgeSaveFailed": "ナレッジホームの保存に失敗しました"
+    "knowledgeSaveFailed": "ナレッジホームの保存に失敗しました",
+    "knowledgeInsertCard": "カードを挿入",
+    "knowledgeCardEmpty": "空のカードです。あとで編集できます。",
+    "knowledgeCardSource": "出典",
+    "knowledgeCards": {
+      "bookQuote": "引用カード",
+      "callout": "コールアウト",
+      "bookMetadata": "書籍情報",
+      "aiSummary": "AI 要約",
+      "qa": "Q&A",
+      "review": "レビュー",
+      "mindmap": "マインドマップ",
+      "mermaid": "図表",
+      "relatedNotes": "関連ノート"
+    }
   }
 }

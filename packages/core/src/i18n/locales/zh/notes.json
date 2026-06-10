@@ -63,6 +63,20 @@
     "knowledgeSaved": "已保存",
     "knowledgePending": "待保存",
     "knowledgeLoadFailed": "知识主页加载失败",
-    "knowledgeSaveFailed": "知识主页保存失败"
+    "knowledgeSaveFailed": "知识主页保存失败",
+    "knowledgeInsertCard": "插入卡片",
+    "knowledgeCardEmpty": "空卡片，稍后可编辑。",
+    "knowledgeCardSource": "来源",
+    "knowledgeCards": {
+      "bookQuote": "书摘卡",
+      "callout": "提示卡",
+      "bookMetadata": "书籍信息卡",
+      "aiSummary": "AI 摘要卡",
+      "qa": "问答卡",
+      "review": "书评卡",
+      "mindmap": "思维导图卡",
+      "mermaid": "图表卡",
+      "relatedNotes": "相关笔记卡"
+    }
   }
 }

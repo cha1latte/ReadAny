@@ -63,6 +63,20 @@
     "knowledgeSaved": "Saved",
     "knowledgePending": "Pending",
     "knowledgeLoadFailed": "Failed to load knowledge home",
-    "knowledgeSaveFailed": "Failed to save knowledge home"
+    "knowledgeSaveFailed": "Failed to save knowledge home",
+    "knowledgeInsertCard": "Insert card",
+    "knowledgeCardEmpty": "Empty card, ready to edit later.",
+    "knowledgeCardSource": "Source",
+    "knowledgeCards": {
+      "bookQuote": "Quote card",
+      "callout": "Callout",
+      "bookMetadata": "Book metadata",
+      "aiSummary": "AI summary",
+      "qa": "Q&A",
+      "review": "Review",
+      "mindmap": "Mind map",
+      "mermaid": "Diagram",
+      "relatedNotes": "Related notes"
+    }
   }
 }

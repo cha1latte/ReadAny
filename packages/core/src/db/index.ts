@@ -47,6 +47,23 @@ export {
   insertNote,
   updateNote,
   deleteNote,
+  // Knowledge queries
+  getKnowledgeDocument,
+  getKnowledgeDocuments,
+  getBookHomeDocument,
+  createKnowledgeDocument,
+  ensureBookHomeDocument,
+  insertKnowledgeDocument,
+  updateKnowledgeDocument,
+  deleteKnowledgeDocument,
+  getKnowledgeLinks,
+  insertKnowledgeLink,
+  deleteKnowledgeLink,
+  getKnowledgeAttachments,
+  insertKnowledgeAttachment,
+  deleteKnowledgeAttachment,
+  getKnowledgeCardTemplates,
+  upsertKnowledgeCardTemplate,
   // Bookmark queries
   getBookmarks,
   insertBookmark,
@@ -82,3 +99,4 @@ export {
 } from "./database";
 
 export type { HighlightWithBook } from "./database";
+export type { CreateKnowledgeDocumentInput, KnowledgeDocumentFilters } from "./database";

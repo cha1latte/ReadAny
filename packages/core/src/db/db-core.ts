@@ -408,6 +408,81 @@ export async function initDatabase(): Promise<void> {
   `);
 
       await database.execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+      id TEXT PRIMARY KEY,
+      book_id TEXT,
+      parent_id TEXT,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      content_json TEXT NOT NULL DEFAULT '{}',
+      content_md TEXT NOT NULL DEFAULT '',
+      content_schema_version INTEGER NOT NULL DEFAULT 1,
+      excerpt TEXT,
+      tags TEXT DEFAULT '[]',
+      source_kind TEXT,
+      source_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER,
+      sync_version INTEGER DEFAULT 0,
+      last_modified_by TEXT,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES knowledge_documents(id) ON DELETE SET NULL
+    )
+  `);
+
+      await database.execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_links (
+      id TEXT PRIMARY KEY,
+      from_document_id TEXT NOT NULL,
+      to_kind TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      relation TEXT NOT NULL,
+      label TEXT,
+      cfi TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      sync_version INTEGER DEFAULT 0,
+      last_modified_by TEXT,
+      FOREIGN KEY (from_document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+    )
+  `);
+
+      await database.execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_attachments (
+      id TEXT PRIMARY KEY,
+      document_id TEXT,
+      kind TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT,
+      local_path TEXT,
+      remote_path TEXT,
+      size INTEGER DEFAULT 0,
+      hash TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      sync_version INTEGER DEFAULT 0,
+      last_modified_by TEXT,
+      FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE SET NULL
+    )
+  `);
+
+      await database.execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_card_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      schema_json TEXT NOT NULL DEFAULT '{}',
+      built_in INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      sync_version INTEGER DEFAULT 0,
+      last_modified_by TEXT
+    )
+  `);
+
+      await database.execute(`
     CREATE TABLE IF NOT EXISTS bookmarks (
       id TEXT PRIMARY KEY,
       book_id TEXT NOT NULL,
@@ -501,6 +576,18 @@ export async function initDatabase(): Promise<void> {
         "CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book_id)",
       );
       await database.execute("CREATE INDEX IF NOT EXISTS idx_notes_book ON notes(book_id)");
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_documents_book ON knowledge_documents(book_id)",
+      );
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_documents_source ON knowledge_documents(source_kind, source_id)",
+      );
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_links_from ON knowledge_links(from_document_id)",
+      );
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_attachments_document ON knowledge_attachments(document_id)",
+      );
       await database.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id)");
       await database.execute(
         "CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)",
@@ -591,6 +678,10 @@ export async function initDatabase(): Promise<void> {
         "tags",
         "book_tags",
         "book_groups",
+        "knowledge_documents",
+        "knowledge_links",
+        "knowledge_attachments",
+        "knowledge_card_templates",
         "reading_sessions",
         "threads",
         "messages",

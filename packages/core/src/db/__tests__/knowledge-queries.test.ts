@@ -1,0 +1,351 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { KnowledgeAttachment, KnowledgeCardTemplate, KnowledgeLink } from "../../types";
+
+const mockExecute = vi.fn();
+const mockSelect = vi.fn();
+const mockDb = { execute: mockExecute, select: mockSelect, close: vi.fn() };
+
+const coreMocks = vi.hoisted(() => ({
+  getDB: vi.fn(),
+  getDeviceId: vi.fn(),
+  nextSyncVersion: vi.fn(),
+  nextUpdatedAt: vi.fn(),
+  insertTombstone: vi.fn(),
+  parseJSON: vi.fn((str: string | null | undefined, fallback: unknown) => {
+    if (!str) return fallback;
+    try {
+      return JSON.parse(str);
+    } catch {
+      return fallback;
+    }
+  }),
+}));
+
+const idMocks = vi.hoisted(() => ({
+  generateId: vi.fn(() => "generated-id"),
+}));
+
+vi.mock("../db-core", () => coreMocks);
+vi.mock("../../utils/generate-id", () => idMocks);
+
+const {
+  createKnowledgeDocument,
+  deleteKnowledgeAttachment,
+  deleteKnowledgeDocument,
+  deleteKnowledgeLink,
+  ensureBookHomeDocument,
+  getKnowledgeAttachments,
+  getKnowledgeCardTemplates,
+  getKnowledgeDocument,
+  getKnowledgeDocuments,
+  getKnowledgeLinks,
+  insertKnowledgeAttachment,
+  insertKnowledgeDocument,
+  insertKnowledgeLink,
+  updateKnowledgeDocument,
+  upsertKnowledgeCardTemplate,
+} = await import("../knowledge-queries");
+
+const docRow = {
+  id: "doc-1",
+  book_id: "book-1",
+  parent_id: null,
+  type: "book_home",
+  title: "Book Home",
+  content_json: '{"type":"doc","content":[]}',
+  content_md: "# Book Home",
+  content_schema_version: 1,
+  excerpt: "Short",
+  tags: '["tag-a"]',
+  source_kind: "book",
+  source_id: "book-1",
+  created_at: 1000,
+  updated_at: 1000,
+  deleted_at: null,
+};
+
+describe("knowledge-queries", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(Date, "now").mockReturnValue(1234);
+    coreMocks.getDB.mockResolvedValue(mockDb);
+    coreMocks.getDeviceId.mockResolvedValue("device-1");
+    coreMocks.nextSyncVersion.mockResolvedValue(7);
+    coreMocks.nextUpdatedAt.mockResolvedValue(2345);
+    coreMocks.insertTombstone.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("maps a knowledge document row", async () => {
+    mockSelect.mockResolvedValue([docRow]);
+
+    const doc = await getKnowledgeDocument("doc-1");
+
+    expect(doc).toMatchObject({
+      id: "doc-1",
+      bookId: "book-1",
+      type: "book_home",
+      title: "Book Home",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "# Book Home",
+      tags: ["tag-a"],
+      sourceKind: "book",
+      sourceId: "book-1",
+    });
+    expect(mockSelect).toHaveBeenCalledWith(
+      "SELECT * FROM knowledge_documents WHERE id = ? LIMIT 1",
+      ["doc-1"],
+    );
+  });
+
+  it("filters knowledge documents by book, type, source, and limit", async () => {
+    mockSelect.mockResolvedValue([]);
+
+    await getKnowledgeDocuments({
+      bookId: "book-1",
+      parentId: null,
+      type: "book_home",
+      sourceKind: "book",
+      sourceId: "book-1",
+      limit: 5,
+    });
+
+    const [sql, params] = mockSelect.mock.calls[0];
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("book_id = ?");
+    expect(sql).toContain("parent_id IS NULL");
+    expect(sql).toContain("type = ?");
+    expect(sql).toContain("source_kind = ?");
+    expect(sql).toContain("source_id = ?");
+    expect(params).toEqual(["book-1", "book_home", "book", "book-1", 5]);
+  });
+
+  it("creates a knowledge document with defaults and sync tracking", async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    const doc = await createKnowledgeDocument({
+      bookId: "book-1",
+      type: "book_home",
+      title: "  Book Home  ",
+      sourceKind: "book",
+      sourceId: "book-1",
+    });
+
+    expect(doc).toMatchObject({
+      id: "generated-id",
+      title: "Book Home",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      contentSchemaVersion: 1,
+      tags: [],
+      createdAt: 1234,
+      updatedAt: 1234,
+    });
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("INSERT INTO knowledge_documents");
+    expect(params[0]).toBe("generated-id");
+    expect(params[1]).toBe("book-1");
+    expect(params[5]).toBe('{"type":"doc","content":[]}');
+    expect(params[15]).toBe(7);
+    expect(params[16]).toBe("device-1");
+  });
+
+  it("ensures book home document by returning the existing document first", async () => {
+    mockSelect.mockResolvedValue([docRow]);
+
+    const doc = await ensureBookHomeDocument("book-1", "Fallback");
+
+    expect(doc.id).toBe("doc-1");
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it("inserts a provided knowledge document", async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    await insertKnowledgeDocument({
+      id: "doc-2",
+      bookId: "book-1",
+      type: "standalone_note",
+      title: "Manual",
+      contentJson: { type: "doc" },
+      contentMd: "Manual",
+      contentSchemaVersion: 1,
+      tags: ["x"],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("INSERT INTO knowledge_documents");
+    expect(params[0]).toBe("doc-2");
+    expect(params[9]).toBe('["x"]');
+  });
+
+  it("updates content, nullable fields, and sync tracking", async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    await updateKnowledgeDocument("doc-1", {
+      title: "Updated",
+      contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+      contentMd: "Updated",
+      excerpt: undefined,
+      tags: ["new"],
+      sourceKind: undefined,
+    });
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("title = ?");
+    expect(sql).toContain("content_json = ?");
+    expect(sql).toContain("content_md = ?");
+    expect(sql).toContain("excerpt = ?");
+    expect(sql).toContain("source_kind = ?");
+    expect(sql).toContain("updated_at = ?");
+    expect(sql).toContain("sync_version = ?");
+    expect(params).toContain("Updated");
+    expect(params).toContain('{"type":"doc","content":[{"type":"paragraph"}]}');
+    expect(params).toContain('["new"]');
+    expect(params).toContain(2345);
+    expect(params).toContain(7);
+    expect(params).toContain("device-1");
+  });
+
+  it("deletes a knowledge document with a tombstone", async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    await deleteKnowledgeDocument("doc-1");
+
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "doc-1", "knowledge_documents");
+    expect(mockExecute).toHaveBeenCalledWith("DELETE FROM knowledge_documents WHERE id = ?", [
+      "doc-1",
+    ]);
+  });
+
+  it("maps and inserts knowledge links", async () => {
+    mockSelect.mockResolvedValue([
+      {
+        id: "link-1",
+        from_document_id: "doc-1",
+        to_kind: "highlight",
+        to_id: "hl-1",
+        relation: "source",
+        label: "Quote",
+        cfi: "epubcfi(/6/2)",
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+
+    const links = await getKnowledgeLinks("doc-1");
+    expect(links[0]).toMatchObject({
+      id: "link-1",
+      fromDocumentId: "doc-1",
+      toKind: "highlight",
+      relation: "source",
+      cfi: "epubcfi(/6/2)",
+    });
+
+    const link: KnowledgeLink = {
+      id: "link-2",
+      fromDocumentId: "doc-1",
+      toKind: "document",
+      toId: "doc-2",
+      relation: "related",
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    await insertKnowledgeLink(link);
+    expect(mockExecute.mock.calls[0][0]).toContain("INSERT INTO knowledge_links");
+
+    await deleteKnowledgeLink("link-2");
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-2", "knowledge_links");
+  });
+
+  it("maps and inserts knowledge attachments", async () => {
+    mockSelect.mockResolvedValue([
+      {
+        id: "att-1",
+        document_id: "doc-1",
+        kind: "image",
+        file_name: "cover.png",
+        mime_type: "image/png",
+        local_path: "/tmp/cover.png",
+        remote_path: "/readany/data/knowledge/cover.png",
+        size: 12,
+        hash: "hash",
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+
+    const attachments = await getKnowledgeAttachments("doc-1");
+    expect(attachments[0]).toMatchObject({
+      id: "att-1",
+      documentId: "doc-1",
+      kind: "image",
+      fileName: "cover.png",
+      size: 12,
+    });
+
+    const attachment: KnowledgeAttachment = {
+      id: "att-2",
+      documentId: "doc-1",
+      kind: "file",
+      fileName: "note.bin",
+      size: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    await insertKnowledgeAttachment(attachment);
+    expect(mockExecute.mock.calls[0][0]).toContain("INSERT INTO knowledge_attachments");
+
+    await deleteKnowledgeAttachment("att-2");
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+      mockDb,
+      "att-2",
+      "knowledge_attachments",
+    );
+  });
+
+  it("maps and upserts card templates", async () => {
+    mockSelect.mockResolvedValue([
+      {
+        id: "card-quote",
+        name: "Quote",
+        version: 1,
+        schema_json: '{"type":"object"}',
+        built_in: 1,
+        enabled: 1,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+    ]);
+
+    const templates = await getKnowledgeCardTemplates();
+    expect(templates[0]).toMatchObject({
+      id: "card-quote",
+      schemaJson: { type: "object" },
+      builtIn: true,
+      enabled: true,
+    });
+
+    const template: KnowledgeCardTemplate = {
+      id: "card-review",
+      name: "Review",
+      version: 1,
+      schemaJson: { type: "object" },
+      builtIn: false,
+      enabled: true,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+    await upsertKnowledgeCardTemplate(template);
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("INSERT INTO knowledge_card_templates");
+    expect(sql).toContain("ON CONFLICT(id) DO UPDATE");
+    expect(params[3]).toBe('{"type":"object"}');
+  });
+});

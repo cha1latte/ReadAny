@@ -74,6 +74,57 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     "created_at",
     "updated_at",
   ],
+  knowledge_documents: [
+    "id",
+    "book_id",
+    "parent_id",
+    "type",
+    "title",
+    "content_json",
+    "content_md",
+    "content_schema_version",
+    "excerpt",
+    "tags",
+    "source_kind",
+    "source_id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+  ],
+  knowledge_links: [
+    "id",
+    "from_document_id",
+    "to_kind",
+    "to_id",
+    "relation",
+    "label",
+    "cfi",
+    "created_at",
+    "updated_at",
+  ],
+  knowledge_attachments: [
+    "id",
+    "document_id",
+    "kind",
+    "file_name",
+    "mime_type",
+    "local_path",
+    "remote_path",
+    "size",
+    "hash",
+    "created_at",
+    "updated_at",
+  ],
+  knowledge_card_templates: [
+    "id",
+    "name",
+    "version",
+    "schema_json",
+    "built_in",
+    "enabled",
+    "created_at",
+    "updated_at",
+  ],
   bookmarks: ["id", "book_id", "cfi", "label", "chapter_title", "created_at", "updated_at"],
   threads: [
     "id",
@@ -280,9 +331,40 @@ class FakeSyncDb {
 
   private assertForeignKeys(table: string, row: Row): void {
     if (
-      ["highlights", "notes", "bookmarks", "book_tags", "reading_sessions"].includes(table) &&
+      [
+        "highlights",
+        "notes",
+        "knowledge_documents",
+        "bookmarks",
+        "book_tags",
+        "reading_sessions",
+      ].includes(table) &&
       row.book_id &&
       !this.tables.get("books")?.has(String(row.book_id))
+    ) {
+      throw new Error("FOREIGN KEY constraint failed");
+    }
+
+    if (
+      table === "knowledge_documents" &&
+      row.parent_id &&
+      !this.tables.get("knowledge_documents")?.has(String(row.parent_id))
+    ) {
+      throw new Error("FOREIGN KEY constraint failed");
+    }
+
+    if (
+      table === "knowledge_links" &&
+      row.from_document_id &&
+      !this.tables.get("knowledge_documents")?.has(String(row.from_document_id))
+    ) {
+      throw new Error("FOREIGN KEY constraint failed");
+    }
+
+    if (
+      table === "knowledge_attachments" &&
+      row.document_id &&
+      !this.tables.get("knowledge_documents")?.has(String(row.document_id))
     ) {
       throw new Error("FOREIGN KEY constraint failed");
     }
@@ -301,10 +383,33 @@ class FakeSyncDb {
   }
 
   private deleteBookDependents(bookId: string): void {
-    for (const table of ["highlights", "notes", "bookmarks", "book_tags", "reading_sessions"]) {
+    for (const table of [
+      "highlights",
+      "notes",
+      "knowledge_documents",
+      "bookmarks",
+      "book_tags",
+      "reading_sessions",
+    ]) {
       const rows = this.tables.get(table);
       for (const [id, row] of rows ?? []) {
-        if (row.book_id === bookId) rows?.delete(id);
+        if (row.book_id === bookId) {
+          rows?.delete(id);
+          if (table === "knowledge_documents") {
+            this.deleteKnowledgeDocumentDependents(id);
+          }
+        }
+      }
+    }
+  }
+
+  private deleteKnowledgeDocumentDependents(documentId: string): void {
+    for (const table of ["knowledge_links", "knowledge_attachments"]) {
+      const rows = this.tables.get(table);
+      for (const [id, row] of rows ?? []) {
+        if (row.from_document_id === documentId || row.document_id === documentId) {
+          rows?.delete(id);
+        }
       }
     }
   }
@@ -429,6 +534,73 @@ function highlightRow(overrides: Row = {}): Row {
   };
 }
 
+function knowledgeDocumentRow(overrides: Row = {}): Row {
+  return {
+    id: "doc-1",
+    book_id: "book-1",
+    parent_id: null,
+    type: "book_home",
+    title: "Book home",
+    content_json: '{"type":"doc","content":[]}',
+    content_md: "# Book home",
+    content_schema_version: 1,
+    excerpt: "Book home",
+    tags: "[]",
+    source_kind: "book",
+    source_id: "book-1",
+    created_at: 1000,
+    updated_at: 1000,
+    deleted_at: null,
+    ...overrides,
+  };
+}
+
+function knowledgeLinkRow(overrides: Row = {}): Row {
+  return {
+    id: "knowledge-link-1",
+    from_document_id: "doc-1",
+    to_kind: "highlight",
+    to_id: "hl-1",
+    relation: "source",
+    label: "Source highlight",
+    cfi: "epubcfi(/6/2)",
+    created_at: 1000,
+    updated_at: 1000,
+    ...overrides,
+  };
+}
+
+function knowledgeAttachmentRow(overrides: Row = {}): Row {
+  return {
+    id: "knowledge-attachment-1",
+    document_id: "doc-1",
+    kind: "image",
+    file_name: "quote.png",
+    mime_type: "image/png",
+    local_path: "knowledge/quote.png",
+    remote_path: "/readany/data/knowledge/quote.png",
+    size: 10,
+    hash: "hash-1",
+    created_at: 1000,
+    updated_at: 1000,
+    ...overrides,
+  };
+}
+
+function knowledgeCardTemplateRow(overrides: Row = {}): Row {
+  return {
+    id: "card-quote",
+    name: "Quote card",
+    version: 1,
+    schema_json: '{"type":"object"}',
+    built_in: 1,
+    enabled: 1,
+    created_at: 1000,
+    updated_at: 1000,
+    ...overrides,
+  };
+}
+
 async function syncDevice(
   deviceId: string,
   db: FakeSyncDb,
@@ -516,6 +688,43 @@ describe("simple sync convergence", () => {
     expect(result).toEqual({ applied: 2, skipped: 0 });
     expect(target.get("books", "book-1")).toBeTruthy();
     expect(target.get("highlights", "hl-1")).toBeTruthy();
+  });
+
+  it("syncs knowledge documents, links, attachments, and card templates", async () => {
+    const backend = new MemoryBackend();
+    const deviceA = new FakeSyncDb();
+    const deviceB = new FakeSyncDb();
+
+    deviceA.insert("books", bookRow());
+    deviceA.insert("highlights", highlightRow());
+    deviceA.insert("knowledge_documents", knowledgeDocumentRow());
+    deviceA.insert("knowledge_links", knowledgeLinkRow());
+    deviceA.insert("knowledge_attachments", knowledgeAttachmentRow());
+    deviceA.insert("knowledge_card_templates", knowledgeCardTemplateRow());
+
+    now = 1100;
+    await syncDevice("device-a", deviceA, backend);
+
+    now = 1200;
+    const result = await syncDevice("device-b", deviceB, backend);
+
+    expect(result.success).toBe(true);
+    expect(deviceB.get("knowledge_documents", "doc-1")).toMatchObject({
+      title: "Book home",
+      source_kind: "book",
+    });
+    expect(deviceB.get("knowledge_links", "knowledge-link-1")).toMatchObject({
+      from_document_id: "doc-1",
+      to_kind: "highlight",
+    });
+    expect(deviceB.get("knowledge_attachments", "knowledge-attachment-1")).toMatchObject({
+      document_id: "doc-1",
+      file_name: "quote.png",
+    });
+    expect(deviceB.get("knowledge_card_templates", "card-quote")).toMatchObject({
+      name: "Quote card",
+      built_in: 1,
+    });
   });
 
   it("keeps a newer local record when an older remote tombstone arrives", async () => {

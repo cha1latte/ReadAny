@@ -71,6 +71,29 @@ export {
 } from "./note-queries";
 
 export {
+  getKnowledgeDocument,
+  getKnowledgeDocuments,
+  getBookHomeDocument,
+  createKnowledgeDocument,
+  ensureBookHomeDocument,
+  insertKnowledgeDocument,
+  updateKnowledgeDocument,
+  deleteKnowledgeDocument,
+  getKnowledgeLinks,
+  insertKnowledgeLink,
+  deleteKnowledgeLink,
+  getKnowledgeAttachments,
+  insertKnowledgeAttachment,
+  deleteKnowledgeAttachment,
+  getKnowledgeCardTemplates,
+  upsertKnowledgeCardTemplate,
+} from "./knowledge-queries";
+export type {
+  CreateKnowledgeDocumentInput,
+  KnowledgeDocumentFilters,
+} from "./knowledge-queries";
+
+export {
   getBookmarks,
   insertBookmark,
   deleteBookmark,

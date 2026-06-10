@@ -72,7 +72,7 @@ describe("KnowledgeExporter", () => {
     expect(files[0].content).toContain('book: "The Book: A Study"');
     expect(files[0].content).toContain("# Book Home");
     expect(files[0].content).toContain("## Notes");
-    expect(files[0].content).toContain("> [!note] Quote");
+    expect(files[0].content).toContain("> [!quote] Quote");
     expect(files[0].content).toContain("> Reading is thinking.");
   });
 

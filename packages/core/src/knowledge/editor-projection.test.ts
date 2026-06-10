@@ -86,7 +86,40 @@ describe("editor projection", () => {
       ],
     });
 
-    expect(markdown).toBe("> [!note] Important Quote\n> Reading is thinking.\n> Source: Chapter 1");
+    expect(markdown).toBe(
+      "> [!quote] Important Quote\n> Reading is thinking.\n> Source: Chapter 1",
+    );
+  });
+
+  it("uses card registry fallbacks for built-in ReadAny card types", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "aiSummary",
+            title: "AI Summary",
+            markdown: "A compact summary.",
+          },
+        },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "mermaid",
+            title: "Flow",
+            markdown: "graph TD\n  A --> B",
+          },
+        },
+      ],
+    });
+
+    expect(markdown).toBe(
+      [
+        "> [!summary] AI Summary\n> A compact summary.",
+        "> [!abstract] Flow\n```mermaid\ngraph TD\n  A --> B\n```",
+      ].join("\n\n"),
+    );
   });
 
   it("can preserve ReadAny card metadata for round-tripping", () => {

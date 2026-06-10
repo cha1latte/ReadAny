@@ -6,7 +6,16 @@ export {
 } from "./editor-projection";
 export type {
   MarkdownProjectionOptions,
-  ReadAnyCardAttrs,
   TiptapMark,
   TiptapNode,
 } from "./editor-projection";
+export {
+  builtInReadAnyCards,
+  getReadAnyCardDefinition,
+  renderReadAnyCardMarkdownFallback,
+} from "./card-registry";
+export type {
+  ReadAnyCardAttrs,
+  ReadAnyCardDefinition,
+  ReadAnyCardMarkdownContext,
+} from "./card-registry";

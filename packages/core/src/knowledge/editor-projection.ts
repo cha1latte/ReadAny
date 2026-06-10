@@ -1,5 +1,7 @@
 import type { JSONValue } from "../types";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
+import { type ReadAnyCardAttrs, renderReadAnyCardMarkdownFallback } from "./card-registry";
+export type { ReadAnyCardAttrs } from "./card-registry";
 
 export interface TiptapMark {
   type: string;
@@ -12,19 +14,6 @@ export interface TiptapNode {
   text?: string;
   marks?: TiptapMark[];
   content?: TiptapNode[];
-}
-
-export interface ReadAnyCardAttrs {
-  cardType?: string;
-  id?: string;
-  version?: number;
-  title?: string;
-  text?: string;
-  sourceTitle?: string;
-  sourceId?: string;
-  cfi?: string;
-  markdown?: string;
-  data?: unknown;
 }
 
 export interface MarkdownProjectionOptions {
@@ -105,7 +94,6 @@ function prefixLines(text: string, prefix: string): string {
 function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions): string {
   const attrs = (node.attrs ?? {}) as ReadAnyCardAttrs;
   const cardType = attrs.cardType || "custom";
-  const title = attrs.title || attrs.sourceTitle || cardType;
   const body =
     attrs.markdown ||
     attrs.text ||
@@ -115,10 +103,7 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
       .trim();
 
   if (!options.includeReadAnyCardMetadata) {
-    const lines = [`> [!note] ${title}`];
-    if (body) lines.push(prefixLines(body, "> "));
-    if (attrs.sourceTitle) lines.push(`> Source: ${attrs.sourceTitle}`);
-    return lines.join("\n");
+    return renderReadAnyCardMarkdownFallback(attrs, { body });
   }
 
   const attrText = [

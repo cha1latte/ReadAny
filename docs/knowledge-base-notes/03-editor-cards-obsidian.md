@@ -103,6 +103,25 @@ Use three editor tiers and map every surface to one of them:
 The tier is part of the editor configuration, not a different storage format.
 All tiers still save canonical Tiptap JSON and derive Markdown from that JSON.
 
+### Product Rules
+
+Rich text is only kept where it helps the user's current job. The editor should
+therefore be configured by surface:
+
+| Surface | Tier | UX shape | Keep rich text for | Do not show by default |
+| --- | --- | --- | --- | --- |
+| Reader quick note | `inline_note` | Lightweight popover or bottom sheet. | Short thoughts, emphasis, links, lists, and quoted context. | Headings, tables, images, diagrams, AI cards, metadata fields. |
+| Highlight detail note | `knowledge_doc` when expanded | Opens from the highlight into a focused editor. | Turning a source-attached note into a reusable idea. | App-only layout blocks and unrelated book metadata fields. |
+| Book home | `knowledge_doc` | The main book knowledge workspace. | Outline, summary, source quotes, callouts, cards, backlinks, attachments, diagrams. | Raw sync metadata and fields that must be filterable. |
+| Standalone knowledge note | `knowledge_doc` | Full knowledge document. | Durable notes, cross-book links, tags, attachments, AI-assisted blocks. | Book-only controls unless the note is linked to a book. |
+| Book review / essay | `publishable_doc` | Writing-first editor with export preview. | Polished prose, headings, citations, images, export-friendly callouts. | Interactive AI controls and cards with no Markdown fallback. |
+| AI generated block | Card inside `knowledge_doc` | Inserted as an editable card. | Summary, Q&A, timeline, concepts, mindmap, cited source snippets. | Silent writes to user documents. |
+| Book metadata | Structured form, not rich text | Native fields and selectors. | Searchable and sync-safe title, author, language, ISBN, rating, tags, dates. | Freeform editor blocks. |
+
+This gives ReadAny one canonical editor engine, but not one overpowered toolbar
+everywhere. A quick reading note stays fast, while book knowledge pages can still
+grow into real documents.
+
 ### Baseline Feature Matrix
 
 | Feature | Quick annotation | Knowledge document | Review / export |

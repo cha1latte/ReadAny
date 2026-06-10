@@ -9,10 +9,15 @@ export type {
   TiptapMark,
   TiptapNode,
 } from "./editor-projection";
-export { getKnowledgeEditorProfile, hasKnowledgeEditorFeature } from "./editor-profile";
+export {
+  getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceProfile,
+  hasKnowledgeEditorFeature,
+} from "./editor-profile";
 export type {
   KnowledgeEditorFeature,
   KnowledgeEditorProfile,
+  KnowledgeEditorSurface,
   KnowledgeEditorTier,
 } from "./editor-profile";
 export {

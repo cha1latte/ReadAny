@@ -90,6 +90,25 @@ editing surface has a different job, so rich text must be tiered by scenario.
 This avoids the worst outcome: every note surface becoming a bloated document
 editor while still failing to support the durable knowledge-base workflows.
 
+### Retention Principle
+
+Rich text should be retained for five product jobs:
+
+- Capture: preserve quick emphasis, links, lists, and source quotes while the
+  user is still reading.
+- Structure: let book home pages and standalone notes grow into outlines,
+  summaries, tasks, callouts, backlinks, and visual cards.
+- Evidence: keep quotes, highlight links, CFI references, and citation cards
+  connected to the original book position.
+- Publish: support clean long-form writing that exports to Markdown, Obsidian,
+  and shareable text without app-only blocks.
+- Ownership: AI output can enter as structured cards, but the user can confirm,
+  edit, convert to normal content, or delete it.
+
+Rich text should not replace structured fields. Title, author, language, ISBN,
+rating, tags, groups, dates, source paths, and sync metadata stay in native
+forms/tables so they remain searchable, sortable, sync-safe, and AI-tool-safe.
+
 ### Rich Text Tiers
 
 Use three editor tiers and map every surface to one of them:
@@ -144,6 +163,10 @@ grow into real documents.
 | ReadAny cards | No large cards | Required | Only export-friendly cards |
 | Mermaid / mindmap | No | Required as cards | Optional as export-friendly cards |
 | AI cards | No | Required | Convert to editable content before final export |
+
+The current core profile treats tables as a deferred feature. They are useful,
+but they should only be exposed after the desktop editor, mobile WebView editor,
+Markdown projection, and Obsidian export all handle tables consistently.
 
 ### Quick Annotation Notes
 

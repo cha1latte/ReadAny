@@ -268,6 +268,30 @@ async function buildKnowledgeEditor() {
         case "horizontalRule":
           chain.setHorizontalRule().run();
           break;
+        case "insertCard": {
+          const cardAttrs = attrs && typeof attrs === "object" ? attrs : {};
+          chain
+            .insertContent({
+              type: "readanyCard",
+              attrs: {
+                cardType:
+                  typeof cardAttrs.cardType === "string" && cardAttrs.cardType
+                    ? cardAttrs.cardType
+                    : "callout",
+                version: typeof cardAttrs.version === "number" ? cardAttrs.version : 1,
+                title: typeof cardAttrs.title === "string" ? cardAttrs.title : null,
+                text: typeof cardAttrs.text === "string" ? cardAttrs.text : null,
+                sourceTitle:
+                  typeof cardAttrs.sourceTitle === "string" ? cardAttrs.sourceTitle : null,
+                sourceId: typeof cardAttrs.sourceId === "string" ? cardAttrs.sourceId : null,
+                cfi: typeof cardAttrs.cfi === "string" ? cardAttrs.cfi : null,
+                markdown: typeof cardAttrs.markdown === "string" ? cardAttrs.markdown : "",
+                data: cardAttrs.data ?? null,
+              },
+            })
+            .run();
+          break;
+        }
         case "focus":
           editor.commands.focus(attrs.position || "end");
           break;

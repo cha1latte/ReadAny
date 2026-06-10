@@ -1,16 +1,22 @@
 import {
   BoldIcon,
+  BookOpenIcon,
+  BrainIcon,
   CodeIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
   ItalicIcon,
+  LightbulbIcon,
   Link2Icon,
   ListIcon,
   ListOrderedIcon,
+  MessageCirclePlusIcon,
   MinusIcon,
   QuoteIcon,
   Redo2Icon,
+  ScrollTextIcon,
+  SparklesIcon,
   StrikethroughIcon,
   Undo2Icon,
 } from "@/components/ui/Icon";
@@ -19,6 +25,8 @@ import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/t
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorTier,
+  builtInReadAnyCards,
+  createDefaultReadAnyCardAttrs,
   getKnowledgeEditorProfile,
   hasKnowledgeEditorFeature,
   markdownToBasicTiptap,
@@ -38,6 +46,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
 
 const EDITOR_HTML_ASSET = Asset.fromModule(require("../../../assets/editor/knowledge-editor.html"));
@@ -113,6 +122,17 @@ interface EditorTheme {
 
 const MIN_EDITOR_HEIGHT = 260;
 const MAX_EDITOR_HEIGHT = 560;
+const cardIconMap: Record<string, typeof SparklesIcon> = {
+  bookQuote: QuoteIcon,
+  callout: LightbulbIcon,
+  bookMetadata: BookOpenIcon,
+  aiSummary: SparklesIcon,
+  qa: MessageCirclePlusIcon,
+  review: ScrollTextIcon,
+  mindmap: BrainIcon,
+  mermaid: BrainIcon,
+  relatedNotes: BrainIcon,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -160,6 +180,7 @@ export function MobileKnowledgeEditor({
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
   const webViewRef = useRef<WebView>(null);
   const latestValueRef = useRef(value);
@@ -178,6 +199,7 @@ export function MobileKnowledgeEditor({
     canRedo: false,
   });
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showCardMenu, setShowCardMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const editorProfile = useMemo(() => getKnowledgeEditorProfile(tier), [tier]);
   const canUse = useCallback(
@@ -326,6 +348,24 @@ export function MobileKnowledgeEditor({
     setShowLinkModal(false);
     setLinkUrl("");
   }, [linkUrl, runCommand]);
+
+  const insertCard = useCallback(
+    (cardType: string) => {
+      if (!canUse("readAnyCards")) return;
+      const definition = builtInReadAnyCards.find((card) => card.cardType === cardType);
+      if (!definition) return;
+      const title = t(`notes.knowledgeCards.${cardType}`, {
+        defaultValue: definition.insertLabel,
+      });
+      const attrs = createDefaultReadAnyCardAttrs(cardType, {
+        title,
+        version: definition.version,
+      });
+      runCommand("insertCard", attrs as Record<string, unknown>);
+      setShowCardMenu(false);
+    },
+    [canUse, runCommand, t],
+  );
 
   const handleFallbackChange = useCallback(
     (markdown: string) => {
@@ -547,6 +587,20 @@ export function MobileKnowledgeEditor({
           ),
         }
       : null,
+    canUse("readAnyCards")
+      ? {
+          key: "cards",
+          node: (
+            <ToolbarButton
+              onPress={() => setShowCardMenu(true)}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <SparklesIcon size={15} color={colors.mutedForeground} />
+            </ToolbarButton>
+          ),
+        }
+      : null,
   ];
   const toolbarGroups = toolbarGroupCandidates.filter(
     (group): group is { key: string; node: React.ReactNode } => group !== null,
@@ -682,6 +736,65 @@ export function MobileKnowledgeEditor({
                 <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showCardMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCardMenu(false)}
+      >
+        <View style={styles.cardSheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowCardMenu(false)}
+          />
+          <View style={[styles.cardSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+            <View style={styles.cardSheetHandle} />
+            <View style={styles.cardSheetHeader}>
+              <Text style={styles.cardSheetTitle}>
+                {t("notes.knowledgeCardPickerTitle", "插入知识卡片")}
+              </Text>
+              <Text style={styles.cardSheetHint}>
+                {t("notes.knowledgeCardPickerHint", "选择一种结构，插入后会随知识文档同步和导出。")}
+              </Text>
+            </View>
+            <ScrollView
+              style={styles.cardOptionScroll}
+              contentContainerStyle={styles.cardOptionList}
+              showsVerticalScrollIndicator={false}
+            >
+              {builtInReadAnyCards.map((card) => {
+                const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
+                return (
+                  <TouchableOpacity
+                    key={card.cardType}
+                    style={styles.cardOption}
+                    activeOpacity={0.78}
+                    onPress={() => insertCard(card.cardType)}
+                  >
+                    <View style={styles.cardOptionIcon}>
+                      <Icon size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.cardOptionText}>
+                      <Text style={styles.cardOptionTitle}>
+                        {t(`notes.knowledgeCards.${card.cardType}`, {
+                          defaultValue: card.insertLabel,
+                        })}
+                      </Text>
+                      <Text style={styles.cardOptionDescription} numberOfLines={2}>
+                        {t(`notes.knowledgeCardDescriptions.${card.cardType}`, {
+                          defaultValue: "",
+                        })}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -867,5 +980,91 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.primaryForeground,
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
+    },
+    cardSheetOverlay: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: withOpacity("#000000", 0.4),
+    },
+    cardSheet: {
+      maxHeight: "76%",
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: 0,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      shadowColor: "#000000",
+      shadowOpacity: 0.18,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: -10 },
+      elevation: 12,
+    },
+    cardSheetHandle: {
+      alignSelf: "center",
+      width: 34,
+      height: 4,
+      borderRadius: radius.full,
+      backgroundColor: withOpacity(colors.mutedForeground, 0.28),
+    },
+    cardSheetHeader: {
+      gap: 5,
+      paddingTop: 14,
+      paddingBottom: 12,
+    },
+    cardSheetTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      letterSpacing: 0,
+    },
+    cardSheetHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 18,
+    },
+    cardOptionScroll: {
+      flexGrow: 0,
+    },
+    cardOptionList: {
+      gap: 8,
+      paddingBottom: 2,
+    },
+    cardOption: {
+      minHeight: 66,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+      backgroundColor: colors.background,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    cardOptionIcon: {
+      width: 38,
+      height: 38,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    cardOptionText: {
+      minWidth: 0,
+      flex: 1,
+      gap: 3,
+    },
+    cardOptionTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    cardOptionDescription: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 17,
     },
   });

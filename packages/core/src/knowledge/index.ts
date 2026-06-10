@@ -17,6 +17,7 @@ export type {
 } from "./editor-profile";
 export {
   builtInReadAnyCards,
+  createDefaultReadAnyCardAttrs,
   getReadAnyCardDefinition,
   renderReadAnyCardMarkdownFallback,
 } from "./card-registry";

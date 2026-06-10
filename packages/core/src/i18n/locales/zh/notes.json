@@ -69,6 +69,8 @@
     "knowledgeEditorReloading": "编辑器正在恢复...",
     "knowledgeEditorError": "编辑器出错了",
     "knowledgeInsertCard": "插入卡片",
+    "knowledgeCardPickerTitle": "插入知识卡片",
+    "knowledgeCardPickerHint": "选择一种结构，插入后会随知识文档同步和导出。",
     "knowledgeCardEmpty": "空卡片，稍后可编辑。",
     "knowledgeCardSource": "来源",
     "knowledgeCards": {
@@ -81,6 +83,17 @@
       "mindmap": "思维导图卡",
       "mermaid": "图表卡",
       "relatedNotes": "相关笔记卡"
+    },
+    "knowledgeCardDescriptions": {
+      "bookQuote": "保存原文摘录、出处和后续解读。",
+      "callout": "记录提醒、观点、疑问或临时想法。",
+      "bookMetadata": "插入可导出的书籍信息摘要。",
+      "aiSummary": "放置 AI 摘要，之后可转成普通内容。",
+      "qa": "整理问题、回答和待追问线索。",
+      "review": "沉淀书评、评价和阅读结论。",
+      "mindmap": "用层级文本生成思维导图。",
+      "mermaid": "插入流程图、关系图或时序图。",
+      "relatedNotes": "连接同书或跨书的相关笔记。"
     }
   }
 }

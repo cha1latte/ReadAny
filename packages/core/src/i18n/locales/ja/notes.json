@@ -69,6 +69,8 @@
     "knowledgeEditorReloading": "エディターを復元しています...",
     "knowledgeEditorError": "エディターで問題が発生しました",
     "knowledgeInsertCard": "カードを挿入",
+    "knowledgeCardPickerTitle": "ナレッジカードを挿入",
+    "knowledgeCardPickerHint": "構造を選んで挿入します。カードは文書と同期され、きれいにエクスポートできます。",
     "knowledgeCardEmpty": "空のカードです。あとで編集できます。",
     "knowledgeCardSource": "出典",
     "knowledgeCards": {
@@ -81,6 +83,17 @@
       "mindmap": "マインドマップ",
       "mermaid": "図表",
       "relatedNotes": "関連ノート"
+    },
+    "knowledgeCardDescriptions": {
+      "bookQuote": "抜粋、出典、あとからの解釈を残します。",
+      "callout": "注意、考え、問い、ふと思いついたことを記録します。",
+      "bookMetadata": "書籍情報の要約をエクスポート可能な形で挿入します。",
+      "aiSummary": "あとで通常の本文に変換できる AI 要約を置きます。",
+      "qa": "質問、回答、さらに追うべき論点を整理します。",
+      "review": "レビュー、評価、読後の結論をまとめます。",
+      "mindmap": "階層テキストからマインドマップを作ります。",
+      "mermaid": "フロー図、関係図、シーケンス図を挿入します。",
+      "relatedNotes": "同じ本や別の本の関連ノートをつなぎます。"
     }
   }
 }

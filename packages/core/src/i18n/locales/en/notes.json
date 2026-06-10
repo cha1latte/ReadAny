@@ -69,6 +69,8 @@
     "knowledgeEditorReloading": "Recovering editor...",
     "knowledgeEditorError": "The editor ran into a problem",
     "knowledgeInsertCard": "Insert card",
+    "knowledgeCardPickerTitle": "Insert knowledge card",
+    "knowledgeCardPickerHint": "Choose a structure to insert. Cards sync with the document and export cleanly.",
     "knowledgeCardEmpty": "Empty card, ready to edit later.",
     "knowledgeCardSource": "Source",
     "knowledgeCards": {
@@ -81,6 +83,17 @@
       "mindmap": "Mind map",
       "mermaid": "Diagram",
       "relatedNotes": "Related notes"
+    },
+    "knowledgeCardDescriptions": {
+      "bookQuote": "Save an excerpt with source context and later commentary.",
+      "callout": "Capture a reminder, idea, question, or passing thought.",
+      "bookMetadata": "Insert an exportable summary of book details.",
+      "aiSummary": "Place an AI summary that can later become normal content.",
+      "qa": "Collect questions, answers, and follow-up threads.",
+      "review": "Shape a review, rating, or reading conclusion.",
+      "mindmap": "Turn hierarchical text into a mind map.",
+      "mermaid": "Insert a flowchart, relation map, or sequence diagram.",
+      "relatedNotes": "Connect related notes across this book or other books."
     }
   }
 }

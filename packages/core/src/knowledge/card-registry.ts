@@ -131,6 +131,49 @@ export function getReadAnyCardDefinition(cardType: string): ReadAnyCardDefinitio
   return builtInCardMap.get(cardType);
 }
 
+export function createDefaultReadAnyCardAttrs(
+  cardType: string,
+  options: { title?: string; version?: number } = {},
+): ReadAnyCardAttrs {
+  const definition = getReadAnyCardDefinition(cardType);
+  const version = options.version ?? definition?.version ?? 1;
+  const title = options.title ?? definition?.insertLabel ?? cardType;
+
+  if (cardType === "mermaid") {
+    return {
+      cardType,
+      version,
+      title,
+      markdown: "graph TD\n  A[Idea] --> B[Note]",
+    };
+  }
+
+  if (cardType === "mindmap") {
+    return {
+      cardType,
+      version,
+      title,
+      markdown: "# Topic\n## Branch",
+    };
+  }
+
+  if (cardType === "qa") {
+    return {
+      cardType,
+      version,
+      title,
+      markdown: "Q:\nA:",
+    };
+  }
+
+  return {
+    cardType,
+    version,
+    title,
+    markdown: "",
+  };
+}
+
 export function renderReadAnyCardMarkdownFallback(
   attrs: ReadAnyCardAttrs,
   context: ReadAnyCardMarkdownContext,

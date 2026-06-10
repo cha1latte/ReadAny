@@ -69,6 +69,8 @@
     "knowledgeEditorReloading": "編輯器正在恢復...",
     "knowledgeEditorError": "編輯器發生錯誤",
     "knowledgeInsertCard": "插入卡片",
+    "knowledgeCardPickerTitle": "插入知識卡片",
+    "knowledgeCardPickerHint": "選擇一種結構，插入後會隨知識文件同步並乾淨匯出。",
     "knowledgeCardEmpty": "空卡片，稍後可編輯。",
     "knowledgeCardSource": "來源",
     "knowledgeCards": {
@@ -81,6 +83,17 @@
       "mindmap": "心智圖卡",
       "mermaid": "圖表卡",
       "relatedNotes": "相關筆記卡"
+    },
+    "knowledgeCardDescriptions": {
+      "bookQuote": "保存原文摘錄、出處與後續解讀。",
+      "callout": "記錄提醒、觀點、疑問或臨時想法。",
+      "bookMetadata": "插入可匯出的書籍資訊摘要。",
+      "aiSummary": "放置 AI 摘要，之後可轉成普通內容。",
+      "qa": "整理問題、回答與待追問線索。",
+      "review": "沉澱書評、評價與閱讀結論。",
+      "mindmap": "用階層文字生成心智圖。",
+      "mermaid": "插入流程圖、關係圖或時序圖。",
+      "relatedNotes": "連接同書或跨書的相關筆記。"
     }
   }
 }

@@ -3,6 +3,7 @@ import {
   type KnowledgeEditorTier,
   type ReadAnyCardAttrs,
   builtInReadAnyCards,
+  createDefaultReadAnyCardAttrs,
   getKnowledgeEditorProfile,
   hasKnowledgeEditorFeature,
   normalizeTiptapDocument,
@@ -115,35 +116,6 @@ const ReadAnyCardExtension = Node.create({
 
 function contentJsonEquals(left: JSONValue, right: JSONValue): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function createDefaultCardAttrs(
-  cardType: string,
-  title: string,
-  version: number,
-): ReadAnyCardAttrs {
-  if (cardType === "mermaid") {
-    return {
-      cardType,
-      version,
-      title,
-      markdown: "graph TD\n  A[Idea] --> B[Note]",
-    };
-  }
-  if (cardType === "mindmap") {
-    return {
-      cardType,
-      version,
-      title,
-      markdown: "# Topic\n## Branch",
-    };
-  }
-  return {
-    cardType,
-    version,
-    title,
-    markdown: "",
-  };
 }
 
 export function KnowledgeEditor({
@@ -259,7 +231,10 @@ export function KnowledgeEditor({
         .focus()
         .insertContent({
           type: "readanyCard",
-          attrs: createDefaultCardAttrs(cardType, title, definition.version),
+          attrs: createDefaultReadAnyCardAttrs(cardType, {
+            title,
+            version: definition.version,
+          }),
         })
         .run();
       setIsInsertOpen(false);

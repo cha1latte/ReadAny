@@ -1099,6 +1099,7 @@ function NoteDetailCard({
         {isEditing ? (
           <div className="mt-2 flex items-start gap-2">
             <MarkdownEditor
+              tier="inline_note"
               value={editNote}
               onChange={setEditNote}
               placeholder={t("notebook.addNote")}

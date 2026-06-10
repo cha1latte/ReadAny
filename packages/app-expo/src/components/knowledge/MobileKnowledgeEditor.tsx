@@ -557,6 +557,7 @@ export function MobileKnowledgeEditor({
       <View style={styles.fallbackWrap}>
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <RichTextEditor
+          tier={tier}
           initialContent={value.contentMd}
           onChange={handleFallbackChange}
           placeholder={placeholder}

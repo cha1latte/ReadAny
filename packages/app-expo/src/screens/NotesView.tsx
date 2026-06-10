@@ -1,12 +1,17 @@
 import {
   BookOpenIcon,
+  CheckCheckIcon,
   ChevronLeftIcon,
   HighlighterIcon,
   NotebookPenIcon,
+  ScrollTextIcon,
   SearchIcon,
   ShareIcon,
+  SparklesIcon,
   XIcon,
 } from "@/components/ui/Icon";
+import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
@@ -14,17 +19,23 @@ import { useAnnotationStore, useLibraryStore } from "@/stores";
 import { useColors, useTheme } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { HighlightWithBook } from "@readany/core/db/database";
+import {
+  type HighlightWithBook,
+  ensureBookHomeDocument,
+  updateKnowledgeDocument,
+} from "@readany/core/db/database";
 import { AnnotationExporter, type ExportFormat } from "@readany/core/export";
+import { markdownToBasicTiptap } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Highlight } from "@readany/core/types";
+import type { Highlight, KnowledgeDocument } from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
+import type { TFunction } from "i18next";
 /**
  * NotesScreen — matching Tauri mobile NotesPage exactly.
  * Features: stats header, book notebooks list with covers, detail view with
  * highlights/notes tabs, chapter grouping, color dots, edit/delete, export, search.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -50,7 +61,16 @@ const NOTE_PNG = require("../../assets/note.png");
 const NOTE_DARK_PNG = require("../../assets/note-dark.png");
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type DetailTab = "notes" | "highlights";
+type DetailTab = "knowledge" | "notes" | "highlights";
+
+function createKnowledgeExcerpt(markdown: string): string | undefined {
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[#>*_`~\-[\]()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text.slice(0, 220) : undefined;
+}
 
 export function NotesView({
   initialBookId,
@@ -82,10 +102,16 @@ export function NotesView({
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [detailTab, setDetailTab] = useState<DetailTab>("notes");
+  const [detailTab, setDetailTab] = useState<DetailTab>(initialBookId ? "notes" : "knowledge");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNote, setEditNote] = useState("");
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [knowledgeHome, setKnowledgeHome] = useState<KnowledgeDocument | null>(null);
+  const [knowledgeContent, setKnowledgeContent] = useState("");
+  const [savedKnowledgeContent, setSavedKnowledgeContent] = useState("");
+  const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
+  const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const knowledgeSaveVersionRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,7 +147,7 @@ export function NotesView({
     }
   }, [initialBookId]);
 
-  // Group by book — matching Tauri exactly
+  // Group by book, while keeping every library book available as a knowledge workspace.
   const bookNotebooks = useMemo(() => {
     const grouped = new Map<
       string,
@@ -137,13 +163,27 @@ export function NotesView({
       }
     >();
 
+    for (const book of books) {
+      if (book.deletedAt) continue;
+      grouped.set(book.id, {
+        bookId: book.id,
+        title: book.meta.title || t("notes.unknownBook", "未知书籍"),
+        author: book.meta.author || t("notes.unknownAuthor", "未知作者"),
+        coverUrl: book.meta.coverUrl || null,
+        highlights: [],
+        notesCount: 0,
+        highlightsOnlyCount: 0,
+        latestAt: book.lastOpenedAt || book.updatedAt || book.addedAt,
+      });
+    }
+
     for (const h of highlightsWithBooks) {
       const existing = grouped.get(h.bookId);
       if (existing) {
         existing.highlights.push(h);
         if (h.note) existing.notesCount++;
         else existing.highlightsOnlyCount++;
-        if (h.createdAt > existing.latestAt) existing.latestAt = h.createdAt;
+        if (h.updatedAt > existing.latestAt) existing.latestAt = h.updatedAt;
       } else {
         grouped.set(h.bookId, {
           bookId: h.bookId,
@@ -159,7 +199,7 @@ export function NotesView({
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.latestAt - a.latestAt);
-  }, [highlightsWithBooks, t]);
+  }, [books, highlightsWithBooks, t]);
 
   // Resolve cover URLs using shared hook
   const resolvedCovers = useResolvedCovers(bookNotebooks);
@@ -168,6 +208,18 @@ export function NotesView({
     if (!selectedBookId) return null;
     return bookNotebooks.find((b) => b.bookId === selectedBookId) || null;
   }, [selectedBookId, bookNotebooks]);
+  const selectedKnowledgeBookId = selectedBook?.bookId ?? null;
+  const selectedKnowledgeBookTitle = selectedBook?.title ?? "";
+
+  useEffect(() => {
+    if (!selectedBookId) return;
+    if (bookNotebooks.some((book) => book.bookId === selectedBookId)) return;
+
+    setSelectedBookId(null);
+    setDetailTab("knowledge");
+    setSearchQuery("");
+    setEditingId(null);
+  }, [bookNotebooks, selectedBookId]);
 
   const { notesList, highlightsList } = useMemo(() => {
     if (!selectedBook) return { notesList: [], highlightsList: [] };
@@ -188,7 +240,8 @@ export function NotesView({
     };
   }, [selectedBook, searchQuery]);
 
-  const currentList = detailTab === "notes" ? notesList : highlightsList;
+  const currentList =
+    detailTab === "notes" ? notesList : detailTab === "highlights" ? highlightsList : [];
 
   // Group by chapter
   const itemsByChapter = useMemo(() => {
@@ -212,6 +265,78 @@ export function NotesView({
     },
     [nav, t],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadKnowledgeHome() {
+      knowledgeSaveVersionRef.current += 1;
+
+      if (!selectedKnowledgeBookId) {
+        setKnowledgeHome(null);
+        setKnowledgeContent("");
+        setSavedKnowledgeContent("");
+        setIsKnowledgeSaving(false);
+        return;
+      }
+
+      setIsKnowledgeLoading(true);
+      setIsKnowledgeSaving(false);
+      try {
+        const document = await ensureBookHomeDocument(
+          selectedKnowledgeBookId,
+          selectedKnowledgeBookTitle,
+        );
+        if (cancelled) return;
+        setKnowledgeHome(document);
+        setKnowledgeContent(document.contentMd);
+        setSavedKnowledgeContent(document.contentMd);
+      } catch (error) {
+        console.error("[Notes] Failed to load knowledge home:", error);
+        Alert.alert(t("common.error", "错误"), t("notes.knowledgeLoadFailed", "知识主页加载失败"));
+      } finally {
+        if (!cancelled) setIsKnowledgeLoading(false);
+      }
+    }
+
+    void loadKnowledgeHome();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKnowledgeBookId, selectedKnowledgeBookTitle, t]);
+
+  useEffect(() => {
+    if (!knowledgeHome || knowledgeContent === savedKnowledgeContent) return;
+
+    const saveVersion = knowledgeSaveVersionRef.current + 1;
+    knowledgeSaveVersionRef.current = saveVersion;
+
+    const timeout = setTimeout(async () => {
+      setIsKnowledgeSaving(true);
+      try {
+        await updateKnowledgeDocument(knowledgeHome.id, {
+          contentMd: knowledgeContent,
+          contentJson: markdownToBasicTiptap(
+            knowledgeContent,
+          ) as unknown as KnowledgeDocument["contentJson"],
+          excerpt: createKnowledgeExcerpt(knowledgeContent),
+        });
+        if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        setSavedKnowledgeContent(knowledgeContent);
+      } catch (error) {
+        if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        console.error("[Notes] Failed to save knowledge home:", error);
+        Alert.alert(t("common.error", "错误"), t("notes.knowledgeSaveFailed", "知识主页保存失败"));
+      } finally {
+        if (knowledgeSaveVersionRef.current === saveVersion) {
+          setIsKnowledgeSaving(false);
+        }
+      }
+    }, 700);
+
+    return () => clearTimeout(timeout);
+  }, [knowledgeHome, knowledgeContent, savedKnowledgeContent, t]);
 
   const handleDeleteNote = useCallback(
     (highlight: HighlightWithBook) => {
@@ -384,6 +509,20 @@ export function NotesView({
             <View style={s.detailTabRow}>
               <View style={s.tabSwitcher}>
                 <TouchableOpacity
+                  style={[s.tabBtn, detailTab === "knowledge" && s.tabBtnActive]}
+                  onPress={() => setDetailTab("knowledge")}
+                >
+                  <ScrollTextIcon
+                    size={12}
+                    color={
+                      detailTab === "knowledge" ? colors.primaryForeground : colors.mutedForeground
+                    }
+                  />
+                  <Text style={[s.tabBtnText, detailTab === "knowledge" && s.tabBtnTextActive]}>
+                    {t("notes.knowledgeTab", "知识主页")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[s.tabBtn, detailTab === "notes" && s.tabBtnActive]}
                   onPress={() => setDetailTab("notes")}
                 >
@@ -414,22 +553,53 @@ export function NotesView({
                 </TouchableOpacity>
               </View>
 
-              <View style={s.detailSearch}>
-                <SearchIcon size={14} color={colors.mutedForeground} />
-                <TextInput
-                  style={s.detailSearchInput}
-                  placeholder={t("notes.searchPlaceholder", "搜索...")}
-                  placeholderTextColor={colors.mutedForeground}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
+              {detailTab === "knowledge" ? (
+                <View style={s.knowledgeStatusBar}>
+                  <View style={s.knowledgeStatusPill}>
+                    <CheckCheckIcon size={13} color={colors.mutedForeground} />
+                    <Text style={s.knowledgeStatusText}>
+                      {isKnowledgeSaving
+                        ? t("notes.knowledgeSaving", "保存中")
+                        : knowledgeContent === savedKnowledgeContent
+                          ? t("notes.knowledgeSaved", "已保存")
+                          : t("notes.knowledgePending", "待保存")}
+                    </Text>
+                  </View>
+                  <Text style={s.knowledgeStatusMeta}>
+                    {selectedBook.highlights.length} {t("notes.highlightsCount", "条高亮")}
+                  </Text>
+                </View>
+              ) : (
+                <View style={s.detailSearch}>
+                  <SearchIcon size={14} color={colors.mutedForeground} />
+                  <TextInput
+                    style={s.detailSearchInput}
+                    placeholder={t("notes.searchPlaceholder", "搜索...")}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+              )}
             </View>
           </View>
         )}
 
         {/* Detail content */}
-        {currentList.length === 0 ? (
+        {detailTab === "knowledge" ? (
+          <KnowledgeHomePanel
+            key={knowledgeHome?.id ?? selectedBook.bookId}
+            book={selectedBook}
+            document={knowledgeHome}
+            content={knowledgeContent}
+            isLoading={isKnowledgeLoading}
+            onChange={setKnowledgeContent}
+            onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
+            t={t}
+            styles={s}
+            colors={colors}
+          />
+        ) : currentList.length === 0 ? (
           <View style={s.detailEmpty}>
             <Text style={s.detailEmptyText}>
               {searchQuery
@@ -587,12 +757,139 @@ export function NotesView({
               setSelectedBookId(item.bookId);
               setSearchQuery("");
               setEditingId(null);
-              setDetailTab("notes");
+              setDetailTab("knowledge");
             }}
           />
         )}
       />
     </SafeAreaView>
+  );
+}
+
+function KnowledgeHomePanel({
+  book,
+  document,
+  content,
+  isLoading,
+  onChange,
+  onOpenBook,
+  t,
+  styles,
+  colors,
+}: {
+  book: {
+    bookId: string;
+    title: string;
+    author: string;
+    highlights: HighlightWithBook[];
+    notesCount: number;
+    highlightsOnlyCount: number;
+  };
+  document: KnowledgeDocument | null;
+  content: string;
+  isLoading: boolean;
+  onChange: (value: string) => void;
+  onOpenBook: (cfi?: string) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const recentHighlights = useMemo(
+    () => sortAnnotationsByPosition(book.highlights).slice(0, 3),
+    [book.highlights],
+  );
+
+  if (isLoading || !document) {
+    return (
+      <View style={styles.knowledgeLoading}>
+        <View style={styles.spinner} />
+        <Text style={styles.loadingText}>{t("notes.knowledgeLoading", "正在打开知识主页...")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAwareScrollView
+      style={styles.knowledgeScroll}
+      contentContainerStyle={styles.knowledgeContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.knowledgeHero}>
+        <View style={styles.knowledgeHeroTop}>
+          <View style={styles.knowledgeHeroIcon}>
+            <SparklesIcon size={16} color={colors.primary} />
+          </View>
+          <Text style={styles.knowledgeHeroEyebrow}>{t("notes.knowledgeEyebrow", "知识库")}</Text>
+        </View>
+        <Text style={styles.knowledgeHeroTitle} numberOfLines={2}>
+          {book.title}
+        </Text>
+        <Text style={styles.knowledgeHeroSubtitle} numberOfLines={1}>
+          {book.author}
+        </Text>
+        <View style={styles.knowledgeMetricRow}>
+          <View style={styles.knowledgeMetric}>
+            <Text style={styles.knowledgeMetricValue}>{book.notesCount}</Text>
+            <Text style={styles.knowledgeMetricLabel}>{t("notes.notesCount", "条笔记")}</Text>
+          </View>
+          <View style={styles.knowledgeMetric}>
+            <Text style={styles.knowledgeMetricValue}>{book.highlightsOnlyCount}</Text>
+            <Text style={styles.knowledgeMetricLabel}>{t("notes.highlightsCount", "条高亮")}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.knowledgeEditorCard}>
+        <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeTab", "知识主页")}</Text>
+        <View style={styles.knowledgeEditorFrame}>
+          <RichTextEditor
+            initialContent={content}
+            onChange={onChange}
+            placeholder={t(
+              "notes.knowledgePlaceholder",
+              "记录这本书的摘要、问题、想法和长期知识...",
+            )}
+          />
+        </View>
+      </View>
+
+      <View style={styles.knowledgeSourcesCard}>
+        <View style={styles.knowledgeSourcesHeader}>
+          <Text style={styles.knowledgeSectionTitle}>
+            {t("notes.knowledgeSources", "最近摘录")}
+          </Text>
+          <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
+            <Text style={styles.knowledgeOpenButtonText}>{t("notes.openBook", "打开书籍")}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentHighlights.length === 0 ? (
+          <Text style={styles.knowledgeEmptySources}>
+            {t("notes.knowledgeNoSources", "暂无摘录")}
+          </Text>
+        ) : (
+          <View style={styles.knowledgeSourceList}>
+            {recentHighlights.map((highlight) => (
+              <TouchableOpacity
+                key={highlight.id}
+                style={styles.knowledgeSourceItem}
+                activeOpacity={0.75}
+                onPress={() => onOpenBook(highlight.cfi)}
+              >
+                <Text style={styles.knowledgeSourceText} numberOfLines={3}>
+                  "{highlight.text}"
+                </Text>
+                {!!highlight.chapterTitle && (
+                  <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                    {highlight.chapterTitle}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    </KeyboardAwareScrollView>
   );
 }
 

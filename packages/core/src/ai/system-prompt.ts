@@ -102,6 +102,12 @@ function buildToolsSection(
   tools.push(
     "- **searchKnowledgeBase**: Search durable ReadAny knowledge documents, book home pages, reviews, summaries, and standalone notes (params: reasoning, query, bookId, type, limit)",
   );
+  tools.push(
+    "- **proposeKnowledgeDocumentCreate**: Draft a new knowledge document for user confirmation only; it does NOT save anything (params: reasoning, title, contentMd, type, bookId, tags)",
+  );
+  tools.push(
+    "- **proposeKnowledgeDocumentUpdate**: Draft a patch for an existing knowledge document for user confirmation only; it does NOT save anything (params: reasoning, documentId, title, contentMd, tags)",
+  );
   tools.push("- **getReadingStats**: Get reading statistics (params: reasoning, days)");
   tools.push("- **getSkills**: Query available skills/SOPs for guidance (params: reasoning, task)");
   tools.push(
@@ -184,6 +190,11 @@ function buildToolsSection(
       );
     }
   }
+
+  tools.push("");
+  tools.push(
+    "Knowledge write safety: proposeKnowledgeDocumentCreate and proposeKnowledgeDocumentUpdate only return confirmation-required drafts. Never tell the user a knowledge document was saved or changed until the app has explicitly confirmed applying the proposal.",
+  );
 
   // Custom skills
   if (skills.length > 0) {

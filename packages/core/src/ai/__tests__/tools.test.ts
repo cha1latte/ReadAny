@@ -7,6 +7,8 @@ vi.mock("../../db/database", () => ({
   getChunks: vi.fn(),
   getHighlights: vi.fn(),
   getNotes: vi.fn(),
+  getKnowledgeDocument: vi.fn(),
+  getKnowledgeDocuments: vi.fn(),
   getAllHighlights: vi.fn(),
   getAllNotes: vi.fn(),
   getSkills: vi.fn(),
@@ -125,6 +127,9 @@ describe("getAvailableTools", () => {
     expect(names).toContain("listBooks");
     expect(names).toContain("searchAllHighlights");
     expect(names).toContain("searchAllNotes");
+    expect(names).toContain("searchKnowledgeBase");
+    expect(names).toContain("proposeKnowledgeDocumentCreate");
+    expect(names).toContain("proposeKnowledgeDocumentUpdate");
     expect(names).toContain("getReadingStats");
     expect(names).toContain("getSkills");
     expect(names).toContain("mindmap");

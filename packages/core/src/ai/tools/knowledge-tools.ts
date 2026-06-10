@@ -5,8 +5,9 @@
  * go through a confirmation-capable UI flow so AI never silently overwrites a
  * user's durable notes.
  */
-import { getKnowledgeDocuments } from "../../db/database";
-import type { KnowledgeDocument, KnowledgeDocumentType } from "../../types";
+import { getKnowledgeDocument, getKnowledgeDocuments } from "../../db/database";
+import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
+import type { JSONValue, KnowledgeDocument, KnowledgeDocumentType } from "../../types";
 import type { ToolDefinition } from "./tool-types";
 
 const SEARCH_SCAN_LIMIT = 200;
@@ -37,8 +38,40 @@ function normalizeType(value: unknown): KnowledgeDocumentType | undefined {
   return allowed.has(type as KnowledgeDocumentType) ? (type as KnowledgeDocumentType) : undefined;
 }
 
+function normalizeDocumentType(value: unknown): KnowledgeDocumentType {
+  return normalizeType(value) ?? "standalone_note";
+}
+
+function parseTags(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = String(value).trim();
+  if (!raw) return [];
+
+  let values: unknown[];
+  if (raw.startsWith("[")) {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("tags JSON must be an array");
+    values = parsed;
+  } else {
+    values = raw.split(/[,，\n]/);
+  }
+
+  return [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
+}
+
 function compactText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function createExcerpt(markdown: string): string | undefined {
+  const text = compactText(
+    markdown.replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~\-[\]()]/g, " "),
+  );
+  return text ? text.slice(0, 220) : undefined;
+}
+
+function markdownToKnowledgeJson(markdown: string): JSONValue {
+  return markdownToBasicTiptap(markdown) as unknown as JSONValue;
 }
 
 function createSnippet(document: KnowledgeDocument, query: string): string {
@@ -178,6 +211,174 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
         bookId,
         total: documents.length,
         documents: documents.map((document) => documentSummary(document, "", includeContent)),
+      };
+    },
+  };
+}
+
+export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
+  return {
+    name: "proposeKnowledgeDocumentCreate",
+    description:
+      "Create a confirmation-required draft for a new ReadAny knowledge document. This tool NEVER saves data. Use it when the user asks AI to create a durable note, summary, review, or knowledge document, then ask the user to confirm applying the draft.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why you are drafting a new knowledge document",
+        required: true,
+      },
+      title: {
+        type: "string",
+        description: "Proposed document title",
+        required: true,
+      },
+      contentMd: {
+        type: "string",
+        description: "Proposed Markdown content for the document",
+        required: true,
+      },
+      type: {
+        type: "string",
+        description:
+          "Document type: standalone_note, review, summary, highlight_note, imported_markdown, or book_home. Defaults to standalone_note.",
+      },
+      bookId: {
+        type: "string",
+        description: "Optional book id to attach the draft to a book",
+      },
+      tags: {
+        type: "string",
+        description: 'Optional tags as comma-separated text or JSON array, e.g. "reading,summary"',
+      },
+    },
+    execute: async (args) => {
+      const title = String(args.title ?? "").trim();
+      const contentMd = String(args.contentMd ?? "");
+      if (!title) return { success: false, error: "title is required" };
+
+      let tags: string[] | undefined;
+      try {
+        tags = parseTags(args.tags);
+      } catch (error) {
+        return { success: false, error: `Invalid tags: ${(error as Error).message}` };
+      }
+
+      const bookId = String(args.bookId ?? "").trim() || undefined;
+      const type = normalizeDocumentType(args.type);
+      const contentJson = markdownToKnowledgeJson(contentMd);
+
+      return {
+        success: true,
+        action: "create",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_document_create",
+        message: "Draft generated only. No knowledge document has been saved.",
+        draft: {
+          type,
+          title,
+          bookId,
+          tags: tags ?? [],
+          contentMd,
+          contentJson,
+          excerpt: createExcerpt(contentMd),
+          sourceKind: bookId ? "book" : undefined,
+          sourceId: bookId,
+        },
+      };
+    },
+  };
+}
+
+export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
+  return {
+    name: "proposeKnowledgeDocumentUpdate",
+    description:
+      "Create a confirmation-required patch for an existing ReadAny knowledge document. This tool NEVER saves data. Use it when the user asks AI to update a knowledge note, summary, review, tags, or title, then ask the user to confirm applying the patch.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why you are drafting a document update",
+        required: true,
+      },
+      documentId: {
+        type: "string",
+        description: "Knowledge document id to update",
+        required: true,
+      },
+      title: {
+        type: "string",
+        description: "Optional replacement title",
+      },
+      contentMd: {
+        type: "string",
+        description: "Optional replacement Markdown content",
+      },
+      tags: {
+        type: "string",
+        description: "Optional replacement tags as comma-separated text or JSON array",
+      },
+    },
+    execute: async (args) => {
+      const documentId = String(args.documentId ?? "").trim();
+      if (!documentId) return { success: false, error: "documentId is required" };
+
+      const document = await getKnowledgeDocument(documentId);
+      if (!document) return { success: false, error: "Knowledge document not found" };
+
+      const patch: Partial<
+        Pick<KnowledgeDocument, "title" | "contentMd" | "contentJson" | "excerpt" | "tags">
+      > = {};
+      const changedFields: string[] = [];
+
+      if (Object.prototype.hasOwnProperty.call(args, "title")) {
+        const title = String(args.title ?? "").trim();
+        if (title && title !== document.title) {
+          patch.title = title;
+          changedFields.push("title");
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(args, "contentMd")) {
+        const contentMd = String(args.contentMd ?? "");
+        if (contentMd !== document.contentMd) {
+          patch.contentMd = contentMd;
+          patch.contentJson = markdownToKnowledgeJson(contentMd);
+          patch.excerpt = createExcerpt(contentMd);
+          changedFields.push("contentMd", "contentJson", "excerpt");
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(args, "tags")) {
+        let tags: string[] | undefined;
+        try {
+          tags = parseTags(args.tags) ?? [];
+        } catch (error) {
+          return { success: false, error: `Invalid tags: ${(error as Error).message}` };
+        }
+        if (JSON.stringify(tags) !== JSON.stringify(document.tags)) {
+          patch.tags = tags;
+          changedFields.push("tags");
+        }
+      }
+
+      if (changedFields.length === 0) {
+        return {
+          success: false,
+          error: "No changes were proposed",
+          documentId,
+        };
+      }
+
+      return {
+        success: true,
+        action: "update",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_document_update",
+        message: "Patch generated only. The existing knowledge document has not been changed.",
+        documentId,
+        current: documentSummary(document, "", false),
+        patch,
+        changedFields,
       };
     },
   };

@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KnowledgeDocument } from "../../types";
 
 const dbMocks = vi.hoisted(() => ({
+  getKnowledgeDocument: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
 }));
 
 vi.mock("../../db/database", () => dbMocks);
 
-const { createGetBookKnowledgeTool, createSearchKnowledgeBaseTool } = await import(
-  "./knowledge-tools"
-);
+const {
+  createGetBookKnowledgeTool,
+  createProposeKnowledgeDocumentCreateTool,
+  createProposeKnowledgeDocumentUpdateTool,
+  createSearchKnowledgeBaseTool,
+} = await import("./knowledge-tools");
 
 function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
   return {
@@ -99,5 +103,95 @@ describe("knowledge tools", () => {
       content: "Reading slowly helps memory and reflection.",
       snippet: "Reading slowly helps memory.",
     });
+  });
+
+  it("creates confirmation-required drafts without saving knowledge documents", async () => {
+    const tool = createProposeKnowledgeDocumentCreateTool();
+    const result = (await tool.execute({
+      reasoning: "User asked to save a summary",
+      title: "Reading Summary",
+      contentMd: "## Summary\nSlow reading helps memory.",
+      type: "summary",
+      bookId: "book-1",
+      tags: '["reading","memory","reading"]',
+    })) as {
+      success: boolean;
+      requiresConfirmation: boolean;
+      draft: {
+        title: string;
+        type: string;
+        bookId: string;
+        tags: string[];
+        contentMd: string;
+        contentJson: { type: string };
+        excerpt: string;
+      };
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.draft).toMatchObject({
+      title: "Reading Summary",
+      type: "summary",
+      bookId: "book-1",
+      tags: ["reading", "memory"],
+      contentMd: "## Summary\nSlow reading helps memory.",
+      contentJson: { type: "doc" },
+      excerpt: "Summary Slow reading helps memory.",
+    });
+    expect(dbMocks.getKnowledgeDocument).not.toHaveBeenCalled();
+    expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
+  });
+
+  it("creates confirmation-required update patches for existing knowledge documents", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(doc());
+
+    const tool = createProposeKnowledgeDocumentUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "User asked to refine the note",
+      documentId: "doc-1",
+      title: "Deep Reading Notes",
+      contentMd: "Updated durable note.",
+      tags: "reading, reflection",
+    })) as {
+      success: boolean;
+      requiresConfirmation: boolean;
+      documentId: string;
+      patch: {
+        title?: string;
+        contentMd?: string;
+        contentJson?: { type: string };
+        tags?: string[];
+      };
+      changedFields: string[];
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-1");
+    expect(result.success).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.documentId).toBe("doc-1");
+    expect(result.patch).toMatchObject({
+      title: "Deep Reading Notes",
+      contentMd: "Updated durable note.",
+      contentJson: { type: "doc" },
+      tags: ["reading", "reflection"],
+    });
+    expect(result.changedFields).toEqual(["title", "contentMd", "contentJson", "excerpt", "tags"]);
+  });
+
+  it("does not create an update proposal when nothing changes", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(doc());
+
+    const tool = createProposeKnowledgeDocumentUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "Check no-op",
+      documentId: "doc-1",
+      title: "Deep Reading Home",
+      contentMd: "Reading slowly helps memory and reflection.",
+      tags: '["reading","memory"]',
+    })) as { success: boolean; error: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("No changes were proposed");
   });
 });

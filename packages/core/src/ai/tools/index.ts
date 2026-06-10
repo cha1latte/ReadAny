@@ -8,7 +8,8 @@
  * - Annotation Tools: getAnnotations, addCitation
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
- * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge
+ * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge, proposeKnowledgeDocumentCreate,
+ *   proposeKnowledgeDocumentUpdate
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap
  * - Context Tools: getCurrentChapter, getSelection, getReadingProgress, getRecentHighlights, getSurroundingContext
@@ -28,7 +29,12 @@ import {
   createFallbackSearchTool,
   createFallbackTocTool,
 } from "./fallback-content-tools";
-import { createGetBookKnowledgeTool, createSearchKnowledgeBaseTool } from "./knowledge-tools";
+import {
+  createGetBookKnowledgeTool,
+  createProposeKnowledgeDocumentCreateTool,
+  createProposeKnowledgeDocumentUpdateTool,
+  createSearchKnowledgeBaseTool,
+} from "./knowledge-tools";
 import {
   createClassifyBooksTool,
   createListBooksTool,
@@ -56,6 +62,8 @@ function getGeneralTools(): ToolDefinition[] {
     createSearchAllHighlightsTool(),
     createSearchAllNotesTool(),
     createSearchKnowledgeBaseTool(),
+    createProposeKnowledgeDocumentCreateTool(),
+    createProposeKnowledgeDocumentUpdateTool(),
     createReadingStatsTool(),
     createGetSkillsTool(),
     createMindmapTool(),

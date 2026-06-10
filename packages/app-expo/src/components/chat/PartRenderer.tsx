@@ -4,6 +4,11 @@ import { BrainIcon, CheckIcon, ChevronDownIcon, OctagonXIcon, XIcon } from "@/co
 import { useThrottledValue } from "@/hooks";
 import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
+import {
+  type KnowledgeWriteProposal,
+  applyKnowledgeWriteProposal,
+  getKnowledgeWriteProposal,
+} from "@readany/core/knowledge/proposals";
 import type {
   AbortedPart,
   CitationPart,
@@ -14,10 +19,11 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -160,19 +166,53 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   fallbackToc: "toolLabels.fallbackToc",
   fallbackSearch: "toolLabels.fallbackSearch",
   fallbackChapterContext: "toolLabels.fallbackChapterContext",
+  searchKnowledgeBase: "toolLabels.searchKnowledgeBase",
+  getBookKnowledge: "toolLabels.getBookKnowledge",
+  proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
+  proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
+};
+
+type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+
+const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
+  book_home: "knowledgeProposal.types.bookHome",
+  standalone_note: "knowledgeProposal.types.standaloneNote",
+  highlight_note: "knowledgeProposal.types.highlightNote",
+  review: "knowledgeProposal.types.review",
+  summary: "knowledgeProposal.types.summary",
+  imported_markdown: "knowledgeProposal.types.importedMarkdown",
 };
 
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const hasError = part.status === "error" || Boolean(part.error);
+  const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
 
-  const [isOpen, setIsOpen] = useState(hasError);
+  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
+  const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
 
   useEffect(() => {
-    if (hasError) setIsOpen(true);
-  }, [hasError]);
+    if (hasError || proposal) setIsOpen(true);
+    setProposalApplyState("idle");
+  }, [hasError, proposal]);
+
+  const handleApplyProposal = async () => {
+    if (!proposal || proposalApplyState !== "idle") return;
+    setProposalApplyState("applying");
+    try {
+      await applyKnowledgeWriteProposal(proposal);
+      setProposalApplyState("applied");
+    } catch (error) {
+      setProposalApplyState("idle");
+      console.error("[KnowledgeProposal] Failed to apply proposal:", error);
+      Alert.alert(
+        t("knowledgeProposal.applyFailed", "应用失败"),
+        error instanceof Error ? error.message : t("knowledgeProposal.applyFailed", "应用失败"),
+      );
+    }
+  };
 
   const getStatusIcon = () => {
     switch (part.status) {
@@ -210,6 +250,15 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
               <Text style={s.errorBadgeText}>{t("streaming.toolFailed", "调用失败")}</Text>
             </View>
           ) : null}
+          {proposal && !hasError ? (
+            <View style={s.proposalBadge}>
+              <Text style={s.proposalBadgeText}>
+                {proposalApplyState === "applied"
+                  ? t("knowledgeProposal.savedBadge", "已应用")
+                  : t("knowledgeProposal.pendingBadge", "待确认")}
+              </Text>
+            </View>
+          ) : null}
           {queryText ? (
             <Text style={s.queryText} numberOfLines={1}>
               {queryText.slice(0, 30)}
@@ -240,25 +289,139 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
           {part.result !== undefined && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{t("common.result", "结果")}</Text>
-              <View style={s.codeBlockScroll}>
-                <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-                  <Text style={s.codeText}>
-                    {typeof part.result === "string" && part.result.length > 500
-                      ? `${part.result.slice(0, 500)}...`
-                      : JSON.stringify(part.result, null, 2)}
-                  </Text>
-                </ScrollView>
-              </View>
+              {proposal ? (
+                <KnowledgeProposalCard
+                  proposal={proposal}
+                  applyState={proposalApplyState}
+                  onApply={handleApplyProposal}
+                />
+              ) : (
+                <View style={s.codeBlockScroll}>
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                    <Text style={s.codeText}>
+                      {typeof part.result === "string" && part.result.length > 500
+                        ? `${part.result.slice(0, 500)}...`
+                        : JSON.stringify(part.result, null, 2)}
+                    </Text>
+                  </ScrollView>
+                </View>
+              )}
             </View>
           )}
           {hasError && (
             <View style={s.errorBlock}>
               <Text style={s.errorTitle}>{t("streaming.toolFailedDetail", "工具调用失败")}</Text>
-              <Text style={s.errorText}>{errorMessage || t("streaming.toolFailed", "调用失败")}</Text>
+              <Text style={s.errorText}>
+                {errorMessage || t("streaming.toolFailed", "调用失败")}
+              </Text>
             </View>
           )}
         </View>
       )}
+    </View>
+  );
+}
+
+function KnowledgeProposalCard({
+  proposal,
+  applyState,
+  onApply,
+}: {
+  proposal: KnowledgeWriteProposal;
+  applyState: KnowledgeProposalApplyState;
+  onApply: () => void;
+}) {
+  const { t } = useTranslation();
+  const colors = useColors();
+  const s = makeToolStyles(colors);
+  const isCreate = proposal.action === "create";
+  const title = isCreate
+    ? proposal.draft.title
+    : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
+  const type = isCreate ? proposal.draft.type : proposal.current?.type;
+  const tags = isCreate
+    ? (proposal.draft.tags ?? [])
+    : (proposal.patch.tags ?? proposal.current?.tags ?? []);
+  const preview = isCreate
+    ? proposal.draft.excerpt || proposal.draft.contentMd
+    : proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+  const changedFields = proposal.action === "update" ? proposal.changedFields : [];
+
+  return (
+    <View style={s.proposalCard}>
+      <View style={s.proposalHeader}>
+        <View style={s.proposalTitleWrap}>
+          <Text style={s.proposalActionText}>
+            {isCreate
+              ? t("knowledgeProposal.create", "创建知识文档")
+              : t("knowledgeProposal.update", "更新知识文档")}
+          </Text>
+          <Text style={s.proposalTitleText} numberOfLines={2}>
+            {title}
+          </Text>
+        </View>
+        <View style={s.proposalTypeBadge}>
+          <Text style={s.proposalTypeText} numberOfLines={1}>
+            {type
+              ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[type], { defaultValue: type })
+              : t("knowledgeProposal.types.knowledgeDocument", "知识文档")}
+          </Text>
+        </View>
+      </View>
+
+      <View style={s.proposalBody}>
+        <Text style={s.proposalHintText}>
+          {t("knowledgeProposal.safeHint", "AI 只生成了草稿，确认后才会写入你的知识库。")}
+        </Text>
+
+        {tags.length > 0 ? (
+          <View style={s.proposalTagRow}>
+            {tags.slice(0, 6).map((tag) => (
+              <View key={tag} style={s.proposalTag}>
+                <Text style={s.proposalTagText}>{tag}</Text>
+              </View>
+            ))}
+            {tags.length > 6 ? (
+              <View style={s.proposalTag}>
+                <Text style={s.proposalTagText}>+{tags.length - 6}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {changedFields.length > 0 ? (
+          <View style={s.proposalMetaBlock}>
+            <Text style={s.proposalMetaLabel}>{t("knowledgeProposal.changes", "变更")}</Text>
+            <Text style={s.proposalMetaText}>{changedFields.join(", ")}</Text>
+          </View>
+        ) : null}
+
+        {preview ? (
+          <View style={s.proposalPreviewBlock}>
+            <Text style={s.proposalMetaLabel}>
+              {t("knowledgeProposal.contentPreview", "内容预览")}
+            </Text>
+            <Text style={s.proposalPreviewText} numberOfLines={6}>
+              {preview.length > 520 ? `${preview.slice(0, 520)}...` : preview}
+            </Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[s.proposalApplyButton, applyState !== "idle" && s.proposalApplyButtonDisabled]}
+          onPress={onApply}
+          disabled={applyState !== "idle"}
+          activeOpacity={0.8}
+        >
+          <Text style={s.proposalApplyText}>
+            {applyState === "applying"
+              ? t("knowledgeProposal.applying", "应用中...")
+              : applyState === "applied"
+                ? t("knowledgeProposal.applied", "已应用")
+                : t("knowledgeProposal.apply", "应用到知识库")}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -390,6 +553,17 @@ const makeToolStyles = (colors: ThemeColors) =>
       color: colors.destructive,
       fontWeight: fw.medium,
     },
+    proposalBadge: {
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    proposalBadgeText: {
+      fontSize: fs.xs,
+      color: colors.primary,
+      fontWeight: fw.medium,
+    },
     chevron: {},
     chevronOpen: { transform: [{ rotate: "180deg" }] },
     body: {
@@ -427,6 +601,116 @@ const makeToolStyles = (colors: ThemeColors) =>
       lineHeight: 16,
     },
     codeKey: { color: colors.mutedForeground },
+    proposalCard: {
+      overflow: "hidden",
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.primary, 0.24),
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+    },
+    proposalHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.border,
+      backgroundColor: withOpacity(colors.primary, 0.04),
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+    },
+    proposalTitleWrap: {
+      flex: 1,
+      gap: 3,
+    },
+    proposalActionText: {
+      fontSize: fs.xs,
+      fontWeight: fw.medium,
+      color: colors.primary,
+    },
+    proposalTitleText: {
+      fontSize: fs.sm,
+      lineHeight: 18,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    proposalTypeBadge: {
+      maxWidth: 110,
+      borderRadius: radius.sm,
+      backgroundColor: colors.muted,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+    },
+    proposalTypeText: {
+      fontSize: fs.xs,
+      color: colors.mutedForeground,
+    },
+    proposalBody: {
+      gap: 9,
+      padding: 10,
+    },
+    proposalHintText: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.mutedForeground,
+    },
+    proposalTagRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    proposalTag: {
+      borderRadius: radius.sm,
+      backgroundColor: colors.muted,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+    },
+    proposalTagText: {
+      fontSize: fs.xs,
+      color: colors.mutedForeground,
+    },
+    proposalMetaBlock: {
+      gap: 3,
+    },
+    proposalMetaLabel: {
+      fontSize: fs.xs,
+      fontWeight: fw.medium,
+      color: colors.mutedForeground,
+    },
+    proposalMetaText: {
+      fontSize: fs.xs,
+      color: colors.foreground,
+    },
+    proposalPreviewBlock: {
+      gap: 5,
+    },
+    proposalPreviewText: {
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.45),
+      borderRadius: radius.sm,
+      padding: 8,
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.foreground,
+    },
+    proposalApplyButton: {
+      alignSelf: "flex-end",
+      minHeight: 34,
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    proposalApplyButtonDisabled: {
+      opacity: 0.65,
+    },
+    proposalApplyText: {
+      fontSize: fs.xs,
+      fontWeight: fw.semibold,
+      color: colors.primaryForeground,
+    },
     errorBlock: {
       borderWidth: 0.5,
       borderColor: colors.destructive,

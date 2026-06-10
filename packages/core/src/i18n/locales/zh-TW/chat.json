@@ -98,7 +98,35 @@
     "mindmap": "產生心智圖",
     "fallbackToc": "讀取原始目錄",
     "fallbackSearch": "掃描原始檔案",
-    "fallbackChapterContext": "讀取章節內容"
+    "fallbackChapterContext": "讀取章節內容",
+    "searchKnowledgeBase": "搜尋知識庫",
+    "getBookKnowledge": "讀取本書知識",
+    "proposeKnowledgeDocumentCreate": "草擬知識文件",
+    "proposeKnowledgeDocumentUpdate": "草擬文件更新"
+  },
+  "knowledgeProposal": {
+    "title": "知識庫寫入提案",
+    "create": "建立知識文件",
+    "update": "更新知識文件",
+    "pendingBadge": "待確認",
+    "savedBadge": "已套用",
+    "safeHint": "AI 只產生了草稿，確認後才會寫入你的知識庫。",
+    "changes": "變更",
+    "contentPreview": "內容預覽",
+    "apply": "套用到知識庫",
+    "applying": "套用中...",
+    "applied": "已套用",
+    "applySuccess": "已儲存到知識庫",
+    "applyFailed": "套用知識庫提案失敗",
+    "types": {
+      "knowledgeDocument": "知識文件",
+      "bookHome": "書籍首頁",
+      "standaloneNote": "獨立筆記",
+      "highlightNote": "劃線筆記",
+      "review": "書評",
+      "summary": "摘要",
+      "importedMarkdown": "匯入文件"
+    }
   },
   "mindmap": {
     "title": "心智圖",

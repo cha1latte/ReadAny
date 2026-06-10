@@ -98,7 +98,35 @@
     "mindmap": "Generando mapa mental",
     "fallbackToc": "Leyendo tabla de contenidos original",
     "fallbackSearch": "Escaneando archivo original",
-    "fallbackChapterContext": "Leyendo contenido del capítulo"
+    "fallbackChapterContext": "Leyendo contenido del capítulo",
+    "searchKnowledgeBase": "Buscando en la base de conocimiento",
+    "getBookKnowledge": "Leyendo conocimiento del libro",
+    "proposeKnowledgeDocumentCreate": "Redactando documento de conocimiento",
+    "proposeKnowledgeDocumentUpdate": "Redactando actualización del documento"
+  },
+  "knowledgeProposal": {
+    "title": "Propuesta de escritura de conocimiento",
+    "create": "Crear documento de conocimiento",
+    "update": "Actualizar documento de conocimiento",
+    "pendingBadge": "Necesita confirmación",
+    "savedBadge": "Aplicado",
+    "safeHint": "La IA solo creó un borrador. Se escribirá en tu base de conocimiento tras confirmarlo.",
+    "changes": "Cambios",
+    "contentPreview": "Vista previa",
+    "apply": "Aplicar a la base de conocimiento",
+    "applying": "Aplicando...",
+    "applied": "Aplicado",
+    "applySuccess": "Guardado en la base de conocimiento",
+    "applyFailed": "No se pudo aplicar la propuesta",
+    "types": {
+      "knowledgeDocument": "Documento de conocimiento",
+      "bookHome": "Inicio del libro",
+      "standaloneNote": "Nota independiente",
+      "highlightNote": "Nota de subrayado",
+      "review": "Reseña",
+      "summary": "Resumen",
+      "importedMarkdown": "Documento importado"
+    }
   },
   "mindmap": {
     "title": "Mapa mental",

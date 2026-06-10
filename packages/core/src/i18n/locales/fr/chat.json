@@ -98,7 +98,35 @@
     "mindmap": "Génération de la carte mentale",
     "fallbackToc": "Lecture de la table des matières originale",
     "fallbackSearch": "Analyse du fichier original",
-    "fallbackChapterContext": "Lecture du contenu du chapitre"
+    "fallbackChapterContext": "Lecture du contenu du chapitre",
+    "searchKnowledgeBase": "Recherche dans la base de connaissances",
+    "getBookKnowledge": "Lecture des connaissances du livre",
+    "proposeKnowledgeDocumentCreate": "Brouillon de document de connaissance",
+    "proposeKnowledgeDocumentUpdate": "Brouillon de mise à jour du document"
+  },
+  "knowledgeProposal": {
+    "title": "Proposition d'écriture de connaissance",
+    "create": "Créer un document de connaissance",
+    "update": "Mettre à jour le document de connaissance",
+    "pendingBadge": "Confirmation requise",
+    "savedBadge": "Appliqué",
+    "safeHint": "L'IA a seulement créé un brouillon. Il sera écrit dans votre base après confirmation.",
+    "changes": "Modifications",
+    "contentPreview": "Aperçu",
+    "apply": "Appliquer à la base de connaissances",
+    "applying": "Application...",
+    "applied": "Appliqué",
+    "applySuccess": "Enregistré dans la base de connaissances",
+    "applyFailed": "Impossible d'appliquer la proposition",
+    "types": {
+      "knowledgeDocument": "Document de connaissance",
+      "bookHome": "Accueil du livre",
+      "standaloneNote": "Note autonome",
+      "highlightNote": "Note de surlignage",
+      "review": "Critique",
+      "summary": "Résumé",
+      "importedMarkdown": "Document importé"
+    }
   },
   "mindmap": {
     "title": "Carte mentale",

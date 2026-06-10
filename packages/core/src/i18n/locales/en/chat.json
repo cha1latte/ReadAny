@@ -98,7 +98,35 @@
     "mindmap": "Generating mindmap",
     "fallbackToc": "Reading original table of contents",
     "fallbackSearch": "Scanning original file",
-    "fallbackChapterContext": "Reading chapter content"
+    "fallbackChapterContext": "Reading chapter content",
+    "searchKnowledgeBase": "Searching knowledge base",
+    "getBookKnowledge": "Reading book knowledge",
+    "proposeKnowledgeDocumentCreate": "Drafting knowledge document",
+    "proposeKnowledgeDocumentUpdate": "Drafting document update"
+  },
+  "knowledgeProposal": {
+    "title": "Knowledge write proposal",
+    "create": "Create knowledge document",
+    "update": "Update knowledge document",
+    "pendingBadge": "Needs confirmation",
+    "savedBadge": "Applied",
+    "safeHint": "AI has only drafted this. It will write to your knowledge base after confirmation.",
+    "changes": "Changes",
+    "contentPreview": "Preview",
+    "apply": "Apply to knowledge base",
+    "applying": "Applying...",
+    "applied": "Applied",
+    "applySuccess": "Saved to knowledge base",
+    "applyFailed": "Failed to apply knowledge proposal",
+    "types": {
+      "knowledgeDocument": "Knowledge document",
+      "bookHome": "Book home",
+      "standaloneNote": "Standalone note",
+      "highlightNote": "Highlight note",
+      "review": "Review",
+      "summary": "Summary",
+      "importedMarkdown": "Imported document"
+    }
   },
   "mindmap": {
     "title": "Mindmap",

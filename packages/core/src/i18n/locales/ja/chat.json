@@ -98,7 +98,35 @@
     "mindmap": "マインドマップを生成中",
     "fallbackToc": "元ファイルの目次を読み取り中",
     "fallbackSearch": "元ファイルをスキャン中",
-    "fallbackChapterContext": "章の内容を読み取り中"
+    "fallbackChapterContext": "章の内容を読み取り中",
+    "searchKnowledgeBase": "ナレッジベースを検索中",
+    "getBookKnowledge": "この本のナレッジを読み取り中",
+    "proposeKnowledgeDocumentCreate": "ナレッジ文書を下書き中",
+    "proposeKnowledgeDocumentUpdate": "文書更新を下書き中"
+  },
+  "knowledgeProposal": {
+    "title": "ナレッジ書き込み提案",
+    "create": "ナレッジ文書を作成",
+    "update": "ナレッジ文書を更新",
+    "pendingBadge": "確認待ち",
+    "savedBadge": "適用済み",
+    "safeHint": "AI は下書きだけを作成しました。確認後にナレッジベースへ保存されます。",
+    "changes": "変更",
+    "contentPreview": "プレビュー",
+    "apply": "ナレッジベースに適用",
+    "applying": "適用中...",
+    "applied": "適用済み",
+    "applySuccess": "ナレッジベースに保存しました",
+    "applyFailed": "ナレッジ提案の適用に失敗しました",
+    "types": {
+      "knowledgeDocument": "ナレッジ文書",
+      "bookHome": "本のホーム",
+      "standaloneNote": "独立ノート",
+      "highlightNote": "ハイライトノート",
+      "review": "レビュー",
+      "summary": "要約",
+      "importedMarkdown": "インポート文書"
+    }
   },
   "mindmap": {
     "title": "マインドマップ",

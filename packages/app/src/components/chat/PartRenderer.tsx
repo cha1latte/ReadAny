@@ -2,7 +2,13 @@
  * Message Part Components
  * Renders individual parts of a message (text, reasoning, tool calls, citations)
  */
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  type KnowledgeWriteProposal,
+  applyKnowledgeWriteProposal,
+  getKnowledgeWriteProposal,
+} from "@readany/core/knowledge/proposals";
 import type {
   AbortedPart,
   CitationPart,
@@ -23,8 +29,9 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 const TEXT_RENDER_THROTTLE_MS = 100;
@@ -216,13 +223,30 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   fallbackToc: "toolLabels.fallbackToc",
   fallbackSearch: "toolLabels.fallbackSearch",
   fallbackChapterContext: "toolLabels.fallbackChapterContext",
+  searchKnowledgeBase: "toolLabels.searchKnowledgeBase",
+  getBookKnowledge: "toolLabels.getBookKnowledge",
+  proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
+  proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
+};
+
+type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+
+const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
+  book_home: "knowledgeProposal.types.bookHome",
+  standalone_note: "knowledgeProposal.types.standaloneNote",
+  highlight_note: "knowledgeProposal.types.highlightNote",
+  review: "knowledgeProposal.types.review",
+  summary: "knowledgeProposal.types.summary",
+  imported_markdown: "knowledgeProposal.types.importedMarkdown",
 };
 
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const { t } = useTranslation();
   const hasError = part.status === "error" || Boolean(part.error);
+  const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
 
-  const [isOpen, setIsOpen] = useState(hasError);
+  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
+  const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
 
   const getStatusIcon = () => {
     switch (part.status) {
@@ -249,8 +273,23 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       : "");
 
   useEffect(() => {
-    if (hasError) setIsOpen(true);
-  }, [hasError]);
+    if (hasError || proposal) setIsOpen(true);
+    setProposalApplyState("idle");
+  }, [hasError, proposal]);
+
+  const handleApplyProposal = async () => {
+    if (!proposal || proposalApplyState !== "idle") return;
+    setProposalApplyState("applying");
+    try {
+      await applyKnowledgeWriteProposal(proposal);
+      setProposalApplyState("applied");
+      toast.success(t("knowledgeProposal.applySuccess"));
+    } catch (error) {
+      setProposalApplyState("idle");
+      console.error("[KnowledgeProposal] Failed to apply proposal:", error);
+      toast.error(error instanceof Error ? error.message : t("knowledgeProposal.applyFailed"));
+    }
+  };
 
   return (
     <div className="my-1">
@@ -275,6 +314,13 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                 {hasError && (
                   <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
                     {t("streaming.toolFailed")}
+                  </span>
+                )}
+                {proposal && !hasError && (
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
+                    {proposalApplyState === "applied"
+                      ? t("knowledgeProposal.savedBadge")
+                      : t("knowledgeProposal.pendingBadge")}
                   </span>
                 )}
                 {queryText && (
@@ -315,7 +361,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                         <span className="text-muted-foreground">{key}:</span>{" "}
                         <span className="text-foreground">
                           {typeof value === "string" && value.length > 100
-                            ? value.slice(0, 100) + "..."
+                            ? `${value.slice(0, 100)}...`
                             : String(value)}
                         </span>
                       </div>
@@ -329,13 +375,21 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                   <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">
                     {t("common.result")}
                   </h4>
-                  <div className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-xs">
-                    <pre className="whitespace-pre-wrap text-foreground">
-                      {typeof part.result === "string" && part.result.length > 500
-                        ? part.result.slice(0, 500) + "..."
-                        : JSON.stringify(part.result, null, 2)}
-                    </pre>
-                  </div>
+                  {proposal ? (
+                    <KnowledgeProposalCard
+                      proposal={proposal}
+                      applyState={proposalApplyState}
+                      onApply={handleApplyProposal}
+                    />
+                  ) : (
+                    <div className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-xs">
+                      <pre className="whitespace-pre-wrap text-foreground">
+                        {typeof part.result === "string" && part.result.length > 500
+                          ? `${part.result.slice(0, 500)}...`
+                          : JSON.stringify(part.result, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -348,6 +402,107 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
             </div>
           </CollapsibleContent>
         </Collapsible>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeProposalCard({
+  proposal,
+  applyState,
+  onApply,
+}: {
+  proposal: KnowledgeWriteProposal;
+  applyState: KnowledgeProposalApplyState;
+  onApply: () => void;
+}) {
+  const { t } = useTranslation();
+  const isCreate = proposal.action === "create";
+  const title = isCreate
+    ? proposal.draft.title
+    : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
+  const type = isCreate ? proposal.draft.type : proposal.current?.type;
+  const tags = isCreate
+    ? (proposal.draft.tags ?? [])
+    : (proposal.patch.tags ?? proposal.current?.tags ?? []);
+  const preview = isCreate
+    ? proposal.draft.excerpt || proposal.draft.contentMd
+    : proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+  const changedFields = proposal.action === "update" ? proposal.changedFields : [];
+
+  return (
+    <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
+      <div className="border-b border-border/70 bg-primary/[0.04] px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-primary">
+              {isCreate ? t("knowledgeProposal.create") : t("knowledgeProposal.update")}
+            </div>
+            <div className="truncate text-sm font-semibold text-foreground">{title}</div>
+          </div>
+          <div className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+            {type
+              ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[type], { defaultValue: type })
+              : t("knowledgeProposal.types.knowledgeDocument")}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-3">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t("knowledgeProposal.safeHint")}
+        </p>
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.slice(0, 6).map((tag) => (
+              <span key={tag} className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+                {tag}
+              </span>
+            ))}
+            {tags.length > 6 && (
+              <span className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+                +{tags.length - 6}
+              </span>
+            )}
+          </div>
+        )}
+
+        {changedFields.length > 0 && (
+          <div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              {t("knowledgeProposal.changes")}
+            </div>
+            <div className="text-xs text-foreground">{changedFields.join(", ")}</div>
+          </div>
+        )}
+
+        {preview && (
+          <div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              {t("knowledgeProposal.contentPreview")}
+            </div>
+            <div className="max-h-28 overflow-auto rounded border border-border bg-muted/30 p-2 text-xs leading-relaxed text-foreground">
+              {preview.length > 520 ? `${preview.slice(0, 520)}...` : preview}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onApply}
+            disabled={applyState !== "idle"}
+            className="h-8"
+          >
+            {applyState === "applying"
+              ? t("knowledgeProposal.applying")
+              : applyState === "applied"
+                ? t("knowledgeProposal.applied")
+                : t("knowledgeProposal.apply")}
+          </Button>
+        </div>
       </div>
     </div>
   );

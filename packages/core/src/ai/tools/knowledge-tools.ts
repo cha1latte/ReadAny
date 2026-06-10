@@ -8,6 +8,7 @@
 import { getKnowledgeDocument, getKnowledgeDocuments } from "../../db/database";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
 import type { JSONValue, KnowledgeDocument, KnowledgeDocumentType } from "../../types";
+import { generateId } from "../../utils/generate-id";
 import type { ToolDefinition } from "./tool-types";
 
 const SEARCH_SCAN_LIMIT = 200;
@@ -274,6 +275,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
         confirmationKind: "knowledge_document_create",
         message: "Draft generated only. No knowledge document has been saved.",
         draft: {
+          id: generateId(),
           type,
           title,
           bookId,

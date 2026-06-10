@@ -98,7 +98,35 @@
     "mindmap": "生成思维导图",
     "fallbackToc": "读取原始目录",
     "fallbackSearch": "扫描原始文件",
-    "fallbackChapterContext": "读取章节内容"
+    "fallbackChapterContext": "读取章节内容",
+    "searchKnowledgeBase": "搜索知识库",
+    "getBookKnowledge": "读取本书知识",
+    "proposeKnowledgeDocumentCreate": "草拟知识文档",
+    "proposeKnowledgeDocumentUpdate": "草拟文档更新"
+  },
+  "knowledgeProposal": {
+    "title": "知识库写入提案",
+    "create": "创建知识文档",
+    "update": "更新知识文档",
+    "pendingBadge": "待确认",
+    "savedBadge": "已应用",
+    "safeHint": "AI 只生成了草稿，确认后才会写入你的知识库。",
+    "changes": "变更",
+    "contentPreview": "内容预览",
+    "apply": "应用到知识库",
+    "applying": "应用中...",
+    "applied": "已应用",
+    "applySuccess": "已保存到知识库",
+    "applyFailed": "应用知识库提案失败",
+    "types": {
+      "knowledgeDocument": "知识文档",
+      "bookHome": "书籍主页",
+      "standaloneNote": "独立笔记",
+      "highlightNote": "高亮笔记",
+      "review": "书评",
+      "summary": "摘要",
+      "importedMarkdown": "导入文档"
+    }
   },
   "mindmap": {
     "title": "思维导图",

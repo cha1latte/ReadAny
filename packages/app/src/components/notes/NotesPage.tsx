@@ -1,6 +1,12 @@
 import { KnowledgeEditor, type KnowledgeEditorValue } from "@/components/knowledge/KnowledgeEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
@@ -14,7 +20,12 @@ import { openDesktopBook } from "@/lib/library/open-book";
 import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
-import { type ExportFormat, annotationExporter } from "@readany/core/export";
+import {
+  type ExportFormat,
+  type KnowledgeExportFormat,
+  annotationExporter,
+  knowledgeExporter,
+} from "@readany/core/export";
 import { markdownToBasicTiptap, renderKnowledgeJsonToMarkdown } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type { Highlight, KnowledgeDocument, Note } from "@readany/core/types";
@@ -25,6 +36,7 @@ import {
   BookOpen,
   Check,
   ChevronLeft,
+  Download,
   Edit3,
   FileText,
   Highlighter,
@@ -415,6 +427,38 @@ export function NotesPage() {
     }
   };
 
+  const handleKnowledgeExport = async (format: KnowledgeExportFormat) => {
+    if (!selectedBook || !knowledgeHome) return;
+    const book = books.find((b) => b.id === selectedBook.bookId);
+    if (!book) return;
+
+    try {
+      const liveDocument: KnowledgeDocument = {
+        ...knowledgeHome,
+        contentJson: knowledgeValue.contentJson,
+        contentMd: knowledgeValue.contentMd,
+        excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+        updatedAt: Date.now(),
+      };
+      const files = knowledgeExporter.export(
+        { documents: [liveDocument], books: [book] },
+        { format, rootDir: "ReadAny" },
+      );
+      const file = files[0];
+      if (!file) throw new Error("No knowledge export file generated");
+
+      const filename =
+        file.path.split("/").filter(Boolean).pop() || `${book.meta.title}-knowledge.md`;
+      await annotationExporter.downloadAsFile(file.content, filename, format);
+      toast.success(t("notes.exportSuccess"), {
+        description: file.path,
+      });
+    } catch (error) {
+      toast.error(t("notes.exportFailed"));
+      console.error("[Notes] Knowledge export failed:", error);
+    }
+  };
+
   const handleSingleBookExport = (format: ExportFormat) => {
     if (!selectedBook) return;
     const book = books.find((b) => b.id === selectedBook.bookId);
@@ -694,6 +738,7 @@ export function NotesPage() {
                 isSaving={isKnowledgeSaving}
                 isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
                 onChange={setKnowledgeValue}
+                onExport={handleKnowledgeExport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
                 t={t}
               />
@@ -779,6 +824,7 @@ interface KnowledgeHomePanelProps {
   isSaving: boolean;
   isSaved: boolean;
   onChange: (value: KnowledgeEditorValue) => void;
+  onExport: (format: KnowledgeExportFormat) => void;
   onOpenBook: (cfi?: string) => void;
   t: (key: string) => string;
 }
@@ -791,6 +837,7 @@ function KnowledgeHomePanel({
   isSaving,
   isSaved,
   onChange,
+  onExport,
   onOpenBook,
   t,
 }: KnowledgeHomePanelProps) {
@@ -821,13 +868,16 @@ function KnowledgeHomePanel({
               </p>
               <h3 className="mt-1 truncate text-lg font-semibold text-foreground">{book.title}</h3>
             </div>
-            <div className="flex shrink-0 items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
-              <Save className="h-3.5 w-3.5" />
-              {isSaving
-                ? t("notes.knowledgeSaving")
-                : isSaved
-                  ? t("notes.knowledgeSaved")
-                  : t("notes.knowledgePending")}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <Save className="h-3.5 w-3.5" />
+                {isSaving
+                  ? t("notes.knowledgeSaving")
+                  : isSaved
+                    ? t("notes.knowledgeSaved")
+                    : t("notes.knowledgePending")}
+              </div>
+              <KnowledgeExportMenu onExport={onExport} t={t} />
             </div>
           </div>
 
@@ -899,6 +949,35 @@ function KnowledgeHomePanel({
         </aside>
       </div>
     </div>
+  );
+}
+
+function KnowledgeExportMenu({
+  onExport,
+  t,
+}: {
+  onExport: (format: KnowledgeExportFormat) => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+          <Download className="h-3 w-3" />
+          {t("notes.export")}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onExport("obsidian")}>
+          <FileText className="mr-2 h-4 w-4" />
+          {t("notes.exportObsidian")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onExport("markdown")}>
+          <FileText className="mr-2 h-4 w-4" />
+          {t("notes.exportMarkdown")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

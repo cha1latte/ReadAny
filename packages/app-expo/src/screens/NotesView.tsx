@@ -1,12 +1,15 @@
+import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import {
   MobileKnowledgeEditor,
   type MobileKnowledgeEditorValue,
 } from "@/components/knowledge/MobileKnowledgeEditor";
 import {
   BookOpenIcon,
+  BrainIcon,
   CheckCheckIcon,
   ChevronLeftIcon,
   HighlighterIcon,
+  LoaderIcon,
   NotebookPenIcon,
   PlusIcon,
   ScrollTextIcon,
@@ -18,12 +21,14 @@ import {
 } from "@/components/ui/Icon";
 import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
 import { SyncButton } from "@/components/ui/SyncButton";
+import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
-import { useAnnotationStore, useLibraryStore } from "@/stores";
+import { useAnnotationStore, useLibraryStore, useSettingsStore } from "@/stores";
 import { useColors, useTheme } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { maybeCompressAndPersistKnowledgeSummary } from "@readany/core/ai";
 import {
   type HighlightWithBook,
   type KnowledgeBacklink,
@@ -34,6 +39,7 @@ import {
   ensureNoteKnowledgeDocuments,
   getKnowledgeAttachments,
   getKnowledgeBacklinks,
+  getKnowledgeDocument,
   getKnowledgeDocuments,
   getKnowledgeLinks,
   updateKnowledgeDocument,
@@ -46,6 +52,7 @@ import {
 } from "@readany/core/export";
 import {
   createKnowledgeExcerpt,
+  createKnowledgeSummarySourceFingerprint,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -229,6 +236,7 @@ export function NotesView({
   const [isKnowledgeRelationsLoading, setIsKnowledgeRelationsLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
@@ -787,6 +795,98 @@ export function NotesView({
     [knowledgeDocuments, knowledgeHome?.id, selectedKnowledgeDocumentId, t],
   );
 
+  const handleCompressKnowledgeSummary = useCallback(async () => {
+    if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
+
+    const resolvedAIConfig = await resolveActiveAIConfig(useSettingsStore.getState());
+    if (!resolvedAIConfig) {
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeSummaryAIConfigMissing", "请先配置可用的 AI 模型，再压缩知识记忆"),
+      );
+      return;
+    }
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
+    const liveDocument: KnowledgeDocument = {
+      ...knowledgeHome,
+      title: knowledgeTitle.trim() || knowledgeHome.title,
+      contentJson: knowledgeValue.contentJson,
+      contentMd: knowledgeValue.contentMd,
+      excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+      tags: normalizedTags,
+      updatedAt: Date.now(),
+    };
+
+    setIsKnowledgeSummaryCompressing(true);
+    try {
+      const result = await maybeCompressAndPersistKnowledgeSummary(liveDocument, resolvedAIConfig);
+
+      if (result.status === "failed") {
+        Alert.alert(
+          t("common.error", "错误"),
+          [t("notes.knowledgeSummaryFailed", "压缩记忆更新失败"), result.error]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        return;
+      }
+
+      if (result.status === "skipped") {
+        const message =
+          result.plan.reason === "empty"
+            ? t("notes.knowledgeSummaryEmpty", "这个文档还没有可摘要的内容")
+            : result.plan.reason === "below_threshold"
+              ? t("notes.knowledgeSummaryTooShort", "这个文档还比较短，暂不需要压缩记忆")
+              : t("notes.knowledgeSummaryUpToDate", "压缩记忆已是最新");
+        Alert.alert(t("notes.knowledgeSummaryMemory", "AI 记忆"), message);
+        return;
+      }
+
+      const refreshedDocument = await getKnowledgeDocument(liveDocument.id);
+      const updatedDocument: KnowledgeDocument =
+        refreshedDocument ??
+        ({
+          ...liveDocument,
+          summaryMd: result.state?.summaryMd,
+          summarySourceFingerprint: result.state?.sourceFingerprint,
+          summarySourceUpdatedAt: result.state?.sourceUpdatedAt,
+          summaryUpdatedAt: result.state?.compressedAt,
+          updatedAt: Date.now(),
+        } satisfies KnowledgeDocument);
+
+      setKnowledgeHome(updatedDocument);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((document) =>
+            document.id === updatedDocument.id ? updatedDocument : document,
+          ),
+          documents.find((document) => document.type === "book_home")?.id,
+        ),
+      );
+      Alert.alert(
+        t("common.success", "成功"),
+        t("notes.knowledgeSummaryCompressed", "压缩记忆已更新"),
+      );
+    } catch (error) {
+      console.error("[Notes] Failed to compress knowledge summary:", error);
+      Alert.alert(t("common.error", "错误"), t("notes.knowledgeSummaryFailed", "压缩记忆更新失败"));
+    } finally {
+      setIsKnowledgeSummaryCompressing(false);
+    }
+  }, [
+    isKnowledgeSummaryCompressing,
+    knowledgeHome,
+    knowledgeTags,
+    knowledgeTitle,
+    knowledgeValue,
+    saveActiveKnowledgeDocumentNow,
+    t,
+  ]);
+
   const handleDeleteNote = useCallback(
     (highlight: HighlightWithBook) => {
       Alert.alert(t("common.confirm", "确认"), t("notes.deleteNoteConfirm", "确定删除此笔记？"), [
@@ -1085,12 +1185,14 @@ export function NotesView({
             isCreatingDocument={isKnowledgeDocumentCreating}
             isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
             isSaving={isKnowledgeSaving}
+            isSummaryCompressing={isKnowledgeSummaryCompressing}
             onTitleChange={setKnowledgeTitle}
             onTagsChange={setKnowledgeTags}
             onChange={setKnowledgeValue}
             onSelectDocument={openKnowledgeDocument}
             onCreateDocument={handleCreateKnowledgeDocument}
             onDeleteDocument={handleDeleteKnowledgeDocument}
+            onCompressSummary={handleCompressKnowledgeSummary}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -1296,12 +1398,14 @@ function KnowledgeHomePanel({
   isCreatingDocument,
   isSaved,
   isSaving,
+  isSummaryCompressing,
   onTitleChange,
   onTagsChange,
   onChange,
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onCompressSummary,
   onOpenBook,
   t,
   styles,
@@ -1328,12 +1432,14 @@ function KnowledgeHomePanel({
   isCreatingDocument: boolean;
   isSaved: boolean;
   isSaving: boolean;
+  isSummaryCompressing: boolean;
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
+  onCompressSummary: () => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
@@ -1461,6 +1567,15 @@ function KnowledgeHomePanel({
         onOpenBook={onOpenBook}
         t={t}
         styles={styles}
+      />
+
+      <KnowledgeSummaryMemoryCard
+        document={document}
+        isCompressing={isSummaryCompressing}
+        onCompress={onCompressSummary}
+        t={t}
+        styles={styles}
+        colors={colors}
       />
 
       <View style={styles.knowledgeSourcesCard}>
@@ -1702,6 +1817,121 @@ function KnowledgeRelationsCard({
             </TouchableOpacity>
           ))}
         </View>
+      )}
+    </View>
+  );
+}
+
+function KnowledgeSummaryMemoryCard({
+  document,
+  isCompressing,
+  onCompress,
+  t,
+  styles,
+  colors,
+}: {
+  document: KnowledgeDocument;
+  isCompressing: boolean;
+  onCompress: () => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const summary = document.summaryMd?.trim();
+  const updatedAt = document.summaryUpdatedAt;
+  const isStale =
+    !!summary &&
+    document.summarySourceFingerprint !== createKnowledgeSummarySourceFingerprint(document);
+  const statusLabel = !summary
+    ? t("notes.knowledgeSummaryMissing", "暂无压缩记忆")
+    : isStale
+      ? t("notes.knowledgeSummaryStale", "需要刷新")
+      : t("notes.knowledgeSummaryReady", "压缩记忆已就绪");
+  const statusColor = !summary
+    ? colors.mutedForeground
+    : isStale
+      ? colors.foreground
+      : colors.primary;
+
+  const markdownStyles = useMemo(
+    () => ({
+      body: styles.knowledgeSummaryMarkdownBody,
+      heading1: styles.knowledgeSummaryMarkdownHeading,
+      heading2: styles.knowledgeSummaryMarkdownHeading,
+      heading3: styles.knowledgeSummaryMarkdownHeading,
+      paragraph: styles.knowledgeSummaryMarkdownParagraph,
+      bullet_list: styles.knowledgeSummaryMarkdownList,
+      ordered_list: styles.knowledgeSummaryMarkdownList,
+      list_item: styles.knowledgeSummaryMarkdownListItem,
+      strong: styles.knowledgeSummaryMarkdownStrong,
+      em: styles.knowledgeSummaryMarkdownEm,
+      link: styles.knowledgeSummaryMarkdownLink,
+      blockquote: styles.knowledgeSummaryMarkdownQuote,
+      code_inline: styles.knowledgeSummaryMarkdownCode,
+    }),
+    [styles],
+  );
+
+  return (
+    <View style={styles.knowledgeSummaryCard}>
+      <View style={styles.knowledgeSummaryHeader}>
+        <View style={styles.knowledgeSummaryTitleWrap}>
+          <View style={styles.knowledgeSummaryIcon}>
+            <BrainIcon size={15} color={colors.primary} />
+          </View>
+          <View style={styles.knowledgeSummaryTitleTextWrap}>
+            <Text style={styles.knowledgeSectionTitle}>
+              {t("notes.knowledgeSummaryMemory", "AI 记忆")}
+            </Text>
+            <Text style={[styles.knowledgeSummaryStatus, { color: statusColor }]}>
+              {statusLabel}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[
+            styles.knowledgeSummaryButton,
+            isCompressing && styles.knowledgeSummaryButtonDisabled,
+          ]}
+          onPress={onCompress}
+          disabled={isCompressing}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isCompressing
+              ? t("notes.knowledgeSummaryCompressing", "压缩中")
+              : t("notes.knowledgeSummaryCompress", "压缩")
+          }
+        >
+          {isCompressing ? (
+            <LoaderIcon size={13} color={colors.primary} />
+          ) : (
+            <SparklesIcon size={13} color={colors.primary} />
+          )}
+          <Text style={styles.knowledgeSummaryButtonText}>
+            {isCompressing
+              ? t("notes.knowledgeSummaryCompressing", "压缩中")
+              : t("notes.knowledgeSummaryCompress", "压缩")}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {summary ? (
+        <View style={styles.knowledgeSummaryPreview}>
+          <MarkdownRenderer content={summary} styleOverrides={markdownStyles} />
+          {updatedAt ? (
+            <Text style={styles.knowledgeSummaryUpdated}>
+              {t("notes.knowledgeSummaryUpdatedAt", {
+                time: new Date(updatedAt).toLocaleString(),
+              })}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <Text style={styles.knowledgeSummaryEmpty}>
+          {t("notes.knowledgeSummaryPreview", "将当前文档压缩成紧凑记忆，方便后续 AI 检索。")}
+        </Text>
       )}
     </View>
   );

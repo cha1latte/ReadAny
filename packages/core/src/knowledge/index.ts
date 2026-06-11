@@ -12,6 +12,7 @@ export type {
 export {
   READANY_ATTACHMENT_URI_PREFIX,
   basenameFromPath,
+  canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeAttachmentHash,
   createKnowledgeAttachmentUri,
   extensionFromFileName,

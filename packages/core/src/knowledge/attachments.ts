@@ -107,6 +107,10 @@ export function resolveKnowledgeAttachmentImageSources(
   return resolveKnowledgeAttachmentImageSourcesNode(contentJson, resolveSrc) as JSONValue;
 }
 
+export function canonicalizeKnowledgeAttachmentImageSources(contentJson: JSONValue): JSONValue {
+  return resolveKnowledgeAttachmentImageSources(contentJson, createKnowledgeAttachmentUri);
+}
+
 function resolveKnowledgeAttachmentImageSourcesNode(
   value: JSONValue,
   resolveSrc: (attachmentId: string) => string | undefined,

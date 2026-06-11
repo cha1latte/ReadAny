@@ -55,6 +55,7 @@ import {
 import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
+  canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
   flattenKnowledgeDocumentTree,
@@ -704,6 +705,9 @@ export function NotesPage() {
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
     const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
+    const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
+      knowledgeValue.contentJson,
+    ) as KnowledgeDocument["contentJson"];
 
     const timeout = window.setTimeout(async () => {
       if (knowledgeSaveVersionRef.current !== saveVersion) return;
@@ -712,7 +716,7 @@ export function NotesPage() {
         await updateKnowledgeDocument(knowledgeHome.id, {
           title: normalizedTitle,
           contentMd: knowledgeValue.contentMd,
-          contentJson: knowledgeValue.contentJson,
+          contentJson: contentJsonForStorage,
           excerpt: nextExcerpt,
           tags: normalizedTags,
         });
@@ -721,7 +725,7 @@ export function NotesPage() {
           ...knowledgeHome,
           title: normalizedTitle,
           contentMd: knowledgeValue.contentMd,
-          contentJson: knowledgeValue.contentJson,
+          contentJson: contentJsonForStorage,
           excerpt: nextExcerpt,
           tags: normalizedTags,
           updatedAt: Date.now(),
@@ -772,13 +776,16 @@ export function NotesPage() {
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
     const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
+    const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
+      knowledgeValue.contentJson,
+    ) as KnowledgeDocument["contentJson"];
 
     setIsKnowledgeSaving(true);
     try {
       await updateKnowledgeDocument(knowledgeHome.id, {
         title: normalizedTitle,
         contentMd: knowledgeValue.contentMd,
-        contentJson: knowledgeValue.contentJson,
+        contentJson: contentJsonForStorage,
         excerpt: nextExcerpt,
         tags: normalizedTags,
       });
@@ -787,7 +794,7 @@ export function NotesPage() {
         ...knowledgeHome,
         title: normalizedTitle,
         contentMd: knowledgeValue.contentMd,
-        contentJson: knowledgeValue.contentJson,
+        contentJson: contentJsonForStorage,
         excerpt: nextExcerpt,
         tags: normalizedTags,
         updatedAt: Date.now(),

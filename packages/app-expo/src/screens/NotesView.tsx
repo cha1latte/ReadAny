@@ -57,6 +57,7 @@ import {
 import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
+  canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
   flattenKnowledgeDocumentTree,
@@ -569,6 +570,9 @@ export function NotesView({
     const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const valueToSave = knowledgeValue;
     const nextExcerpt = createKnowledgeExcerpt(valueToSave.contentMd);
+    const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
+      valueToSave.contentJson,
+    ) as KnowledgeDocument["contentJson"];
 
     const timeout = setTimeout(async () => {
       if (knowledgeSaveVersionRef.current !== saveVersion) return;
@@ -577,7 +581,7 @@ export function NotesView({
         await updateKnowledgeDocument(knowledgeHome.id, {
           title: normalizedTitle,
           contentMd: valueToSave.contentMd,
-          contentJson: valueToSave.contentJson,
+          contentJson: contentJsonForStorage,
           excerpt: nextExcerpt,
           tags: normalizedTags,
         });
@@ -586,7 +590,7 @@ export function NotesView({
           ...knowledgeHome,
           title: normalizedTitle,
           contentMd: valueToSave.contentMd,
-          contentJson: valueToSave.contentJson,
+          contentJson: contentJsonForStorage,
           excerpt: nextExcerpt,
           tags: normalizedTags,
           updatedAt: Date.now(),
@@ -637,13 +641,16 @@ export function NotesView({
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
     const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
+    const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
+      knowledgeValue.contentJson,
+    ) as KnowledgeDocument["contentJson"];
 
     setIsKnowledgeSaving(true);
     try {
       await updateKnowledgeDocument(knowledgeHome.id, {
         title: normalizedTitle,
         contentMd: knowledgeValue.contentMd,
-        contentJson: knowledgeValue.contentJson,
+        contentJson: contentJsonForStorage,
         excerpt: nextExcerpt,
         tags: normalizedTags,
       });
@@ -652,7 +659,7 @@ export function NotesView({
         ...knowledgeHome,
         title: normalizedTitle,
         contentMd: knowledgeValue.contentMd,
-        contentJson: knowledgeValue.contentJson,
+        contentJson: contentJsonForStorage,
         excerpt: nextExcerpt,
         tags: normalizedTags,
         updatedAt: Date.now(),

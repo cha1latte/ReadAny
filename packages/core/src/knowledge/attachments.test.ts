@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { JSONValue } from "../types";
 import {
   basenameFromPath,
+  canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeAttachmentHash,
   createKnowledgeAttachmentUri,
   inferKnowledgeAttachmentKind,
@@ -104,5 +105,51 @@ describe("knowledge attachments", () => {
     };
 
     expect(resolveKnowledgeAttachmentImageSources(contentJson, () => undefined)).toBe(contentJson);
+  });
+
+  it("canonicalizes image attachment sources to portable attachment URIs", () => {
+    const contentJson: JSONValue = {
+      type: "doc",
+      content: [
+        {
+          type: "image",
+          attrs: {
+            src: "file:///this-device/cover.png",
+            attachmentId: "att-1",
+            alt: "Cover",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "https://example.com/remote.png",
+            alt: "Remote",
+          },
+        },
+      ],
+    };
+    const originalJson = JSON.stringify(contentJson);
+
+    expect(canonicalizeKnowledgeAttachmentImageSources(contentJson)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "image",
+          attrs: {
+            src: "readany-attachment://att-1",
+            attachmentId: "att-1",
+            alt: "Cover",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "https://example.com/remote.png",
+            alt: "Remote",
+          },
+        },
+      ],
+    });
+    expect(JSON.stringify(contentJson)).toBe(originalJson);
   });
 });

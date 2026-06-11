@@ -54,7 +54,12 @@ const SYNC_TABLES: SyncTableConfig[] = [
   { name: "notes", pk: "id", timestampCol: "updated_at" },
   { name: "knowledge_documents", pk: "id", timestampCol: "updated_at" },
   { name: "knowledge_links", pk: "id", timestampCol: "updated_at" },
-  { name: "knowledge_attachments", pk: "id", timestampCol: "updated_at" },
+  {
+    name: "knowledge_attachments",
+    pk: "id",
+    timestampCol: "updated_at",
+    excludeColumns: ["local_path"],
+  },
   { name: "knowledge_card_templates", pk: "id", timestampCol: "updated_at" },
   { name: "bookmarks", pk: "id", timestampCol: "updated_at" },
   { name: "threads", pk: "id", timestampCol: "updated_at" },

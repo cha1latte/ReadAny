@@ -712,6 +712,12 @@ describe("simple sync convergence", () => {
 
     now = 1100;
     await syncDevice("device-a", deviceA, backend);
+    const deviceASnapshot = backend.jsonFiles.get("/readany/sync/device-device-a.json") as {
+      tables?: Record<string, { records?: Row[] }>;
+    };
+    expect(deviceASnapshot.tables?.knowledge_attachments?.records?.[0]).not.toHaveProperty(
+      "local_path",
+    );
 
     now = 1200;
     const result = await syncDevice("device-b", deviceB, backend);
@@ -731,6 +737,9 @@ describe("simple sync convergence", () => {
       document_id: "doc-1",
       file_name: "quote.png",
     });
+    expect(deviceB.get("knowledge_attachments", "knowledge-attachment-1")).not.toHaveProperty(
+      "local_path",
+    );
     expect(deviceB.get("knowledge_card_templates", "card-quote")).toMatchObject({
       name: "Quote card",
       built_in: 1,

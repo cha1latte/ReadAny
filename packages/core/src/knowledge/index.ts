@@ -58,13 +58,17 @@ export type {
 export {
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,
+  createReadAnyCardAttrsFromTemplate,
   getReadAnyCardDefinition,
+  getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateInsertLabel,
   renderReadAnyCardMarkdownFallback,
 } from "./card-registry";
 export type {
   ReadAnyCardAttrs,
   ReadAnyCardDefinition,
   ReadAnyCardMarkdownContext,
+  ReadAnyCardTemplateSchema,
 } from "./card-registry";
 export { ensureKnowledgeSourceLink } from "./source-links";
 export type { EnsureKnowledgeSourceLinkInput } from "./source-links";

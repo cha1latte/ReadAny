@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/Icon";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
+import { getKnowledgeCardTemplates } from "@readany/core/db/database";
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
@@ -31,9 +32,12 @@ import {
   clearKnowledgeEditorDraft,
   createDefaultReadAnyCardAttrs,
   createKnowledgeEditorDraftKey,
+  createReadAnyCardAttrsFromTemplate,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
+  getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
   isKnowledgeEditorDraftRestorable,
   knowledgeEditorDraftFingerprint,
@@ -43,7 +47,7 @@ import {
   saveKnowledgeEditorDraft,
 } from "@readany/core/knowledge";
 import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
-import type { JSONValue } from "@readany/core/types";
+import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -132,6 +136,14 @@ interface EditorTheme {
   muted: string;
   mutedForeground: string;
   primary: string;
+}
+
+interface InsertableCardItem {
+  key: string;
+  cardType: string;
+  insertLabel: string;
+  description?: string;
+  createAttrs: () => Record<string, unknown>;
 }
 
 const MIN_EDITOR_HEIGHT = 260;
@@ -224,6 +236,7 @@ export function MobileKnowledgeEditor({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showCardMenu, setShowCardMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
     [surface, tier],
@@ -240,8 +253,43 @@ export function MobileKnowledgeEditor({
     [canUse],
   );
   const allowedCards = useMemo(
-    () => builtInReadAnyCards.filter((card) => canInsertCard(card.cardType)),
-    [canInsertCard],
+    () => [
+      ...builtInReadAnyCards
+        .filter((card) => canInsertCard(card.cardType))
+        .map<InsertableCardItem>((card) => ({
+          key: `built-in:${card.cardType}`,
+          cardType: card.cardType,
+          insertLabel: t(`notes.knowledgeCards.${card.cardType}`, {
+            defaultValue: card.insertLabel,
+          }),
+          description: t(`notes.knowledgeCardDescriptions.${card.cardType}`, {
+            defaultValue: "",
+          }),
+          createAttrs: () =>
+            createDefaultReadAnyCardAttrs(card.cardType, {
+              title: t(`notes.knowledgeCards.${card.cardType}`, {
+                defaultValue: card.insertLabel,
+              }),
+              version: card.version,
+            }) as Record<string, unknown>,
+        })),
+      ...cardTemplates
+        .map((template) => {
+          const attrs = createReadAnyCardAttrsFromTemplate(template);
+          const cardType = attrs.cardType ?? `custom:${template.id}`;
+          return { template, cardType };
+        })
+        .filter(({ cardType }) => canInsertCard(cardType))
+        .map<InsertableCardItem>(({ template, cardType }) => ({
+          key: `template:${template.id}`,
+          cardType,
+          insertLabel: getReadAnyCardTemplateInsertLabel(template),
+          description: getReadAnyCardTemplateDescription(template),
+          createAttrs: () =>
+            createReadAnyCardAttrsFromTemplate(template) as Record<string, unknown>,
+        })),
+    ],
+    [canInsertCard, cardTemplates, t],
   );
 
   const theme = useMemo<EditorTheme>(
@@ -272,6 +320,21 @@ export function MobileKnowledgeEditor({
   useEffect(() => {
     latestValueRef.current = value;
   }, [value]);
+
+  useEffect(() => {
+    let mounted = true;
+    void getKnowledgeCardTemplates()
+      .then((templates) => {
+        if (mounted) setCardTemplates(templates.filter((template) => !template.builtIn));
+      })
+      .catch((error) => {
+        console.warn("[MobileKnowledgeEditor] Failed to load card templates:", error);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -518,21 +581,12 @@ export function MobileKnowledgeEditor({
   }, [linkUrl, runCommand]);
 
   const insertCard = useCallback(
-    (cardType: string) => {
-      if (!canInsertCard(cardType)) return;
-      const definition = builtInReadAnyCards.find((card) => card.cardType === cardType);
-      if (!definition) return;
-      const title = t(`notes.knowledgeCards.${cardType}`, {
-        defaultValue: definition.insertLabel,
-      });
-      const attrs = createDefaultReadAnyCardAttrs(cardType, {
-        title,
-        version: definition.version,
-      });
-      runCommand("insertCard", attrs as Record<string, unknown>);
+    (card: InsertableCardItem) => {
+      if (!canInsertCard(card.cardType)) return;
+      runCommand("insertCard", card.createAttrs());
       setShowCardMenu(false);
     },
-    [canInsertCard, runCommand, t],
+    [canInsertCard, runCommand],
   );
 
   const handleFallbackChange = useCallback(
@@ -1046,25 +1100,21 @@ export function MobileKnowledgeEditor({
                 const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
                 return (
                   <TouchableOpacity
-                    key={card.cardType}
+                    key={card.key}
                     style={styles.cardOption}
                     activeOpacity={0.78}
-                    onPress={() => insertCard(card.cardType)}
+                    onPress={() => insertCard(card)}
                   >
                     <View style={styles.cardOptionIcon}>
                       <Icon size={18} color={colors.primary} />
                     </View>
                     <View style={styles.cardOptionText}>
-                      <Text style={styles.cardOptionTitle}>
-                        {t(`notes.knowledgeCards.${card.cardType}`, {
-                          defaultValue: card.insertLabel,
-                        })}
-                      </Text>
-                      <Text style={styles.cardOptionDescription} numberOfLines={2}>
-                        {t(`notes.knowledgeCardDescriptions.${card.cardType}`, {
-                          defaultValue: "",
-                        })}
-                      </Text>
+                      <Text style={styles.cardOptionTitle}>{card.insertLabel}</Text>
+                      {card.description ? (
+                        <Text style={styles.cardOptionDescription} numberOfLines={2}>
+                          {card.description}
+                        </Text>
+                      ) : null}
                     </View>
                   </TouchableOpacity>
                 );

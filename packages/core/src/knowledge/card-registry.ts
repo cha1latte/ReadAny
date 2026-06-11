@@ -1,3 +1,5 @@
+import type { KnowledgeCardTemplate } from "../types";
+
 export interface ReadAnyCardAttrs {
   cardType?: string;
   id?: string;
@@ -20,6 +22,31 @@ export interface ReadAnyCardDefinition {
   version: number;
   insertLabel: string;
   markdownFallback: (attrs: ReadAnyCardAttrs, context: ReadAnyCardMarkdownContext) => string;
+}
+
+export interface ReadAnyCardTemplateSchema {
+  cardType?: string;
+  title?: string;
+  insertLabel?: string;
+  description?: string;
+  markdown?: string;
+  text?: string;
+  sourceTitle?: string;
+  sourceId?: string;
+  cfi?: string;
+  attrs?: Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringAttr(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function templateSchema(template: KnowledgeCardTemplate): ReadAnyCardTemplateSchema {
+  return isRecord(template.schemaJson) ? (template.schemaJson as ReadAnyCardTemplateSchema) : {};
 }
 
 function prefixLines(text: string, prefix: string): string {
@@ -172,6 +199,46 @@ export function createDefaultReadAnyCardAttrs(
     title,
     markdown: "",
   };
+}
+
+export function createReadAnyCardAttrsFromTemplate(
+  template: KnowledgeCardTemplate,
+): ReadAnyCardAttrs {
+  const schema = templateSchema(template);
+  const schemaAttrs = isRecord(schema.attrs) ? schema.attrs : {};
+  const cardType =
+    stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
+  const version = typeof schemaAttrs.version === "number" ? schemaAttrs.version : template.version;
+  const attrs: ReadAnyCardAttrs = {
+    cardType,
+    version,
+    id: stringAttr(schemaAttrs.id),
+    title: stringAttr(schema.title) ?? stringAttr(schema.insertLabel) ?? template.name,
+    markdown: stringAttr(schema.markdown) ?? "",
+  };
+
+  const text = stringAttr(schema.text);
+  const sourceTitle = stringAttr(schema.sourceTitle);
+  const sourceId = stringAttr(schema.sourceId);
+  const cfi = stringAttr(schema.cfi);
+  if (text) attrs.text = text;
+  if (sourceTitle) attrs.sourceTitle = sourceTitle;
+  if (sourceId) attrs.sourceId = sourceId;
+  if (cfi) attrs.cfi = cfi;
+  if ("data" in schemaAttrs) attrs.data = schemaAttrs.data;
+
+  return attrs;
+}
+
+export function getReadAnyCardTemplateInsertLabel(template: KnowledgeCardTemplate): string {
+  const schema = templateSchema(template);
+  return stringAttr(schema.insertLabel) ?? stringAttr(schema.title) ?? template.name;
+}
+
+export function getReadAnyCardTemplateDescription(
+  template: KnowledgeCardTemplate,
+): string | undefined {
+  return stringAttr(templateSchema(template).description);
 }
 
 export function renderReadAnyCardMarkdownFallback(

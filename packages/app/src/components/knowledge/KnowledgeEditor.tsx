@@ -1,3 +1,4 @@
+import { getKnowledgeCardTemplates } from "@/lib/db/database";
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
@@ -5,14 +6,17 @@ import {
   type ReadAnyCardAttrs,
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,
+  createReadAnyCardAttrsFromTemplate,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
+  getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
   normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
-import type { JSONValue } from "@readany/core/types";
+import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
@@ -83,6 +87,14 @@ const cardIconMap = {
   relatedNotes: Brain,
 };
 
+interface InsertableCardItem {
+  key: string;
+  cardType: string;
+  insertLabel: string;
+  description?: string;
+  createAttrs: () => ReadAnyCardAttrs;
+}
+
 const ReadAnyCardExtension = Node.create({
   name: "readanyCard",
   group: "block",
@@ -137,6 +149,7 @@ export function KnowledgeEditor({
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
+  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const isInternalUpdate = useRef(false);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -154,9 +167,58 @@ export function KnowledgeEditor({
     [canUse],
   );
   const allowedCards = useMemo(
-    () => builtInReadAnyCards.filter((card) => canInsertCard(card.cardType)),
-    [canInsertCard],
+    () => [
+      ...builtInReadAnyCards
+        .filter((card) => canInsertCard(card.cardType))
+        .map<InsertableCardItem>((card) => ({
+          key: `built-in:${card.cardType}`,
+          cardType: card.cardType,
+          insertLabel: t(`notes.knowledgeCards.${card.cardType}`, {
+            defaultValue: card.insertLabel,
+          }),
+          description: t(`notes.knowledgeCardDescriptions.${card.cardType}`, {
+            defaultValue: "",
+          }),
+          createAttrs: () =>
+            createDefaultReadAnyCardAttrs(card.cardType, {
+              title: t(`notes.knowledgeCards.${card.cardType}`, {
+                defaultValue: card.insertLabel,
+              }),
+              version: card.version,
+            }),
+        })),
+      ...cardTemplates
+        .map((template) => {
+          const attrs = createReadAnyCardAttrsFromTemplate(template);
+          const cardType = attrs.cardType ?? `custom:${template.id}`;
+          return { template, cardType };
+        })
+        .filter(({ cardType }) => canInsertCard(cardType))
+        .map<InsertableCardItem>(({ template, cardType }) => ({
+          key: `template:${template.id}`,
+          cardType,
+          insertLabel: getReadAnyCardTemplateInsertLabel(template),
+          description: getReadAnyCardTemplateDescription(template),
+          createAttrs: () => createReadAnyCardAttrsFromTemplate(template),
+        })),
+    ],
+    [canInsertCard, cardTemplates, t],
   );
+
+  useEffect(() => {
+    let mounted = true;
+    void getKnowledgeCardTemplates()
+      .then((templates) => {
+        if (mounted) setCardTemplates(templates.filter((template) => !template.builtIn));
+      })
+      .catch((error) => {
+        console.warn("[KnowledgeEditor] Failed to load card templates:", error);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const extensions = useMemo(
     () => [
@@ -245,28 +307,19 @@ export function KnowledgeEditor({
   }, [canUse, editor, t]);
 
   const insertCard = useCallback(
-    (cardType: string) => {
-      if (!editor || !canInsertCard(cardType)) return;
-      const definition = builtInReadAnyCards.find((card) => card.cardType === cardType);
-      if (!definition) return;
-      const title = t(`notes.knowledgeCards.${cardType}`, {
-        defaultValue: definition.insertLabel,
-      });
-
+    (card: InsertableCardItem) => {
+      if (!editor || !canInsertCard(card.cardType)) return;
       editor
         .chain()
         .focus()
         .insertContent({
           type: "readanyCard",
-          attrs: createDefaultReadAnyCardAttrs(cardType, {
-            title,
-            version: definition.version,
-          }),
+          attrs: card.createAttrs(),
         })
         .run();
       setIsInsertOpen(false);
     },
-    [canInsertCard, editor, t],
+    [canInsertCard, editor],
   );
 
   if (!editor) return null;
@@ -463,16 +516,19 @@ export function KnowledgeEditor({
                     const Icon = cardIconMap[card.cardType as keyof typeof cardIconMap] ?? Sparkles;
                     return (
                       <button
-                        key={card.cardType}
+                        key={card.key}
                         type="button"
                         className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-popover-foreground transition-colors hover:bg-muted"
-                        onClick={() => insertCard(card.cardType)}
+                        onClick={() => insertCard(card)}
                       >
                         <Icon className="h-3.5 w-3.5 text-primary" />
-                        <span className="font-medium">
-                          {t(`notes.knowledgeCards.${card.cardType}`, {
-                            defaultValue: card.insertLabel,
-                          })}
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{card.insertLabel}</span>
+                          {card.description ? (
+                            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                              {card.description}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     );

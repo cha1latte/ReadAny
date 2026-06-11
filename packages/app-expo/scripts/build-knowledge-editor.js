@@ -289,6 +289,7 @@ async function buildKnowledgeEditor() {
                     ? cardAttrs.cardType
                     : "callout",
                 version: typeof cardAttrs.version === "number" ? cardAttrs.version : 1,
+                id: typeof cardAttrs.id === "string" ? cardAttrs.id : null,
                 title: typeof cardAttrs.title === "string" ? cardAttrs.title : null,
                 text: typeof cardAttrs.text === "string" ? cardAttrs.text : null,
                 sourceTitle:

@@ -27,14 +27,21 @@ import {
   type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
   builtInReadAnyCards,
+  clearKnowledgeEditorDraft,
   createDefaultReadAnyCardAttrs,
+  createKnowledgeEditorDraftKey,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
+  isKnowledgeEditorDraftRestorable,
+  knowledgeEditorDraftFingerprint,
+  loadKnowledgeEditorDraft,
   markdownToBasicTiptap,
   renderKnowledgeJsonToMarkdown,
+  saveKnowledgeEditorDraft,
 } from "@readany/core/knowledge";
+import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
 import type { JSONValue } from "@readany/core/types";
 import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -68,6 +75,7 @@ interface MobileKnowledgeEditorProps {
   autoFocus?: boolean;
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
+  isSaved?: boolean;
 }
 
 interface SelectionState {
@@ -126,6 +134,8 @@ interface EditorTheme {
 
 const MIN_EDITOR_HEIGHT = 260;
 const MAX_EDITOR_HEIGHT = 560;
+const EDITOR_READY_TIMEOUT_MS = 8000;
+const DRAFT_SAVE_DELAY_MS = 650;
 const cardIconMap: Record<string, typeof SparklesIcon> = {
   bookQuote: QuoteIcon,
   callout: LightbulbIcon,
@@ -167,7 +177,7 @@ function parseBridgeMessage(data: string): EditorBridgeMessage | null {
 }
 
 function fingerprintJson(value: JSONValue): string {
-  return JSON.stringify(value);
+  return knowledgeEditorDraftFingerprint(value);
 }
 
 function clampEditorHeight(height: number): number {
@@ -182,6 +192,7 @@ export function MobileKnowledgeEditor({
   autoFocus = false,
   tier = "knowledge_doc",
   surface,
+  isSaved,
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -190,12 +201,17 @@ export function MobileKnowledgeEditor({
   const webViewRef = useRef<WebView>(null);
   const latestValueRef = useRef(value);
   const localFingerprintRef = useRef(fingerprintJson(value.contentJson));
+  const baseFingerprintRef = useRef(fingerprintJson(value.contentJson));
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWrittenDraftFingerprintRef = useRef<string | null>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
   const [isBridgeReady, setIsBridgeReady] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [editorReloadKey, setEditorReloadKey] = useState(0);
   const [editorHeight, setEditorHeight] = useState(MIN_EDITOR_HEIGHT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [useMarkdownFallback, setUseMarkdownFallback] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<KnowledgeEditorDraft | null>(null);
   const [selection, setSelection] = useState<SelectionState>({
     marks: {},
     linkHref: null,
@@ -240,10 +256,67 @@ export function MobileKnowledgeEditor({
   );
 
   const valueFingerprint = useMemo(() => fingerprintJson(value.contentJson), [value.contentJson]);
+  const draftKey = useMemo(
+    () => (documentId ? createKnowledgeEditorDraftKey(documentId, "mobile") : null),
+    [documentId],
+  );
+  const webViewInstanceKey = useMemo(
+    () => `${documentId ?? "knowledge-editor"}-${editorReloadKey}`,
+    [documentId, editorReloadKey],
+  );
+  const previousDraftKeyRef = useRef(draftKey);
+  const readyAttemptRef = useRef(webViewInstanceKey);
 
   useEffect(() => {
     latestValueRef.current = value;
   }, [value]);
+
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (previousDraftKeyRef.current === draftKey) return;
+    previousDraftKeyRef.current = draftKey;
+    baseFingerprintRef.current = valueFingerprint;
+    localFingerprintRef.current = valueFingerprint;
+    lastWrittenDraftFingerprintRef.current = null;
+    setPendingDraft(null);
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+  }, [draftKey, valueFingerprint]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!draftKey) return;
+
+    const initialFingerprint = baseFingerprintRef.current;
+    const loadDraft = async () => {
+      const draft = await loadKnowledgeEditorDraft(draftKey);
+      if (!mounted) return;
+      if (isKnowledgeEditorDraftRestorable(draft, initialFingerprint)) {
+        setPendingDraft(draft);
+      } else if (draft) {
+        void clearKnowledgeEditorDraft(draftKey);
+      }
+    };
+
+    void loadDraft();
+    return () => {
+      mounted = false;
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || !isSaved) return;
+    if (lastWrittenDraftFingerprintRef.current !== valueFingerprint) return;
+
+    lastWrittenDraftFingerprintRef.current = null;
+    baseFingerprintRef.current = valueFingerprint;
+    setPendingDraft((draft) => (draft?.contentFingerprint === valueFingerprint ? null : draft));
+    void clearKnowledgeEditorDraft(draftKey);
+  }, [draftKey, isSaved, valueFingerprint]);
 
   useEffect(() => {
     let mounted = true;
@@ -265,6 +338,57 @@ export function MobileKnowledgeEditor({
       mounted = false;
     };
   }, [t]);
+
+  useEffect(() => {
+    if (!htmlUri || isEditorReady || useMarkdownFallback) return;
+    readyAttemptRef.current = webViewInstanceKey;
+    const attemptKey = webViewInstanceKey;
+    const timeout = setTimeout(() => {
+      if (readyAttemptRef.current !== attemptKey) return;
+      setErrorMessage(
+        (current) =>
+          current ?? t("notes.knowledgeEditorTimeout", "编辑器启动超时，可以重试或使用备用编辑器"),
+      );
+    }, EDITOR_READY_TIMEOUT_MS);
+
+    return () => clearTimeout(timeout);
+  }, [htmlUri, isEditorReady, t, useMarkdownFallback, webViewInstanceKey]);
+
+  const scheduleDraftSave = useCallback(
+    (nextValue: MobileKnowledgeEditorValue) => {
+      if (!draftKey) return;
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+
+      const nextFingerprint = fingerprintJson(nextValue.contentJson);
+      if (nextFingerprint === baseFingerprintRef.current) {
+        lastWrittenDraftFingerprintRef.current = null;
+        void clearKnowledgeEditorDraft(draftKey);
+        return;
+      }
+
+      draftSaveTimerRef.current = setTimeout(() => {
+        void saveKnowledgeEditorDraft(draftKey, nextValue, {
+          baseFingerprint: baseFingerprintRef.current,
+        })
+          .then((draft) => {
+            lastWrittenDraftFingerprintRef.current = draft.contentFingerprint;
+          })
+          .catch((error) => {
+            console.warn("[MobileKnowledgeEditor] Failed to save editor draft:", error);
+          });
+      }, DRAFT_SAVE_DELAY_MS);
+    },
+    [draftKey],
+  );
+
+  const retryEditor = useCallback(() => {
+    setErrorMessage(null);
+    setUseMarkdownFallback(false);
+    setIsBridgeReady(false);
+    setIsEditorReady(false);
+    setEditorReloadKey((key) => key + 1);
+    webViewRef.current?.reload();
+  }, []);
 
   const injectCommand = useCallback((command: EditorCommand) => {
     const script = `
@@ -330,22 +454,25 @@ export function MobileKnowledgeEditor({
             canRedo: message.canRedo === true,
           });
           break;
-        case "contentChanged":
+        case "contentChanged": {
           if (!isJsonValue(message.contentJson)) return;
           localFingerprintRef.current = fingerprintJson(message.contentJson);
-          onChange({
+          const nextValue = {
             contentJson: message.contentJson,
             contentMd: renderKnowledgeJsonToMarkdown(message.contentJson),
             plainText: typeof message.plainText === "string" ? message.plainText : "",
-          });
+          };
+          scheduleDraftSave(nextValue);
+          onChange(nextValue);
           break;
+        }
         case "error":
           console.error("[MobileKnowledgeEditor] WebView error:", message);
           setErrorMessage(message.message || t("notes.knowledgeEditorError", "编辑器出错了"));
           break;
       }
     },
-    [onChange, sendInit, t],
+    [onChange, scheduleDraftSave, sendInit, t],
   );
 
   const runCommand = useCallback(
@@ -354,6 +481,26 @@ export function MobileKnowledgeEditor({
     },
     [injectCommand],
   );
+
+  const restorePendingDraft = useCallback(() => {
+    if (!pendingDraft) return;
+    const nextValue = pendingDraft.value;
+    setPendingDraft(null);
+    lastWrittenDraftFingerprintRef.current = pendingDraft.contentFingerprint;
+    onChange(nextValue);
+
+    if (isBridgeReady && isEditorReady) {
+      localFingerprintRef.current = pendingDraft.contentFingerprint;
+      injectCommand({ type: "setContent", contentJson: nextValue.contentJson });
+    }
+  }, [injectCommand, isBridgeReady, isEditorReady, onChange, pendingDraft]);
+
+  const discardPendingDraft = useCallback(() => {
+    if (!draftKey) return;
+    setPendingDraft(null);
+    lastWrittenDraftFingerprintRef.current = null;
+    void clearKnowledgeEditorDraft(draftKey);
+  }, [draftKey]);
 
   const openLinkModal = useCallback(() => {
     if (!canUse("link")) return;
@@ -389,13 +536,15 @@ export function MobileKnowledgeEditor({
   const handleFallbackChange = useCallback(
     (markdown: string) => {
       const contentJson = markdownToBasicTiptap(markdown) as unknown as JSONValue;
-      onChange({
+      const nextValue = {
         contentJson,
         contentMd: markdown,
         plainText: markdown,
-      });
+      };
+      scheduleDraftSave(nextValue);
+      onChange(nextValue);
     },
-    [onChange],
+    [onChange, scheduleDraftSave],
   );
 
   const toolbarGroupCandidates: ({ key: string; node: React.ReactNode } | null)[] = [
@@ -628,6 +777,38 @@ export function MobileKnowledgeEditor({
   if (useMarkdownFallback) {
     return (
       <View style={styles.fallbackWrap}>
+        {pendingDraft ? (
+          <View style={styles.draftBanner}>
+            <View style={styles.draftBannerTextBlock}>
+              <Text style={styles.draftBannerTitle}>
+                {t("notes.knowledgeEditorDraftFound", "发现未恢复的草稿")}
+              </Text>
+              <Text style={styles.draftBannerHint}>
+                {t("notes.knowledgeEditorDraftHint", "可以恢复上次未保存的编辑内容。")}
+              </Text>
+            </View>
+            <View style={styles.draftBannerActions}>
+              <TouchableOpacity
+                style={styles.draftGhostButton}
+                activeOpacity={0.75}
+                onPress={discardPendingDraft}
+              >
+                <Text style={styles.draftGhostText}>
+                  {t("notes.knowledgeEditorDraftDiscard", "丢弃")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.draftPrimaryButton}
+                activeOpacity={0.82}
+                onPress={restorePendingDraft}
+              >
+                <Text style={styles.draftPrimaryText}>
+                  {t("notes.knowledgeEditorDraftRestore", "恢复")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <RichTextEditor
           tier={tier}
@@ -657,6 +838,39 @@ export function MobileKnowledgeEditor({
         ))}
       </ScrollView>
 
+      {pendingDraft ? (
+        <View style={styles.draftBanner}>
+          <View style={styles.draftBannerTextBlock}>
+            <Text style={styles.draftBannerTitle}>
+              {t("notes.knowledgeEditorDraftFound", "发现未恢复的草稿")}
+            </Text>
+            <Text style={styles.draftBannerHint}>
+              {t("notes.knowledgeEditorDraftHint", "可以恢复上次未保存的编辑内容。")}
+            </Text>
+          </View>
+          <View style={styles.draftBannerActions}>
+            <TouchableOpacity
+              style={styles.draftGhostButton}
+              activeOpacity={0.75}
+              onPress={discardPendingDraft}
+            >
+              <Text style={styles.draftGhostText}>
+                {t("notes.knowledgeEditorDraftDiscard", "丢弃")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.draftPrimaryButton}
+              activeOpacity={0.82}
+              onPress={restorePendingDraft}
+            >
+              <Text style={styles.draftPrimaryText}>
+                {t("notes.knowledgeEditorDraftRestore", "恢复")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
       <View style={[styles.webViewFrame, { height: editorHeight }]}>
         {!htmlUri ? (
           <View style={styles.loadingWrap}>
@@ -668,7 +882,7 @@ export function MobileKnowledgeEditor({
         ) : (
           <>
             <WebView
-              key={documentId ?? "knowledge-editor"}
+              key={webViewInstanceKey}
               ref={webViewRef}
               source={{ uri: htmlUri }}
               style={styles.webView}
@@ -691,19 +905,44 @@ export function MobileKnowledgeEditor({
                 setErrorMessage(t("notes.knowledgeEditorReloading", "编辑器正在恢复..."));
                 setIsBridgeReady(false);
                 setIsEditorReady(false);
-                webViewRef.current?.reload();
+                setEditorReloadKey((key) => key + 1);
               }}
             />
             {!isEditorReady && (
               <View style={styles.readyOverlay}>
                 <ActivityIndicator size="small" color={colors.primary} />
+                {errorMessage ? (
+                  <>
+                    <Text style={styles.readyOverlayText}>{errorMessage}</Text>
+                    <View style={styles.readyOverlayActions}>
+                      <TouchableOpacity
+                        style={styles.readyGhostButton}
+                        activeOpacity={0.75}
+                        onPress={() => setUseMarkdownFallback(true)}
+                      >
+                        <Text style={styles.readyGhostText}>
+                          {t("notes.knowledgeEditorFallback", "使用备用编辑器")}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.readyPrimaryButton}
+                        activeOpacity={0.82}
+                        onPress={retryEditor}
+                      >
+                        <Text style={styles.readyPrimaryText}>
+                          {t("notes.knowledgeEditorRetry", "重试")}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : null}
               </View>
             )}
           </>
         )}
       </View>
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {errorMessage && isEditorReady ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
       <Modal
         visible={showLinkModal}
@@ -923,7 +1162,46 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       ...StyleSheet.absoluteFillObject,
       alignItems: "center",
       justifyContent: "center",
+      gap: 10,
+      paddingHorizontal: 22,
       backgroundColor: withOpacity(colors.background, 0.72),
+    },
+    readyOverlayText: {
+      color: colors.foreground,
+      fontSize: fontSize.xs,
+      lineHeight: 18,
+      textAlign: "center",
+    },
+    readyOverlayActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    readyGhostButton: {
+      minHeight: 34,
+      justifyContent: "center",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+    },
+    readyGhostText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    readyPrimaryButton: {
+      minHeight: 34,
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 13,
+    },
+    readyPrimaryText: {
+      color: colors.primaryForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
     },
     errorText: {
       paddingHorizontal: 12,
@@ -932,6 +1210,59 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       lineHeight: 17,
       color: colors.destructive,
       backgroundColor: withOpacity(colors.destructive, 0.08),
+    },
+    draftBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: withOpacity(colors.primary, 0.08),
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    draftBannerTextBlock: {
+      minWidth: 0,
+      flex: 1,
+      gap: 2,
+    },
+    draftBannerTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    draftBannerHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 16,
+    },
+    draftBannerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    draftGhostButton: {
+      minHeight: 32,
+      justifyContent: "center",
+      borderRadius: radius.md,
+      paddingHorizontal: 9,
+    },
+    draftGhostText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    draftPrimaryButton: {
+      minHeight: 32,
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 10,
+    },
+    draftPrimaryText: {
+      color: colors.primaryForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
     },
     modalOverlay: {
       flex: 1,

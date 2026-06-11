@@ -16,6 +16,16 @@ export {
   getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
 } from "./editor-profile";
+export {
+  KNOWLEDGE_EDITOR_DRAFT_MAX_AGE_MS,
+  clearKnowledgeEditorDraft,
+  createKnowledgeEditorDraftKey,
+  isKnowledgeEditorDraftRestorable,
+  knowledgeEditorDraftFingerprint,
+  loadKnowledgeEditorDraft,
+  saveKnowledgeEditorDraft,
+} from "./editor-draft";
+export type { KnowledgeEditorDraft, KnowledgeEditorDraftValue } from "./editor-draft";
 export type {
   KnowledgeEditorFeature,
   KnowledgeEditorProfile,

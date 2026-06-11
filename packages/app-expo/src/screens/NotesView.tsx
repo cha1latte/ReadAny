@@ -1443,6 +1443,7 @@ function KnowledgeHomePanel({
             documentId={document.id}
             value={value}
             onChange={onChange}
+            isSaved={isSaved}
             placeholder={t(
               "notes.knowledgePlaceholder",
               "记录这本书的摘要、问题、想法和长期知识...",

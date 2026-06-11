@@ -106,11 +106,19 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
     return renderReadAnyCardMarkdownFallback(attrs, { body });
   }
 
+  const attr = (name: string, value: string | number | undefined) => {
+    if (value === undefined || value === "") return "";
+    const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return `${name}="${escaped}"`;
+  };
+
   const attrText = [
-    `type="${cardType}"`,
-    attrs.id ? `id="${attrs.id}"` : "",
-    `version="${attrs.version ?? 1}"`,
-    attrs.sourceId ? `source="${attrs.sourceId}"` : "",
+    attr("type", cardType),
+    attr("id", attrs.id),
+    attr("version", attrs.version ?? 1),
+    attr("title", attrs.title),
+    attr("source", attrs.sourceId),
+    attr("cfi", attrs.cfi),
   ]
     .filter(Boolean)
     .join(" ");
@@ -340,6 +348,7 @@ function splitMarkdownBlocks(markdown: string): string[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   let buffer: string[] = [];
   let inFence = false;
+  let inReadAnyCard = false;
 
   const flush = () => {
     const block = buffer.join("\n").trim();
@@ -348,6 +357,24 @@ function splitMarkdownBlocks(markdown: string): string[] {
   };
 
   for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (!inFence && !inReadAnyCard && /^:::readany-card(?:\s|$)/.test(trimmedLine)) {
+      flush();
+      buffer.push(line);
+      inReadAnyCard = true;
+      continue;
+    }
+
+    if (inReadAnyCard) {
+      buffer.push(line);
+      if (trimmedLine === ":::") {
+        inReadAnyCard = false;
+        flush();
+      }
+      continue;
+    }
+
     if (line.startsWith("```")) {
       buffer.push(line);
       inFence = !inFence;
@@ -367,10 +394,49 @@ function splitMarkdownBlocks(markdown: string): string[] {
   return blocks;
 }
 
+function unescapeReadAnyCardAttr(value: string): string {
+  return value.replace(/\\(["\\])/g, "$1");
+}
+
+function parseReadAnyCardMetadata(rawAttrs: string): ReadAnyCardAttrs {
+  const attrs: ReadAnyCardAttrs = {};
+  const matches = rawAttrs.matchAll(/([A-Za-z][\w-]*)="((?:\\.|[^"\\])*)"/g);
+
+  for (const match of matches) {
+    const key = match[1];
+    const value = unescapeReadAnyCardAttr(match[2]);
+
+    if (key === "type") attrs.cardType = value;
+    else if (key === "id") attrs.id = value;
+    else if (key === "title") attrs.title = value;
+    else if (key === "source") attrs.sourceId = value;
+    else if (key === "cfi") attrs.cfi = value;
+    else if (key === "version") {
+      const version = Number.parseInt(value, 10);
+      if (Number.isFinite(version) && version > 0) attrs.version = version;
+    }
+  }
+
+  return attrs;
+}
+
 export function markdownToBasicTiptap(markdown: string): TiptapNode {
   const blocks = splitMarkdownBlocks(markdown);
 
   const content = blocks.map<TiptapNode>((block) => {
+    const readAnyCard = block.match(/^:::readany-card(?:\s+([^\n]*))?\n([\s\S]*?)\n?:::$/);
+    if (readAnyCard) {
+      const attrs = parseReadAnyCardMetadata(readAnyCard[1] ?? "");
+      const body = readAnyCard[2].trim();
+      return {
+        type: "readanyCard",
+        attrs: {
+          ...attrs,
+          markdown: body,
+        },
+      };
+    }
+
     const codeBlock = block.match(/^```([^\n]*)\n([\s\S]*?)\n?```$/);
     if (codeBlock) {
       return {

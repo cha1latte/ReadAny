@@ -147,6 +147,63 @@ describe("editor projection", () => {
     );
   });
 
+  it("preserves ReadAny card title and CFI metadata when requested", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              cardType: "bookQuote",
+              id: "card-1",
+              version: 2,
+              title: 'Quoted "Idea"',
+              sourceId: "hl-1",
+              cfi: "epubcfi(/6/2)",
+              markdown: "Reading is thinking.",
+            },
+          },
+        ],
+      },
+      { includeReadAnyCardMetadata: true },
+    );
+
+    expect(markdown).toBe(
+      ':::readany-card type="bookQuote" id="card-1" version="2" title="Quoted \\"Idea\\"" source="hl-1" cfi="epubcfi(/6/2)"\nReading is thinking.\n:::',
+    );
+  });
+
+  it("imports ReadAny card metadata blocks without losing card attrs or body spacing", () => {
+    const json = markdownToBasicTiptap(
+      [
+        ':::readany-card type="bookQuote" id="card-1" version="2" title="Quoted \\"Idea\\"" source="hl-1" cfi="epubcfi(/6/2)"',
+        "Line 1",
+        "",
+        "Line 2",
+        ":::",
+      ].join("\n"),
+    );
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "bookQuote",
+            id: "card-1",
+            version: 2,
+            title: 'Quoted "Idea"',
+            sourceId: "hl-1",
+            cfi: "epubcfi(/6/2)",
+            markdown: "Line 1\n\nLine 2",
+          },
+        },
+      ],
+    });
+  });
+
   it("imports basic Markdown blocks into Tiptap JSON", () => {
     const json = markdownToBasicTiptap(
       ["# Title", "Paragraph", "> Quote", "- A\n- B", "1. One\n2. Two", "---"].join("\n\n"),

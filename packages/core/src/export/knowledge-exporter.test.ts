@@ -263,9 +263,10 @@ describe("KnowledgeExporter", () => {
     expect(JSON.parse(manifestFile?.content ?? "{}")).toEqual(vault.manifest);
   });
 
-  it("records attachment metadata in the vault manifest", () => {
+  it("exports local attachments into the vault and links documents to exported assets", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage({
+      books: [baseBook],
       documents: [knowledgeDocument()],
       attachments: [
         {
@@ -283,15 +284,116 @@ describe("KnowledgeExporter", () => {
       ],
     });
 
+    expect(vault.files.map((file) => file.path)).toEqual([
+      "Books/The Book A Study/README.md",
+      "Assets/cover.png",
+      ".readany/manifest.json",
+    ]);
+    expect(vault.files[0].content).toContain("- [cover.png](../../Assets/cover.png)");
+    expect(vault.files[1]).toMatchObject({
+      path: "Assets/cover.png",
+      mimeType: "image/png",
+      sourcePath: "local/cover.png",
+    });
     expect(vault.manifest.attachments["att-1"]).toEqual({
       id: "att-1",
       documentId: "doc-1",
       kind: "image",
       fileName: "cover.png",
       mimeType: "image/png",
-      path: "local/cover.png",
+      path: "Assets/cover.png",
       size: 42,
       hash: "sha256:cover",
+      updatedAt: 2000,
+    });
+  });
+
+  it("keeps duplicate attachment paths unique and synced with the manifest", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      documents: [knowledgeDocument({ bookId: undefined })],
+      attachments: [
+        {
+          id: "att-a",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "diagram.png",
+          localPath: "/tmp/a.png",
+          size: 10,
+          createdAt: 1000,
+          updatedAt: 1000,
+        },
+        {
+          id: "att-b",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "diagram.png",
+          localPath: "/tmp/b.png",
+          size: 20,
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ],
+    });
+
+    expect(vault.files.map((file) => file.path)).toEqual([
+      "Notes/Book Home.md",
+      "Assets/diagram.png",
+      "Assets/diagram-2.png",
+      ".readany/manifest.json",
+    ]);
+    expect(vault.files[0].content).toContain("- [diagram.png](../Assets/diagram.png)");
+    expect(vault.files[0].content).toContain("- [diagram.png](../Assets/diagram-2.png)");
+    expect(vault.manifest.attachments["att-a"].path).toBe("Assets/diagram.png");
+    expect(vault.manifest.attachments["att-b"].path).toBe("Assets/diagram-2.png");
+  });
+
+  it("reuses previous attachment paths by id during linked-folder exports", () => {
+    const exporter = new KnowledgeExporter();
+    const first = exporter.buildVaultPackage({
+      documents: [knowledgeDocument({ bookId: undefined })],
+      attachments: [
+        {
+          id: "att-rename",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "old-name.png",
+          localPath: "/tmp/old-name.png",
+          size: 10,
+          createdAt: 1000,
+          updatedAt: 1000,
+        },
+      ],
+    });
+    const second = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined })],
+        attachments: [
+          {
+            id: "att-rename",
+            documentId: "doc-1",
+            kind: "image",
+            fileName: "new-name.png",
+            localPath: "/tmp/new-name.png",
+            size: 12,
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+        ],
+      },
+      { previousManifest: first.manifest },
+    );
+
+    expect(first.manifest.attachments["att-rename"].path).toBe("Assets/old-name.png");
+    expect(second.files[1]).toMatchObject({
+      path: "Assets/old-name.png",
+      sourcePath: "/tmp/new-name.png",
+    });
+    expect(second.manifest.attachments["att-rename"]).toMatchObject({
+      id: "att-rename",
+      fileName: "new-name.png",
+      path: "Assets/old-name.png",
+      size: 12,
       updatedAt: 2000,
     });
   });

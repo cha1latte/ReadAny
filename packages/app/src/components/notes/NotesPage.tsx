@@ -31,6 +31,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import {
   type ExportFormat,
+  type KnowledgeExportFile,
   type KnowledgeExportFormat,
   type KnowledgeExportManifest,
   type KnowledgeExportObservedFile,
@@ -200,10 +201,14 @@ async function readExistingKnowledgeVaultFiles(
   for (const path of uniqueExportPaths(paths)) {
     const filePath = await joinDesktopPath(rootPath, path);
     if (!(await exists(filePath))) continue;
-    existingFiles.push({
-      path,
-      content: await readTextFile(filePath),
-    });
+    try {
+      existingFiles.push({
+        path,
+        content: await readTextFile(filePath),
+      });
+    } catch {
+      existingFiles.push({ path });
+    }
   }
 
   return existingFiles;
@@ -211,16 +216,21 @@ async function readExistingKnowledgeVaultFiles(
 
 async function writeKnowledgeVaultFiles(
   rootPath: string,
-  files: { path: string; content: string }[],
+  files: KnowledgeExportFile[],
 ): Promise<void> {
-  const { mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
+  const { copyFile, mkdir, writeTextFile } = await import("@tauri-apps/plugin-fs");
 
   for (const file of files) {
     const directory = exportFileDirectory(file.path);
     if (directory) {
       await mkdir(await joinDesktopPath(rootPath, directory), { recursive: true });
     }
-    await writeTextFile(await joinDesktopPath(rootPath, file.path), file.content);
+    const targetPath = await joinDesktopPath(rootPath, file.path);
+    if (file.sourcePath) {
+      await copyFile(file.sourcePath, targetPath);
+    } else {
+      await writeTextFile(targetPath, file.content);
+    }
   }
 }
 

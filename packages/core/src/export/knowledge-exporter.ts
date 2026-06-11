@@ -6,7 +6,8 @@ export type KnowledgeExportFormat = "markdown" | "obsidian";
 export interface KnowledgeExportFile {
   path: string;
   content: string;
-  mimeType: "application/json" | "text/markdown";
+  mimeType: string;
+  sourcePath?: string;
 }
 
 export interface KnowledgeExportInput {
@@ -99,6 +100,7 @@ interface ExportContext {
   documentsById: Map<string, KnowledgeDocument>;
   linksByDocumentId: Map<string, KnowledgeLink[]>;
   attachmentsByDocumentId: Map<string, KnowledgeAttachment[]>;
+  attachmentExportPathsById: Map<string, string>;
 }
 
 type ResolvedKnowledgeExportOptions = Required<KnowledgeExportOptions>;
@@ -106,6 +108,11 @@ type ResolvedKnowledgeExportOptions = Required<KnowledgeExportOptions>;
 interface DocumentExportFile extends KnowledgeExportFile {
   documentId: string;
   document: KnowledgeDocument;
+}
+
+interface AttachmentExportFile extends KnowledgeExportFile {
+  attachmentId: string;
+  attachment: KnowledgeAttachment;
 }
 
 function slugPart(value: string, fallback: string): string {
@@ -176,7 +183,10 @@ export function createKnowledgeExportHash(content: string): string {
   return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-function createContext(input: KnowledgeExportInput): ExportContext {
+function createContext(
+  input: KnowledgeExportInput,
+  attachmentExportPathsById = new Map<string, string>(),
+): ExportContext {
   const booksById = new Map((input.books ?? []).map((book) => [book.id, book]));
   const documentsById = new Map(input.documents.map((document) => [document.id, document]));
   const linksByDocumentId = new Map<string, KnowledgeLink[]>();
@@ -195,7 +205,13 @@ function createContext(input: KnowledgeExportInput): ExportContext {
     attachmentsByDocumentId.set(attachment.documentId, attachments);
   }
 
-  return { booksById, documentsById, linksByDocumentId, attachmentsByDocumentId };
+  return {
+    booksById,
+    documentsById,
+    linksByDocumentId,
+    attachmentsByDocumentId,
+    attachmentExportPathsById,
+  };
 }
 
 function documentBody(document: KnowledgeDocument, options: Required<KnowledgeExportOptions>) {
@@ -250,7 +266,25 @@ function renderLinks(document: KnowledgeDocument, context: ExportContext): strin
   return ["## ReadAny Links", "", ...links.map((link) => renderLinkItem(link, context))];
 }
 
-function renderAttachments(document: KnowledgeDocument, context: ExportContext): string[] {
+function relativeMarkdownPath(fromFilePath: string, toFilePath: string): string {
+  const fromParts = normalizePath(fromFilePath).split("/").filter(Boolean);
+  const toParts = normalizePath(toFilePath).split("/").filter(Boolean);
+  fromParts.pop();
+
+  while (fromParts.length > 0 && toParts.length > 0 && fromParts[0] === toParts[0]) {
+    fromParts.shift();
+    toParts.shift();
+  }
+
+  const relativeParts = [...fromParts.map(() => ".."), ...toParts];
+  return relativeParts.join("/") || ".";
+}
+
+function renderAttachments(
+  document: KnowledgeDocument,
+  context: ExportContext,
+  documentFilePath: string,
+): string[] {
   const attachments = context.attachmentsByDocumentId.get(document.id) ?? [];
   if (attachments.length === 0) return [];
 
@@ -258,7 +292,10 @@ function renderAttachments(document: KnowledgeDocument, context: ExportContext):
     "## Attachments",
     "",
     ...attachments.map((attachment) => {
-      const target = attachment.remotePath || attachment.localPath || attachment.fileName;
+      const exportedPath = context.attachmentExportPathsById.get(attachment.id);
+      const target = exportedPath
+        ? relativeMarkdownPath(documentFilePath, exportedPath)
+        : attachment.remotePath || attachment.localPath || attachment.fileName;
       return `- [${attachment.fileName}](${target})`;
     }),
   ];
@@ -292,6 +329,7 @@ function renderDocument(
   document: KnowledgeDocument,
   context: ExportContext,
   options: ResolvedKnowledgeExportOptions,
+  path: string,
 ): string {
   const body = documentBody(document, options);
   const sections = [
@@ -302,7 +340,7 @@ function renderDocument(
     "",
     ...renderLinks(document, context),
     "",
-    ...renderAttachments(document, context),
+    ...renderAttachments(document, context, path),
   ];
 
   return sections
@@ -325,12 +363,13 @@ function createDocumentExportFiles(
   input: KnowledgeExportInput,
   options: ResolvedKnowledgeExportOptions,
   previousManifest?: KnowledgeExportManifest,
+  usedPaths = new Set<string>(),
+  attachmentExportPathsById = new Map<string, string>(),
 ): DocumentExportFile[] {
-  const context = createContext(input);
+  const context = createContext(input, attachmentExportPathsById);
   const documents = options.includeDeleted
     ? input.documents
     : input.documents.filter((document) => !document.deletedAt);
-  const usedPaths = new Set<string>();
   const canReuseManifestPaths = previousManifest?.rootDir === options.rootDir;
 
   return documents.map<DocumentExportFile>((document) => {
@@ -346,27 +385,65 @@ function createDocumentExportFiles(
       documentId: document.id,
       document,
       path,
-      content: renderDocument(document, context, options),
+      content: renderDocument(document, context, options, path),
       mimeType: "text/markdown",
     };
   });
 }
 
+function createAttachmentExportFiles(
+  input: KnowledgeExportInput,
+  options: ResolvedKnowledgeExportOptions,
+  previousManifest?: KnowledgeExportManifest,
+  usedPaths = new Set<string>(),
+): {
+  files: AttachmentExportFile[];
+  attachmentExportPathsById: Map<string, string>;
+} {
+  const files: AttachmentExportFile[] = [];
+  const attachmentExportPathsById = new Map<string, string>();
+  const canReuseManifestPaths = previousManifest?.rootDir === options.rootDir;
+
+  for (const attachment of input.attachments ?? []) {
+    if (!attachment.localPath) continue;
+
+    const previousPath = canReuseManifestPaths
+      ? previousManifest?.attachments[attachment.id]?.path
+      : undefined;
+    const path = ensureUniquePath(
+      previousPath ||
+        joinPath(options.rootDir, "Assets", slugPart(attachment.fileName, attachment.id)),
+      usedPaths,
+    );
+    attachmentExportPathsById.set(attachment.id, path);
+    files.push({
+      attachmentId: attachment.id,
+      attachment,
+      path,
+      content: "",
+      mimeType: attachment.mimeType || "application/octet-stream",
+      sourcePath: attachment.localPath,
+    });
+  }
+
+  return { files, attachmentExportPathsById };
+}
+
 function createAttachmentManifestEntries(
   input: KnowledgeExportInput,
   rootDir: string,
+  attachmentExportPathsById = new Map<string, string>(),
 ): Record<string, KnowledgeExportManifestAttachment> {
   const entries: Record<string, KnowledgeExportManifestAttachment> = {};
 
   for (const attachment of input.attachments ?? []) {
     const fallbackPath = joinPath("Assets", slugPart(attachment.fileName, attachment.id));
+    const exportedPath = attachmentExportPathsById.get(attachment.id);
     entries[attachment.id] = {
       id: attachment.id,
       kind: attachment.kind,
       fileName: attachment.fileName,
-      path: normalizePath(
-        joinPath(rootDir, attachment.remotePath || attachment.localPath || fallbackPath),
-      ),
+      path: normalizePath(exportedPath ?? joinPath(rootDir, attachment.remotePath || fallbackPath)),
       size: attachment.size,
       updatedAt: attachment.updatedAt,
       ...(attachment.documentId ? { documentId: attachment.documentId } : {}),
@@ -383,6 +460,7 @@ function createManifest(
   files: DocumentExportFile[],
   options: ResolvedKnowledgeExportOptions,
   exportedAt: number,
+  attachmentExportPathsById = new Map<string, string>(),
 ): KnowledgeExportManifest {
   const documents: Record<string, KnowledgeExportManifestDocument> = {};
 
@@ -409,7 +487,7 @@ function createManifest(
     rootDir: options.rootDir,
     exportedAt,
     documents,
-    attachments: createAttachmentManifestEntries(input, options.rootDir),
+    attachments: createAttachmentManifestEntries(input, options.rootDir, attachmentExportPathsById),
   };
 }
 
@@ -571,12 +649,32 @@ export class KnowledgeExporter {
       includeReadAnyCardMetadata: options.includeReadAnyCardMetadata ?? false,
     };
     const exportedAt = options.exportedAt ?? Date.now();
-    const documentFiles = createDocumentExportFiles(input, opts, options.previousManifest);
-    const manifest = createManifest(input, documentFiles, opts, exportedAt);
+    const usedPaths = new Set<string>();
+    const { files: attachmentFiles, attachmentExportPathsById } = createAttachmentExportFiles(
+      input,
+      opts,
+      options.previousManifest,
+      usedPaths,
+    );
+    const documentFiles = createDocumentExportFiles(
+      input,
+      opts,
+      options.previousManifest,
+      usedPaths,
+      attachmentExportPathsById,
+    );
+    const manifest = createManifest(
+      input,
+      documentFiles,
+      opts,
+      exportedAt,
+      attachmentExportPathsById,
+    );
     const conflicts = detectConflicts(manifest, options.previousManifest, options.existingFiles);
     const files: KnowledgeExportFile[] = documentFiles.map(
       ({ document, documentId, ...file }) => file,
     );
+    files.push(...attachmentFiles.map(({ attachment, attachmentId, ...file }) => file));
 
     if (options.includeManifest ?? true) {
       files.push({

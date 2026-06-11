@@ -39,6 +39,7 @@ export interface KnowledgeExportManifestDocument {
   updatedAt: number;
   contentSchemaVersion: number;
   bookId?: string;
+  parentId?: string;
   sourceKind?: KnowledgeDocument["sourceKind"];
   sourceId?: string;
   deletedAt?: number;
@@ -230,14 +231,37 @@ function documentPath(
   options: ResolvedKnowledgeExportOptions,
 ): string {
   const book = document.bookId ? context.booksById.get(document.bookId) : undefined;
+  const hierarchySegments: string[] = [];
+  const visited = new Set<string>([document.id]);
+  let parentId = document.parentId;
+
+  while (parentId) {
+    const parent = context.documentsById.get(parentId);
+    if (!parent || visited.has(parent.id)) break;
+    visited.add(parent.id);
+    if (parent.type !== "book_home") {
+      hierarchySegments.unshift(slugPart(parent.title, parent.id));
+    }
+    parentId = parent.parentId;
+  }
+
+  if (document.type === "folder") {
+    hierarchySegments.push(slugPart(document.title, document.id));
+  }
+
   const fileName =
-    document.type === "book_home"
+    (document.type === "book_home" && book) || document.type === "folder"
       ? "README"
       : slugPart(document.title, document.type || "knowledge");
 
   const scopedPath = book
-    ? joinPath("Books", slugPart(book.meta.title, document.bookId ?? "book"), `${fileName}.md`)
-    : joinPath("Notes", `${slugPart(document.title, document.id)}.md`);
+    ? joinPath(
+        "Books",
+        slugPart(book.meta.title, document.bookId ?? "book"),
+        ...hierarchySegments,
+        `${fileName}.md`,
+      )
+    : joinPath("Notes", ...hierarchySegments, `${fileName}.md`);
 
   return joinPath(options.rootDir, scopedPath);
 }
@@ -312,6 +336,7 @@ function renderFrontmatter(document: KnowledgeDocument, context: ExportContext):
   ];
 
   if (document.bookId) lines.push(`bookId: ${yamlString(document.bookId)}`);
+  if (document.parentId) lines.push(`parentId: ${yamlString(document.parentId)}`);
   if (book) {
     lines.push(`book: ${yamlString(book.meta.title)}`);
     if (book.meta.author) lines.push(`author: ${yamlString(book.meta.author)}`);
@@ -474,6 +499,7 @@ function createManifest(
       updatedAt: file.document.updatedAt,
       contentSchemaVersion: file.document.contentSchemaVersion,
       ...(file.document.bookId ? { bookId: file.document.bookId } : {}),
+      ...(file.document.parentId ? { parentId: file.document.parentId } : {}),
       ...(file.document.sourceKind ? { sourceKind: file.document.sourceKind } : {}),
       ...(file.document.sourceId ? { sourceId: file.document.sourceId } : {}),
       ...(file.document.deletedAt ? { deletedAt: file.document.deletedAt } : {}),

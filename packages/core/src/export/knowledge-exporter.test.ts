@@ -76,6 +76,44 @@ describe("KnowledgeExporter", () => {
     expect(files[0].content).toContain("> Reading is thinking.");
   });
 
+  it("exports folders as directory README files and nests child documents", () => {
+    const exporter = new KnowledgeExporter();
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Trail",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const note = knowledgeDocument({
+      id: "note-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "Why does this matter?",
+    });
+    const vault = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [knowledgeDocument(), folder, note],
+    });
+
+    expect(vault.files.map((file) => file.path)).toContain(
+      "Books/The Book A Study/Reading Trail/README.md",
+    );
+    expect(vault.files.map((file) => file.path)).toContain(
+      "Books/The Book A Study/Reading Trail/Question Log.md",
+    );
+    expect(vault.files.find((file) => file.path.endsWith("Question Log.md"))?.content).toContain(
+      'parentId: "folder-1"',
+    );
+    expect(vault.manifest.documents["note-1"]).toMatchObject({
+      parentId: "folder-1",
+      path: "Books/The Book A Study/Reading Trail/Question Log.md",
+    });
+  });
+
   it("renders links and attachments into readable Markdown sections", () => {
     const exporter = new KnowledgeExporter();
     const related = knowledgeDocument({

@@ -42,6 +42,7 @@ export interface KnowledgeDocumentUpdateProposal {
   current?: {
     id: string;
     bookId?: string;
+    parentId?: string;
     type?: KnowledgeDocumentType;
     title?: string;
     tags?: string[];
@@ -49,7 +50,7 @@ export interface KnowledgeDocumentUpdateProposal {
     updatedAt?: number;
   };
   patch: Partial<
-    Pick<KnowledgeDocument, "title" | "contentMd" | "contentJson" | "excerpt" | "tags">
+    Pick<KnowledgeDocument, "parentId" | "title" | "contentMd" | "contentJson" | "excerpt" | "tags">
   >;
   changedFields: string[];
 }
@@ -225,6 +226,9 @@ function normalizeUpdateProposal(
   if (!documentId || !isRecord(patchResult)) return null;
 
   const patch: KnowledgeDocumentUpdateProposal["patch"] = {};
+  if (Object.prototype.hasOwnProperty.call(patchResult, "parentId")) {
+    patch.parentId = stringOrUndefined(patchResult.parentId);
+  }
   if (typeof patchResult.title === "string") patch.title = patchResult.title;
   if (typeof patchResult.contentMd === "string") {
     if (!isJSONValue(patchResult.contentJson)) return null;
@@ -244,6 +248,7 @@ function normalizeUpdateProposal(
     ? {
         id: String(result.current.id ?? documentId),
         bookId: stringOrUndefined(result.current.bookId),
+        parentId: stringOrUndefined(result.current.parentId),
         type: asDocumentType(result.current.type) ?? undefined,
         title: stringOrUndefined(result.current.title),
         tags: asStringArray(result.current.tags),

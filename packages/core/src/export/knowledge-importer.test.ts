@@ -131,6 +131,34 @@ describe("Knowledge markdown importer", () => {
     });
   });
 
+  it("preserves parent ids from ReadAny Markdown frontmatter", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Books/The Book/Ideas/Question.md",
+      content: `---
+type: "readany-knowledge"
+id: "note-1"
+documentType: "standalone_note"
+title: "Question"
+bookId: "book-1"
+parentId: "folder-1"
+tags: []
+---
+# Question
+
+Why does this matter?
+`,
+    });
+
+    expect(imported.frontmatter.parentId).toBe("folder-1");
+    expect(imported.draft).toMatchObject({
+      id: "note-1",
+      bookId: "book-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question",
+    });
+  });
+
   it("imports ordinary Obsidian Markdown with frontmatter as an imported document", () => {
     const imported = parseKnowledgeMarkdownDocument({
       path: "Vault/Ideas/Slow Reading.md",

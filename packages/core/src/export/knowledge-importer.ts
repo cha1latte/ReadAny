@@ -24,6 +24,7 @@ export interface KnowledgeImportFrontmatter {
   documentType?: KnowledgeDocumentType;
   title?: string;
   bookId?: string;
+  parentId?: string;
   book?: string;
   author?: string;
   sourceKind?: KnowledgeSourceKind;
@@ -261,6 +262,7 @@ function normalizeFrontmatter(
     documentType: readDocumentType(parsed.documentType),
     title: readString(parsed.title),
     bookId: readString(parsed.bookId),
+    parentId: readString(parsed.parentId),
     book: readString(parsed.book),
     author: readString(parsed.author),
     sourceKind: readSourceKind(parsed.sourceKind),
@@ -309,6 +311,7 @@ export function parseKnowledgeMarkdownDocument(
     contentMd,
     draft: {
       id: metadata.id,
+      parentId: metadata.parentId,
       type: documentType,
       title,
       bookId,
@@ -485,6 +488,7 @@ function createKnowledgeImportUpdateProposal(
   }
 
   const patch: KnowledgeDocumentUpdateProposal["patch"] = {
+    parentId: imported.draft.parentId,
     title: imported.draft.title ?? options.current?.title ?? "Imported Knowledge",
     contentMd: imported.contentMd,
     contentJson: requireImportedContentJson(imported),
@@ -492,13 +496,16 @@ function createKnowledgeImportUpdateProposal(
     tags: imported.draft.tags ?? [],
   };
 
-  const changedFields = ["title", "contentMd", "contentJson", "excerpt", "tags"].filter((field) => {
-    if (field === "title") return patch.title !== options.current?.title;
-    if (field === "tags") {
-      return JSON.stringify(patch.tags ?? []) !== JSON.stringify(options.current?.tags ?? []);
-    }
-    return true;
-  });
+  const changedFields = ["parentId", "title", "contentMd", "contentJson", "excerpt", "tags"].filter(
+    (field) => {
+      if (field === "parentId") return patch.parentId !== options.current?.parentId;
+      if (field === "title") return patch.title !== options.current?.title;
+      if (field === "tags") {
+        return JSON.stringify(patch.tags ?? []) !== JSON.stringify(options.current?.tags ?? []);
+      }
+      return true;
+    },
+  );
 
   return {
     success: true,
@@ -541,6 +548,7 @@ export function createKnowledgeVaultImportWriteProposals(
         current: {
           id: entry.documentId,
           bookId: manifestDocument?.bookId,
+          parentId: manifestDocument?.parentId,
           type: manifestDocument?.type,
           title: manifestDocument?.title,
           updatedAt: manifestDocument?.updatedAt,

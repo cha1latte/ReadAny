@@ -173,10 +173,11 @@ describe("knowledge write proposals", () => {
       confirmationKind: "knowledge_document_update",
       documentId: "doc-1",
       patch: {
+        parentId: "folder-1",
         title: "Updated",
         tags: ["done"],
       },
-      changedFields: ["title", "tags"],
+      changedFields: ["parentId", "title", "tags"],
     });
     expect(updateProposal).not.toBeNull();
     if (!updateProposal) throw new Error("Expected update proposal");
@@ -186,6 +187,7 @@ describe("knowledge write proposals", () => {
       documentId: "doc-1",
     });
     expect(dbMocks.updateKnowledgeDocument).toHaveBeenCalledWith("doc-1", {
+      parentId: "folder-1",
       title: "Updated",
       tags: ["done"],
     });

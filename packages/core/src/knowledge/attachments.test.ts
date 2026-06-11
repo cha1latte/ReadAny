@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { JSONValue } from "../types";
 import {
   basenameFromPath,
   createKnowledgeAttachmentHash,
@@ -6,6 +7,7 @@ import {
   inferKnowledgeAttachmentKind,
   inferKnowledgeAttachmentMimeType,
   parseKnowledgeAttachmentUri,
+  resolveKnowledgeAttachmentImageSources,
   sanitizeKnowledgeAttachmentFileName,
 } from "./attachments";
 
@@ -33,5 +35,74 @@ describe("knowledge attachments", () => {
     expect(createKnowledgeAttachmentHash(new Uint8Array([1, 2, 4]))).not.toBe(
       createKnowledgeAttachmentHash(new Uint8Array([1, 2, 3])),
     );
+  });
+
+  it("resolves image node sources from attachment ids without mutating the document", () => {
+    const contentJson: JSONValue = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Before" }],
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "file:///other-device/cover.png",
+            attachmentId: "att-1",
+            alt: "Cover",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "file:///other-device/missing.png",
+            attachmentId: "missing",
+            alt: "Missing",
+          },
+        },
+      ],
+    };
+    const originalJson = JSON.stringify(contentJson);
+
+    const resolved = resolveKnowledgeAttachmentImageSources(contentJson, (attachmentId) =>
+      attachmentId === "att-1" ? "asset://local/cover.png" : undefined,
+    );
+
+    expect(resolved).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Before" }],
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "asset://local/cover.png",
+            attachmentId: "att-1",
+            alt: "Cover",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "file:///other-device/missing.png",
+            attachmentId: "missing",
+            alt: "Missing",
+          },
+        },
+      ],
+    });
+    expect(JSON.stringify(contentJson)).toBe(originalJson);
+  });
+
+  it("keeps object identity when no attachment image source changes", () => {
+    const contentJson: JSONValue = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Only text" }] }],
+    };
+
+    expect(resolveKnowledgeAttachmentImageSources(contentJson, () => undefined)).toBe(contentJson);
   });
 });

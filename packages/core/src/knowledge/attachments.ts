@@ -1,4 +1,5 @@
 import type { KnowledgeAttachmentKind } from "../types";
+import type { JSONValue } from "../types";
 
 export const READANY_ATTACHMENT_URI_PREFIX = "readany-attachment://";
 
@@ -97,4 +98,51 @@ export function createKnowledgeAttachmentHash(data: Uint8Array): string {
     hash = Math.imul(hash, 0x01000193);
   }
   return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function resolveKnowledgeAttachmentImageSources(
+  contentJson: JSONValue,
+  resolveSrc: (attachmentId: string) => string | undefined,
+): JSONValue {
+  return resolveKnowledgeAttachmentImageSourcesNode(contentJson, resolveSrc) as JSONValue;
+}
+
+function resolveKnowledgeAttachmentImageSourcesNode(
+  value: JSONValue,
+  resolveSrc: (attachmentId: string) => string | undefined,
+): JSONValue {
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map((item) => {
+      const resolved = resolveKnowledgeAttachmentImageSourcesNode(item, resolveSrc);
+      changed ||= resolved !== item;
+      return resolved;
+    });
+    return changed ? next : value;
+  }
+
+  if (!value || typeof value !== "object") return value;
+
+  let changed = false;
+  const next: Record<string, JSONValue> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const resolved = resolveKnowledgeAttachmentImageSourcesNode(item, resolveSrc);
+    changed ||= resolved !== item;
+    next[key] = resolved;
+  }
+
+  if (value.type === "image" && value.attrs && typeof value.attrs === "object") {
+    const attrs = value.attrs as Record<string, JSONValue>;
+    const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId.trim() : "";
+    const resolvedSrc = attachmentId ? resolveSrc(attachmentId) : undefined;
+    if (resolvedSrc && attrs.src !== resolvedSrc) {
+      next.attrs = {
+        ...attrs,
+        src: resolvedSrc,
+      };
+      changed = true;
+    }
+  }
+
+  return changed ? next : value;
 }

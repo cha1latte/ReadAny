@@ -18,6 +18,7 @@ export {
   inferKnowledgeAttachmentKind,
   inferKnowledgeAttachmentMimeType,
   parseKnowledgeAttachmentUri,
+  resolveKnowledgeAttachmentImageSources,
   sanitizeKnowledgeAttachmentFileName,
 } from "./attachments";
 export {

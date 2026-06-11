@@ -63,6 +63,7 @@ import {
   markdownToBasicTiptap,
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
+  resolveKnowledgeAttachmentImageSources,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
 import {
@@ -70,9 +71,11 @@ import {
   applyKnowledgeWriteProposal,
 } from "@readany/core/knowledge/proposals";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
+import { getPlatformService } from "@readany/core/services";
 import type {
   Book,
   Highlight,
+  KnowledgeAttachment,
   KnowledgeDocument,
   KnowledgeDocumentType,
   KnowledgeLink,
@@ -195,12 +198,20 @@ function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boole
   );
 }
 
-function createKnowledgeValueFromDocument(document: KnowledgeDocument): KnowledgeEditorValue {
-  const shouldImportMarkdown =
-    !!document.contentMd.trim() && isEmptyTiptapDocument(document.contentJson);
-  const contentJson = shouldImportMarkdown
-    ? (markdownToBasicTiptap(document.contentMd) as unknown as KnowledgeDocument["contentJson"])
-    : document.contentJson;
+function createKnowledgeContentJsonFromDocument(
+  document: KnowledgeDocument,
+): KnowledgeDocument["contentJson"] {
+  if (!!document.contentMd.trim() && isEmptyTiptapDocument(document.contentJson)) {
+    return markdownToBasicTiptap(document.contentMd) as unknown as KnowledgeDocument["contentJson"];
+  }
+  return document.contentJson;
+}
+
+function createKnowledgeValueFromDocument(
+  document: KnowledgeDocument,
+  contentJsonOverride?: KnowledgeDocument["contentJson"],
+): KnowledgeEditorValue {
+  const contentJson = contentJsonOverride ?? createKnowledgeContentJsonFromDocument(document);
   const contentMd = document.contentMd || renderKnowledgeJsonToMarkdown(contentJson);
 
   return {
@@ -208,6 +219,45 @@ function createKnowledgeValueFromDocument(document: KnowledgeDocument): Knowledg
     contentMd,
     plainText: createKnowledgeExcerpt(contentMd) ?? "",
   };
+}
+
+function resolveKnowledgeAttachmentDisplaySrc(attachment: KnowledgeAttachment): string | undefined {
+  if (!attachment.localPath) return undefined;
+  try {
+    return getPlatformService().convertFileSrc(attachment.localPath);
+  } catch (error) {
+    console.warn("[Notes] Failed to resolve knowledge attachment image source:", error);
+    return attachment.localPath;
+  }
+}
+
+async function createResolvedKnowledgeValueFromDocument(
+  document: KnowledgeDocument,
+): Promise<KnowledgeEditorValue> {
+  let attachments: KnowledgeAttachment[] = [];
+  try {
+    attachments = await getKnowledgeAttachments(document.id);
+  } catch (error) {
+    console.warn("[Notes] Failed to load knowledge attachments:", error);
+    return createKnowledgeValueFromDocument(document);
+  }
+  if (attachments.length === 0) return createKnowledgeValueFromDocument(document);
+
+  const displaySrcByAttachmentId = new Map<string, string>();
+  for (const attachment of attachments) {
+    if (attachment.kind !== "image") continue;
+    const displaySrc = resolveKnowledgeAttachmentDisplaySrc(attachment);
+    if (displaySrc) displaySrcByAttachmentId.set(attachment.id, displaySrc);
+  }
+
+  if (displaySrcByAttachmentId.size === 0) return createKnowledgeValueFromDocument(document);
+
+  const contentJson = createKnowledgeContentJsonFromDocument(document);
+  const resolvedContentJson = resolveKnowledgeAttachmentImageSources(contentJson, (attachmentId) =>
+    displaySrcByAttachmentId.get(attachmentId),
+  ) as KnowledgeDocument["contentJson"];
+
+  return createKnowledgeValueFromDocument(document, resolvedContentJson);
 }
 
 function normalizeExportPath(path: string): string {
@@ -584,7 +634,7 @@ export function NotesPage() {
           homeDocument.id,
         );
         const activeDocument = nextDocuments[0] ?? homeDocument;
-        const nextValue = createKnowledgeValueFromDocument(activeDocument);
+        const nextValue = await createResolvedKnowledgeValueFromDocument(activeDocument);
         setKnowledgeDocuments(nextDocuments);
         setSelectedKnowledgeDocumentId(activeDocument.id);
         setKnowledgeHome(activeDocument);
@@ -778,7 +828,7 @@ export function NotesPage() {
     if (!saved) return;
 
     knowledgeSaveVersionRef.current += 1;
-    const nextValue = createKnowledgeValueFromDocument(document);
+    const nextValue = await createResolvedKnowledgeValueFromDocument(document);
     setSelectedKnowledgeDocumentId(document.id);
     setKnowledgeHome(document);
     setKnowledgeTitle(document.title);
@@ -830,7 +880,7 @@ export function NotesPage() {
       return;
     }
 
-    const nextValue = createKnowledgeValueFromDocument(nextActiveDocument);
+    const nextValue = await createResolvedKnowledgeValueFromDocument(nextActiveDocument);
     setSelectedKnowledgeDocumentId(nextActiveDocument.id);
     setKnowledgeHome(nextActiveDocument);
     setKnowledgeTitle(nextActiveDocument.title);
@@ -928,7 +978,7 @@ export function NotesPage() {
           remainingDocuments[0] ??
           null;
         if (nextDocument) {
-          const nextValue = createKnowledgeValueFromDocument(nextDocument);
+          const nextValue = await createResolvedKnowledgeValueFromDocument(nextDocument);
           setSelectedKnowledgeDocumentId(nextDocument.id);
           setKnowledgeHome(nextDocument);
           setKnowledgeTitle(nextDocument.title);

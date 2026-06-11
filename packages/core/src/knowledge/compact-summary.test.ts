@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KnowledgeSummaryDocument } from "./compact-summary";
 import {
   createKnowledgeSummaryCompressionState,
+  createKnowledgeSummaryCompressionStateFromDocument,
   createKnowledgeSummarySourceFingerprint,
   prepareKnowledgeSummaryCompression,
 } from "./compact-summary";
@@ -90,5 +91,32 @@ describe("knowledge summary compression planning", () => {
     expect(nextPlan.source).toContain("## Existing Compressed Summary");
     expect(nextPlan.source).toContain("- First compressed memory");
     expect(nextPlan.sourceFingerprint).not.toBe(originalPlan.sourceFingerprint);
+  });
+
+  it("restores persisted compact summary state from a knowledge document", () => {
+    expect(
+      createKnowledgeSummaryCompressionStateFromDocument(
+        document({
+          summaryMd: "  - Existing durable memory  ",
+          summarySourceFingerprint: " fnv1a32:feedface ",
+          summarySourceUpdatedAt: 500,
+          summaryUpdatedAt: 600,
+        }),
+      ),
+    ).toEqual({
+      summaryMd: "- Existing durable memory",
+      sourceFingerprint: "fnv1a32:feedface",
+      sourceUpdatedAt: 500,
+      compressedAt: 600,
+    });
+
+    expect(
+      createKnowledgeSummaryCompressionStateFromDocument(
+        document({
+          summaryMd: "- Missing fingerprint",
+          summarySourceFingerprint: undefined,
+        }),
+      ),
+    ).toBeUndefined();
   });
 });

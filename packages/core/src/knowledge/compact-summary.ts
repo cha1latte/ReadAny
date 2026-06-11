@@ -37,6 +37,10 @@ export type KnowledgeSummaryDocument = Pick<
   | "title"
   | "contentMd"
   | "excerpt"
+  | "summaryMd"
+  | "summarySourceFingerprint"
+  | "summarySourceUpdatedAt"
+  | "summaryUpdatedAt"
   | "tags"
   | "sourceKind"
   | "sourceId"
@@ -158,6 +162,21 @@ export function createKnowledgeSummarySourceFingerprint(
 ): string {
   const source = normalizeMarkdownForSummary(document.contentMd);
   return createSourceFingerprint(document, source);
+}
+
+export function createKnowledgeSummaryCompressionStateFromDocument(
+  document: KnowledgeSummaryDocument,
+): KnowledgeSummaryCompressionState | undefined {
+  const summaryMd = document.summaryMd?.trim();
+  const sourceFingerprint = document.summarySourceFingerprint?.trim();
+  if (!summaryMd || !sourceFingerprint) return undefined;
+
+  return {
+    summaryMd,
+    sourceFingerprint,
+    sourceUpdatedAt: document.summarySourceUpdatedAt,
+    compressedAt: document.summaryUpdatedAt,
+  };
 }
 
 export function prepareKnowledgeSummaryCompression(

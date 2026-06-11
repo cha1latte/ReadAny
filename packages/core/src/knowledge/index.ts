@@ -72,6 +72,7 @@ export type {
 } from "./card-registry";
 export {
   createKnowledgeSummaryCompressionState,
+  createKnowledgeSummaryCompressionStateFromDocument,
   createKnowledgeSummarySourceFingerprint,
   prepareKnowledgeSummaryCompression,
 } from "./compact-summary";

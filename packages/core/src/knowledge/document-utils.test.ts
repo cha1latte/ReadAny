@@ -15,6 +15,7 @@ import {
   isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
   orderKnowledgeDocuments,
+  validateKnowledgeDocumentParent,
 } from "./document-utils";
 
 function document(overrides: Partial<KnowledgeDocument>): KnowledgeDocument {
@@ -90,6 +91,42 @@ describe("knowledge document utilities", () => {
 
     expect(tree.roots.map((node) => node.document.id).sort()).toEqual(["left", "right"]);
     expect(tree.roots.flatMap((node) => node.children)).toEqual([]);
+  });
+
+  it("validates document parent moves", () => {
+    const home = document({ id: "home", type: "book_home" });
+    const root = document({ id: "root", type: "folder", title: "Root" });
+    const child = document({ id: "child", type: "folder", title: "Child", parentId: "root" });
+    const note = document({ id: "note", parentId: "child" });
+    const sibling = document({ id: "sibling" });
+    const documents = [home, root, child, note, sibling];
+
+    expect(validateKnowledgeDocumentParent("note", "root", documents)).toEqual({ ok: true });
+    expect(validateKnowledgeDocumentParent("note", undefined, documents)).toEqual({ ok: true });
+    expect(validateKnowledgeDocumentParent("note", "child", documents)).toEqual({
+      ok: false,
+      reason: "same_parent",
+    });
+    expect(validateKnowledgeDocumentParent("note", "missing", documents)).toEqual({
+      ok: false,
+      reason: "missing_parent",
+    });
+    expect(validateKnowledgeDocumentParent("note", "sibling", documents)).toEqual({
+      ok: false,
+      reason: "parent_not_folder",
+    });
+    expect(validateKnowledgeDocumentParent("child", "child", documents)).toEqual({
+      ok: false,
+      reason: "self_parent",
+    });
+    expect(validateKnowledgeDocumentParent("root", "child", documents)).toEqual({
+      ok: false,
+      reason: "descendant_parent",
+    });
+    expect(validateKnowledgeDocumentParent("home", "root", documents)).toEqual({
+      ok: false,
+      reason: "book_home_locked",
+    });
   });
 
   it("uses normalized titles in document fingerprints", () => {

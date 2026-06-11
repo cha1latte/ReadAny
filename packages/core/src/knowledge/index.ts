@@ -44,6 +44,7 @@ export {
   extractLegacyNoteContentForLegacyField,
   flattenKnowledgeDocumentTree,
   buildKnowledgeDocumentTree,
+  validateKnowledgeDocumentParent,
   hasHighlightNoteContent,
   hasLegacyNoteContent,
   isGeneratedHighlightNoteDocument,
@@ -57,6 +58,8 @@ export type {
   KnowledgeDocumentTree,
   KnowledgeDocumentTreeNode,
   KnowledgeDocumentSnapshot,
+  KnowledgeDocumentParentValidation,
+  KnowledgeDocumentParentValidationReason,
   LegacyNoteProjection,
 } from "./document-utils";
 export {

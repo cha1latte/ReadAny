@@ -58,6 +58,7 @@ import {
   markdownToBasicTiptap,
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
+  validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
 import {
   type KnowledgeDocumentUpdateProposal,
@@ -951,6 +952,45 @@ export function NotesPage() {
     }
   };
 
+  const handleMoveKnowledgeDocument = async (
+    document: KnowledgeDocument,
+    parentId?: string | null,
+  ) => {
+    const validation = validateKnowledgeDocumentParent(document.id, parentId, knowledgeDocuments);
+    if (!validation.ok) {
+      if (validation.reason !== "same_parent") {
+        toast.error(t("notes.knowledgeDocumentMoveInvalid"));
+      }
+      return;
+    }
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    try {
+      const nextParentId = parentId || undefined;
+      await updateKnowledgeDocument(document.id, { parentId: nextParentId });
+      const updatedDocument: KnowledgeDocument = {
+        ...document,
+        parentId: nextParentId,
+        updatedAt: Date.now(),
+      };
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((item) => (item.id === document.id ? updatedDocument : item)),
+          documents.find((item) => item.type === "book_home")?.id,
+        ),
+      );
+      if (knowledgeHome?.id === document.id) {
+        setKnowledgeHome(updatedDocument);
+      }
+      toast.success(t("notes.knowledgeDocumentMoved"));
+    } catch (error) {
+      console.error("[Notes] Failed to move knowledge document:", error);
+      toast.error(t("notes.knowledgeDocumentMoveFailed"));
+    }
+  };
+
   const handleCompressKnowledgeSummary = async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1726,6 +1766,7 @@ export function NotesPage() {
                 onSelectDocument={openKnowledgeDocument}
                 onCreateDocument={handleCreateKnowledgeDocument}
                 onDeleteDocument={handleDeleteKnowledgeDocument}
+                onMoveDocument={handleMoveKnowledgeDocument}
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
                 onImportMarkdown={handleKnowledgeMarkdownImport}
@@ -1843,6 +1884,7 @@ interface KnowledgeHomePanelProps {
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
+  onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onImportMarkdown: () => void;
@@ -1887,6 +1929,7 @@ function KnowledgeHomePanel({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onMoveDocument,
   onCompressSummary,
   onExport,
   onImportMarkdown,
@@ -1940,6 +1983,7 @@ function KnowledgeHomePanel({
           onSelect={onSelectDocument}
           onCreate={onCreateDocument}
           onDelete={onDeleteDocument}
+          onMove={onMoveDocument}
           t={t}
         />
 
@@ -2467,6 +2511,7 @@ function KnowledgeDocumentExplorer({
   onSelect,
   onCreate,
   onDelete,
+  onMove,
   t,
 }: {
   documents: KnowledgeDocument[];
@@ -2475,6 +2520,7 @@ function KnowledgeDocumentExplorer({
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
+  onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [query, setQuery] = useState("");
@@ -2497,6 +2543,10 @@ function KnowledgeDocumentExplorer({
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
   const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
+  const folderNodes = useMemo(
+    () => flatNodes.filter((node) => node.document.type === "folder"),
+    [flatNodes],
+  );
   const visibleSearchNodes = useMemo(() => {
     if (!normalizedQuery) return [];
     return flatNodes.filter((node) =>
@@ -2539,6 +2589,17 @@ function KnowledgeDocumentExplorer({
     const childCount = childCountByParentId.get(document.id) ?? 0;
     const canDelete =
       canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
+    const canMove = document.type !== "book_home";
+    const moveTargets = canMove
+      ? [
+          { id: undefined, title: t("notes.knowledgeMoveRoot"), depth: 0 },
+          ...folderNodes.map((folderNode) => ({
+            id: folderNode.document.id,
+            title: folderNode.document.title.trim() || t("notes.knowledgeUntitledDocument"),
+            depth: folderNode.depth + 1,
+          })),
+        ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok)
+      : [];
     const Icon = isFolder ? (isExpanded ? FolderOpen : Folder) : FileText;
 
     return (
@@ -2610,19 +2671,57 @@ function KnowledgeDocumentExplorer({
             ) : null}
           </button>
 
-          {canDelete ? (
-            <button
-              type="button"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-              onClick={() => onDelete(document)}
-              aria-label={t("notes.knowledgeDeleteDocument")}
-              title={t("notes.knowledgeDeleteDocument")}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <span className="h-6 w-6 shrink-0" />
-          )}
+          <div className="flex h-6 shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {moveTargets.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    aria-label={t("notes.knowledgeMoveDocument")}
+                    title={t("notes.knowledgeMoveDocument")}
+                  >
+                    <FolderDown className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 min-w-48 overflow-y-auto">
+                  <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {t("notes.knowledgeMoveTo")}
+                  </div>
+                  {moveTargets.map((target) => (
+                    <DropdownMenuItem
+                      key={target.id ?? "__root__"}
+                      onClick={() => onMove(document, target.id)}
+                      className="text-xs"
+                    >
+                      <span
+                        className="inline-flex min-w-0 items-center gap-2"
+                        style={{ paddingLeft: `${Math.min(target.depth, 7) * 10}px` }}
+                      >
+                        {target.id ? (
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <FolderUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="truncate">{target.title}</span>
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            {canDelete ? (
+              <button
+                type="button"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => onDelete(document)}
+                aria-label={t("notes.knowledgeDeleteDocument")}
+                title={t("notes.knowledgeDeleteDocument")}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
         {isFolder && isExpanded && node.children.length > 0
           ? node.children.map((child) => renderNode(child))

@@ -10,6 +10,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   FolderIcon,
+  FolderInputIcon,
   FolderPlusIcon,
   HighlighterIcon,
   LoaderIcon,
@@ -65,6 +66,7 @@ import {
   normalizeTiptapDocument,
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
+  validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type {
@@ -815,6 +817,50 @@ export function NotesView({
     [knowledgeDocuments, knowledgeHome?.id, selectedKnowledgeDocumentId, t],
   );
 
+  const handleMoveKnowledgeDocument = useCallback(
+    async (document: KnowledgeDocument, parentId?: string | null) => {
+      const validation = validateKnowledgeDocumentParent(document.id, parentId, knowledgeDocuments);
+      if (!validation.ok) {
+        if (validation.reason !== "same_parent") {
+          Alert.alert(
+            t("common.error", "错误"),
+            t("notes.knowledgeDocumentMoveInvalid", "不能移动到这个位置"),
+          );
+        }
+        return;
+      }
+
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      try {
+        const nextParentId = parentId || undefined;
+        await updateKnowledgeDocument(document.id, { parentId: nextParentId });
+        const updatedDocument: KnowledgeDocument = {
+          ...document,
+          parentId: nextParentId,
+          updatedAt: Date.now(),
+        };
+        setKnowledgeDocuments((documents) =>
+          orderKnowledgeDocuments(
+            documents.map((item) => (item.id === document.id ? updatedDocument : item)),
+            documents.find((item) => item.type === "book_home")?.id,
+          ),
+        );
+        if (knowledgeHome?.id === document.id) {
+          setKnowledgeHome(updatedDocument);
+        }
+      } catch (error) {
+        console.error("[Notes] Failed to move knowledge document:", error);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentMoveFailed", "知识文档移动失败"),
+        );
+      }
+    },
+    [knowledgeDocuments, knowledgeHome?.id, saveActiveKnowledgeDocumentNow, t],
+  );
+
   const handleCompressKnowledgeSummary = useCallback(async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1212,6 +1258,7 @@ export function NotesView({
             onSelectDocument={openKnowledgeDocument}
             onCreateDocument={handleCreateKnowledgeDocument}
             onDeleteDocument={handleDeleteKnowledgeDocument}
+            onMoveDocument={handleMoveKnowledgeDocument}
             onCompressSummary={handleCompressKnowledgeSummary}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
@@ -1425,6 +1472,7 @@ function KnowledgeHomePanel({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onMoveDocument,
   onCompressSummary,
   onOpenBook,
   t,
@@ -1459,6 +1507,7 @@ function KnowledgeHomePanel({
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
+  onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onCompressSummary: () => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
@@ -1477,6 +1526,37 @@ function KnowledgeHomePanel({
       undefined,
     );
   }, [document, documents]);
+  const [isMovePickerVisible, setIsMovePickerVisible] = useState(false);
+  const moveTargets = useMemo(() => {
+    if (!document || document.type === "book_home") return [];
+    const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+    const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+    const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
+      .filter((node) => node.document.type === "folder")
+      .map((node) => ({
+        id: node.document.id,
+        title: node.document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+        depth: node.depth + 1,
+      }));
+    return [
+      { id: undefined, title: t("notes.knowledgeMoveRoot", "根目录"), depth: 0 },
+      ...folderTargets,
+    ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
+  }, [document, documents, t]);
+
+  const showMovePicker = useCallback(() => {
+    if (!document || moveTargets.length === 0) return;
+    setIsMovePickerVisible(true);
+  }, [document, moveTargets.length]);
+
+  const handleMoveToTarget = useCallback(
+    (targetId?: string) => {
+      if (!document) return;
+      setIsMovePickerVisible(false);
+      onMoveDocument(document, targetId);
+    },
+    [document, onMoveDocument],
+  );
 
   if (isLoading || !document) {
     return (
@@ -1566,6 +1646,16 @@ function KnowledgeHomePanel({
                 accessibilityLabel={t("notes.knowledgeDeleteDocument", "删除文档")}
               >
                 <Trash2Icon size={14} color={colors.destructive} />
+              </TouchableOpacity>
+            ) : null}
+            {moveTargets.length > 0 ? (
+              <TouchableOpacity
+                activeOpacity={0.78}
+                style={styles.knowledgeMoveButton}
+                onPress={showMovePicker}
+                accessibilityLabel={t("notes.knowledgeMoveDocument", "移动文档")}
+              >
+                <FolderInputIcon size={14} color={colors.primary} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -1666,6 +1756,67 @@ function KnowledgeHomePanel({
           )}
         </View>
       )}
+
+      <Modal
+        visible={isMovePickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsMovePickerVisible(false)}
+      >
+        <Pressable
+          style={styles.knowledgeMoveSheetBackdrop}
+          onPress={() => setIsMovePickerVisible(false)}
+        />
+        <View style={styles.knowledgeMoveSheet}>
+          <View style={styles.knowledgeMoveSheetHeader}>
+            <View style={styles.knowledgeMoveSheetTitleBlock}>
+              <Text style={styles.knowledgeMoveSheetTitle}>
+                {t("notes.knowledgeMoveTo", "移动到")}
+              </Text>
+              <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
+                {document.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              style={styles.knowledgeMoveSheetClose}
+              onPress={() => setIsMovePickerVisible(false)}
+              accessibilityLabel={t("common.cancel", "取消")}
+            >
+              <XIcon size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.knowledgeMoveTargetScroll}
+            contentContainerStyle={styles.knowledgeMoveTargetList}
+            showsVerticalScrollIndicator={false}
+          >
+            {moveTargets.map((target) => (
+              <TouchableOpacity
+                key={target.id ?? "__root__"}
+                activeOpacity={0.78}
+                style={[
+                  styles.knowledgeMoveTarget,
+                  { paddingLeft: 12 + Math.min(target.depth, 5) * 14 },
+                ]}
+                onPress={() => handleMoveToTarget(target.id)}
+              >
+                <View style={styles.knowledgeMoveTargetIcon}>
+                  {target.id ? (
+                    <FolderIcon size={15} color={colors.foreground} />
+                  ) : (
+                    <FolderInputIcon size={15} color={colors.primary} />
+                  )}
+                </View>
+                <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
+                  {target.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </KeyboardAwareScrollView>
   );
 }

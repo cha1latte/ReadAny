@@ -331,3 +331,44 @@ export function flattenKnowledgeDocumentTree(
 ): KnowledgeDocumentTreeNode[] {
   return nodes.flatMap((node) => [node, ...flattenKnowledgeDocumentTree(node.children)]);
 }
+
+export type KnowledgeDocumentParentValidationReason =
+  | "missing_document"
+  | "book_home_locked"
+  | "same_parent"
+  | "missing_parent"
+  | "parent_not_folder"
+  | "self_parent"
+  | "descendant_parent";
+
+export interface KnowledgeDocumentParentValidation {
+  ok: boolean;
+  reason?: KnowledgeDocumentParentValidationReason;
+}
+
+export function validateKnowledgeDocumentParent(
+  documentId: string,
+  parentId: string | undefined | null,
+  documents: KnowledgeDocument[],
+): KnowledgeDocumentParentValidation {
+  const documentsById = new Map(documents.map((document) => [document.id, document]));
+  const document = documentsById.get(documentId);
+  const normalizedParentId = parentId || undefined;
+
+  if (!document) return { ok: false, reason: "missing_document" };
+  if (document.type === "book_home") return { ok: false, reason: "book_home_locked" };
+  if ((document.parentId || undefined) === normalizedParentId) {
+    return { ok: false, reason: "same_parent" };
+  }
+  if (!normalizedParentId) return { ok: true };
+  if (normalizedParentId === documentId) return { ok: false, reason: "self_parent" };
+
+  const parent = documentsById.get(normalizedParentId);
+  if (!parent) return { ok: false, reason: "missing_parent" };
+  if (parent.type !== "folder") return { ok: false, reason: "parent_not_folder" };
+  if (hasAncestryCycle(documentId, normalizedParentId, documentsById)) {
+    return { ok: false, reason: "descendant_parent" };
+  }
+
+  return { ok: true };
+}

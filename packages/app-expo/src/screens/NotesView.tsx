@@ -1626,25 +1626,24 @@ function KnowledgeHomePanel({
       contentContainerStyle={styles.knowledgeContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.knowledgeHero}>
-        <View style={styles.knowledgeHeroTop}>
-          <View style={styles.knowledgeHeroIcon}>
-            <SparklesIcon size={16} color={colors.primary} />
-          </View>
-          <Text style={styles.knowledgeHeroEyebrow}>{t("notes.knowledgeEyebrow", "知识库")}</Text>
+      <View style={styles.knowledgeVaultHeader}>
+        <View style={styles.knowledgeVaultIcon}>
+          <FolderIcon size={15} color={colors.primary} />
         </View>
-        <Text style={styles.knowledgeHeroTitle} numberOfLines={2}>
-          {book.title}
-        </Text>
-        <Text style={styles.knowledgeHeroSubtitle} numberOfLines={1}>
-          {book.author}
-        </Text>
-        <View style={styles.knowledgeMetricRail}>
-          <Text style={styles.knowledgeMetricText}>
+        <View style={styles.knowledgeVaultText}>
+          <Text style={styles.knowledgeVaultEyebrow}>{t("notes.knowledgeEyebrow", "知识库")}</Text>
+          <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
+            {book.title}
+          </Text>
+          <Text style={styles.knowledgeVaultPath} numberOfLines={1}>
+            {activePath || t("notes.knowledgeVaultRoot", "知识库")}
+          </Text>
+        </View>
+        <View style={styles.knowledgeVaultStats}>
+          <Text style={styles.knowledgeVaultStatText}>
             {documents.length} {t("notes.knowledgeDocuments", "文档")}
           </Text>
-          <View style={styles.knowledgeMetricDot} />
-          <Text style={styles.knowledgeMetricText}>
+          <Text style={styles.knowledgeVaultStatText}>
             {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
           </Text>
         </View>

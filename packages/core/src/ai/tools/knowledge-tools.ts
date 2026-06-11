@@ -10,6 +10,7 @@ import {
   getKnowledgeDocuments,
   searchKnowledgeDocuments,
 } from "../../db/database";
+import { validateKnowledgeDocumentParent } from "../../knowledge/document-utils";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
 import type {
   AIConfig,
@@ -129,6 +130,57 @@ function createExcerpt(markdown: string): string | undefined {
 
 function markdownToKnowledgeJson(markdown: string): JSONValue {
   return markdownToBasicTiptap(markdown) as unknown as JSONValue;
+}
+
+function sameOptionalString(left: string | undefined, right: string | undefined): boolean {
+  return (left || undefined) === (right || undefined);
+}
+
+function parentValidationError(reason: string): string {
+  return `Invalid parentId: ${reason}`;
+}
+
+async function resolveCreateParentContext({
+  type,
+  bookId,
+  parentId,
+}: {
+  type: KnowledgeDocumentType;
+  bookId?: string;
+  parentId?: string;
+}): Promise<{ bookId?: string; error?: string }> {
+  if (!parentId) return { bookId };
+  if (type === "book_home") return { bookId, error: parentValidationError("book_home_locked") };
+
+  const parent = await getKnowledgeDocument(parentId);
+  if (!parent) return { bookId, error: parentValidationError("missing_parent") };
+  if (parent.type !== "folder")
+    return { bookId, error: parentValidationError("parent_not_folder") };
+  if (bookId && !sameOptionalString(bookId, parent.bookId)) {
+    return { bookId, error: parentValidationError("book_mismatch") };
+  }
+
+  return { bookId: bookId ?? parent.bookId };
+}
+
+async function validateUpdateParentChange(
+  document: KnowledgeDocument,
+  parentId: string | undefined,
+): Promise<string | null> {
+  const documents = await getKnowledgeDocuments({
+    ...(document.bookId ? { bookId: document.bookId } : {}),
+    limit: 5000,
+  });
+  const validation = validateKnowledgeDocumentParent(document.id, parentId, documents);
+  if (!validation.ok) return parentValidationError(validation.reason ?? "invalid_parent");
+
+  if (!parentId) return null;
+  const parent = documents.find((item) => item.id === parentId);
+  if (!parent) return parentValidationError("missing_parent");
+  if (!sameOptionalString(parent.bookId, document.bookId)) {
+    return parentValidationError("book_mismatch");
+  }
+  return null;
 }
 
 function createSnippet(document: KnowledgeDocument, query: string): string {
@@ -400,6 +452,8 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       const bookId = String(args.bookId ?? "").trim() || undefined;
       const parentId = normalizeParentId(args.parentId);
       const type = normalizeDocumentType(args.type);
+      const parentContext = await resolveCreateParentContext({ type, bookId, parentId });
+      if (parentContext.error) return { success: false, error: parentContext.error };
       const contentJson = markdownToKnowledgeJson(contentMd);
 
       return {
@@ -412,7 +466,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
           id: generateId(),
           type,
           title,
-          bookId,
+          bookId: parentContext.bookId,
           parentId,
           tags: tags ?? [],
           contentMd,
@@ -478,6 +532,8 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
       if (Object.prototype.hasOwnProperty.call(args, "parentId")) {
         const parentId = normalizeParentId(args.parentId);
         if ((parentId || undefined) !== (document.parentId || undefined)) {
+          const parentError = await validateUpdateParentChange(document, parentId);
+          if (parentError) return { success: false, error: parentError, documentId };
           patch.parentId = parentId;
           changedFields.push("parentId");
         }

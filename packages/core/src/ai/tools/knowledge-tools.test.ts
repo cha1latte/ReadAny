@@ -221,6 +221,10 @@ describe("knowledge tools", () => {
   });
 
   it("creates confirmation-required drafts without saving knowledge documents", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      doc({ id: "folder-1", type: "folder", title: "Folder" }),
+    );
+
     const tool = createProposeKnowledgeDocumentCreateTool();
     const result = (await tool.execute({
       reasoning: "User asked to save a summary",
@@ -257,12 +261,68 @@ describe("knowledge tools", () => {
       contentJson: { type: "doc" },
       excerpt: "Summary Slow reading helps memory.",
     });
-    expect(dbMocks.getKnowledgeDocument).not.toHaveBeenCalled();
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("folder-1");
     expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
   });
 
+  it("rejects create drafts under missing or non-folder parents", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(null);
+
+    const tool = createProposeKnowledgeDocumentCreateTool();
+    await expect(
+      tool.execute({
+        reasoning: "Create in a folder",
+        title: "Bad child",
+        contentMd: "Body",
+        parentId: "missing-folder",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "Invalid parentId: missing_parent",
+    });
+
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(doc({ id: "doc-parent" }));
+    await expect(
+      tool.execute({
+        reasoning: "Create in a document",
+        title: "Bad child",
+        contentMd: "Body",
+        parentId: "doc-parent",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "Invalid parentId: parent_not_folder",
+    });
+  });
+
+  it("inherits the book id from the parent folder when creating drafts", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      doc({ id: "folder-1", type: "folder", bookId: "book-9" }),
+    );
+
+    const tool = createProposeKnowledgeDocumentCreateTool();
+    const result = (await tool.execute({
+      reasoning: "Create in the active folder",
+      title: "Folder Child",
+      contentMd: "Body",
+      parentId: "folder-1",
+    })) as { success: boolean; draft: { bookId?: string; parentId?: string } };
+
+    expect(result).toMatchObject({
+      success: true,
+      draft: {
+        bookId: "book-9",
+        parentId: "folder-1",
+      },
+    });
+  });
+
   it("creates confirmation-required update patches for existing knowledge documents", async () => {
-    dbMocks.getKnowledgeDocument.mockResolvedValue(doc());
+    dbMocks.getKnowledgeDocument.mockResolvedValue(doc({ type: "standalone_note" }));
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      doc({ type: "standalone_note" }),
+      doc({ id: "folder-1", type: "folder", title: "Target Folder" }),
+    ]);
 
     const tool = createProposeKnowledgeDocumentUpdateTool();
     const result = (await tool.execute({
@@ -287,6 +347,7 @@ describe("knowledge tools", () => {
     };
 
     expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-1");
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(result.success).toBe(true);
     expect(result.requiresConfirmation).toBe(true);
     expect(result.documentId).toBe("doc-1");
@@ -305,6 +366,27 @@ describe("knowledge tools", () => {
       "excerpt",
       "tags",
     ]);
+  });
+
+  it("rejects update patches that move documents into invalid parents", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(doc({ type: "standalone_note" }));
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      doc({ type: "standalone_note" }),
+      doc({ id: "not-folder", type: "summary", title: "Not Folder" }),
+    ]);
+
+    const tool = createProposeKnowledgeDocumentUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "Move to a target",
+      documentId: "doc-1",
+      parentId: "not-folder",
+    })) as { success: boolean; error: string; documentId: string };
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid parentId: parent_not_folder",
+      documentId: "doc-1",
+    });
   });
 
   it("does not create an update proposal when nothing changes", async () => {

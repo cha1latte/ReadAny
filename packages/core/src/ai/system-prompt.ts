@@ -103,10 +103,10 @@ function buildToolsSection(
     "- **searchKnowledgeBase**: Search durable ReadAny knowledge documents, book home pages, reviews, summaries, and standalone notes (params: reasoning, query, bookId, type, limit)",
   );
   tools.push(
-    "- **proposeKnowledgeDocumentCreate**: Draft a new knowledge document for user confirmation only; it does NOT save anything (params: reasoning, title, contentMd, type, bookId, tags)",
+    "- **proposeKnowledgeDocumentCreate**: Draft a new knowledge document for user confirmation only; it does NOT save anything. Use parentId to place it inside a vault folder when appropriate (params: reasoning, title, contentMd, type, bookId, parentId, tags)",
   );
   tools.push(
-    "- **proposeKnowledgeDocumentUpdate**: Draft a patch for an existing knowledge document for user confirmation only; it does NOT save anything (params: reasoning, documentId, title, contentMd, tags)",
+    "- **proposeKnowledgeDocumentUpdate**: Draft a patch for an existing knowledge document for user confirmation only; it does NOT save anything. Use parentId to move a document between vault folders (params: reasoning, documentId, title, contentMd, parentId, tags)",
   );
   tools.push(
     "- **proposeKnowledgeLinkCreate**: Draft a link between knowledge documents, highlights, CFIs, books, URLs, Obsidian paths, or AI messages for user confirmation only; it does NOT save anything (params: reasoning, fromDocumentId, toKind, toId, relation, label, cfi)",

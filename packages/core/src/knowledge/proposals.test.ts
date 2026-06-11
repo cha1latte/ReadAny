@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dbMocks = vi.hoisted(() => ({
   createKnowledgeDocument: vi.fn(),
   getKnowledgeDocument: vi.fn(),
+  getKnowledgeDocuments: vi.fn(),
   getKnowledgeLinks: vi.fn(),
   insertKnowledgeLink: vi.fn(),
   updateKnowledgeDocument: vi.fn(),
@@ -22,6 +23,24 @@ describe("knowledge write proposals", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  function document(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "doc-1",
+      bookId: "book-1",
+      parentId: undefined,
+      type: "standalone_note",
+      title: "Note",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "Body",
+      contentSchemaVersion: 1,
+      excerpt: undefined,
+      tags: [],
+      createdAt: 1000,
+      updatedAt: 2000,
+      ...overrides,
+    };
+  }
 
   it("normalizes confirmation-required create proposals", () => {
     const proposal = getKnowledgeWriteProposal({
@@ -181,6 +200,11 @@ describe("knowledge write proposals", () => {
     });
     expect(updateProposal).not.toBeNull();
     if (!updateProposal) throw new Error("Expected update proposal");
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "doc-1", bookId: "book-1" }));
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({ id: "doc-1", bookId: "book-1" }),
+      document({ id: "folder-1", type: "folder", title: "Folder", bookId: "book-1" }),
+    ]);
 
     await expect(applyKnowledgeWriteProposal(updateProposal)).resolves.toEqual({
       action: "update",
@@ -191,6 +215,66 @@ describe("knowledge write proposals", () => {
       title: "Updated",
       tags: ["done"],
     });
+  });
+
+  it("validates parent folders before applying create proposals", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      draft: {
+        type: "standalone_note",
+        title: "Child Note",
+        bookId: "book-1",
+        parentId: "not-folder",
+        contentMd: "Body",
+        contentJson: { type: "doc", content: [] },
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "not-folder", type: "summary" }));
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document parent: parent_not_folder",
+    );
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("validates parent moves before applying update proposals", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "folder-root",
+      patch: {
+        parentId: "folder-child",
+      },
+      changedFields: ["parentId"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "folder-root", type: "folder", bookId: "book-1" }),
+    );
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({ id: "folder-root", type: "folder", bookId: "book-1" }),
+      document({
+        id: "folder-child",
+        type: "folder",
+        parentId: "folder-root",
+        bookId: "book-1",
+      }),
+    ]);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document parent: descendant_parent",
+    );
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
   });
 
   it("applies link proposals once and avoids duplicates", async () => {

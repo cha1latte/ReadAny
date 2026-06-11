@@ -21,6 +21,7 @@ import {
   getBook as getBookRecord,
   getKnowledgeAttachments,
   getKnowledgeBacklinks,
+  getKnowledgeDocument,
   getKnowledgeDocuments,
   getKnowledgeLinks,
   updateKnowledgeDocument,
@@ -29,6 +30,8 @@ import { openDesktopBook } from "@/lib/library/open-book";
 import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { maybeCompressAndPersistKnowledgeSummary } from "@readany/core/ai";
 import {
   type ExportFormat,
   type KnowledgeExportFile,
@@ -40,6 +43,7 @@ import {
 } from "@readany/core/export";
 import {
   createKnowledgeExcerpt,
+  createKnowledgeSummarySourceFingerprint,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -56,10 +60,11 @@ import type {
   Note,
 } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
-import { cn } from "@readany/core/utils";
+import { cn, providerRequiresApiKey } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
 import {
   AlertTriangle,
+  Brain,
   BookOpen,
   Check,
   ChevronLeft,
@@ -316,6 +321,7 @@ export function NotesPage() {
   } = useAnnotationStore();
   const { activeTabId } = useAppStore();
   const books = useLibraryStore((s) => s.books);
+  const aiConfig = useSettingsStore((s) => s.aiConfig);
 
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -342,6 +348,7 @@ export function NotesPage() {
   const [isKnowledgeRelationsLoading, setIsKnowledgeRelationsLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+  const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const [isKnowledgeVaultExporting, setIsKnowledgeVaultExporting] = useState(false);
   const [knowledgeVaultConflicts, setKnowledgeVaultConflicts] =
@@ -828,6 +835,80 @@ export function NotesPage() {
     }
   };
 
+  const handleCompressKnowledgeSummary = async () => {
+    if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
+
+    const endpoint = aiConfig.endpoints.find((item) => item.id === aiConfig.activeEndpointId);
+    const needsKey = endpoint ? providerRequiresApiKey(endpoint.provider) : true;
+    if (!endpoint || (needsKey && !endpoint.apiKey) || !aiConfig.activeModel) {
+      toast.error(t("notes.knowledgeSummaryAIConfigMissing"));
+      return;
+    }
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    const liveDocument: KnowledgeDocument = {
+      ...knowledgeHome,
+      title: knowledgeTitle.trim() || knowledgeHome.title,
+      contentJson: knowledgeValue.contentJson,
+      contentMd: knowledgeValue.contentMd,
+      excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+      tags: normalizeKnowledgeTags(knowledgeTags),
+      updatedAt: Date.now(),
+    };
+
+    setIsKnowledgeSummaryCompressing(true);
+    try {
+      const result = await maybeCompressAndPersistKnowledgeSummary(liveDocument, aiConfig);
+      if (result.status === "failed") {
+        toast.error(t("notes.knowledgeSummaryFailed"), {
+          description: result.error,
+        });
+        return;
+      }
+
+      if (result.status === "skipped") {
+        const message =
+          result.plan.reason === "empty"
+            ? t("notes.knowledgeSummaryEmpty")
+            : result.plan.reason === "below_threshold"
+              ? t("notes.knowledgeSummaryTooShort")
+              : t("notes.knowledgeSummaryUpToDate");
+        toast.success(message);
+        return;
+      }
+
+      const refreshedDocument = await getKnowledgeDocument(liveDocument.id);
+      const updatedDocument: KnowledgeDocument =
+        refreshedDocument ??
+        ({
+          ...liveDocument,
+          summaryMd: result.state?.summaryMd,
+          summarySourceFingerprint: result.state?.sourceFingerprint,
+          summarySourceUpdatedAt: result.state?.sourceUpdatedAt,
+          summaryUpdatedAt: result.state?.compressedAt,
+          updatedAt: Date.now(),
+        } satisfies KnowledgeDocument);
+
+      setKnowledgeHome(updatedDocument);
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((document) =>
+            document.id === updatedDocument.id ? updatedDocument : document,
+          ),
+          documents.find((document) => document.type === "book_home")?.id,
+        ),
+      );
+      toast.success(t("notes.knowledgeSummaryCompressed"));
+    } catch (error) {
+      console.error("[Notes] Failed to compress knowledge summary:", error);
+      toast.error(t("notes.knowledgeSummaryFailed"));
+    } finally {
+      setIsKnowledgeSummaryCompressing(false);
+    }
+  };
+
   const handleOpenBook = async (bookId: string, _title: string, cfi?: string) => {
     const book =
       books.find((item) => item.id === bookId) ??
@@ -1302,6 +1383,7 @@ export function NotesPage() {
                 isRelationsLoading={isKnowledgeRelationsLoading}
                 isLoading={isKnowledgeLoading}
                 isSaving={isKnowledgeSaving}
+                isSummaryCompressing={isKnowledgeSummaryCompressing}
                 isCreatingDocument={isKnowledgeDocumentCreating}
                 isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
                 onTitleChange={setKnowledgeTitle}
@@ -1310,6 +1392,7 @@ export function NotesPage() {
                 onSelectDocument={openKnowledgeDocument}
                 onCreateDocument={handleCreateKnowledgeDocument}
                 onDeleteDocument={handleDeleteKnowledgeDocument}
+                onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
                 onExportVault={handleKnowledgeVaultExport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
@@ -1405,6 +1488,7 @@ interface KnowledgeHomePanelProps {
   isRelationsLoading: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  isSummaryCompressing: boolean;
   isCreatingDocument: boolean;
   isSaved: boolean;
   onTitleChange: (title: string) => void;
@@ -1413,6 +1497,7 @@ interface KnowledgeHomePanelProps {
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
+  onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
   onOpenBook: (cfi?: string) => void;
@@ -1435,6 +1520,7 @@ function KnowledgeHomePanel({
   isRelationsLoading,
   isLoading,
   isSaving,
+  isSummaryCompressing,
   isCreatingDocument,
   isSaved,
   onTitleChange,
@@ -1443,6 +1529,7 @@ function KnowledgeHomePanel({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onCompressSummary,
   onExport,
   onExportVault,
   onOpenBook,
@@ -1558,6 +1645,13 @@ function KnowledgeHomePanel({
             isLoading={isRelationsLoading}
             onSelectDocument={onSelectDocument}
             onOpenBook={onOpenBook}
+            t={t}
+          />
+
+          <KnowledgeSummaryMemoryCard
+            document={document}
+            isCompressing={isSummaryCompressing}
+            onCompress={onCompressSummary}
             t={t}
           />
 
@@ -1813,6 +1907,111 @@ function KnowledgeRelationsPanel({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function KnowledgeSummaryMemoryCard({
+  document,
+  isCompressing,
+  onCompress,
+  t,
+}: {
+  document: KnowledgeDocument;
+  isCompressing: boolean;
+  onCompress: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const summary = document.summaryMd?.trim();
+  const updatedAt = document.summaryUpdatedAt;
+  const isStale =
+    !!summary &&
+    document.summarySourceFingerprint !== createKnowledgeSummarySourceFingerprint(document);
+  const statusLabel = !summary
+    ? t("notes.knowledgeSummaryMissing")
+    : isStale
+      ? t("notes.knowledgeSummaryStale")
+      : t("notes.knowledgeSummaryReady");
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Brain className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">
+              {t("notes.knowledgeSummaryMemory")}
+            </p>
+            <p
+              className={cn(
+                "mt-0.5 text-[11px]",
+                !summary
+                  ? "text-muted-foreground"
+                  : isStale
+                    ? "text-foreground"
+                    : "text-primary",
+              )}
+            >
+              {statusLabel}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/60 bg-background px-2 text-[11px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={onCompress}
+          disabled={isCompressing}
+        >
+          {isCompressing ? (
+            <span className="h-3 w-3 animate-spin rounded-full border border-primary/30 border-t-primary" />
+          ) : (
+            <Sparkles className="h-3 w-3 text-primary" />
+          )}
+          {isCompressing
+            ? t("notes.knowledgeSummaryCompressing")
+            : t("notes.knowledgeSummaryCompress")}
+        </button>
+      </div>
+
+      {summary ? (
+        <div className="rounded-md border border-border/40 bg-background px-2.5 py-2">
+          <div className="max-h-36 overflow-hidden text-[11px] leading-relaxed text-muted-foreground">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h1: ({ children }) => (
+                  <p className="mb-1 text-xs font-semibold text-foreground">{children}</p>
+                ),
+                h2: ({ children }) => (
+                  <p className="mb-1 text-xs font-semibold text-foreground">{children}</p>
+                ),
+                h3: ({ children }) => (
+                  <p className="mb-1 text-[11px] font-semibold text-foreground">{children}</p>
+                ),
+                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="mb-1 list-disc pl-4 last:mb-0">{children}</ul>,
+                ol: ({ children }) => (
+                  <ol className="mb-1 list-decimal pl-4 last:mb-0">{children}</ol>
+                ),
+                li: ({ children }) => <li className="mb-0.5">{children}</li>,
+              }}
+            >
+              {summary}
+            </ReactMarkdown>
+          </div>
+          {updatedAt ? (
+            <p className="mt-2 border-t border-border/40 pt-1.5 text-[10px] text-muted-foreground">
+              {t("notes.knowledgeSummaryUpdatedAt", {
+                time: new Date(updatedAt).toLocaleString(),
+              })}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          {t("notes.knowledgeSummaryPreview")}
+        </p>
+      )}
     </div>
   );
 }

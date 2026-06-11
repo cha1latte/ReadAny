@@ -5,7 +5,8 @@ testable layers.
 
 ## Phase 0: Research and Design
 
-Status: current branch.
+Status: completed as the initial design baseline. The current branch has moved
+into layered runtime implementation.
 
 Deliverables:
 
@@ -17,6 +18,9 @@ Deliverables:
 No runtime behavior should change in this phase.
 
 ## Phase 1: Core Knowledge Model
+
+Status: implemented on the current branch; keep expanding tests when the model
+changes.
 
 Goal:
 
@@ -43,6 +47,9 @@ Verification:
 
 ## Phase 2: Desktop Knowledge MVP
 
+Status: implemented as an active MVP on the current branch; polish and
+compatibility work continues.
+
 Goal:
 
 - Introduce a desktop knowledge page for books while keeping old notes usable.
@@ -65,6 +72,9 @@ Verification:
 
 ## Phase 3: Mobile WebView Tiptap Editor
 
+Status: implemented for knowledge documents on the current branch. Legacy quick
+annotation surfaces still use lightweight native editors by design.
+
 Goal:
 
 - Replace mobile Markdown TextInput editing with a WebView Tiptap editor.
@@ -85,6 +95,10 @@ Verification:
 - Existing reader selection flow remains fast.
 
 ## Phase 4: Export and Obsidian v1
+
+Status: partially implemented. Document export, vault package generation,
+manifests, attachment path planning, conflict detection, and ReadAny card
+fallbacks exist. Linked-folder import/reconcile remains future work.
 
 Goal:
 
@@ -108,6 +122,10 @@ Verification:
 
 ## Phase 5: AI Knowledge Tools
 
+Status: partially implemented. Search/get/propose/create/update/link tooling,
+confirmation proposals, compact summaries, and proposal cards exist. Broader
+retrieval UX and end-to-end validation still need work.
+
 Goal:
 
 - Let AI read and manage the user's knowledge base safely.
@@ -126,6 +144,10 @@ Verification:
 - Tool failures display clear failure cards on desktop and mobile.
 
 ## Phase 6: Custom Card Platform
+
+Status: partially implemented. Built-in card registry, card templates, desktop
+node views, mobile WebView card rendering, and Markdown fallbacks exist. Richer
+card editing and migrations remain future work.
 
 Goal:
 

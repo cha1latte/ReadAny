@@ -6,14 +6,16 @@ Use one shared Tiptap editor model across desktop and mobile.
 
 Desktop:
 
-- Replace the current note-only `MarkdownEditor` with a reusable
-  `KnowledgeEditor`.
+- Use the reusable `KnowledgeEditor` for knowledge documents while keeping the
+  current note-only `MarkdownEditor` for legacy quick-note surfaces until those
+  flows are migrated.
 - Keep React Tiptap and the existing visual language.
 - Save canonical JSON plus Markdown projection.
 
 Mobile:
 
-- Replace the native `RichTextEditor` with a WebView-backed Tiptap editor.
+- Use the WebView-backed Tiptap editor for knowledge documents while the native
+  `RichTextEditor` remains limited to legacy quick-note surfaces.
 - Reuse the same extension list and card registry.
 - Use a typed RN bridge for editor lifecycle, content updates, toolbar state,
   focus, blur, keyboard-aware sizing, and errors.
@@ -21,8 +23,10 @@ Mobile:
 Dependency note:
 
 - Desktop already depends on Tiptap packages.
-- Mobile currently has `react-native-webview`, but does not yet ship a Tiptap
-  editor bundle.
+- Mobile now ships a generated Tiptap editor bundle at
+  `packages/app-expo/assets/editor/knowledge-editor.html`; rebuild it with
+  `packages/app-expo/scripts/build-knowledge-editor.js` when WebView editor
+  extensions change.
 - Static JSON-to-Markdown/HTML rendering should add `@tiptap/static-renderer`
   or an equivalent shared renderer in the package that owns editor utilities.
 

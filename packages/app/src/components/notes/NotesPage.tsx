@@ -2041,6 +2041,7 @@ function KnowledgeHomePanel({
     () => (document ? documents.filter((item) => item.parentId === document.id) : []),
     [document, documents],
   );
+  const [isContextInspectorOpen, setIsContextInspectorOpen] = useState(true);
 
   if (isLoading || !document) {
     return (
@@ -2057,7 +2058,14 @@ function KnowledgeHomePanel({
 
   return (
     <div className="min-h-full bg-background p-3">
-      <div className="mx-auto grid min-h-[calc(100vh-6.5rem)] max-w-[1540px] grid-cols-[280px_minmax(0,1fr)_294px] gap-3">
+      <div
+        className={cn(
+          "mx-auto grid min-h-[calc(100vh-6.5rem)] max-w-[1540px] gap-3",
+          isContextInspectorOpen
+            ? "grid-cols-[280px_minmax(0,1fr)_294px]"
+            : "grid-cols-[280px_minmax(0,1fr)]",
+        )}
+      >
         <KnowledgeDocumentExplorer
           documents={documents}
           activeDocumentId={activeDocumentId}
@@ -2106,6 +2114,20 @@ function KnowledgeHomePanel({
                       ? t("notes.knowledgeSaved")
                       : t("notes.knowledgePending")}
                 </div>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                    isContextInspectorOpen
+                      ? "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15"
+                      : "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                  onClick={() => setIsContextInspectorOpen((open) => !open)}
+                  aria-label={t("notes.knowledgeContext")}
+                  title={t("notes.knowledgeContext")}
+                >
+                  <Brain className="h-3.5 w-3.5" />
+                </button>
                 <KnowledgeExportMenu
                   onExport={onExport}
                   onImportMarkdown={onImportMarkdown}
@@ -2173,84 +2195,110 @@ function KnowledgeHomePanel({
           </div>
         </section>
 
-        <aside className="min-w-0 space-y-3 overflow-y-auto">
-          <div className="rounded-lg border border-border/55 bg-background p-3 shadow-sm">
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeSignals")}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-md border border-border/35 bg-muted/25 p-2">
-                <p className="text-lg font-semibold text-foreground">{book.notesCount}</p>
-                <p className="text-[11px] text-muted-foreground">{t("notes.notesCount")}</p>
+        {isContextInspectorOpen ? (
+          <aside className="min-w-0 space-y-3 overflow-y-auto">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-border/55 bg-background px-3 py-2.5 shadow-sm">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">
+                  {t("notes.knowledgeContext")}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {t("notes.knowledgeRelations")} · {t("notes.knowledgeRecentExcerpts")}
+                </p>
               </div>
-              <div className="rounded-md border border-border/35 bg-muted/25 p-2">
-                <p className="text-lg font-semibold text-foreground">{book.highlightsOnlyCount}</p>
-                <p className="text-[11px] text-muted-foreground">{t("notes.highlightsCount")}</p>
-              </div>
-            </div>
-          </div>
-
-          <KnowledgeRelationsPanel
-            links={links}
-            backlinks={backlinks}
-            highlights={book.highlights}
-            isLoading={isRelationsLoading}
-            onSelectDocument={onSelectDocument}
-            onOpenBook={onOpenBook}
-            t={t}
-          />
-
-          {!isFolderDocument ? (
-            <KnowledgeSummaryMemoryCard
-              document={document}
-              isCompressing={isSummaryCompressing}
-              onCompress={onCompressSummary}
-              t={t}
-            />
-          ) : null}
-
-          <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold text-foreground">
-                {t("notes.knowledgeRecentExcerpts")}
-              </p>
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                onClick={() => onOpenBook()}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => setIsContextInspectorOpen(false)}
+                aria-label={t("common.close")}
+                title={t("common.close")}
               >
-                {t("notes.openBook")}
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {recentHighlights.length === 0 ? (
-              <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
-                {t("notes.knowledgeNoSources")}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {recentHighlights.map((highlight) => (
-                  <button
-                    key={highlight.id}
-                    type="button"
-                    className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
-                    onClick={() => onOpenBook(highlight.cfi)}
-                  >
-                    <p className="line-clamp-3 text-xs leading-relaxed text-foreground/90">
-                      "{highlight.text}"
-                    </p>
-                    {highlight.chapterTitle && (
-                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                        {highlight.chapterTitle}
-                      </p>
-                    )}
-                  </button>
-                ))}
+            <div className="rounded-lg border border-border/55 bg-background p-3 shadow-sm">
+              <div className="mb-2 flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-foreground">
+                  {t("notes.knowledgeSignals")}
+                </p>
               </div>
-            )}
-          </div>
-        </aside>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border border-border/35 bg-muted/25 p-2">
+                  <p className="text-lg font-semibold text-foreground">{book.notesCount}</p>
+                  <p className="text-[11px] text-muted-foreground">{t("notes.notesCount")}</p>
+                </div>
+                <div className="rounded-md border border-border/35 bg-muted/25 p-2">
+                  <p className="text-lg font-semibold text-foreground">
+                    {book.highlightsOnlyCount}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t("notes.highlightsCount")}</p>
+                </div>
+              </div>
+            </div>
+
+            <KnowledgeRelationsPanel
+              links={links}
+              backlinks={backlinks}
+              highlights={book.highlights}
+              isLoading={isRelationsLoading}
+              onSelectDocument={onSelectDocument}
+              onOpenBook={onOpenBook}
+              t={t}
+            />
+
+            {!isFolderDocument ? (
+              <KnowledgeSummaryMemoryCard
+                document={document}
+                isCompressing={isSummaryCompressing}
+                onCompress={onCompressSummary}
+                t={t}
+              />
+            ) : null}
+
+            <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-foreground">
+                  {t("notes.knowledgeRecentExcerpts")}
+                </p>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => onOpenBook()}
+                >
+                  {t("notes.openBook")}
+                </button>
+              </div>
+
+              {recentHighlights.length === 0 ? (
+                <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
+                  {t("notes.knowledgeNoSources")}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {recentHighlights.map((highlight) => (
+                    <button
+                      key={highlight.id}
+                      type="button"
+                      className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+                      onClick={() => onOpenBook(highlight.cfi)}
+                    >
+                      <p className="line-clamp-3 text-xs leading-relaxed text-foreground/90">
+                        "{highlight.text}"
+                      </p>
+                      {highlight.chapterTitle && (
+                        <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                          {highlight.chapterTitle}
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        ) : null}
       </div>
     </div>
   );

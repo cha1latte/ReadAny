@@ -1667,7 +1667,10 @@ function KnowledgeHomePanel({
   return (
     <KeyboardAwareScrollView
       style={styles.knowledgeScroll}
-      contentContainerStyle={styles.knowledgeContent}
+      contentContainerStyle={[
+        styles.knowledgeContent,
+        workspaceMode === "document" && styles.knowledgeDocumentContent,
+      ]}
       showsVerticalScrollIndicator={false}
     >
       {workspaceMode === "vault" ? (
@@ -1695,41 +1698,6 @@ function KnowledgeHomePanel({
                 {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.knowledgeWorkspaceTabs}>
-            <TouchableOpacity
-              activeOpacity={0.82}
-              style={[styles.knowledgeWorkspaceTab, styles.knowledgeWorkspaceTabActive]}
-              onPress={() => setWorkspaceMode("vault")}
-              accessibilityRole="button"
-              accessibilityLabel={t("notes.knowledgeWorkspaceVault", "目录")}
-            >
-              <FolderIcon size={14} color={colors.primary} />
-              <Text
-                style={[styles.knowledgeWorkspaceTabText, styles.knowledgeWorkspaceTabTextActive]}
-              >
-                {t("notes.knowledgeWorkspaceVault", "目录")}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.82}
-              style={[
-                styles.knowledgeWorkspaceTab,
-                isFolderDocument && styles.knowledgeWorkspaceTabDisabled,
-              ]}
-              onPress={() => {
-                if (!isFolderDocument) setWorkspaceMode("document");
-              }}
-              disabled={isFolderDocument}
-              accessibilityRole="button"
-              accessibilityLabel={t("notes.knowledgeWorkspaceDocument", "文档")}
-            >
-              <ScrollTextIcon size={14} color={colors.mutedForeground} />
-              <Text style={styles.knowledgeWorkspaceTabText}>
-                {t("notes.knowledgeWorkspaceDocument", "文档")}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           <KnowledgeDocumentExplorer
@@ -2656,6 +2624,12 @@ function KnowledgeDocumentTreeRow({
         ]}
         onPress={() => onSelect(document)}
       >
+        {node.depth > 0 && !forceLeaf ? (
+          <View
+            pointerEvents="none"
+            style={[styles.knowledgeTreeConnector, { left: 17 + Math.min(node.depth - 1, 5) * 16 }]}
+          />
+        ) : null}
         {isFolder && !forceLeaf ? (
           <TouchableOpacity
             activeOpacity={0.72}

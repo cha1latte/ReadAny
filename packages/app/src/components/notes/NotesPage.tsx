@@ -2057,13 +2057,13 @@ function KnowledgeHomePanel({
   const isFolderDocument = document.type === "folder";
 
   return (
-    <div className="min-h-full bg-background p-3">
+    <div className="min-h-full bg-muted/15 p-3">
       <div
         className={cn(
           "mx-auto grid min-h-[calc(100vh-6.5rem)] max-w-[1540px] gap-3",
           isContextInspectorOpen
-            ? "grid-cols-[280px_minmax(0,1fr)_294px]"
-            : "grid-cols-[280px_minmax(0,1fr)]",
+            ? "grid-cols-[292px_minmax(0,1fr)_292px]"
+            : "grid-cols-[292px_minmax(0,1fr)]",
         )}
       >
         <KnowledgeDocumentExplorer
@@ -2077,8 +2077,8 @@ function KnowledgeHomePanel({
           t={t}
         />
 
-        <section className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-background shadow-sm">
-          <div className="border-b border-border/45 bg-background px-7 py-5">
+        <section className="min-w-0 overflow-hidden rounded-lg border border-border/45 bg-background shadow-sm">
+          <div className="border-b border-border/40 bg-background px-7 py-5">
             <div className="mx-auto flex max-w-[880px] items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <KnowledgeDocumentBreadcrumbs
@@ -2106,7 +2106,7 @@ function KnowledgeHomePanel({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <div className="flex h-8 items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 text-xs text-muted-foreground">
+                <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/25 px-2.5 text-xs text-muted-foreground">
                   <Save className="h-3.5 w-3.5" />
                   {isSaving
                     ? t("notes.knowledgeSaving")
@@ -2142,7 +2142,7 @@ function KnowledgeHomePanel({
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-12.5rem)] overflow-y-auto px-7 py-5">
+          <div className="max-h-[calc(100vh-12.5rem)] overflow-y-auto bg-muted/10 px-7 py-5">
             {vaultConflicts ? (
               <KnowledgeVaultConflictCard
                 notice={vaultConflicts}
@@ -2189,7 +2189,7 @@ function KnowledgeHomePanel({
                 onPickLocalImage={() => onPickImageAttachment(document)}
                 placeholder={t("notes.knowledgePlaceholder")}
                 chrome="canvas"
-                contentClassName="max-h-none min-h-[690px] px-0 pb-10 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[640px] [&_.ProseMirror]:max-w-[820px] [&_.ProseMirror]:rounded-md [&_.ProseMirror]:bg-background [&_.ProseMirror]:px-1 [&_.ProseMirror]:py-1"
+                contentClassName="max-h-none min-h-[690px] px-0 pb-12 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[780px] [&_.ProseMirror]:rounded-md [&_.ProseMirror]:bg-background [&_.ProseMirror]:px-10 [&_.ProseMirror]:py-8 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}
           </div>
@@ -2998,25 +2998,19 @@ function KnowledgeDocumentExplorer({
   };
 
   return (
-    <aside className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-background shadow-sm">
-      <div className="border-b border-border/45 bg-card p-3">
-        <div className="mb-3 rounded-md border border-border/45 bg-background px-2.5 py-2">
-          <div className="flex items-center gap-2">
-            <FolderOpen className="h-3.5 w-3.5 text-primary" />
-            <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
-              {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
-            </p>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {documents.length} {t("notes.knowledgeDocuments")} · {folderCount}{" "}
-            {t("notes.knowledgeDocumentFolder")}
-          </p>
-        </div>
-        <div className="mb-2 flex items-center justify-between gap-2">
+    <aside className="min-w-0 overflow-hidden rounded-lg border border-border/45 bg-background shadow-sm">
+      <div className="border-b border-border/40 bg-background p-3">
+        <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {t("notes.knowledgeExplorerHint")}
+            <div className="flex min-w-0 items-center gap-2">
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <p className="min-w-0 truncate text-xs font-semibold text-foreground">
+                {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+              </p>
+            </div>
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+              {documents.length} {t("notes.knowledgeDocuments")} · {folderCount}{" "}
+              {t("notes.knowledgeDocumentFolder")} · {t("notes.knowledgeExplorerHint")}
             </p>
           </div>
           <DropdownMenu>
@@ -3063,7 +3057,7 @@ function KnowledgeDocumentExplorer({
         </div>
       </div>
 
-      <div className="max-h-[calc(100vh-13rem)] space-y-0.5 overflow-y-auto p-2">
+      <div className="max-h-[calc(100vh-12.1rem)] space-y-0.5 overflow-y-auto p-2">
         {normalizedQuery ? (
           visibleSearchNodes.length === 0 ? (
             <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
@@ -3103,12 +3097,14 @@ function KnowledgeFolderOverview({
 
   return (
     <div className="mx-auto min-h-[690px] max-w-[880px] px-1 pb-10 pt-1">
-      <div className="mb-6 flex items-start justify-between gap-4 border-b border-border/40 pb-5">
+      <div className="mb-5 flex items-start justify-between gap-4 border-b border-border/35 pb-4">
         <div className="min-w-0">
-          <div className="mb-3 flex items-center gap-2.5">
-            <FolderOpen className="h-5 w-5 shrink-0 text-primary" />
+          <div className="mb-2 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FolderOpen className="h-4 w-4" />
+            </span>
             <div className="min-w-0">
-              <p className="truncate text-2xl font-semibold leading-tight text-foreground">
+              <p className="truncate text-[22px] font-semibold leading-tight text-foreground">
                 {folder.title || t("notes.knowledgeUntitledDocument")}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -3144,7 +3140,7 @@ function KnowledgeFolderOverview({
       </div>
 
       {orderedChildren.length === 0 ? (
-        <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20 px-6 py-10 text-center">
+        <div className="flex min-h-72 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
           <div className="max-w-sm">
             <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -3153,7 +3149,7 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="rounded-md border border-border/40 bg-background">
           {orderedChildren.map((document) => {
             const isFolder = document.type === "folder";
             const Icon = isFolder ? Folder : FileText;
@@ -3161,7 +3157,7 @@ function KnowledgeFolderOverview({
               <button
                 key={document.id}
                 type="button"
-                className="group flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-colors hover:border-border/55 hover:bg-muted/35"
+                className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
                 onClick={() => onSelect(document)}
               >
                 <Icon

@@ -28,6 +28,7 @@ import {
   createKnowledgeDocument,
   ensureBookHomeDocument,
   ensureHighlightNoteKnowledgeDocuments,
+  ensureNoteKnowledgeDocuments,
   getKnowledgeAttachments,
   getKnowledgeDocuments,
   getKnowledgeLinks,
@@ -373,7 +374,10 @@ export function NotesView({
           selectedKnowledgeBookId,
           selectedKnowledgeBookTitle,
         );
-        await ensureHighlightNoteKnowledgeDocuments(selectedKnowledgeBookId);
+        await Promise.all([
+          ensureHighlightNoteKnowledgeDocuments(selectedKnowledgeBookId),
+          ensureNoteKnowledgeDocuments(selectedKnowledgeBookId),
+        ]);
         const bookDocuments = await getKnowledgeDocuments({
           bookId: selectedKnowledgeBookId,
           limit: 200,

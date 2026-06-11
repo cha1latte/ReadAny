@@ -27,13 +27,22 @@ export {
   createHighlightNoteProjection,
   createHighlightNoteTitle,
   createKnowledgeExcerpt,
+  createLegacyNoteMarkdown,
+  createLegacyNoteProjection,
+  createLegacyNoteTitle,
   hasHighlightNoteContent,
+  hasLegacyNoteContent,
   isGeneratedHighlightNoteDocument,
+  isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
   knowledgeValueFingerprint,
   orderKnowledgeDocuments,
 } from "./document-utils";
-export type { HighlightNoteProjection, KnowledgeDocumentSnapshot } from "./document-utils";
+export type {
+  HighlightNoteProjection,
+  KnowledgeDocumentSnapshot,
+  LegacyNoteProjection,
+} from "./document-utils";
 export {
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,

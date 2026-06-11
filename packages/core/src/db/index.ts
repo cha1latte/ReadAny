@@ -45,6 +45,7 @@ export {
   // Note queries
   getNotes,
   getAllNotes,
+  ensureNoteKnowledgeDocuments,
   insertNote,
   updateNote,
   deleteNote,

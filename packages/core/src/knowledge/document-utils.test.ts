@@ -5,7 +5,11 @@ import {
   createHighlightNoteProjection,
   createHighlightNoteTitle,
   createKnowledgeExcerpt,
+  createLegacyNoteMarkdown,
+  createLegacyNoteProjection,
+  createLegacyNoteTitle,
   isGeneratedHighlightNoteDocument,
+  isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
   orderKnowledgeDocuments,
 } from "./document-utils";
@@ -132,5 +136,61 @@ _Source: Analects_`);
 
     expect(isGeneratedHighlightNoteDocument(generated, highlight)).toBe(true);
     expect(isGeneratedHighlightNoteDocument(edited, highlight)).toBe(false);
+  });
+
+  it("projects legacy notes into standalone knowledge documents", () => {
+    const note = {
+      id: "note-1",
+      bookId: "book-1",
+      title: "Reading question",
+      content: "Why does this argument depend on memory?",
+      chapterTitle: "Chapter 2",
+      tags: ["question"],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    expect(createLegacyNoteTitle(note)).toBe("Reading question");
+    expect(createLegacyNoteMarkdown(note)).toBe(`Why does this argument depend on memory?
+
+_Source: Chapter 2_`);
+
+    const projection = createLegacyNoteProjection(note);
+    expect(projection.contentJson).toMatchObject({ type: "doc" });
+    expect(projection.tags).toEqual(["question"]);
+    expect(projection.excerpt).toContain("argument");
+  });
+
+  it("detects generated legacy note documents without overwriting expanded notes", () => {
+    const note = {
+      id: "note-1",
+      bookId: "book-1",
+      title: "Reading question",
+      content: "Original content",
+      chapterTitle: "Chapter 2",
+      tags: ["question"],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const generated = document({
+      id: "doc-1",
+      type: "standalone_note",
+      title: "Reading question",
+      sourceKind: "note",
+      sourceId: "note-1",
+      contentMd: createLegacyNoteMarkdown(note),
+    });
+    const retitled = document({
+      ...generated,
+      title: "My own title",
+    });
+    const expanded = document({
+      ...generated,
+      contentMd: `${createLegacyNoteMarkdown(note)}\n\nUser expansion`,
+    });
+
+    expect(isGeneratedLegacyNoteDocument(generated, note)).toBe(true);
+    expect(isGeneratedLegacyNoteDocument(retitled, note)).toBe(false);
+    expect(isGeneratedLegacyNoteDocument(expanded, note)).toBe(false);
   });
 });

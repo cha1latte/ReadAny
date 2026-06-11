@@ -1,4 +1,4 @@
-import type { Highlight, JSONValue, KnowledgeDocument } from "../types";
+import type { Highlight, JSONValue, KnowledgeDocument, Note } from "../types";
 import { markdownToBasicTiptap } from "./editor-projection";
 
 export interface KnowledgeDocumentSnapshot {
@@ -11,6 +11,10 @@ export interface HighlightNoteProjection {
   contentJson: JSONValue;
   contentMd: string;
   excerpt?: string;
+}
+
+export interface LegacyNoteProjection extends HighlightNoteProjection {
+  tags: string[];
 }
 
 function compactText(value: string): string {
@@ -87,6 +91,44 @@ export function isGeneratedHighlightNoteDocument(
   if (document.sourceKind !== "highlight" || document.sourceId !== highlight.id) return false;
   const content = normalizeGeneratedMarkdown(document.contentMd);
   return !content || content === normalizeGeneratedMarkdown(createHighlightNoteMarkdown(highlight));
+}
+
+export function hasLegacyNoteContent(note: Pick<Note, "title" | "content">): boolean {
+  return !!note.title.trim() || !!note.content.trim();
+}
+
+export function createLegacyNoteTitle(note: Pick<Note, "title" | "content">): string {
+  return truncateText(note.title || note.content || "Note", 80);
+}
+
+export function createLegacyNoteMarkdown(note: Pick<Note, "content" | "chapterTitle">): string {
+  const content = note.content.trim();
+  const chapterTitle = note.chapterTitle?.trim();
+  const sections: string[] = [];
+
+  if (content) sections.push(content);
+  if (chapterTitle) sections.push(`_Source: ${chapterTitle}_`);
+
+  return sections.join("\n\n");
+}
+
+export function createLegacyNoteProjection(note: Note): LegacyNoteProjection {
+  const contentMd = createLegacyNoteMarkdown(note);
+  return {
+    title: createLegacyNoteTitle(note),
+    contentMd,
+    contentJson: markdownToBasicTiptap(contentMd) as unknown as JSONValue,
+    excerpt: createKnowledgeExcerpt(contentMd),
+    tags: note.tags,
+  };
+}
+
+export function isGeneratedLegacyNoteDocument(document: KnowledgeDocument, note: Note): boolean {
+  if (document.type !== "standalone_note") return false;
+  if (document.sourceKind !== "note" || document.sourceId !== note.id) return false;
+  if (document.title.trim() !== createLegacyNoteTitle(note)) return false;
+  const content = normalizeGeneratedMarkdown(document.contentMd);
+  return !content || content === normalizeGeneratedMarkdown(createLegacyNoteMarkdown(note));
 }
 
 export function knowledgeValueFingerprint(value: KnowledgeDocumentSnapshot): string {

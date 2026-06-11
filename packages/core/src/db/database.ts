@@ -66,6 +66,7 @@ export type { HighlightWithBook } from "./highlight-queries";
 export {
   getNotes,
   getAllNotes,
+  ensureNoteKnowledgeDocuments,
   insertNote,
   updateNote,
   deleteNote,

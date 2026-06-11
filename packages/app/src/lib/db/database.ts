@@ -26,6 +26,7 @@ export {
   deleteHighlight,
   getNotes,
   getAllNotes,
+  ensureNoteKnowledgeDocuments,
   insertNote,
   updateNote,
   deleteNote,

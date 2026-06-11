@@ -38,7 +38,10 @@ import {
   type KnowledgeExportFormat,
   type KnowledgeExportManifest,
   type KnowledgeExportObservedFile,
+  type KnowledgeVaultImportPlan,
   annotationExporter,
+  createKnowledgeVaultImportPlan,
+  createKnowledgeVaultImportWriteProposals,
   knowledgeExporter,
 } from "@readany/core/export";
 import {
@@ -50,6 +53,10 @@ import {
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
+import {
+  type KnowledgeDocumentUpdateProposal,
+  applyKnowledgeWriteProposal,
+} from "@readany/core/knowledge/proposals";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import type {
   Book,
@@ -64,13 +71,14 @@ import { cn, providerRequiresApiKey } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
 import {
   AlertTriangle,
-  Brain,
   BookOpen,
+  Brain,
   Check,
   ChevronLeft,
   Download,
   Edit3,
   FileText,
+  FolderDown,
   FolderUp,
   Highlighter,
   Link2,
@@ -105,6 +113,12 @@ interface KnowledgeVaultConflictNotice {
   rootPath: string;
   paths: string[];
   kind: "external_modified" | "untracked_existing_file";
+}
+
+interface KnowledgeVaultImportReview {
+  rootPath: string;
+  plan: KnowledgeVaultImportPlan;
+  proposals: KnowledgeDocumentUpdateProposal[];
 }
 
 function createEmptyKnowledgeValue(): KnowledgeEditorValue {
@@ -351,8 +365,12 @@ export function NotesPage() {
   const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const [isKnowledgeVaultExporting, setIsKnowledgeVaultExporting] = useState(false);
+  const [isKnowledgeVaultImporting, setIsKnowledgeVaultImporting] = useState(false);
+  const [isKnowledgeVaultImportApplying, setIsKnowledgeVaultImportApplying] = useState(false);
   const [knowledgeVaultConflicts, setKnowledgeVaultConflicts] =
     useState<KnowledgeVaultConflictNotice | null>(null);
+  const [knowledgeVaultImportReview, setKnowledgeVaultImportReview] =
+    useState<KnowledgeVaultImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
@@ -730,6 +748,58 @@ export function NotesPage() {
     setIsKnowledgeSaving(false);
   };
 
+  const refreshSelectedKnowledgeDocuments = async (preferredDocumentId?: string | null) => {
+    if (!selectedKnowledgeBookId) return;
+
+    const homeDocument = await ensureBookHomeDocument(
+      selectedKnowledgeBookId,
+      selectedKnowledgeBookTitle,
+    );
+    const bookDocuments = await getKnowledgeDocuments({
+      bookId: selectedKnowledgeBookId,
+      limit: 200,
+    });
+    const documentsById = new Map<string, KnowledgeDocument>();
+    for (const document of [homeDocument, ...bookDocuments]) {
+      documentsById.set(document.id, document);
+    }
+    const nextDocuments = orderKnowledgeDocuments(
+      Array.from(documentsById.values()),
+      homeDocument.id,
+    );
+    const nextActiveDocument =
+      nextDocuments.find((document) => document.id === preferredDocumentId) ??
+      nextDocuments.find((document) => document.id === knowledgeHome?.id) ??
+      nextDocuments[0] ??
+      null;
+
+    knowledgeSaveVersionRef.current += 1;
+    setKnowledgeDocuments(nextDocuments);
+
+    if (!nextActiveDocument) {
+      setSelectedKnowledgeDocumentId(null);
+      setKnowledgeHome(null);
+      setKnowledgeTitle("");
+      setKnowledgeTags([]);
+      const emptyValue = createEmptyKnowledgeValue();
+      setKnowledgeValue(emptyValue);
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
+      setIsKnowledgeSaving(false);
+      return;
+    }
+
+    const nextValue = createKnowledgeValueFromDocument(nextActiveDocument);
+    setSelectedKnowledgeDocumentId(nextActiveDocument.id);
+    setKnowledgeHome(nextActiveDocument);
+    setKnowledgeTitle(nextActiveDocument.title);
+    setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
+    setKnowledgeValue(nextValue);
+    setSavedKnowledgeFingerprint(
+      knowledgeDocumentFingerprint(nextActiveDocument.title, nextValue, nextActiveDocument.tags),
+    );
+    setIsKnowledgeSaving(false);
+  };
+
   const handleCreateKnowledgeDocument = async (
     type: CreatableKnowledgeDocumentType = "standalone_note",
   ) => {
@@ -1012,6 +1082,7 @@ export function NotesPage() {
 
     setIsKnowledgeVaultExporting(true);
     setKnowledgeVaultConflicts(null);
+    setKnowledgeVaultImportReview(null);
 
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
@@ -1096,6 +1167,101 @@ export function NotesPage() {
       console.error("[Notes] Knowledge vault export failed:", error);
     } finally {
       setIsKnowledgeVaultExporting(false);
+    }
+  };
+
+  const handleKnowledgeVaultImport = async () => {
+    if (isKnowledgeVaultImporting || isKnowledgeVaultImportApplying) return;
+
+    setIsKnowledgeVaultImporting(true);
+    setKnowledgeVaultConflicts(null);
+    setKnowledgeVaultImportReview(null);
+
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t("notes.knowledgeVaultImportSelectFolder"),
+      });
+      if (!selected || Array.isArray(selected)) return;
+
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      let manifest: KnowledgeExportManifest | undefined;
+      try {
+        manifest = await readKnowledgeVaultManifest(selected);
+      } catch (error) {
+        toast.error(t("notes.knowledgeVaultManifestInvalid"));
+        console.error("[Notes] Failed to read knowledge vault manifest for import:", error);
+        return;
+      }
+
+      if (!manifest) {
+        toast.error(t("notes.knowledgeVaultImportManifestMissing"));
+        return;
+      }
+
+      const files = await readExistingKnowledgeVaultFiles(
+        selected,
+        Object.values(manifest.documents).map((entry) => entry.path),
+      );
+      const plan = createKnowledgeVaultImportPlan({ manifest, files });
+      const proposals = createKnowledgeVaultImportWriteProposals(plan);
+
+      if (plan.modified.length === 0 && plan.missing.length === 0 && plan.unreadable.length === 0) {
+        toast.success(t("notes.knowledgeVaultImportUpToDate"));
+        return;
+      }
+
+      setKnowledgeVaultImportReview({
+        rootPath: selected,
+        plan,
+        proposals,
+      });
+
+      if (proposals.length > 0) {
+        toast.success(t("notes.knowledgeVaultImportReady"), {
+          description: t("notes.knowledgeVaultImportReadyDetail", {
+            count: proposals.length,
+          }),
+        });
+      } else {
+        toast.error(t("notes.knowledgeVaultImportNoApplicableChanges"));
+      }
+    } catch (error) {
+      toast.error(t("notes.knowledgeVaultImportFailed"));
+      console.error("[Notes] Knowledge vault import failed:", error);
+    } finally {
+      setIsKnowledgeVaultImporting(false);
+    }
+  };
+
+  const handleApplyKnowledgeVaultImport = async () => {
+    if (!knowledgeVaultImportReview || isKnowledgeVaultImportApplying) return;
+    if (knowledgeVaultImportReview.proposals.length === 0) return;
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    setIsKnowledgeVaultImportApplying(true);
+    try {
+      for (const proposal of knowledgeVaultImportReview.proposals) {
+        await applyKnowledgeWriteProposal(proposal);
+      }
+      await refreshSelectedKnowledgeDocuments(knowledgeHome?.id);
+      toast.success(t("notes.knowledgeVaultImportApplied"), {
+        description: t("notes.knowledgeVaultImportAppliedDetail", {
+          count: knowledgeVaultImportReview.proposals.length,
+        }),
+      });
+      setKnowledgeVaultImportReview(null);
+    } catch (error) {
+      toast.error(t("notes.knowledgeVaultImportApplyFailed"));
+      console.error("[Notes] Failed to apply knowledge vault import:", error);
+    } finally {
+      setIsKnowledgeVaultImportApplying(false);
     }
   };
 
@@ -1395,10 +1561,16 @@ export function NotesPage() {
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
                 onExportVault={handleKnowledgeVaultExport}
+                onImportVault={handleKnowledgeVaultImport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
                 isVaultExporting={isKnowledgeVaultExporting}
+                isVaultImporting={isKnowledgeVaultImporting}
+                isVaultImportApplying={isKnowledgeVaultImportApplying}
                 vaultConflicts={knowledgeVaultConflicts}
                 onDismissVaultConflicts={() => setKnowledgeVaultConflicts(null)}
+                vaultImportReview={knowledgeVaultImportReview}
+                onApplyVaultImport={handleApplyKnowledgeVaultImport}
+                onDismissVaultImport={() => setKnowledgeVaultImportReview(null)}
                 t={t}
               />
             ) : currentList.length === 0 ? (
@@ -1500,10 +1672,16 @@ interface KnowledgeHomePanelProps {
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
+  onImportVault: () => void;
   onOpenBook: (cfi?: string) => void;
   isVaultExporting: boolean;
+  isVaultImporting: boolean;
+  isVaultImportApplying: boolean;
   vaultConflicts: KnowledgeVaultConflictNotice | null;
   onDismissVaultConflicts: () => void;
+  vaultImportReview: KnowledgeVaultImportReview | null;
+  onApplyVaultImport: () => void;
+  onDismissVaultImport: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -1532,10 +1710,16 @@ function KnowledgeHomePanel({
   onCompressSummary,
   onExport,
   onExportVault,
+  onImportVault,
   onOpenBook,
   isVaultExporting,
+  isVaultImporting,
+  isVaultImportApplying,
   vaultConflicts,
   onDismissVaultConflicts,
+  vaultImportReview,
+  onApplyVaultImport,
+  onDismissVaultImport,
   t,
 }: KnowledgeHomePanelProps) {
   const recentHighlights = useMemo(
@@ -1585,7 +1769,9 @@ function KnowledgeHomePanel({
               <KnowledgeExportMenu
                 onExport={onExport}
                 onExportVault={onExportVault}
+                onImportVault={onImportVault}
                 isVaultExporting={isVaultExporting}
+                isVaultImporting={isVaultImporting}
                 t={t}
               />
             </div>
@@ -1595,6 +1781,16 @@ function KnowledgeHomePanel({
             <KnowledgeVaultConflictCard
               notice={vaultConflicts}
               onDismiss={onDismissVaultConflicts}
+              t={t}
+            />
+          ) : null}
+
+          {vaultImportReview ? (
+            <KnowledgeVaultImportReviewCard
+              review={vaultImportReview}
+              isApplying={isVaultImportApplying}
+              onApply={onApplyVaultImport}
+              onDismiss={onDismissVaultImport}
               t={t}
             />
           ) : null}
@@ -1945,11 +2141,7 @@ function KnowledgeSummaryMemoryCard({
             <p
               className={cn(
                 "mt-0.5 text-[11px]",
-                !summary
-                  ? "text-muted-foreground"
-                  : isStale
-                    ? "text-foreground"
-                    : "text-primary",
+                !summary ? "text-muted-foreground" : isStale ? "text-foreground" : "text-primary",
               )}
             >
               {statusLabel}
@@ -2236,15 +2428,187 @@ function KnowledgeVaultConflictCard({
   );
 }
 
+function KnowledgeVaultImportReviewCard({
+  review,
+  isApplying,
+  onApply,
+  onDismiss,
+  t,
+}: {
+  review: KnowledgeVaultImportReview;
+  isApplying: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const visibleModified = review.plan.modified.slice(0, 4);
+  const issueEntries = [...review.plan.missing, ...review.plan.unreadable];
+  const visibleIssues = issueEntries.slice(0, 3);
+  const hiddenModifiedCount = Math.max(0, review.plan.modified.length - visibleModified.length);
+  const hiddenIssueCount = Math.max(0, issueEntries.length - visibleIssues.length);
+  const proposalByDocumentId = new Map(
+    review.proposals.map((proposal) => [proposal.documentId, proposal] as const),
+  );
+
+  return (
+    <div className="mb-3 overflow-hidden rounded-lg border border-primary/20 bg-primary/[0.035] text-sm shadow-sm">
+      <div className="flex items-start gap-3 p-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <FolderDown className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">{t("notes.knowledgeVaultImportTitle")}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {t("notes.knowledgeVaultImportDescription")}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+              onClick={onDismiss}
+              aria-label={t("common.close")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
+              <p className="text-base font-semibold text-foreground">
+                {review.plan.modified.length}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("notes.knowledgeVaultImportModified")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
+              <p className="text-base font-semibold text-foreground">
+                {review.plan.missing.length}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("notes.knowledgeVaultImportMissing")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
+              <p className="text-base font-semibold text-foreground">
+                {review.plan.unreadable.length}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("notes.knowledgeVaultImportUnreadable")}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-md border border-border/50 bg-background/70 px-2.5 py-2">
+            <p className="truncate text-[11px] text-muted-foreground">{review.rootPath}</p>
+            {visibleModified.length > 0 ? (
+              <div className="mt-2 space-y-1.5">
+                {visibleModified.map((entry) => {
+                  const proposal = proposalByDocumentId.get(entry.documentId);
+                  const title = proposal?.patch.title ?? proposal?.current?.title ?? entry.path;
+                  return (
+                    <div
+                      key={entry.documentId}
+                      className="rounded-md border border-border/40 bg-card px-2.5 py-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-foreground">{title}</p>
+                          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                            {entry.path}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                          {t("notes.knowledgeVaultImportWillUpdate")}
+                        </span>
+                      </div>
+                      {proposal?.changedFields.length ? (
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">
+                          {t("notes.knowledgeVaultImportChangedFields", {
+                            fields: proposal.changedFields.join(", "),
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {hiddenModifiedCount > 0 ? (
+                  <p className="px-1 text-[11px] text-muted-foreground">
+                    {t("notes.knowledgeVaultImportMoreModified", { count: hiddenModifiedCount })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {visibleIssues.length > 0 ? (
+              <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
+                <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {t("notes.knowledgeVaultImportIssues")}
+                </div>
+                <div className="space-y-1">
+                  {visibleIssues.map((entry) => (
+                    <p
+                      key={`${entry.status}:${entry.path}`}
+                      className="truncate font-mono text-[11px] text-foreground/80"
+                    >
+                      {entry.path}
+                    </p>
+                  ))}
+                  {hiddenIssueCount > 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t("notes.knowledgeVaultImportMoreIssues", { count: hiddenIssueCount })}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="min-w-0 text-xs text-muted-foreground">
+              {review.proposals.length > 0
+                ? t("notes.knowledgeVaultImportSafeHint")
+                : t("notes.knowledgeVaultImportNoApplicableChanges")}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7"
+                disabled={isApplying || review.proposals.length === 0}
+                onClick={onApply}
+              >
+                {isApplying
+                  ? t("notes.knowledgeVaultImportApplying")
+                  : t("notes.knowledgeVaultImportApply")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KnowledgeExportMenu({
   onExport,
   onExportVault,
+  onImportVault,
   isVaultExporting,
+  isVaultImporting,
   t,
 }: {
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
+  onImportVault: () => void;
   isVaultExporting: boolean;
+  isVaultImporting: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
@@ -2268,6 +2632,10 @@ function KnowledgeExportMenu({
         <DropdownMenuItem onClick={onExportVault} disabled={isVaultExporting}>
           <FolderUp className="mr-2 h-4 w-4" />
           {isVaultExporting ? t("notes.knowledgeVaultExporting") : t("notes.knowledgeExportVault")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onImportVault} disabled={isVaultImporting}>
+          <FolderDown className="mr-2 h-4 w-4" />
+          {isVaultImporting ? t("notes.knowledgeVaultImporting") : t("notes.knowledgeImportVault")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

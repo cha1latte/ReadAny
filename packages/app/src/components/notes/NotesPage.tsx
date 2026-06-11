@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
-import type { HighlightWithBook } from "@/lib/db/database";
+import type { HighlightWithBook, KnowledgeBacklink } from "@/lib/db/database";
 import {
   createKnowledgeDocument,
   ensureBookHomeDocument,
@@ -19,6 +19,7 @@ import {
   ensureNoteKnowledgeDocuments,
   getBook as getBookRecord,
   getKnowledgeAttachments,
+  getKnowledgeBacklinks,
   getKnowledgeDocuments,
   getKnowledgeLinks,
   updateKnowledgeDocument,
@@ -44,7 +45,7 @@ import {
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Book, Highlight, KnowledgeDocument, Note } from "@readany/core/types";
+import type { Book, Highlight, KnowledgeDocument, KnowledgeLink, Note } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -58,11 +59,13 @@ import {
   FileText,
   FolderUp,
   Highlighter,
+  Link2,
   NotebookPen,
   Plus,
   Save,
   Search,
   Sparkles,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -92,6 +95,12 @@ function createEmptyKnowledgeValue(): KnowledgeEditorValue {
     contentMd: "",
     plainText: "",
   };
+}
+
+function normalizeKnowledgeTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boolean {
@@ -284,11 +293,15 @@ export function NotesPage() {
     null,
   );
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
+  const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
   const [knowledgeValue, setKnowledgeValue] =
     useState<KnowledgeEditorValue>(createEmptyKnowledgeValue);
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(
     knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
+  const [knowledgeLinks, setKnowledgeLinks] = useState<KnowledgeLink[]>([]);
+  const [knowledgeBacklinks, setKnowledgeBacklinks] = useState<KnowledgeBacklink[]>([]);
+  const [isKnowledgeRelationsLoading, setIsKnowledgeRelationsLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
@@ -297,8 +310,8 @@ export function NotesPage() {
     useState<KnowledgeVaultConflictNotice | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
-    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue),
-    [knowledgeTitle, knowledgeValue],
+    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
+    [knowledgeTitle, knowledgeTags, knowledgeValue],
   );
 
   useEffect(() => {
@@ -377,6 +390,7 @@ export function NotesPage() {
   }, [selectedBookId, bookNotebooks]);
   const selectedKnowledgeBookId = selectedBook?.bookId ?? null;
   const selectedKnowledgeBookTitle = selectedBook?.title ?? "";
+  const activeKnowledgeDocumentId = knowledgeHome?.id ?? null;
 
   useEffect(() => {
     if (!selectedBookId) return;
@@ -434,10 +448,13 @@ export function NotesPage() {
         setKnowledgeDocuments([]);
         setSelectedKnowledgeDocumentId(null);
         setKnowledgeTitle("");
+        setKnowledgeTags([]);
         const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeValue(emptyValue);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
         return;
       }
 
@@ -467,8 +484,11 @@ export function NotesPage() {
         setSelectedKnowledgeDocumentId(activeDocument.id);
         setKnowledgeHome(activeDocument);
         setKnowledgeTitle(activeDocument.title);
+        setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
         setKnowledgeValue(nextValue);
-        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(activeDocument.title, nextValue));
+        setSavedKnowledgeFingerprint(
+          knowledgeDocumentFingerprint(activeDocument.title, nextValue, activeDocument.tags),
+        );
       } catch (error) {
         console.error("[Notes] Failed to load knowledge home:", error);
         toast.error(t("notes.knowledgeLoadFailed"));
@@ -485,11 +505,49 @@ export function NotesPage() {
   }, [selectedKnowledgeBookId, selectedKnowledgeBookTitle, t]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadKnowledgeRelations() {
+      if (!activeKnowledgeDocumentId) {
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
+        setIsKnowledgeRelationsLoading(false);
+        return;
+      }
+
+      setIsKnowledgeRelationsLoading(true);
+      try {
+        const [links, backlinks] = await Promise.all([
+          getKnowledgeLinks(activeKnowledgeDocumentId),
+          getKnowledgeBacklinks(activeKnowledgeDocumentId),
+        ]);
+        if (cancelled) return;
+        setKnowledgeLinks(links);
+        setKnowledgeBacklinks(backlinks);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[Notes] Failed to load knowledge relations:", error);
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
+      } finally {
+        if (!cancelled) setIsKnowledgeRelationsLoading(false);
+      }
+    }
+
+    void loadKnowledgeRelations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKnowledgeDocumentId]);
+
+  useEffect(() => {
     if (!knowledgeHome || currentKnowledgeFingerprint === savedKnowledgeFingerprint) return;
 
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
 
     const timeout = window.setTimeout(async () => {
@@ -501,6 +559,7 @@ export function NotesPage() {
           contentMd: knowledgeValue.contentMd,
           contentJson: knowledgeValue.contentJson,
           excerpt: nextExcerpt,
+          tags: normalizedTags,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         const updatedDocument: KnowledgeDocument = {
@@ -509,6 +568,7 @@ export function NotesPage() {
           contentMd: knowledgeValue.contentMd,
           contentJson: knowledgeValue.contentJson,
           excerpt: nextExcerpt,
+          tags: normalizedTags,
           updatedAt: Date.now(),
         };
         setKnowledgeHome(updatedDocument);
@@ -521,7 +581,12 @@ export function NotesPage() {
           ),
         );
         if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
-        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
+        if (normalizedTags.join("\u0000") !== knowledgeTags.join("\u0000")) {
+          setKnowledgeTags(normalizedTags);
+        }
+        setSavedKnowledgeFingerprint(
+          knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue, normalizedTags),
+        );
       } catch (error) {
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         console.error("[Notes] Failed to save knowledge home:", error);
@@ -537,6 +602,7 @@ export function NotesPage() {
   }, [
     knowledgeHome,
     knowledgeTitle,
+    knowledgeTags,
     knowledgeValue,
     currentKnowledgeFingerprint,
     savedKnowledgeFingerprint,
@@ -549,6 +615,7 @@ export function NotesPage() {
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
 
     setIsKnowledgeSaving(true);
@@ -558,6 +625,7 @@ export function NotesPage() {
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: nextExcerpt,
+        tags: normalizedTags,
       });
       if (knowledgeSaveVersionRef.current !== saveVersion) return false;
       const updatedDocument: KnowledgeDocument = {
@@ -566,6 +634,7 @@ export function NotesPage() {
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: nextExcerpt,
+        tags: normalizedTags,
         updatedAt: Date.now(),
       };
       setKnowledgeHome(updatedDocument);
@@ -578,7 +647,12 @@ export function NotesPage() {
         ),
       );
       if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
+      if (normalizedTags.join("\u0000") !== knowledgeTags.join("\u0000")) {
+        setKnowledgeTags(normalizedTags);
+      }
+      setSavedKnowledgeFingerprint(
+        knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue, normalizedTags),
+      );
       return true;
     } catch (error) {
       if (knowledgeSaveVersionRef.current === saveVersion) {
@@ -603,8 +677,11 @@ export function NotesPage() {
     setSelectedKnowledgeDocumentId(document.id);
     setKnowledgeHome(document);
     setKnowledgeTitle(document.title);
+    setKnowledgeTags(normalizeKnowledgeTags(document.tags));
     setKnowledgeValue(nextValue);
-    setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+    setSavedKnowledgeFingerprint(
+      knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
+    );
     setIsKnowledgeSaving(false);
   };
 
@@ -638,8 +715,9 @@ export function NotesPage() {
       setSelectedKnowledgeDocumentId(document.id);
       setKnowledgeHome(document);
       setKnowledgeTitle(document.title);
+      setKnowledgeTags([]);
       setKnowledgeValue(nextValue);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
       toast.success(t("notes.knowledgeDocumentCreated"));
     } catch (error) {
       console.error("[Notes] Failed to create knowledge document:", error);
@@ -725,6 +803,7 @@ export function NotesPage() {
         contentJson: knowledgeValue.contentJson,
         contentMd: knowledgeValue.contentMd,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+        tags: normalizeKnowledgeTags(knowledgeTags),
         updatedAt: Date.now(),
       };
       const input = await collectBookKnowledgeExportInput(selectedBook.bookId, liveDocument, book);
@@ -767,6 +846,7 @@ export function NotesPage() {
         contentJson: knowledgeValue.contentJson,
         contentMd: knowledgeValue.contentMd,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+        tags: normalizeKnowledgeTags(knowledgeTags),
         updatedAt: Date.now(),
       };
       const input = await collectKnowledgeVaultInput(liveDocument, books);
@@ -1114,12 +1194,17 @@ export function NotesPage() {
                 documents={knowledgeDocuments}
                 activeDocumentId={selectedKnowledgeDocumentId}
                 title={knowledgeTitle}
+                tags={knowledgeTags}
                 value={knowledgeValue}
+                links={knowledgeLinks}
+                backlinks={knowledgeBacklinks}
+                isRelationsLoading={isKnowledgeRelationsLoading}
                 isLoading={isKnowledgeLoading}
                 isSaving={isKnowledgeSaving}
                 isCreatingDocument={isKnowledgeDocumentCreating}
                 isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
                 onTitleChange={setKnowledgeTitle}
+                onTagsChange={setKnowledgeTags}
                 onChange={setKnowledgeValue}
                 onSelectDocument={openKnowledgeDocument}
                 onCreateDocument={handleCreateKnowledgeDocument}
@@ -1211,12 +1296,17 @@ interface KnowledgeHomePanelProps {
   documents: KnowledgeDocument[];
   activeDocumentId: string | null;
   title: string;
+  tags: string[];
   value: KnowledgeEditorValue;
+  links: KnowledgeLink[];
+  backlinks: KnowledgeBacklink[];
+  isRelationsLoading: boolean;
   isLoading: boolean;
   isSaving: boolean;
   isCreatingDocument: boolean;
   isSaved: boolean;
   onTitleChange: (title: string) => void;
+  onTagsChange: (tags: string[]) => void;
   onChange: (value: KnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: () => void;
@@ -1235,12 +1325,17 @@ function KnowledgeHomePanel({
   documents,
   activeDocumentId,
   title,
+  tags,
   value,
+  links,
+  backlinks,
+  isRelationsLoading,
   isLoading,
   isSaving,
   isCreatingDocument,
   isSaved,
   onTitleChange,
+  onTagsChange,
   onChange,
   onSelectDocument,
   onCreateDocument,
@@ -1285,6 +1380,7 @@ function KnowledgeHomePanel({
                 className="mt-1 w-full min-w-0 truncate bg-transparent text-lg font-semibold text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
               />
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.title}</p>
+              <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -1350,9 +1446,21 @@ function KnowledgeHomePanel({
             </div>
           </div>
 
+          <KnowledgeRelationsPanel
+            links={links}
+            backlinks={backlinks}
+            highlights={book.highlights}
+            isLoading={isRelationsLoading}
+            onSelectDocument={onSelectDocument}
+            onOpenBook={onOpenBook}
+            t={t}
+          />
+
           <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeSources")}</p>
+              <p className="text-xs font-semibold text-foreground">
+                {t("notes.knowledgeRecentExcerpts")}
+              </p>
               <button
                 type="button"
                 className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -1389,6 +1497,216 @@ function KnowledgeHomePanel({
             )}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeTagEditor({
+  tags,
+  onChange,
+  t,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const commitDraft = (rawValue = draft) => {
+    const nextTags = rawValue
+      .split(/[,\uFF0C]/)
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    if (nextTags.length === 0) {
+      setDraft("");
+      return;
+    }
+    onChange(normalizeKnowledgeTags([...tags, ...nextTags]));
+    setDraft("");
+  };
+
+  const removeTag = (tag: string) => {
+    onChange(tags.filter((item) => item !== tag));
+  };
+
+  return (
+    <div className="mt-2 flex max-w-2xl flex-wrap items-center gap-1.5">
+      <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-card/70 px-2 text-[11px] font-medium text-muted-foreground">
+        <Tag className="h-3 w-3" />
+        {t("notes.knowledgeTags")}
+      </div>
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="group inline-flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-muted/35 px-2 text-xs text-foreground"
+        >
+          <span className="max-w-28 truncate">{tag}</span>
+          <button
+            type="button"
+            className="rounded-sm text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+            onClick={() => removeTag(tag)}
+            aria-label={t("notes.knowledgeTagRemove", { tag })}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => commitDraft()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === ",") {
+            event.preventDefault();
+            commitDraft();
+          }
+        }}
+        aria-label={t("notes.knowledgeTagInputLabel")}
+        placeholder={t("notes.knowledgeTagPlaceholder")}
+        className="h-7 min-w-24 flex-1 rounded-md border border-dashed border-border/70 bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:bg-card"
+      />
+    </div>
+  );
+}
+
+function knowledgeLinkTargetLabel(
+  link: KnowledgeLink,
+  highlights: HighlightWithBook[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): { title: string; detail: string; cfi?: string } {
+  if (link.toKind === "highlight") {
+    const highlight = highlights.find((item) => item.id === link.toId);
+    return {
+      title: link.label || highlight?.chapterTitle || t("notes.knowledgeSourceHighlight"),
+      detail: highlight?.text || link.toId,
+      cfi: link.cfi || highlight?.cfi,
+    };
+  }
+
+  if (link.toKind === "cfi") {
+    return {
+      title: link.label || t("notes.knowledgeSourcePosition"),
+      detail: link.cfi || link.toId,
+      cfi: link.cfi || link.toId,
+    };
+  }
+
+  if (link.toKind === "book") {
+    return {
+      title: link.label || t("notes.knowledgeSourceBook"),
+      detail: link.toId,
+    };
+  }
+
+  return {
+    title: link.label || t("notes.knowledgeSourceReference"),
+    detail: link.toId,
+    cfi: link.cfi,
+  };
+}
+
+function KnowledgeRelationsPanel({
+  links,
+  backlinks,
+  highlights,
+  isLoading,
+  onSelectDocument,
+  onOpenBook,
+  t,
+}: {
+  links: KnowledgeLink[];
+  backlinks: KnowledgeBacklink[];
+  highlights: HighlightWithBook[];
+  isLoading: boolean;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  onOpenBook: (cfi?: string) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const sourceLinks = links.filter((link) => link.relation === "source").slice(0, 4);
+  const visibleBacklinks = backlinks.slice(0, 4);
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Link2 className="h-3.5 w-3.5 text-primary" />
+          <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeRelations")}</p>
+        </div>
+        {isLoading ? (
+          <span className="text-[11px] text-muted-foreground">
+            {t("notes.knowledgeRelationsLoading")}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+            {t("notes.knowledgeSourceLinks")}
+          </p>
+          {sourceLinks.length === 0 ? (
+            <p className="rounded-md bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+              {t("notes.knowledgeNoSourceLinks")}
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {sourceLinks.map((link) => {
+                const target = knowledgeLinkTargetLabel(link, highlights, t);
+                const canOpen = !!target.cfi || link.toKind === "book";
+                return (
+                  <button
+                    key={link.id}
+                    type="button"
+                    className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors enabled:hover:border-primary/30 enabled:hover:bg-primary/5 disabled:cursor-default"
+                    onClick={() => onOpenBook(target.cfi)}
+                    disabled={!canOpen}
+                    title={canOpen ? t("notes.knowledgeOpenRelation") : undefined}
+                  >
+                    <p className="truncate text-xs font-medium text-foreground">{target.title}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                      {target.detail}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+            {t("notes.knowledgeBacklinks")}
+          </p>
+          {visibleBacklinks.length === 0 ? (
+            <p className="rounded-md bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+              {t("notes.knowledgeNoBacklinks")}
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {visibleBacklinks.map(({ link, fromDocument }) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+                  onClick={() => onSelectDocument(fromDocument)}
+                >
+                  <p className="truncate text-xs font-medium text-foreground">
+                    {fromDocument.title || t("notes.knowledgeUntitledDocument")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {knowledgeDocumentTypeLabel(fromDocument, t)}
+                  </p>
+                  {fromDocument.excerpt ? (
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                      {fromDocument.excerpt}
+                    </p>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

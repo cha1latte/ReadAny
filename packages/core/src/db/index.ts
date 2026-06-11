@@ -58,6 +58,7 @@ export {
   insertKnowledgeDocument,
   updateKnowledgeDocument,
   deleteKnowledgeDocument,
+  getKnowledgeBacklinks,
   getKnowledgeLinks,
   insertKnowledgeLink,
   deleteKnowledgeLink,
@@ -101,4 +102,8 @@ export {
 } from "./database";
 
 export type { HighlightWithBook } from "./database";
-export type { CreateKnowledgeDocumentInput, KnowledgeDocumentFilters } from "./database";
+export type {
+  CreateKnowledgeDocumentInput,
+  KnowledgeBacklink,
+  KnowledgeDocumentFilters,
+} from "./database";

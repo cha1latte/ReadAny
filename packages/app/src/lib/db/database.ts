@@ -38,6 +38,7 @@ export {
   insertKnowledgeDocument,
   updateKnowledgeDocument,
   deleteKnowledgeDocument,
+  getKnowledgeBacklinks,
   getKnowledgeLinks,
   insertKnowledgeLink,
   deleteKnowledgeLink,
@@ -74,5 +75,6 @@ export {
 export type {
   CreateKnowledgeDocumentInput,
   HighlightWithBook,
+  KnowledgeBacklink,
   KnowledgeDocumentFilters,
 } from "@readany/core/db/database";

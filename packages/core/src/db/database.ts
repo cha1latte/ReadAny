@@ -81,6 +81,7 @@ export {
   insertKnowledgeDocument,
   updateKnowledgeDocument,
   deleteKnowledgeDocument,
+  getKnowledgeBacklinks,
   getKnowledgeLinks,
   insertKnowledgeLink,
   deleteKnowledgeLink,
@@ -92,6 +93,7 @@ export {
 } from "./knowledge-queries";
 export type {
   CreateKnowledgeDocumentInput,
+  KnowledgeBacklink,
   KnowledgeDocumentFilters,
 } from "./knowledge-queries";
 

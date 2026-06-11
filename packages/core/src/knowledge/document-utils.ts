@@ -141,9 +141,11 @@ export function knowledgeValueFingerprint(value: KnowledgeDocumentSnapshot): str
 export function knowledgeDocumentFingerprint(
   title: string,
   value: KnowledgeDocumentSnapshot,
+  tags: readonly string[] = [],
 ): string {
   return JSON.stringify({
     title: title.trim(),
+    tags: [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort(),
     value: knowledgeValueFingerprint(value),
   });
 }

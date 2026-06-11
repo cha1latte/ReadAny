@@ -53,6 +53,24 @@ interface KnowledgeLinkRow {
   updated_at: number;
 }
 
+interface KnowledgeBacklinkRow extends KnowledgeLinkRow {
+  document_id: string;
+  document_book_id: string | null;
+  document_parent_id: string | null;
+  document_type: string;
+  document_title: string;
+  document_content_json: string;
+  document_content_md: string;
+  document_content_schema_version: number | null;
+  document_excerpt: string | null;
+  document_tags: string;
+  document_source_kind: string | null;
+  document_source_id: string | null;
+  document_created_at: number;
+  document_updated_at: number;
+  document_deleted_at: number | null;
+}
+
 interface KnowledgeAttachmentRow {
   id: string;
   document_id: string | null;
@@ -102,6 +120,11 @@ export interface KnowledgeDocumentFilters {
   limit?: number;
 }
 
+export interface KnowledgeBacklink {
+  link: KnowledgeLink;
+  fromDocument: KnowledgeDocument;
+}
+
 function rowToKnowledgeDocument(row: KnowledgeDocumentRow): KnowledgeDocument {
   return {
     id: row.id,
@@ -133,6 +156,29 @@ function rowToKnowledgeLink(row: KnowledgeLinkRow): KnowledgeLink {
     cfi: row.cfi || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function rowToKnowledgeBacklink(row: KnowledgeBacklinkRow): KnowledgeBacklink {
+  return {
+    link: rowToKnowledgeLink(row),
+    fromDocument: rowToKnowledgeDocument({
+      id: row.document_id,
+      book_id: row.document_book_id,
+      parent_id: row.document_parent_id,
+      type: row.document_type,
+      title: row.document_title,
+      content_json: row.document_content_json,
+      content_md: row.document_content_md,
+      content_schema_version: row.document_content_schema_version,
+      excerpt: row.document_excerpt,
+      tags: row.document_tags,
+      source_kind: row.document_source_kind,
+      source_id: row.document_source_id,
+      created_at: row.document_created_at,
+      updated_at: row.document_updated_at,
+      deleted_at: row.document_deleted_at,
+    }),
   };
 }
 
@@ -397,6 +443,42 @@ export async function getKnowledgeLinks(documentId: string): Promise<KnowledgeLi
     [documentId],
   );
   return rows.map(rowToKnowledgeLink);
+}
+
+export async function getKnowledgeBacklinks(
+  documentId: string,
+  limit = 100,
+): Promise<KnowledgeBacklink[]> {
+  const database = await getDB();
+  const rows = await database.select<KnowledgeBacklinkRow>(
+    `SELECT
+       kl.id, kl.from_document_id, kl.to_kind, kl.to_id, kl.relation, kl.label, kl.cfi,
+       kl.created_at, kl.updated_at,
+       kd.id AS document_id,
+       kd.book_id AS document_book_id,
+       kd.parent_id AS document_parent_id,
+       kd.type AS document_type,
+       kd.title AS document_title,
+       kd.content_json AS document_content_json,
+       kd.content_md AS document_content_md,
+       kd.content_schema_version AS document_content_schema_version,
+       kd.excerpt AS document_excerpt,
+       kd.tags AS document_tags,
+       kd.source_kind AS document_source_kind,
+       kd.source_id AS document_source_id,
+       kd.created_at AS document_created_at,
+       kd.updated_at AS document_updated_at,
+       kd.deleted_at AS document_deleted_at
+     FROM knowledge_links kl
+     INNER JOIN knowledge_documents kd ON kd.id = kl.from_document_id
+     WHERE kl.to_kind = 'document'
+       AND kl.to_id = ?
+       AND kd.deleted_at IS NULL
+     ORDER BY kl.updated_at DESC, kl.created_at DESC
+     LIMIT ?`,
+    [documentId, limit],
+  );
+  return rows.map(rowToKnowledgeBacklink);
 }
 
 export async function insertKnowledgeLink(link: KnowledgeLink): Promise<void> {

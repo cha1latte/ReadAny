@@ -64,6 +64,20 @@ describe("knowledge document utilities", () => {
     );
   });
 
+  it("uses normalized tag sets in document fingerprints", () => {
+    const value = {
+      contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+      contentMd: "Hello",
+    };
+
+    expect(knowledgeDocumentFingerprint("Title", value, [" idea ", "book", "idea"])).toBe(
+      knowledgeDocumentFingerprint("Title", value, ["book", "idea"]),
+    );
+    expect(knowledgeDocumentFingerprint("Title", value, ["book"])).not.toBe(
+      knowledgeDocumentFingerprint("Title", value, ["book", "idea"]),
+    );
+  });
+
   it("creates compact excerpts from markdown", () => {
     const excerpt = createKnowledgeExcerpt(`# Title
 

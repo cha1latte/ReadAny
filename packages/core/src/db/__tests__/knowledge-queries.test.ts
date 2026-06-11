@@ -34,6 +34,7 @@ const {
   deleteKnowledgeDocument,
   deleteKnowledgeLink,
   ensureBookHomeDocument,
+  getKnowledgeBacklinks,
   getKnowledgeAttachments,
   getKnowledgeCardTemplates,
   getKnowledgeDocument,
@@ -262,6 +263,58 @@ describe("knowledge-queries", () => {
 
     await deleteKnowledgeLink("link-2");
     expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-2", "knowledge_links");
+  });
+
+  it("maps backlinks with their source documents", async () => {
+    mockSelect.mockResolvedValue([
+      {
+        id: "link-1",
+        from_document_id: "doc-source",
+        to_kind: "document",
+        to_id: "doc-target",
+        relation: "related",
+        label: "Related idea",
+        cfi: null,
+        created_at: 1000,
+        updated_at: 2000,
+        document_id: "doc-source",
+        document_book_id: "book-1",
+        document_parent_id: null,
+        document_type: "standalone_note",
+        document_title: "Source note",
+        document_content_json: '{"type":"doc","content":[]}',
+        document_content_md: "Source body",
+        document_content_schema_version: 1,
+        document_excerpt: "Source body",
+        document_tags: '["idea"]',
+        document_source_kind: "book",
+        document_source_id: "book-1",
+        document_created_at: 900,
+        document_updated_at: 1800,
+        document_deleted_at: null,
+      },
+    ]);
+
+    const backlinks = await getKnowledgeBacklinks("doc-target", 5);
+
+    expect(backlinks).toHaveLength(1);
+    expect(backlinks[0].link).toMatchObject({
+      id: "link-1",
+      fromDocumentId: "doc-source",
+      toKind: "document",
+      toId: "doc-target",
+      relation: "related",
+    });
+    expect(backlinks[0].fromDocument).toMatchObject({
+      id: "doc-source",
+      type: "standalone_note",
+      title: "Source note",
+      tags: ["idea"],
+    });
+    expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining("kl.to_kind = 'document'"), [
+      "doc-target",
+      5,
+    ]);
   });
 
   it("maps and inserts knowledge attachments", async () => {

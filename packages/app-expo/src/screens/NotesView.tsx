@@ -25,11 +25,13 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   type HighlightWithBook,
+  type KnowledgeBacklink,
   createKnowledgeDocument,
   ensureBookHomeDocument,
   ensureHighlightNoteKnowledgeDocuments,
   ensureNoteKnowledgeDocuments,
   getKnowledgeAttachments,
+  getKnowledgeBacklinks,
   getKnowledgeDocuments,
   getKnowledgeLinks,
   updateKnowledgeDocument,
@@ -50,7 +52,7 @@ import {
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Book, Highlight, KnowledgeDocument } from "@readany/core/types";
+import type { Book, Highlight, KnowledgeDocument, KnowledgeLink } from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
 import type { TFunction } from "i18next";
 /**
@@ -92,6 +94,12 @@ function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
     contentMd: "",
     plainText: "",
   };
+}
+
+function normalizeKnowledgeTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 function isEmptyTiptapDocument(contentJson: KnowledgeDocument["contentJson"]): boolean {
@@ -181,19 +189,23 @@ export function NotesView({
     null,
   );
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
+  const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
   const [knowledgeValue, setKnowledgeValue] = useState<MobileKnowledgeEditorValue>(() =>
     createEmptyKnowledgeValue(),
   );
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(() =>
     knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
+  const [knowledgeLinks, setKnowledgeLinks] = useState<KnowledgeLink[]>([]);
+  const [knowledgeBacklinks, setKnowledgeBacklinks] = useState<KnowledgeBacklink[]>([]);
+  const [isKnowledgeRelationsLoading, setIsKnowledgeRelationsLoading] = useState(false);
   const [isKnowledgeLoading, setIsKnowledgeLoading] = useState(false);
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
-    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue),
-    [knowledgeTitle, knowledgeValue],
+    () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
+    [knowledgeTitle, knowledgeTags, knowledgeValue],
   );
 
   useFocusEffect(
@@ -293,6 +305,7 @@ export function NotesView({
   }, [selectedBookId, bookNotebooks]);
   const selectedKnowledgeBookId = selectedBook?.bookId ?? null;
   const selectedKnowledgeBookTitle = selectedBook?.title ?? "";
+  const activeKnowledgeDocumentId = knowledgeHome?.id ?? null;
 
   useEffect(() => {
     if (!selectedBookId) return;
@@ -361,9 +374,12 @@ export function NotesView({
         setKnowledgeDocuments([]);
         setSelectedKnowledgeDocumentId(null);
         setKnowledgeTitle("");
+        setKnowledgeTags([]);
         setKnowledgeValue(emptyValue);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
         return;
       }
 
@@ -393,8 +409,11 @@ export function NotesView({
         setSelectedKnowledgeDocumentId(activeDocument.id);
         setKnowledgeHome(activeDocument);
         setKnowledgeTitle(activeDocument.title);
+        setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
         setKnowledgeValue(nextValue);
-        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(activeDocument.title, nextValue));
+        setSavedKnowledgeFingerprint(
+          knowledgeDocumentFingerprint(activeDocument.title, nextValue, activeDocument.tags),
+        );
       } catch (error) {
         console.error("[Notes] Failed to load knowledge home:", error);
         Alert.alert(t("common.error", "错误"), t("notes.knowledgeLoadFailed", "知识主页加载失败"));
@@ -411,11 +430,49 @@ export function NotesView({
   }, [selectedKnowledgeBookId, selectedKnowledgeBookTitle, t]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadKnowledgeRelations() {
+      if (!activeKnowledgeDocumentId) {
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
+        setIsKnowledgeRelationsLoading(false);
+        return;
+      }
+
+      setIsKnowledgeRelationsLoading(true);
+      try {
+        const [links, backlinks] = await Promise.all([
+          getKnowledgeLinks(activeKnowledgeDocumentId),
+          getKnowledgeBacklinks(activeKnowledgeDocumentId),
+        ]);
+        if (cancelled) return;
+        setKnowledgeLinks(links);
+        setKnowledgeBacklinks(backlinks);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[Notes] Failed to load knowledge relations:", error);
+        setKnowledgeLinks([]);
+        setKnowledgeBacklinks([]);
+      } finally {
+        if (!cancelled) setIsKnowledgeRelationsLoading(false);
+      }
+    }
+
+    void loadKnowledgeRelations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKnowledgeDocumentId]);
+
+  useEffect(() => {
     if (!knowledgeHome || currentKnowledgeFingerprint === savedKnowledgeFingerprint) return;
 
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const valueToSave = knowledgeValue;
     const nextExcerpt = createKnowledgeExcerpt(valueToSave.contentMd);
 
@@ -428,6 +485,7 @@ export function NotesView({
           contentMd: valueToSave.contentMd,
           contentJson: valueToSave.contentJson,
           excerpt: nextExcerpt,
+          tags: normalizedTags,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         const updatedDocument: KnowledgeDocument = {
@@ -436,6 +494,7 @@ export function NotesView({
           contentMd: valueToSave.contentMd,
           contentJson: valueToSave.contentJson,
           excerpt: nextExcerpt,
+          tags: normalizedTags,
           updatedAt: Date.now(),
         };
         setKnowledgeHome(updatedDocument);
@@ -448,7 +507,12 @@ export function NotesView({
           ),
         );
         if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
-        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, valueToSave));
+        if (normalizedTags.join("\u0000") !== knowledgeTags.join("\u0000")) {
+          setKnowledgeTags(normalizedTags);
+        }
+        setSavedKnowledgeFingerprint(
+          knowledgeDocumentFingerprint(normalizedTitle, valueToSave, normalizedTags),
+        );
       } catch (error) {
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
         console.error("[Notes] Failed to save knowledge home:", error);
@@ -464,6 +528,7 @@ export function NotesView({
   }, [
     knowledgeHome,
     knowledgeTitle,
+    knowledgeTags,
     knowledgeValue,
     currentKnowledgeFingerprint,
     savedKnowledgeFingerprint,
@@ -476,6 +541,7 @@ export function NotesView({
     const saveVersion = knowledgeSaveVersionRef.current + 1;
     knowledgeSaveVersionRef.current = saveVersion;
     const normalizedTitle = knowledgeTitle.trim() || knowledgeHome.title;
+    const normalizedTags = normalizeKnowledgeTags(knowledgeTags);
     const nextExcerpt = createKnowledgeExcerpt(knowledgeValue.contentMd);
 
     setIsKnowledgeSaving(true);
@@ -485,6 +551,7 @@ export function NotesView({
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: nextExcerpt,
+        tags: normalizedTags,
       });
       if (knowledgeSaveVersionRef.current !== saveVersion) return false;
       const updatedDocument: KnowledgeDocument = {
@@ -493,6 +560,7 @@ export function NotesView({
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: nextExcerpt,
+        tags: normalizedTags,
         updatedAt: Date.now(),
       };
       setKnowledgeHome(updatedDocument);
@@ -505,7 +573,12 @@ export function NotesView({
         ),
       );
       if (normalizedTitle !== knowledgeTitle) setKnowledgeTitle(normalizedTitle);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue));
+      if (normalizedTags.join("\u0000") !== knowledgeTags.join("\u0000")) {
+        setKnowledgeTags(normalizedTags);
+      }
+      setSavedKnowledgeFingerprint(
+        knowledgeDocumentFingerprint(normalizedTitle, knowledgeValue, normalizedTags),
+      );
       return true;
     } catch (error) {
       if (knowledgeSaveVersionRef.current === saveVersion) {
@@ -521,6 +594,7 @@ export function NotesView({
   }, [
     knowledgeHome,
     knowledgeTitle,
+    knowledgeTags,
     knowledgeValue,
     currentKnowledgeFingerprint,
     savedKnowledgeFingerprint,
@@ -538,8 +612,11 @@ export function NotesView({
       setSelectedKnowledgeDocumentId(document.id);
       setKnowledgeHome(document);
       setKnowledgeTitle(document.title);
+      setKnowledgeTags(normalizeKnowledgeTags(document.tags));
       setKnowledgeValue(nextValue);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+      setSavedKnowledgeFingerprint(
+        knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
+      );
       setIsKnowledgeSaving(false);
     },
     [knowledgeHome?.id, saveActiveKnowledgeDocumentNow],
@@ -576,8 +653,9 @@ export function NotesView({
       setSelectedKnowledgeDocumentId(document.id);
       setKnowledgeHome(document);
       setKnowledgeTitle(document.title);
+      setKnowledgeTags([]);
       setKnowledgeValue(nextValue);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue));
+      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
     } catch (error) {
       console.error("[Notes] Failed to create knowledge document:", error);
       Alert.alert(
@@ -692,6 +770,7 @@ export function NotesView({
         contentMd: knowledgeValue.contentMd,
         contentJson: knowledgeValue.contentJson,
         excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+        tags: normalizeKnowledgeTags(knowledgeTags),
         updatedAt: Date.now(),
       };
       try {
@@ -713,7 +792,7 @@ export function NotesView({
         Alert.alert(t("common.error", "错误"), t("notes.exportFailed", "导出失败"));
       }
     },
-    [selectedBook, knowledgeHome, knowledgeTitle, knowledgeValue, books, t],
+    [selectedBook, knowledgeHome, knowledgeTitle, knowledgeTags, knowledgeValue, books, t],
   );
 
   const totalHighlights = stats?.totalHighlights ?? 0;
@@ -883,12 +962,17 @@ export function NotesView({
             documents={knowledgeDocuments}
             activeDocumentId={selectedKnowledgeDocumentId}
             title={knowledgeTitle}
+            tags={knowledgeTags}
             value={knowledgeValue}
+            links={knowledgeLinks}
+            backlinks={knowledgeBacklinks}
+            isRelationsLoading={isKnowledgeRelationsLoading}
             isLoading={isKnowledgeLoading}
             isCreatingDocument={isKnowledgeDocumentCreating}
             isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
             isSaving={isKnowledgeSaving}
             onTitleChange={setKnowledgeTitle}
+            onTagsChange={setKnowledgeTags}
             onChange={setKnowledgeValue}
             onSelectDocument={openKnowledgeDocument}
             onCreateDocument={handleCreateKnowledgeDocument}
@@ -1088,12 +1172,17 @@ function KnowledgeHomePanel({
   documents,
   activeDocumentId,
   title,
+  tags,
   value,
+  links,
+  backlinks,
+  isRelationsLoading,
   isLoading,
   isCreatingDocument,
   isSaved,
   isSaving,
   onTitleChange,
+  onTagsChange,
   onChange,
   onSelectDocument,
   onCreateDocument,
@@ -1114,12 +1203,17 @@ function KnowledgeHomePanel({
   documents: KnowledgeDocument[];
   activeDocumentId: string | null;
   title: string;
+  tags: string[];
   value: MobileKnowledgeEditorValue;
+  links: KnowledgeLink[];
+  backlinks: KnowledgeBacklink[];
+  isRelationsLoading: boolean;
   isLoading: boolean;
   isCreatingDocument: boolean;
   isSaved: boolean;
   isSaving: boolean;
   onTitleChange: (title: string) => void;
+  onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: () => void;
@@ -1200,6 +1294,8 @@ function KnowledgeHomePanel({
           </View>
         </View>
 
+        <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
+
         <KnowledgeDocumentStrip
           documents={documents}
           activeDocumentId={activeDocumentId}
@@ -1226,10 +1322,21 @@ function KnowledgeHomePanel({
         </View>
       </View>
 
+      <KnowledgeRelationsCard
+        links={links}
+        backlinks={backlinks}
+        highlights={book.highlights}
+        isLoading={isRelationsLoading}
+        onSelectDocument={onSelectDocument}
+        onOpenBook={onOpenBook}
+        t={t}
+        styles={styles}
+      />
+
       <View style={styles.knowledgeSourcesCard}>
         <View style={styles.knowledgeSourcesHeader}>
           <Text style={styles.knowledgeSectionTitle}>
-            {t("notes.knowledgeSources", "最近摘录")}
+            {t("notes.knowledgeRecentExcerpts", "最近摘录")}
           </Text>
           <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
             <Text style={styles.knowledgeOpenButtonText}>{t("notes.openBook", "打开书籍")}</Text>
@@ -1263,6 +1370,210 @@ function KnowledgeHomePanel({
         )}
       </View>
     </KeyboardAwareScrollView>
+  );
+}
+
+function KnowledgeTagEditor({
+  tags,
+  onChange,
+  t,
+  styles,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const commitDraft = useCallback(
+    (rawValue = draft) => {
+      const nextTags = rawValue
+        .split(/[,\uFF0C]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+      if (nextTags.length === 0) {
+        setDraft("");
+        return;
+      }
+      onChange(normalizeKnowledgeTags([...tags, ...nextTags]));
+      setDraft("");
+    },
+    [draft, onChange, tags],
+  );
+
+  return (
+    <View style={styles.knowledgeTagWrap}>
+      <Text style={styles.knowledgeTagLabel}>{t("notes.knowledgeTags", "标签")}</Text>
+      <View style={styles.knowledgeTagRow}>
+        {tags.map((tag) => (
+          <TouchableOpacity
+            key={tag}
+            activeOpacity={0.75}
+            style={styles.knowledgeTagChip}
+            onPress={() => onChange(tags.filter((item) => item !== tag))}
+            accessibilityLabel={t("notes.knowledgeTagRemove", { tag })}
+          >
+            <Text style={styles.knowledgeTagText} numberOfLines={1}>
+              {tag}
+            </Text>
+            <Text style={styles.knowledgeTagRemove}>×</Text>
+          </TouchableOpacity>
+        ))}
+        <TextInput
+          value={draft}
+          onChangeText={(text) => {
+            if (/[,\uFF0C]/.test(text)) {
+              commitDraft(text);
+              return;
+            }
+            setDraft(text);
+          }}
+          onSubmitEditing={() => commitDraft()}
+          onBlur={() => commitDraft()}
+          placeholder={t("notes.knowledgeTagPlaceholder", "添加标签")}
+          placeholderTextColor={styles.knowledgeTagInputPlaceholder.color}
+          style={styles.knowledgeTagInput}
+          returnKeyType="done"
+        />
+      </View>
+    </View>
+  );
+}
+
+function knowledgeLinkTargetLabel(
+  link: KnowledgeLink,
+  highlights: HighlightWithBook[],
+  t: TFunction,
+): { title: string; detail: string; cfi?: string } {
+  if (link.toKind === "highlight") {
+    const highlight = highlights.find((item) => item.id === link.toId);
+    return {
+      title: link.label || highlight?.chapterTitle || t("notes.knowledgeSourceHighlight", "高亮"),
+      detail: highlight?.text || link.toId,
+      cfi: link.cfi || highlight?.cfi,
+    };
+  }
+
+  if (link.toKind === "cfi") {
+    return {
+      title: link.label || t("notes.knowledgeSourcePosition", "书中位置"),
+      detail: link.cfi || link.toId,
+      cfi: link.cfi || link.toId,
+    };
+  }
+
+  if (link.toKind === "book") {
+    return {
+      title: link.label || t("notes.knowledgeSourceBook", "书籍"),
+      detail: link.toId,
+    };
+  }
+
+  return {
+    title: link.label || t("notes.knowledgeSourceReference", "引用"),
+    detail: link.toId,
+    cfi: link.cfi,
+  };
+}
+
+function KnowledgeRelationsCard({
+  links,
+  backlinks,
+  highlights,
+  isLoading,
+  onSelectDocument,
+  onOpenBook,
+  t,
+  styles,
+}: {
+  links: KnowledgeLink[];
+  backlinks: KnowledgeBacklink[];
+  highlights: HighlightWithBook[];
+  isLoading: boolean;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  onOpenBook: (cfi?: string) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const sourceLinks = links.filter((link) => link.relation === "source").slice(0, 4);
+  const visibleBacklinks = backlinks.slice(0, 4);
+
+  return (
+    <View style={styles.knowledgeSourcesCard}>
+      <View style={styles.knowledgeSourcesHeader}>
+        <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeRelations", "关系")}</Text>
+        {isLoading ? (
+          <Text style={styles.knowledgeRelationLoading}>
+            {t("notes.knowledgeRelationsLoading", "加载中")}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text style={styles.knowledgeRelationGroupTitle}>
+        {t("notes.knowledgeSourceLinks", "来源")}
+      </Text>
+      {sourceLinks.length === 0 ? (
+        <Text style={styles.knowledgeEmptySources}>
+          {t("notes.knowledgeNoSourceLinks", "暂无来源链接")}
+        </Text>
+      ) : (
+        <View style={styles.knowledgeSourceList}>
+          {sourceLinks.map((link) => {
+            const target = knowledgeLinkTargetLabel(link, highlights, t);
+            const canOpen = !!target.cfi || link.toKind === "book";
+            return (
+              <TouchableOpacity
+                key={link.id}
+                style={styles.knowledgeSourceItem}
+                activeOpacity={canOpen ? 0.75 : 1}
+                disabled={!canOpen}
+                onPress={() => onOpenBook(target.cfi)}
+              >
+                <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                  {target.title}
+                </Text>
+                <Text style={styles.knowledgeSourceText} numberOfLines={2}>
+                  {target.detail}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={styles.knowledgeRelationGroupTitle}>
+        {t("notes.knowledgeBacklinks", "反链")}
+      </Text>
+      {visibleBacklinks.length === 0 ? (
+        <Text style={styles.knowledgeEmptySources}>
+          {t("notes.knowledgeNoBacklinks", "暂无反链")}
+        </Text>
+      ) : (
+        <View style={styles.knowledgeSourceList}>
+          {visibleBacklinks.map(({ link, fromDocument }) => (
+            <TouchableOpacity
+              key={link.id}
+              style={styles.knowledgeSourceItem}
+              activeOpacity={0.75}
+              onPress={() => onSelectDocument(fromDocument)}
+            >
+              <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                {knowledgeDocumentTypeLabel(fromDocument, t)}
+              </Text>
+              <Text style={styles.knowledgeSourceText} numberOfLines={2}>
+                {fromDocument.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+              </Text>
+              {!!fromDocument.excerpt && (
+                <Text style={styles.knowledgeSourceChapter} numberOfLines={2}>
+                  {fromDocument.excerpt}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 

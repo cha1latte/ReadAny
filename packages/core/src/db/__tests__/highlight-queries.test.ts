@@ -323,7 +323,6 @@ describe("highlight-queries", () => {
           contentMd: createHighlightNoteMarkdown({
             ...sampleHighlight,
             note: "Updated note",
-            updatedAt: 2000,
           }),
         }),
       );

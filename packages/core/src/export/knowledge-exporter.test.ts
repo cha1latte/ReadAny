@@ -236,7 +236,7 @@ describe("KnowledgeExporter", () => {
       "ReadAny/Books/The Book A Study/README.md",
       "ReadAny/.readany/manifest.json",
     ]);
-    expect(vault.files.at(-1)?.mimeType).toBe("application/json");
+    expect(vault.files[vault.files.length - 1]?.mimeType).toBe("application/json");
     expect(vault.manifest).toMatchObject({
       version: 1,
       app: "ReadAny",

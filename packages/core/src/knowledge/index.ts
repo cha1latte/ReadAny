@@ -70,5 +70,16 @@ export type {
   ReadAnyCardMarkdownContext,
   ReadAnyCardTemplateSchema,
 } from "./card-registry";
+export {
+  createKnowledgeSummaryCompressionState,
+  createKnowledgeSummarySourceFingerprint,
+  prepareKnowledgeSummaryCompression,
+} from "./compact-summary";
+export type {
+  KnowledgeSummaryCompressionOptions,
+  KnowledgeSummaryCompressionPlan,
+  KnowledgeSummaryCompressionState,
+  KnowledgeSummaryDocument,
+} from "./compact-summary";
 export { ensureKnowledgeSourceLink } from "./source-links";
 export type { EnsureKnowledgeSourceLinkInput } from "./source-links";

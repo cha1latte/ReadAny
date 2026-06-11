@@ -8,6 +8,9 @@ import {
   BrainIcon,
   CheckCheckIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
+  FolderIcon,
+  FolderPlusIcon,
   HighlighterIcon,
   LoaderIcon,
   NotebookPenIcon,
@@ -51,8 +54,11 @@ import {
   knowledgeExporter,
 } from "@readany/core/export";
 import {
+  type KnowledgeDocumentTreeNode,
+  buildKnowledgeDocumentTree,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
+  flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -104,7 +110,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "knowledge" | "notes" | "highlights";
 type CreatableKnowledgeDocumentType = Extract<
   KnowledgeDocumentType,
-  "standalone_note" | "review" | "summary"
+  "folder" | "standalone_note" | "review" | "summary"
 >;
 
 function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
@@ -132,6 +138,7 @@ function knowledgeDocumentCreateTitle(
   count: number,
   t: TFunction,
 ): string {
+  if (type === "folder") return t("notes.knowledgeNewFolderTitle", { count });
   if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
   if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
   return t("notes.knowledgeNewNoteTitle", { count });
@@ -659,7 +666,7 @@ export function NotesView({
   );
 
   const handleCreateKnowledgeDocument = useCallback(
-    async (type: CreatableKnowledgeDocumentType = "standalone_note") => {
+    async (type: CreatableKnowledgeDocumentType = "standalone_note", parentId?: string) => {
       if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
@@ -669,7 +676,9 @@ export function NotesView({
         const emptyValue = createEmptyKnowledgeValue();
         const count = Math.max(
           1,
-          knowledgeDocuments.filter((document) => document.type === type).length + 1,
+          knowledgeDocuments.filter(
+            (document) => document.type === type && document.parentId === parentId,
+          ).length + 1,
         );
         const document = await createKnowledgeDocument({
           bookId: selectedKnowledgeBookId,
@@ -681,6 +690,7 @@ export function NotesView({
           tags: [],
           sourceKind: "book",
           sourceId: selectedKnowledgeBookId,
+          parentId,
         });
         const nextValue = createKnowledgeValue(document);
         setKnowledgeDocuments((documents) =>
@@ -720,6 +730,16 @@ export function NotesView({
         Alert.alert(
           t("common.error", "错误"),
           t("notes.knowledgeDocumentDeleteBlocked", "这个文档暂不支持直接删除"),
+        );
+        return;
+      }
+      if (
+        document.type === "folder" &&
+        knowledgeDocuments.some((item) => item.parentId === document.id)
+      ) {
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeFolderDeleteBlocked", "请先移动或删除这个文件夹里的文档"),
         );
         return;
       }
@@ -1437,7 +1457,7 @@ function KnowledgeHomePanel({
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
-  onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
+  onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onCompressSummary: () => void;
   onOpenBook: (cfi?: string) => void;
@@ -1449,6 +1469,14 @@ function KnowledgeHomePanel({
     () => sortAnnotationsByPosition(book.highlights).slice(0, 3),
     [book.highlights],
   );
+  const isFolderDocument = document?.type === "folder";
+  const folderChildren = useMemo(() => {
+    if (!document || document.type !== "folder") return [];
+    return orderKnowledgeDocuments(
+      documents.filter((item) => item.parentId === document.id),
+      undefined,
+    );
+  }, [document, documents]);
 
   if (isLoading || !document) {
     return (
@@ -1490,11 +1518,25 @@ function KnowledgeHomePanel({
         </View>
       </View>
 
+      <KnowledgeDocumentExplorer
+        documents={documents}
+        activeDocument={document}
+        activeDocumentId={activeDocumentId}
+        isCreating={isCreatingDocument}
+        onSelect={onSelectDocument}
+        onCreate={onCreateDocument}
+        t={t}
+        styles={styles}
+        colors={colors}
+      />
+
       <View style={styles.knowledgeEditorCard}>
         <View style={styles.knowledgeDocumentHeader}>
           <View style={styles.knowledgeDocumentTitleBlock}>
             <Text style={styles.knowledgeDocumentEyebrow}>
-              {t("notes.knowledgeDocuments", "文档")}
+              {isFolderDocument
+                ? t("notes.knowledgeDocumentFolder", "文件夹")
+                : t("notes.knowledgeDocuments", "文档")}
             </Text>
             <TextInput
               value={title}
@@ -1529,91 +1571,101 @@ function KnowledgeHomePanel({
           </View>
         </View>
 
-        <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
+        {isFolderDocument ? null : (
+          <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
+        )}
 
-        <KnowledgeDocumentStrip
-          documents={documents}
-          activeDocumentId={activeDocumentId}
-          isCreating={isCreatingDocument}
-          onSelect={onSelectDocument}
-          onCreate={onCreateDocument}
-          t={t}
-          styles={styles}
-          colors={colors}
-        />
-
-        <View style={styles.knowledgeEditorFrame}>
-          <MobileKnowledgeEditor
-            tier="knowledge_doc"
-            surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
-            documentId={document.id}
-            value={value}
-            onChange={onChange}
-            isSaved={isSaved}
-            placeholder={t(
-              "notes.knowledgePlaceholder",
-              "记录这本书的摘要、问题、想法和长期知识...",
-            )}
+        {isFolderDocument ? (
+          <KnowledgeFolderOverview
+            folder={document}
+            items={folderChildren}
+            isCreating={isCreatingDocument}
+            onSelect={onSelectDocument}
+            onCreate={onCreateDocument}
+            t={t}
+            styles={styles}
+            colors={colors}
           />
-        </View>
-      </View>
-
-      <KnowledgeRelationsCard
-        links={links}
-        backlinks={backlinks}
-        highlights={book.highlights}
-        isLoading={isRelationsLoading}
-        onSelectDocument={onSelectDocument}
-        onOpenBook={onOpenBook}
-        t={t}
-        styles={styles}
-      />
-
-      <KnowledgeSummaryMemoryCard
-        document={document}
-        isCompressing={isSummaryCompressing}
-        onCompress={onCompressSummary}
-        t={t}
-        styles={styles}
-        colors={colors}
-      />
-
-      <View style={styles.knowledgeSourcesCard}>
-        <View style={styles.knowledgeSourcesHeader}>
-          <Text style={styles.knowledgeSectionTitle}>
-            {t("notes.knowledgeRecentExcerpts", "最近摘录")}
-          </Text>
-          <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
-            <Text style={styles.knowledgeOpenButtonText}>{t("notes.openBook", "打开书籍")}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentHighlights.length === 0 ? (
-          <Text style={styles.knowledgeEmptySources}>
-            {t("notes.knowledgeNoSources", "暂无摘录")}
-          </Text>
         ) : (
-          <View style={styles.knowledgeSourceList}>
-            {recentHighlights.map((highlight) => (
-              <TouchableOpacity
-                key={highlight.id}
-                style={styles.knowledgeSourceItem}
-                activeOpacity={0.75}
-                onPress={() => onOpenBook(highlight.cfi)}
-              >
-                <Text style={styles.knowledgeSourceText} numberOfLines={3}>
-                  "{highlight.text}"
-                </Text>
-                {!!highlight.chapterTitle && (
-                  <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
-                    {highlight.chapterTitle}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ))}
+          <View style={styles.knowledgeEditorFrame}>
+            <MobileKnowledgeEditor
+              tier="knowledge_doc"
+              surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
+              documentId={document.id}
+              value={value}
+              onChange={onChange}
+              isSaved={isSaved}
+              placeholder={t(
+                "notes.knowledgePlaceholder",
+                "记录这本书的摘要、问题、想法和长期知识...",
+              )}
+            />
           </View>
         )}
       </View>
+
+      {isFolderDocument ? null : (
+        <>
+          <KnowledgeRelationsCard
+            links={links}
+            backlinks={backlinks}
+            highlights={book.highlights}
+            isLoading={isRelationsLoading}
+            onSelectDocument={onSelectDocument}
+            onOpenBook={onOpenBook}
+            t={t}
+            styles={styles}
+          />
+
+          <KnowledgeSummaryMemoryCard
+            document={document}
+            isCompressing={isSummaryCompressing}
+            onCompress={onCompressSummary}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
+        </>
+      )}
+
+      {isFolderDocument ? null : (
+        <View style={styles.knowledgeSourcesCard}>
+          <View style={styles.knowledgeSourcesHeader}>
+            <Text style={styles.knowledgeSectionTitle}>
+              {t("notes.knowledgeRecentExcerpts", "最近摘录")}
+            </Text>
+            <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
+              <Text style={styles.knowledgeOpenButtonText}>{t("notes.openBook", "打开书籍")}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentHighlights.length === 0 ? (
+            <Text style={styles.knowledgeEmptySources}>
+              {t("notes.knowledgeNoSources", "暂无摘录")}
+            </Text>
+          ) : (
+            <View style={styles.knowledgeSourceList}>
+              {recentHighlights.map((highlight) => (
+                <TouchableOpacity
+                  key={highlight.id}
+                  style={styles.knowledgeSourceItem}
+                  activeOpacity={0.75}
+                  onPress={() => onOpenBook(highlight.cfi)}
+                >
+                  <Text style={styles.knowledgeSourceText} numberOfLines={3}>
+                    "{highlight.text}"
+                  </Text>
+                  {!!highlight.chapterTitle && (
+                    <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                      {highlight.chapterTitle}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </KeyboardAwareScrollView>
   );
 }
@@ -1939,14 +1991,16 @@ function KnowledgeSummaryMemoryCard({
 
 function knowledgeDocumentTypeLabel(document: KnowledgeDocument, t: TFunction): string {
   if (document.type === "book_home") return t("notes.knowledgeDocumentHome", "主页");
+  if (document.type === "folder") return t("notes.knowledgeDocumentFolder", "文件夹");
   if (document.type === "review") return t("notes.knowledgeDocumentReview", "书评");
   if (document.type === "summary") return t("notes.knowledgeDocumentSummary", "摘要");
   if (document.type === "highlight_note") return t("notes.knowledgeDocumentHighlight", "高亮笔记");
   return t("notes.knowledgeDocumentNote", "笔记");
 }
 
-function KnowledgeDocumentStrip({
+function KnowledgeDocumentExplorer({
   documents,
+  activeDocument,
   activeDocumentId,
   isCreating,
   onSelect,
@@ -1956,20 +2010,57 @@ function KnowledgeDocumentStrip({
   colors,
 }: {
   documents: KnowledgeDocument[];
+  activeDocument: KnowledgeDocument | null;
   activeDocumentId: string | null;
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
-  onCreate: (type?: CreatableKnowledgeDocumentType) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
   const [query, setQuery] = useState("");
-  const visibleDocuments = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return documents;
+  const homeDocumentId = useMemo(
+    () => documents.find((document) => document.type === "book_home")?.id,
+    [documents],
+  );
+  const tree = useMemo(
+    () => buildKnowledgeDocumentTree(documents, homeDocumentId),
+    [documents, homeDocumentId],
+  );
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const activeCreateParentId =
+    activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
+  const normalizedQuery = query.trim().toLowerCase();
 
-    return documents.filter((document) => {
+  useEffect(() => {
+    if (!activeDocument) return;
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      if (activeDocument.type === "folder") next.add(activeDocument.id);
+      let parentId = activeDocument.parentId;
+      while (parentId) {
+        next.add(parentId);
+        parentId = documents.find((document) => document.id === parentId)?.parentId;
+      }
+      return next;
+    });
+  }, [activeDocument, documents]);
+
+  const visibleSearchNodes = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+
+    return flattenKnowledgeDocumentTree(tree.roots).filter((node) => {
+      const document = node.document;
       const haystack = [
         document.title,
         knowledgeDocumentTypeLabel(document, t),
@@ -1981,19 +2072,62 @@ function KnowledgeDocumentStrip({
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [documents, query, t]);
+  }, [query, t, tree.roots]);
 
-  const showCreatePicker = useCallback(() => {
-    Alert.alert(t("notes.knowledgeNewDocument", "新建文档"), undefined, [
-      { text: t("notes.knowledgeNewNote", "新建笔记"), onPress: () => onCreate("standalone_note") },
-      { text: t("notes.knowledgeNewReview", "新建书评"), onPress: () => onCreate("review") },
-      { text: t("notes.knowledgeNewSummary", "新建摘要"), onPress: () => onCreate("summary") },
-      { text: t("common.cancel", "取消"), style: "cancel" },
-    ]);
-  }, [onCreate, t]);
+  const toggleFolder = useCallback((id: string) => {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const showCreatePicker = useCallback(
+    (parentId?: string) => {
+      Alert.alert(t("notes.knowledgeNewDocument", "新建文档"), undefined, [
+        {
+          text: t("notes.knowledgeNewFolder", "新建文件夹"),
+          onPress: () => onCreate("folder", parentId),
+        },
+        {
+          text: t("notes.knowledgeNewNote", "新建笔记"),
+          onPress: () => onCreate("standalone_note", parentId),
+        },
+        {
+          text: t("notes.knowledgeNewReview", "新建书评"),
+          onPress: () => onCreate("review", parentId),
+        },
+        {
+          text: t("notes.knowledgeNewSummary", "新建摘要"),
+          onPress: () => onCreate("summary", parentId),
+        },
+        { text: t("common.cancel", "取消"), style: "cancel" },
+      ]);
+    },
+    [onCreate, t],
+  );
 
   return (
-    <View style={styles.knowledgeDocumentStripWrap}>
+    <View style={styles.knowledgeExplorerCard}>
+      <View style={styles.knowledgeExplorerHeader}>
+        <View style={styles.knowledgeExplorerTitleBlock}>
+          <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeDocuments", "文档")}</Text>
+          <Text style={styles.knowledgeExplorerHint} numberOfLines={1}>
+            {t("notes.knowledgeExplorerHint", "文件夹与文档")}
+          </Text>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[styles.knowledgeExplorerCreateButton, isCreating && { opacity: 0.55 }]}
+          onPress={() => showCreatePicker(activeCreateParentId)}
+          disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewDocument", "新建文档")}
+        >
+          <PlusIcon size={16} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.knowledgeDocumentSearch}>
         <SearchIcon size={13} color={colors.mutedForeground} />
         <TextInput
@@ -2006,66 +2140,267 @@ function KnowledgeDocumentStrip({
         />
       </View>
 
-      <View style={styles.knowledgeDocumentStrip}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.knowledgeDocumentStripContent}
-        >
-          {visibleDocuments.map((document) => {
-            const isActive = document.id === activeDocumentId;
-            const label =
-              document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
-            return (
-              <TouchableOpacity
-                key={document.id}
-                activeOpacity={0.78}
-                style={[
-                  styles.knowledgeDocumentChip,
-                  isActive && styles.knowledgeDocumentChipActive,
-                ]}
-                onPress={() => onSelect(document)}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.knowledgeDocumentChipTitle,
-                    isActive && styles.knowledgeDocumentChipTitleActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.knowledgeDocumentChipMeta,
-                    isActive && styles.knowledgeDocumentChipMetaActive,
-                  ]}
-                >
-                  {knowledgeDocumentTypeLabel(document, t)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-          {visibleDocuments.length === 0 ? (
+      <View style={styles.knowledgeTreeList}>
+        {normalizedQuery ? (
+          visibleSearchNodes.length === 0 ? (
             <View style={styles.knowledgeDocumentEmptyResult}>
               <Text style={styles.knowledgeDocumentEmptyResultText}>
                 {t("notes.knowledgeNoDocumentResults", "没有匹配的文档")}
               </Text>
             </View>
-          ) : null}
-        </ScrollView>
+          ) : (
+            visibleSearchNodes.map((node) => (
+              <KnowledgeDocumentTreeRow
+                key={node.document.id}
+                node={{ ...node, depth: 0 }}
+                activeDocumentId={activeDocumentId}
+                expandedFolderIds={expandedFolderIds}
+                childCountByParentId={childCountByParentId}
+                onToggleFolder={toggleFolder}
+                onSelect={onSelect}
+                t={t}
+                styles={styles}
+                colors={colors}
+                forceLeaf
+              />
+            ))
+          )
+        ) : tree.roots.length === 0 ? (
+          <View style={styles.knowledgeDocumentEmptyResult}>
+            <Text style={styles.knowledgeDocumentEmptyResultText}>
+              {t("notes.knowledgeNoDocumentResults", "没有匹配的文档")}
+            </Text>
+          </View>
+        ) : (
+          tree.roots.map((node) => (
+            <KnowledgeDocumentTreeRow
+              key={node.document.id}
+              node={node}
+              activeDocumentId={activeDocumentId}
+              expandedFolderIds={expandedFolderIds}
+              childCountByParentId={childCountByParentId}
+              onToggleFolder={toggleFolder}
+              onSelect={onSelect}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+          ))
+        )}
+      </View>
+    </View>
+  );
+}
 
+function KnowledgeDocumentTreeRow({
+  node,
+  activeDocumentId,
+  expandedFolderIds,
+  childCountByParentId,
+  onToggleFolder,
+  onSelect,
+  t,
+  styles,
+  colors,
+  forceLeaf,
+}: {
+  node: KnowledgeDocumentTreeNode;
+  activeDocumentId: string | null;
+  expandedFolderIds: Set<string>;
+  childCountByParentId: Map<string, number>;
+  onToggleFolder: (id: string) => void;
+  onSelect: (document: KnowledgeDocument) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+  forceLeaf?: boolean;
+}) {
+  const document = node.document;
+  const isFolder = document.type === "folder";
+  const isExpanded = expandedFolderIds.has(document.id);
+  const isActive = document.id === activeDocumentId;
+  const childCount = childCountByParentId.get(document.id) ?? 0;
+  const title = document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
+  const showChildren = isFolder && isExpanded && node.children.length > 0 && !forceLeaf;
+
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={0.78}
+        style={[
+          styles.knowledgeTreeNode,
+          isActive && styles.knowledgeTreeNodeActive,
+          { paddingLeft: 10 + Math.min(node.depth, 6) * 16 },
+        ]}
+        onPress={() => onSelect(document)}
+      >
+        {isFolder && !forceLeaf ? (
+          <TouchableOpacity
+            activeOpacity={0.72}
+            style={styles.knowledgeTreeToggle}
+            onPress={() => onToggleFolder(document.id)}
+            accessibilityLabel={
+              isExpanded
+                ? t("notes.knowledgeCollapseFolder", "收起文件夹")
+                : t("notes.knowledgeExpandFolder", "展开文件夹")
+            }
+          >
+            <View style={isExpanded ? styles.knowledgeTreeToggleExpanded : undefined}>
+              <ChevronRightIcon
+                size={14}
+                color={isActive ? colors.primary : colors.mutedForeground}
+              />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.knowledgeTreeToggleSpacer} />
+        )}
+        <View style={[styles.knowledgeTreeIcon, isActive && styles.knowledgeTreeIconActive]}>
+          {isFolder ? (
+            <FolderIcon size={15} color={isActive ? colors.primary : colors.foreground} />
+          ) : (
+            <ScrollTextIcon size={15} color={isActive ? colors.primary : colors.mutedForeground} />
+          )}
+        </View>
+        <View style={styles.knowledgeTreeTextBlock}>
+          <Text
+            numberOfLines={1}
+            style={[styles.knowledgeTreeTitle, isActive && styles.knowledgeTreeTitleActive]}
+          >
+            {title}
+          </Text>
+          <Text numberOfLines={1} style={styles.knowledgeTreeMeta}>
+            {knowledgeDocumentTypeLabel(document, t)}
+          </Text>
+        </View>
+        {isFolder ? (
+          <Text style={[styles.knowledgeTreeCount, isActive && styles.knowledgeTreeCountActive]}>
+            {childCount}
+          </Text>
+        ) : null}
+      </TouchableOpacity>
+
+      {showChildren
+        ? node.children.map((child) => (
+            <KnowledgeDocumentTreeRow
+              key={child.document.id}
+              node={child}
+              activeDocumentId={activeDocumentId}
+              expandedFolderIds={expandedFolderIds}
+              childCountByParentId={childCountByParentId}
+              onToggleFolder={onToggleFolder}
+              onSelect={onSelect}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+          ))
+        : null}
+    </View>
+  );
+}
+
+function KnowledgeFolderOverview({
+  folder,
+  items,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+  styles,
+  colors,
+}: {
+  folder: KnowledgeDocument;
+  items: KnowledgeDocument[];
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={styles.knowledgeFolderOverview}>
+      <View style={styles.knowledgeFolderLead}>
+        <View style={styles.knowledgeFolderLeadIcon}>
+          <FolderIcon size={19} color={colors.primary} />
+        </View>
+        <View style={styles.knowledgeFolderLeadText}>
+          <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
+            {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+          </Text>
+          <Text style={styles.knowledgeFolderDescription}>
+            {t("notes.knowledgeFolderDescription", "用文件夹把这本书的知识整理成一个小型知识库。")}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.knowledgeFolderActionRow}>
         <TouchableOpacity
           activeOpacity={0.78}
-          style={[styles.knowledgeDocumentCreateButton, isCreating && { opacity: 0.55 }]}
-          onPress={showCreatePicker}
+          style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+          onPress={() => onCreate("folder", folder.id)}
           disabled={isCreating}
-          accessibilityLabel={t("notes.knowledgeNewDocument", "新建文档")}
         >
-          <PlusIcon size={17} color={colors.primary} />
+          <FolderPlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderActionText}>
+            {t("notes.knowledgeNewFolder", "新建文件夹")}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+          onPress={() => onCreate("standalone_note", folder.id)}
+          disabled={isCreating}
+        >
+          <PlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderActionText}>
+            {t("notes.knowledgeNewNote", "新建笔记")}
+          </Text>
         </TouchableOpacity>
       </View>
+
+      {items.length === 0 ? (
+        <View style={styles.knowledgeFolderEmpty}>
+          <Text style={styles.knowledgeFolderEmptyTitle}>
+            {t("notes.knowledgeFolderEmpty", "这个文件夹还是空的")}
+          </Text>
+          <Text style={styles.knowledgeFolderEmptyHint}>
+            {t("notes.knowledgeFolderEmptyHint", "在这里新建笔记或文件夹，慢慢搭出自己的目录。")}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.knowledgeFolderItemList}>
+          {items.map((item) => {
+            const isFolder = item.type === "folder";
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.78}
+                style={styles.knowledgeFolderItem}
+                onPress={() => onSelect(item)}
+              >
+                <View style={styles.knowledgeFolderItemIcon}>
+                  {isFolder ? (
+                    <FolderIcon size={15} color={colors.foreground} />
+                  ) : (
+                    <ScrollTextIcon size={15} color={colors.mutedForeground} />
+                  )}
+                </View>
+                <View style={styles.knowledgeFolderItemText}>
+                  <Text style={styles.knowledgeFolderItemTitle} numberOfLines={1}>
+                    {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                  </Text>
+                  <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
+                    {knowledgeDocumentTypeLabel(item, t)}
+                  </Text>
+                </View>
+                <ChevronRightIcon size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }

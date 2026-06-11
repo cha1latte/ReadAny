@@ -5,6 +5,7 @@ export type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue
 
 export type KnowledgeDocumentType =
   | "book_home"
+  | "folder"
   | "standalone_note"
   | "highlight_note"
   | "review"

@@ -11,7 +11,6 @@ import {
   searchKnowledgeDocuments,
 } from "../../db/database";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
-import { maybeCompressAndPersistKnowledgeSummary } from "../knowledge-memory";
 import type {
   AIConfig,
   JSONValue,
@@ -21,6 +20,7 @@ import type {
   KnowledgeLinkTargetKind,
 } from "../../types";
 import { generateId } from "../../utils/generate-id";
+import { maybeCompressAndPersistKnowledgeSummary } from "../knowledge-memory";
 import type { ToolDefinition } from "./tool-types";
 
 const SEARCH_SCAN_LIMIT = 200;
@@ -64,6 +64,7 @@ function normalizeType(value: unknown): KnowledgeDocumentType | undefined {
   if (!type || type === "all") return undefined;
   const allowed = new Set<KnowledgeDocumentType>([
     "book_home",
+    "folder",
     "standalone_note",
     "highlight_note",
     "review",
@@ -194,7 +195,7 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
       type: {
         type: "string",
         description:
-          "Optional document type: book_home, standalone_note, highlight_note, review, summary, imported_markdown, or all",
+          "Optional document type: book_home, folder, standalone_note, highlight_note, review, summary, imported_markdown, or all",
       },
       limit: {
         type: "number",
@@ -243,7 +244,7 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
       type: {
         type: "string",
         description:
-          "Optional document type: book_home, standalone_note, highlight_note, review, summary, imported_markdown, or all",
+          "Optional document type: book_home, folder, standalone_note, highlight_note, review, summary, imported_markdown, or all",
       },
       includeContent: {
         type: "boolean",
@@ -360,7 +361,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       type: {
         type: "string",
         description:
-          "Document type: standalone_note, review, summary, highlight_note, imported_markdown, or book_home. Defaults to standalone_note.",
+          "Document type: folder, standalone_note, review, summary, highlight_note, imported_markdown, or book_home. Defaults to standalone_note.",
       },
       bookId: {
         type: "string",

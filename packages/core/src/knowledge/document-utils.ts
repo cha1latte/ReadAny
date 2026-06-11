@@ -6,6 +6,18 @@ export interface KnowledgeDocumentSnapshot {
   contentMd: string;
 }
 
+export interface KnowledgeDocumentTreeNode {
+  document: KnowledgeDocument;
+  children: KnowledgeDocumentTreeNode[];
+  depth: number;
+}
+
+export interface KnowledgeDocumentTree {
+  roots: KnowledgeDocumentTreeNode[];
+  nodesById: Map<string, KnowledgeDocumentTreeNode>;
+  orphaned: KnowledgeDocument[];
+}
+
 export interface HighlightNoteProjection {
   title: string;
   contentJson: JSONValue;
@@ -223,11 +235,99 @@ export function orderKnowledgeDocuments(
   const uniqueDocuments = Array.from(
     new Map(documents.map((document) => [document.id, document])).values(),
   );
-  return uniqueDocuments.sort((left, right) => {
-    if (left.id === homeDocumentId) return -1;
-    if (right.id === homeDocumentId) return 1;
-    if (left.type === "book_home") return -1;
-    if (right.type === "book_home") return 1;
-    return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
-  });
+  return uniqueDocuments.sort((left, right) =>
+    compareKnowledgeDocuments(left, right, homeDocumentId),
+  );
+}
+
+function compareKnowledgeDocuments(
+  left: KnowledgeDocument,
+  right: KnowledgeDocument,
+  homeDocumentId?: string,
+): number {
+  if (left.id === homeDocumentId) return -1;
+  if (right.id === homeDocumentId) return 1;
+  if (left.type === "book_home") return -1;
+  if (right.type === "book_home") return 1;
+  if (left.type === "folder" && right.type !== "folder") return -1;
+  if (left.type !== "folder" && right.type === "folder") return 1;
+  if (left.type === "folder" && right.type === "folder") {
+    const titleSort = left.title.localeCompare(right.title, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (titleSort !== 0) return titleSort;
+  }
+  return right.updatedAt - left.updatedAt || right.createdAt - left.createdAt;
+}
+
+function hasAncestryCycle(
+  documentId: string,
+  parentId: string,
+  documentsById: Map<string, KnowledgeDocument>,
+): boolean {
+  const visited = new Set<string>();
+  let nextParentId: string | undefined = parentId;
+
+  while (nextParentId) {
+    if (nextParentId === documentId) return true;
+    if (visited.has(nextParentId)) return true;
+    visited.add(nextParentId);
+    nextParentId = documentsById.get(nextParentId)?.parentId;
+  }
+
+  return false;
+}
+
+export function buildKnowledgeDocumentTree(
+  documents: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeDocumentTree {
+  const uniqueDocuments = orderKnowledgeDocuments(documents, homeDocumentId);
+  const documentsById = new Map(uniqueDocuments.map((document) => [document.id, document]));
+  const childDocumentsByParentId = new Map<string, KnowledgeDocument[]>();
+  const rootDocuments: KnowledgeDocument[] = [];
+  const orphaned: KnowledgeDocument[] = [];
+
+  for (const document of uniqueDocuments) {
+    const parentId = document.parentId;
+    const hasValidParent =
+      !!parentId &&
+      parentId !== document.id &&
+      documentsById.has(parentId) &&
+      !hasAncestryCycle(document.id, parentId, documentsById);
+
+    if (hasValidParent) {
+      const children = childDocumentsByParentId.get(parentId) ?? [];
+      children.push(document);
+      childDocumentsByParentId.set(parentId, children);
+    } else {
+      rootDocuments.push(document);
+      if (parentId && parentId !== document.id) orphaned.push(document);
+    }
+  }
+
+  const nodesById = new Map<string, KnowledgeDocumentTreeNode>();
+  const createNode = (document: KnowledgeDocument, depth: number): KnowledgeDocumentTreeNode => {
+    const children = (childDocumentsByParentId.get(document.id) ?? [])
+      .sort((left, right) => compareKnowledgeDocuments(left, right, homeDocumentId))
+      .map((child) => createNode(child, depth + 1));
+    const node: KnowledgeDocumentTreeNode = { document, children, depth };
+    nodesById.set(document.id, node);
+    return node;
+  };
+
+  return {
+    roots: rootDocuments
+      .sort((left, right) => compareKnowledgeDocuments(left, right, homeDocumentId))
+      .map((document) => createNode(document, 0)),
+    nodesById,
+    orphaned,
+  };
+}
+
+export function flattenKnowledgeDocumentTree(
+  nodes: KnowledgeDocumentTreeNode[],
+): KnowledgeDocumentTreeNode[] {
+  return nodes.flatMap((node) => [node, ...flattenKnowledgeDocumentTree(node.children)]);
 }

@@ -123,6 +123,7 @@
     "types": {
       "knowledgeDocument": "ナレッジ文書",
       "bookHome": "本のホーム",
+      "folder": "フォルダー",
       "standaloneNote": "独立ノート",
       "highlightNote": "ハイライトノート",
       "review": "レビュー",

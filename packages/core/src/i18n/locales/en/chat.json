@@ -123,6 +123,7 @@
     "types": {
       "knowledgeDocument": "Knowledge document",
       "bookHome": "Book home",
+      "folder": "Folder",
       "standaloneNote": "Standalone note",
       "highlightNote": "Highlight note",
       "review": "Review",

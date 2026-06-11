@@ -206,6 +206,7 @@ export function getKnowledgeEditorSurfaceForDocumentType(
     case "review":
       return "review";
     case "standalone_note":
+    case "folder":
     case "summary":
     case "imported_markdown":
       return "standalone_note";

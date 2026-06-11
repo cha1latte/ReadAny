@@ -121,6 +121,7 @@
     "types": {
       "knowledgeDocument": "Documento de conocimiento",
       "bookHome": "Inicio del libro",
+      "folder": "Carpeta",
       "standaloneNote": "Nota independiente",
       "highlightNote": "Nota de subrayado",
       "review": "Reseña",

@@ -123,6 +123,7 @@
     "types": {
       "knowledgeDocument": "지식 문서",
       "bookHome": "책 홈",
+      "folder": "폴더",
       "standaloneNote": "독립 노트",
       "highlightNote": "하이라이트 노트",
       "review": "리뷰",

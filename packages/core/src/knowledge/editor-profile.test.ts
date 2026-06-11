@@ -103,6 +103,7 @@ describe("knowledge editor profile", () => {
     expect(getKnowledgeEditorSurfaceForDocumentType("highlight_note")).toBe("highlight_note");
     expect(getKnowledgeEditorSurfaceForDocumentType("review")).toBe("review");
     expect(getKnowledgeEditorSurfaceForDocumentType("standalone_note")).toBe("standalone_note");
+    expect(getKnowledgeEditorSurfaceForDocumentType("folder")).toBe("standalone_note");
     expect(getKnowledgeEditorSurfaceForDocumentType("summary")).toBe("standalone_note");
     expect(getKnowledgeEditorSurfaceForDocumentType("imported_markdown")).toBe("standalone_note");
   });

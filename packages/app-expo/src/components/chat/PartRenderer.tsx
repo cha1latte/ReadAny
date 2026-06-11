@@ -177,6 +177,7 @@ type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
 
 const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
   book_home: "knowledgeProposal.types.bookHome",
+  folder: "knowledgeProposal.types.folder",
   standalone_note: "knowledgeProposal.types.standaloneNote",
   highlight_note: "knowledgeProposal.types.highlightNote",
   review: "knowledgeProposal.types.review",

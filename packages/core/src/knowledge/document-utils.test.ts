@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeDocument } from "../types";
 import {
+  buildKnowledgeDocumentTree,
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
@@ -45,11 +46,50 @@ describe("knowledge document utilities", () => {
     ]);
   });
 
+  it("orders folders before regular documents", () => {
+    const note = document({ id: "note", title: "Latest note", updatedAt: 100 });
+    const folder = document({ id: "folder", type: "folder", title: "Research", updatedAt: 1 });
+
+    expect(orderKnowledgeDocuments([note, folder]).map((item) => item.id)).toEqual([
+      "folder",
+      "note",
+    ]);
+  });
+
   it("deduplicates documents before sorting", () => {
     const stale = document({ id: "same", title: "Stale", updatedAt: 1 });
     const current = document({ id: "same", title: "Current", updatedAt: 10 });
 
     expect(orderKnowledgeDocuments([stale, current])).toEqual([current]);
+  });
+
+  it("builds a stable document tree from parent ids", () => {
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+    const folder = document({ id: "folder", type: "folder", title: "Ideas", updatedAt: 1 });
+    const nested = document({ id: "nested", title: "Nested note", parentId: "folder" });
+    const stale = document({
+      id: "stale",
+      title: "Missing parent",
+      parentId: "missing-folder",
+      updatedAt: 2,
+    });
+
+    const tree = buildKnowledgeDocumentTree([nested, stale, folder, home], "home");
+
+    expect(tree.roots.map((node) => node.document.id)).toEqual(["home", "folder", "stale"]);
+    expect(tree.roots[1].children.map((node) => node.document.id)).toEqual(["nested"]);
+    expect(tree.roots[1].children[0].depth).toBe(1);
+    expect(tree.orphaned.map((item) => item.id)).toEqual(["stale"]);
+  });
+
+  it("promotes cyclic document parents to roots", () => {
+    const left = document({ id: "left", parentId: "right" });
+    const right = document({ id: "right", parentId: "left" });
+
+    const tree = buildKnowledgeDocumentTree([left, right]);
+
+    expect(tree.roots.map((node) => node.document.id).sort()).toEqual(["left", "right"]);
+    expect(tree.roots.flatMap((node) => node.children)).toEqual([]);
   });
 
   it("uses normalized titles in document fingerprints", () => {

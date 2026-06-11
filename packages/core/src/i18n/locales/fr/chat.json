@@ -121,6 +121,7 @@
     "types": {
       "knowledgeDocument": "Document de connaissance",
       "bookHome": "Accueil du livre",
+      "folder": "Dossier",
       "standaloneNote": "Note autonome",
       "highlightNote": "Note de surlignage",
       "review": "Critique",

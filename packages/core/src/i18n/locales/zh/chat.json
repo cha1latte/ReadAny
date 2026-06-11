@@ -123,6 +123,7 @@
     "types": {
       "knowledgeDocument": "知识文档",
       "bookHome": "书籍主页",
+      "folder": "文件夹",
       "standaloneNote": "独立笔记",
       "highlightNote": "高亮笔记",
       "review": "书评",

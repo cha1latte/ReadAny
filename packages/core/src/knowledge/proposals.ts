@@ -85,6 +85,7 @@ export interface KnowledgeProposalApplyResult {
 
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "book_home",
+  "folder",
   "standalone_note",
   "highlight_note",
   "review",

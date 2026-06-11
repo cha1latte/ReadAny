@@ -42,6 +42,8 @@ export {
   createLegacyNoteTitle,
   extractHighlightNoteContentForLegacyField,
   extractLegacyNoteContentForLegacyField,
+  flattenKnowledgeDocumentTree,
+  buildKnowledgeDocumentTree,
   hasHighlightNoteContent,
   hasLegacyNoteContent,
   isGeneratedHighlightNoteDocument,
@@ -52,6 +54,8 @@ export {
 } from "./document-utils";
 export type {
   HighlightNoteProjection,
+  KnowledgeDocumentTree,
+  KnowledgeDocumentTreeNode,
   KnowledgeDocumentSnapshot,
   LegacyNoteProjection,
 } from "./document-utils";

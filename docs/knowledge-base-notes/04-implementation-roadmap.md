@@ -96,9 +96,11 @@ Verification:
 
 ## Phase 4: Export and Obsidian v1
 
-Status: partially implemented. Document export, vault package generation,
-manifests, attachment path planning, conflict detection, and ReadAny card
-fallbacks exist. Linked-folder import/reconcile remains future work.
+Status: implemented as a desktop v1 on the current branch; mobile file-share
+import and deeper conflict resolution remain future work. Document export, vault
+package generation, manifests, attachment path planning, conflict detection,
+ReadAny card fallbacks, Markdown file import, and linked-folder
+import/reconcile exist.
 
 Goal:
 
@@ -112,6 +114,9 @@ Work:
 - Add frontmatter with stable IDs.
 - Add Obsidian callout rendering for ReadAny cards.
 - Add desktop linked-folder export with manifest and conflict detection.
+- Add desktop Markdown file import as confirmation-required create proposals.
+- Add desktop linked-folder import/reconcile as confirmation-required update
+  proposals.
 
 Verification:
 
@@ -119,6 +124,9 @@ Verification:
 - Wikilinks and assets resolve.
 - Re-export updates existing files by ID.
 - External edits are detected before overwrite.
+- Markdown imports preview the target documents before saving.
+- Vault imports surface modified, missing, and unreadable files before applying
+  updates.
 
 ## Phase 5: AI Knowledge Tools
 

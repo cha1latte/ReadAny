@@ -16,6 +16,9 @@ The target system should support:
 - A unified Tiptap editor on desktop and mobile.
 - Mobile editing through a WebView-based Tiptap editor instead of native
   TextInput markdown editing.
+- Scenario-based editor profiles: quick annotation stays lightweight, book
+  knowledge pages stay powerful, reviews stay export-friendly, and metadata
+  stays in structured fields instead of rich-text blocks.
 - Obsidian-friendly export and, on desktop, optional linked vault/folder output.
 - Export to Markdown, JSON, Obsidian-style vault folders, and later other targets.
 - Backlinks, tags, book grouping, search, AI retrieval, and source citations.
@@ -89,4 +92,3 @@ External docs checked:
 - [Target Architecture](02-target-architecture.md)
 - [Editor, Cards, and Obsidian](03-editor-cards-obsidian.md)
 - [Roadmap](04-implementation-roadmap.md)
-

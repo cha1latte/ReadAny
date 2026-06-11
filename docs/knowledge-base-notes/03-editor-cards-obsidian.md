@@ -141,6 +141,44 @@ This gives ReadAny one canonical editor engine, but not one overpowered toolbar
 everywhere. A quick reading note stays fast, while book knowledge pages can still
 grow into real documents.
 
+### Scenario Decisions
+
+The important product decision is not "support rich text" in the abstract. It is
+where ReadAny must preserve rich structure, and where ReadAny should deliberately
+stay structured or lightweight.
+
+| Scenario | Rich-text role | Required preservation | Product boundary |
+| --- | --- | --- | --- |
+| Reading selection note | Fast capture. | Inline marks, links, short lists, blockquote, source quote relation. | No full-page document controls while the user is reading. |
+| Highlight note preview | Compatibility and continuity. | Existing note text, quote relation, CFI/source ID, Markdown fallback. | The preview can stay compact; expanding opens the real knowledge document. |
+| Expanded highlight note | Turning a quote into reusable knowledge. | H2/H3, task list, callout, related-note link, source reference card. | No book metadata fields or large unrelated layout blocks. |
+| Book home document | The main knowledge workspace for one book. | Headings, lists, callouts, quote cards, highlight collections, AI summary cards, diagrams, attachments, backlinks. | Metadata remains outside the editor so it stays queryable. |
+| Standalone knowledge document | A normal knowledge-base note. | Headings, links, backlinks, tags, attachments, callouts, AI-assisted blocks. | Book-only cards appear only when the note is linked to a book. |
+| Book review / essay | Publishable writing. | Export-safe headings, prose, images, source references, quote cards, Obsidian callouts. | Interactive AI controls and non-exportable cards must be converted before export. |
+| AI generated content | Structured draft material. | Summary, Q&A, concept, timeline, mindmap, and cited quote cards. | AI can propose and insert after confirmation; it should not silently rewrite user text. |
+| Obsidian import/export | Interoperability. | Markdown headings/lists/quotes/links/images/frontmatter/callouts/wikilinks. | Unsupported blocks degrade to readable Markdown plus ReadAny metadata. |
+
+### Capability Groups
+
+The toolbar and schema should be built from capability groups instead of one long
+flat list. This keeps desktop powerful while preventing mobile and reader
+surfaces from becoming visually heavy.
+
+| Group | Features | Used by default in |
+| --- | --- | --- |
+| Inline writing | paragraph, bold, italic, strike, inline code, links | all editor tiers |
+| Lightweight structure | bullet list, ordered list, blockquote, undo/redo | quick notes, highlight notes, full documents |
+| Document structure | H1-H3, horizontal rule, task list, code block | knowledge documents, reviews |
+| Source evidence | source reference, quote card, CFI/highlight/book link | highlight notes, book home, reviews |
+| Knowledge graph | internal links, backlinks, related-note card, tags outside editor | knowledge documents, reviews |
+| Media and attachment | image, file attachment, asset reference | book home, standalone notes, reviews |
+| ReadAny cards | callout, metadata, highlight collection, review, AI, diagram, related notes | book home and standalone knowledge documents |
+| Export discipline | Markdown projection, Obsidian callout fallback, frontmatter | all persisted documents |
+
+Do not expose arbitrary colors, font family, font size, raw HTML, iframes,
+multi-column layouts, or freeform CSS in v1. They look powerful, but they make
+mobile editing, sync merging, Obsidian export, and AI/tool safety much harder.
+
 ### Baseline Feature Matrix
 
 | Feature | Quick annotation | Knowledge document | Review / export |

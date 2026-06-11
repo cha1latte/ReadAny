@@ -21,6 +21,7 @@ export interface KnowledgeSummaryCompressionPlan {
   shouldCompress: boolean;
   reason: "empty" | "below_threshold" | "unchanged" | "missing_summary" | "stale_summary";
   sourceFingerprint: string;
+  sourceUpdatedAt?: number;
   sourceChars: number;
   maxSummaryChars: number;
   source?: string;
@@ -176,6 +177,7 @@ export function prepareKnowledgeSummaryCompression(
       shouldCompress: false,
       reason: "empty",
       sourceFingerprint,
+      sourceUpdatedAt: document.updatedAt,
       sourceChars,
       maxSummaryChars,
     };
@@ -186,6 +188,7 @@ export function prepareKnowledgeSummaryCompression(
       shouldCompress: false,
       reason: "below_threshold",
       sourceFingerprint,
+      sourceUpdatedAt: document.updatedAt,
       sourceChars,
       maxSummaryChars,
     };
@@ -196,6 +199,7 @@ export function prepareKnowledgeSummaryCompression(
       shouldCompress: false,
       reason: "unchanged",
       sourceFingerprint,
+      sourceUpdatedAt: document.updatedAt,
       sourceChars,
       maxSummaryChars,
     };
@@ -206,6 +210,7 @@ export function prepareKnowledgeSummaryCompression(
     shouldCompress: true,
     reason: state?.summaryMd?.trim() ? "stale_summary" : "missing_summary",
     sourceFingerprint,
+    sourceUpdatedAt: document.updatedAt,
     sourceChars,
     maxSummaryChars,
     source,
@@ -216,12 +221,16 @@ export function prepareKnowledgeSummaryCompression(
 
 export function createKnowledgeSummaryCompressionState(
   summaryMd: string,
-  plan: Pick<KnowledgeSummaryCompressionPlan, "sourceFingerprint" | "maxSummaryChars">,
+  plan: Pick<
+    KnowledgeSummaryCompressionPlan,
+    "sourceFingerprint" | "sourceUpdatedAt" | "maxSummaryChars"
+  >,
   now = Date.now(),
 ): KnowledgeSummaryCompressionState {
   return {
     summaryMd: summaryMd.trim().slice(0, plan.maxSummaryChars || DEFAULT_MAX_SUMMARY_CHARS),
     sourceFingerprint: plan.sourceFingerprint,
+    sourceUpdatedAt: plan.sourceUpdatedAt,
     compressedAt: now,
   };
 }

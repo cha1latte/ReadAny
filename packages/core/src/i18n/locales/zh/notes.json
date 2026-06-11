@@ -160,6 +160,7 @@
     "knowledgeVaultRoot": "知识库",
     "knowledgeWorkspaceVault": "目录",
     "knowledgeWorkspaceDocument": "文档",
+    "knowledgeContext": "上下文",
     "knowledgeSelectedDocument": "当前文档",
     "knowledgeOpenDocument": "打开",
     "knowledgeDocumentPath": "文档路径",

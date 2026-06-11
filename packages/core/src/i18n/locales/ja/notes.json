@@ -160,6 +160,7 @@
     "knowledgeVaultRoot": "ナレッジベース",
     "knowledgeWorkspaceVault": "目次",
     "knowledgeWorkspaceDocument": "ドキュメント",
+    "knowledgeContext": "コンテキスト",
     "knowledgeSelectedDocument": "現在のドキュメント",
     "knowledgeOpenDocument": "開く",
     "knowledgeDocumentPath": "ドキュメントのパス",

@@ -160,6 +160,7 @@
     "knowledgeVaultRoot": "Base de savoir",
     "knowledgeWorkspaceVault": "Arborescence",
     "knowledgeWorkspaceDocument": "Document",
+    "knowledgeContext": "Contexte",
     "knowledgeSelectedDocument": "Document actuel",
     "knowledgeOpenDocument": "Ouvrir",
     "knowledgeDocumentPath": "Chemin du document",

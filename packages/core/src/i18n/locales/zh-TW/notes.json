@@ -160,6 +160,7 @@
     "knowledgeVaultRoot": "知識庫",
     "knowledgeWorkspaceVault": "目錄",
     "knowledgeWorkspaceDocument": "文件",
+    "knowledgeContext": "上下文",
     "knowledgeSelectedDocument": "目前文件",
     "knowledgeOpenDocument": "打開",
     "knowledgeDocumentPath": "文件路徑",

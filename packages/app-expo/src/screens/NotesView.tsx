@@ -1605,6 +1605,7 @@ function KnowledgeHomePanel({
     [document, documents, t, title],
   );
   const [workspaceMode, setWorkspaceMode] = useState<MobileKnowledgeWorkspaceMode>("vault");
+  const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
 
   const showMovePicker = useCallback(() => {
     if (!document || moveTargets.length === 0) return;
@@ -1627,12 +1628,32 @@ function KnowledgeHomePanel({
     },
     [onSelectDocument],
   );
+  const handleSelectContextDocument = useCallback(
+    (nextDocument: KnowledgeDocument) => {
+      setIsContextSheetVisible(false);
+      handleSelectKnowledgeDocument(nextDocument);
+    },
+    [handleSelectKnowledgeDocument],
+  );
+  const handleOpenBookFromContext = useCallback(
+    (cfi?: string) => {
+      setIsContextSheetVisible(false);
+      onOpenBook(cfi);
+    },
+    [onOpenBook],
+  );
 
   useEffect(() => {
     if (document?.type === "folder" && workspaceMode === "document") {
       setWorkspaceMode("vault");
     }
   }, [document?.type, workspaceMode]);
+
+  useEffect(() => {
+    if (workspaceMode !== "document") {
+      setIsContextSheetVisible(false);
+    }
+  }, [workspaceMode]);
 
   if (isLoading || !document) {
     return (
@@ -1793,6 +1814,14 @@ function KnowledgeHomePanel({
               <View style={styles.knowledgeCanvasStatus}>
                 <CheckCheckIcon size={13} color={colors.mutedForeground} />
               </View>
+              <TouchableOpacity
+                activeOpacity={0.78}
+                style={styles.knowledgeCanvasIconButton}
+                onPress={() => setIsContextSheetVisible(true)}
+                accessibilityLabel={t("notes.knowledgeContext", "上下文")}
+              >
+                <BrainIcon size={14} color={colors.foreground} />
+              </TouchableOpacity>
               {moveTargets.length > 0 ? (
                 <TouchableOpacity
                   activeOpacity={0.78}
@@ -1824,8 +1853,6 @@ function KnowledgeHomePanel({
                 : t("notes.knowledgePending", "待保存")}
           </Text>
 
-          <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
-
           <View style={styles.knowledgeDocumentCanvas}>
             <MobileKnowledgeEditor
               tier="knowledge_doc"
@@ -1839,67 +1866,6 @@ function KnowledgeHomePanel({
                 "记录这本书的摘要、问题、想法和长期知识...",
               )}
             />
-          </View>
-
-          <View style={styles.knowledgeContextStack}>
-            <KnowledgeRelationsCard
-              links={links}
-              backlinks={backlinks}
-              highlights={book.highlights}
-              isLoading={isRelationsLoading}
-              onSelectDocument={handleSelectKnowledgeDocument}
-              onOpenBook={onOpenBook}
-              t={t}
-              styles={styles}
-            />
-
-            <KnowledgeSummaryMemoryCard
-              document={document}
-              isCompressing={isSummaryCompressing}
-              onCompress={onCompressSummary}
-              t={t}
-              styles={styles}
-              colors={colors}
-            />
-
-            <View style={styles.knowledgeSourcesCard}>
-              <View style={styles.knowledgeSourcesHeader}>
-                <Text style={styles.knowledgeSectionTitle}>
-                  {t("notes.knowledgeRecentExcerpts", "最近摘录")}
-                </Text>
-                <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
-                  <Text style={styles.knowledgeOpenButtonText}>
-                    {t("notes.openBook", "打开书籍")}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {recentHighlights.length === 0 ? (
-                <Text style={styles.knowledgeEmptySources}>
-                  {t("notes.knowledgeNoSources", "暂无摘录")}
-                </Text>
-              ) : (
-                <View style={styles.knowledgeSourceList}>
-                  {recentHighlights.map((highlight) => (
-                    <TouchableOpacity
-                      key={highlight.id}
-                      style={styles.knowledgeSourceItem}
-                      activeOpacity={0.75}
-                      onPress={() => onOpenBook(highlight.cfi)}
-                    >
-                      <Text style={styles.knowledgeSourceText} numberOfLines={3}>
-                        "{highlight.text}"
-                      </Text>
-                      {!!highlight.chapterTitle && (
-                        <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
-                          {highlight.chapterTitle}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
           </View>
         </View>
       )}
@@ -1961,6 +1927,110 @@ function KnowledgeHomePanel({
                 </Text>
               </TouchableOpacity>
             ))}
+          </ScrollView>
+        </View>
+      </Modal>
+      <Modal
+        visible={isContextSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsContextSheetVisible(false)}
+      >
+        <Pressable
+          style={styles.knowledgeMoveSheetBackdrop}
+          onPress={() => setIsContextSheetVisible(false)}
+        />
+        <View style={styles.knowledgeContextSheet}>
+          <View style={styles.knowledgeContextSheetHandle} />
+          <View style={styles.knowledgeContextSheetHeader}>
+            <View style={styles.knowledgeContextSheetTitleBlock}>
+              <Text style={styles.knowledgeContextSheetTitle}>
+                {t("notes.knowledgeContext", "上下文")}
+              </Text>
+              <Text style={styles.knowledgeContextSheetSubtitle} numberOfLines={1}>
+                {title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              style={styles.knowledgeMoveSheetClose}
+              onPress={() => setIsContextSheetVisible(false)}
+              accessibilityLabel={t("common.cancel", "取消")}
+            >
+              <XIcon size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.knowledgeContextSheetScroll}
+            contentContainerStyle={styles.knowledgeContextSheetContent}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          >
+            <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
+
+            <KnowledgeRelationsCard
+              links={links}
+              backlinks={backlinks}
+              highlights={book.highlights}
+              isLoading={isRelationsLoading}
+              onSelectDocument={handleSelectContextDocument}
+              onOpenBook={handleOpenBookFromContext}
+              t={t}
+              styles={styles}
+            />
+
+            <KnowledgeSummaryMemoryCard
+              document={document}
+              isCompressing={isSummaryCompressing}
+              onCompress={onCompressSummary}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+
+            <View style={styles.knowledgeSourcesCard}>
+              <View style={styles.knowledgeSourcesHeader}>
+                <Text style={styles.knowledgeSectionTitle}>
+                  {t("notes.knowledgeRecentExcerpts", "最近摘录")}
+                </Text>
+                <TouchableOpacity
+                  style={styles.knowledgeOpenButton}
+                  onPress={() => handleOpenBookFromContext()}
+                >
+                  <Text style={styles.knowledgeOpenButtonText}>
+                    {t("notes.openBook", "打开书籍")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {recentHighlights.length === 0 ? (
+                <Text style={styles.knowledgeEmptySources}>
+                  {t("notes.knowledgeNoSources", "暂无摘录")}
+                </Text>
+              ) : (
+                <View style={styles.knowledgeSourceList}>
+                  {recentHighlights.map((highlight) => (
+                    <TouchableOpacity
+                      key={highlight.id}
+                      style={styles.knowledgeSourceItem}
+                      activeOpacity={0.75}
+                      onPress={() => handleOpenBookFromContext(highlight.cfi)}
+                    >
+                      <Text style={styles.knowledgeSourceText} numberOfLines={3}>
+                        "{highlight.text}"
+                      </Text>
+                      {!!highlight.chapterTitle && (
+                        <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                          {highlight.chapterTitle}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </ScrollView>
         </View>
       </Modal>

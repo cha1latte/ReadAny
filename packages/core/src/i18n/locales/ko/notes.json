@@ -160,6 +160,7 @@
     "knowledgeVaultRoot": "지식 베이스",
     "knowledgeWorkspaceVault": "목차",
     "knowledgeWorkspaceDocument": "문서",
+    "knowledgeContext": "컨텍스트",
     "knowledgeSelectedDocument": "현재 문서",
     "knowledgeOpenDocument": "열기",
     "knowledgeDocumentPath": "문서 경로",

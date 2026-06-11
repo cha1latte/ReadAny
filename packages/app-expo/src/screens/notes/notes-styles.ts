@@ -639,6 +639,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeMoveTargetScroll: { marginTop: 10 },
     knowledgeMoveTargetList: { gap: 6, paddingBottom: 4 },
+    knowledgeCreateTargetList: { marginTop: 10 },
     knowledgeMoveTarget: {
       minHeight: 42,
       flexDirection: "row",

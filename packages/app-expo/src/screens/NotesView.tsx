@@ -2417,9 +2417,47 @@ function KnowledgeDocumentExplorer({
     [documents],
   );
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const [createParentId, setCreateParentId] = useState<string | undefined>();
+  const [isCreateSheetVisible, setIsCreateSheetVisible] = useState(false);
   const activeCreateParentId =
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
+  const createParentDocument = useMemo(
+    () => documents.find((document) => document.id === createParentId),
+    [createParentId, documents],
+  );
+  const createDestinationLabel =
+    createParentDocument?.title.trim() || t("notes.knowledgeVaultRoot", "知识库");
+  const createOptions = useMemo(
+    () =>
+      [
+        {
+          type: "folder" as const,
+          label: t("notes.knowledgeNewFolder", "新建文件夹"),
+          icon: "folder",
+        },
+        {
+          type: "standalone_note" as const,
+          label: t("notes.knowledgeNewNote", "新建笔记"),
+          icon: "note",
+        },
+        {
+          type: "review" as const,
+          label: t("notes.knowledgeNewReview", "新建书评"),
+          icon: "review",
+        },
+        {
+          type: "summary" as const,
+          label: t("notes.knowledgeNewSummary", "新建摘要"),
+          icon: "summary",
+        },
+      ] satisfies Array<{
+        type: CreatableKnowledgeDocumentType;
+        label: string;
+        icon: "folder" | "note" | "review" | "summary";
+      }>,
+    [t],
+  );
 
   useEffect(() => {
     if (!activeDocument) return;
@@ -2463,29 +2501,16 @@ function KnowledgeDocumentExplorer({
     });
   }, []);
 
-  const showCreatePicker = useCallback(
-    (parentId?: string) => {
-      Alert.alert(t("notes.knowledgeNewDocument", "新建文档"), undefined, [
-        {
-          text: t("notes.knowledgeNewFolder", "新建文件夹"),
-          onPress: () => onCreate("folder", parentId),
-        },
-        {
-          text: t("notes.knowledgeNewNote", "新建笔记"),
-          onPress: () => onCreate("standalone_note", parentId),
-        },
-        {
-          text: t("notes.knowledgeNewReview", "新建书评"),
-          onPress: () => onCreate("review", parentId),
-        },
-        {
-          text: t("notes.knowledgeNewSummary", "新建摘要"),
-          onPress: () => onCreate("summary", parentId),
-        },
-        { text: t("common.cancel", "取消"), style: "cancel" },
-      ]);
+  const showCreatePicker = useCallback((parentId?: string) => {
+    setCreateParentId(parentId);
+    setIsCreateSheetVisible(true);
+  }, []);
+  const handleCreate = useCallback(
+    (type: CreatableKnowledgeDocumentType) => {
+      setIsCreateSheetVisible(false);
+      onCreate(type, createParentId);
     },
-    [onCreate, t],
+    [createParentId, onCreate],
   );
 
   return (
@@ -2573,6 +2598,67 @@ function KnowledgeDocumentExplorer({
           ))
         )}
       </View>
+
+      <Modal
+        visible={isCreateSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCreateSheetVisible(false)}
+      >
+        <Pressable
+          style={styles.knowledgeMoveSheetBackdrop}
+          onPress={() => setIsCreateSheetVisible(false)}
+        />
+        <View style={styles.knowledgeMoveSheet}>
+          <View style={styles.knowledgeMoveSheetHeader}>
+            <View style={styles.knowledgeMoveSheetTitleBlock}>
+              <Text style={styles.knowledgeMoveSheetTitle}>
+                {t("notes.knowledgeNewDocument", "新建文档")}
+              </Text>
+              <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
+                {t("notes.knowledgeMoveTo", "移动到")} · {createDestinationLabel}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              style={styles.knowledgeMoveSheetClose}
+              onPress={() => setIsCreateSheetVisible(false)}
+              accessibilityLabel={t("common.cancel", "取消")}
+            >
+              <XIcon size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.knowledgeMoveTargetList, styles.knowledgeCreateTargetList]}>
+            {createOptions.map((option) => (
+              <TouchableOpacity
+                key={option.type}
+                activeOpacity={0.78}
+                style={styles.knowledgeMoveTarget}
+                onPress={() => handleCreate(option.type)}
+                disabled={isCreating}
+                accessibilityLabel={option.label}
+              >
+                <View style={styles.knowledgeMoveTargetIcon}>
+                  {option.icon === "folder" ? (
+                    <FolderPlusIcon size={15} color={colors.primary} />
+                  ) : option.icon === "review" ? (
+                    <NotebookPenIcon size={15} color={colors.primary} />
+                  ) : option.icon === "summary" ? (
+                    <SparklesIcon size={15} color={colors.primary} />
+                  ) : (
+                    <ScrollTextIcon size={15} color={colors.primary} />
+                  )}
+                </View>
+                <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
+                  {option.label}
+                </Text>
+                <ChevronRightIcon size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

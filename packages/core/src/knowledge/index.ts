@@ -54,3 +54,5 @@ export type {
   ReadAnyCardDefinition,
   ReadAnyCardMarkdownContext,
 } from "./card-registry";
+export { ensureKnowledgeSourceLink } from "./source-links";
+export type { EnsureKnowledgeSourceLinkInput } from "./source-links";

@@ -27,6 +27,8 @@ const knowledgeMocks = vi.hoisted(() => ({
   createKnowledgeDocument: vi.fn(),
   updateKnowledgeDocument: vi.fn(),
   deleteKnowledgeDocument: vi.fn(),
+  getKnowledgeLinks: vi.fn(),
+  insertKnowledgeLink: vi.fn(),
 }));
 
 vi.mock("../db-core", () => coreMocks);
@@ -89,9 +91,13 @@ describe("note-queries", () => {
     coreMocks.insertTombstone.mockResolvedValue(undefined);
     mockSelect.mockResolvedValue([]);
     knowledgeMocks.getKnowledgeDocuments.mockResolvedValue([]);
-    knowledgeMocks.createKnowledgeDocument.mockResolvedValue(undefined);
+    knowledgeMocks.createKnowledgeDocument.mockImplementation(async () =>
+      knowledgeDocument({ id: "doc-created" }),
+    );
     knowledgeMocks.updateKnowledgeDocument.mockResolvedValue(undefined);
     knowledgeMocks.deleteKnowledgeDocument.mockResolvedValue(undefined);
+    knowledgeMocks.getKnowledgeLinks.mockResolvedValue([]);
+    knowledgeMocks.insertKnowledgeLink.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -211,7 +217,7 @@ describe("note-queries", () => {
 
       const changedCount = await ensureNoteKnowledgeDocuments("book-1");
 
-      expect(changedCount).toBe(1);
+      expect(changedCount).toBe(2);
       expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining("WHERE book_id = ?"), [
         "book-1",
         500,
@@ -225,6 +231,15 @@ describe("note-queries", () => {
           tags: ["important", "review"],
           sourceKind: "note",
           sourceId: "note-1",
+        }),
+      );
+      expect(knowledgeMocks.insertKnowledgeLink).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromDocumentId: "doc-created",
+          toKind: "highlight",
+          toId: "hl-1",
+          relation: "source",
+          cfi: "epubcfi(/6/2)",
         }),
       );
     });
@@ -248,6 +263,18 @@ describe("note-queries", () => {
       });
       mockSelect.mockResolvedValue([sampleNoteRow]);
       knowledgeMocks.getKnowledgeDocuments.mockResolvedValue([existingDocument]);
+      knowledgeMocks.getKnowledgeLinks.mockResolvedValue([
+        {
+          id: "link-1",
+          fromDocumentId: "doc-1",
+          toKind: "highlight",
+          toId: "hl-1",
+          relation: "source",
+          cfi: "epubcfi(/6/2)",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]);
 
       const changedCount = await ensureNoteKnowledgeDocuments("book-1");
 

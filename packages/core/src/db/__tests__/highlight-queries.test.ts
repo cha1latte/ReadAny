@@ -19,6 +19,8 @@ const knowledgeMocks = vi.hoisted(() => ({
   createKnowledgeDocument: vi.fn(),
   updateKnowledgeDocument: vi.fn(),
   deleteKnowledgeDocument: vi.fn(),
+  getKnowledgeLinks: vi.fn(),
+  insertKnowledgeLink: vi.fn(),
 }));
 
 vi.mock("../db-core", () => coreMocks);
@@ -86,9 +88,13 @@ describe("highlight-queries", () => {
     coreMocks.insertTombstone.mockResolvedValue(undefined);
     mockSelect.mockResolvedValue([]);
     knowledgeMocks.getKnowledgeDocuments.mockResolvedValue([]);
-    knowledgeMocks.createKnowledgeDocument.mockResolvedValue(undefined);
+    knowledgeMocks.createKnowledgeDocument.mockImplementation(async () =>
+      knowledgeDocument({ id: "doc-created" }),
+    );
     knowledgeMocks.updateKnowledgeDocument.mockResolvedValue(undefined);
     knowledgeMocks.deleteKnowledgeDocument.mockResolvedValue(undefined);
+    knowledgeMocks.getKnowledgeLinks.mockResolvedValue([]);
+    knowledgeMocks.insertKnowledgeLink.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -177,7 +183,7 @@ describe("highlight-queries", () => {
 
       const changedCount = await ensureHighlightNoteKnowledgeDocuments("book-1");
 
-      expect(changedCount).toBe(1);
+      expect(changedCount).toBe(2);
       expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining("WHERE book_id = ?"), [
         "book-1",
         500,
@@ -189,6 +195,15 @@ describe("highlight-queries", () => {
           contentMd: createHighlightNoteMarkdown(sampleHighlight),
           sourceKind: "highlight",
           sourceId: "hl-1",
+        }),
+      );
+      expect(knowledgeMocks.insertKnowledgeLink).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromDocumentId: "doc-created",
+          toKind: "highlight",
+          toId: "hl-1",
+          relation: "source",
+          cfi: "epubcfi(/6/2!/4/2/10)",
         }),
       );
     });
@@ -221,6 +236,18 @@ describe("highlight-queries", () => {
       });
       mockSelect.mockResolvedValue([sampleHighlightRow]);
       knowledgeMocks.getKnowledgeDocuments.mockResolvedValue([existingDocument]);
+      knowledgeMocks.getKnowledgeLinks.mockResolvedValue([
+        {
+          id: "link-1",
+          fromDocumentId: "doc-1",
+          toKind: "highlight",
+          toId: "hl-1",
+          relation: "source",
+          cfi: "epubcfi(/6/2!/4/2/10)",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]);
 
       const changedCount = await ensureHighlightNoteKnowledgeDocuments("book-1");
 

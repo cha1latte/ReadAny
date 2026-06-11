@@ -3,6 +3,7 @@ import {
   hasLegacyNoteContent,
   isGeneratedLegacyNoteDocument,
 } from "../knowledge/document-utils";
+import { ensureKnowledgeSourceLink } from "../knowledge/source-links";
 import { sortAnnotationsByPosition } from "../reader/annotation-order";
 import type { IDatabase } from "../services/platform";
 import type { Note } from "../types";
@@ -76,6 +77,32 @@ function isProjectionCurrent(
   );
 }
 
+async function ensureLegacyNoteSourceLink(documentId: string, note: Note): Promise<number> {
+  if (note.highlightId) {
+    const added = await ensureKnowledgeSourceLink({
+      documentId,
+      toKind: "highlight",
+      toId: note.highlightId,
+      label: note.chapterTitle,
+      cfi: note.cfi,
+    });
+    return added ? 1 : 0;
+  }
+
+  if (note.cfi) {
+    const added = await ensureKnowledgeSourceLink({
+      documentId,
+      toKind: "cfi",
+      toId: note.cfi,
+      label: note.chapterTitle,
+      cfi: note.cfi,
+    });
+    return added ? 1 : 0;
+  }
+
+  return 0;
+}
+
 async function syncLegacyNoteDocument(note: Note, previousNote: Note = note): Promise<number> {
   const documents = await getLegacyNoteDocuments(note.id);
   const generatedDocuments = documents.filter((document) =>
@@ -90,7 +117,7 @@ async function syncLegacyNoteDocument(note: Note, previousNote: Note = note): Pr
   const projection = createLegacyNoteProjection(note);
 
   if (documents.length === 0) {
-    await createKnowledgeDocument({
+    const document = await createKnowledgeDocument({
       bookId: note.bookId,
       type: "standalone_note",
       title: projection.title,
@@ -101,7 +128,7 @@ async function syncLegacyNoteDocument(note: Note, previousNote: Note = note): Pr
       sourceKind: "note",
       sourceId: note.id,
     });
-    return 1;
+    return 1 + (await ensureLegacyNoteSourceLink(document.id, note));
   }
 
   const documentsToUpdate = generatedDocuments.filter(
@@ -122,7 +149,10 @@ async function syncLegacyNoteDocument(note: Note, previousNote: Note = note): Pr
       }),
     ),
   );
-  return documentsToUpdate.length;
+  const linkResults = await Promise.all(
+    documents.map((document) => ensureLegacyNoteSourceLink(document.id, note)),
+  );
+  return documentsToUpdate.length + linkResults.reduce((total, count) => total + count, 0);
 }
 
 export async function getNotes(bookId: string): Promise<Note[]> {

@@ -3,6 +3,7 @@ import {
   hasHighlightNoteContent,
   isGeneratedHighlightNoteDocument,
 } from "../knowledge/document-utils";
+import { ensureKnowledgeSourceLink } from "../knowledge/source-links";
 import { sortAnnotationsByPosition } from "../reader/annotation-order";
 import type { IDatabase } from "../services/platform";
 import type { Highlight } from "../types";
@@ -76,6 +77,20 @@ function isProjectionCurrent(
   );
 }
 
+async function ensureHighlightSourceLink(
+  documentId: string,
+  highlight: Highlight,
+): Promise<number> {
+  const added = await ensureKnowledgeSourceLink({
+    documentId,
+    toKind: "highlight",
+    toId: highlight.id,
+    label: highlight.chapterTitle,
+    cfi: highlight.cfi,
+  });
+  return added ? 1 : 0;
+}
+
 async function syncHighlightNoteDocument(
   highlight: Highlight,
   previousHighlight: Highlight = highlight,
@@ -93,7 +108,7 @@ async function syncHighlightNoteDocument(
   const projection = createHighlightNoteProjection(highlight);
 
   if (documents.length === 0) {
-    await createKnowledgeDocument({
+    const document = await createKnowledgeDocument({
       bookId: highlight.bookId,
       type: "highlight_note",
       title: projection.title,
@@ -103,7 +118,7 @@ async function syncHighlightNoteDocument(
       sourceKind: "highlight",
       sourceId: highlight.id,
     });
-    return 1;
+    return 1 + (await ensureHighlightSourceLink(document.id, highlight));
   }
 
   const documentsToUpdate = generatedDocuments.filter(
@@ -123,7 +138,10 @@ async function syncHighlightNoteDocument(
       }),
     ),
   );
-  return documentsToUpdate.length;
+  const linkResults = await Promise.all(
+    documents.map((document) => ensureHighlightSourceLink(document.id, highlight)),
+  );
+  return documentsToUpdate.length + linkResults.reduce((total, count) => total + count, 0);
 }
 
 export async function getHighlights(bookId: string): Promise<Highlight[]> {

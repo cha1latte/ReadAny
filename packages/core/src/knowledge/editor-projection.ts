@@ -216,28 +216,187 @@ export function renderKnowledgeJsonToMarkdown(
   return renderBlock(document, 0, options).trim();
 }
 
-function textNode(text: string): TiptapNode {
-  return { type: "text", text };
+function textNode(text: string, marks?: TiptapMark[]): TiptapNode {
+  return marks?.length ? { type: "text", text, marks } : { type: "text", text };
 }
 
 function paragraphNode(text: string): TiptapNode {
-  return text ? { type: "paragraph", content: [textNode(text)] } : { type: "paragraph" };
+  const content = parseInlineMarkdown(text);
+  return content.length ? { type: "paragraph", content } : { type: "paragraph" };
+}
+
+function linkNode(label: string, href: string): TiptapNode {
+  if (href.startsWith("readany://cfi/")) {
+    return {
+      type: "readanySourceReference",
+      attrs: {
+        label,
+        cfi: decodeURIComponent(href.slice("readany://cfi/".length)),
+      },
+    };
+  }
+
+  return textNode(label, [{ type: "link", attrs: { href } }]);
+}
+
+function readAnyInternalLinkNode(value: string): TiptapNode {
+  const [target, alias] = value.split("|", 2).map((part) => part.trim());
+  const label = alias || target;
+  return {
+    type: "readanyInternalLink",
+    attrs: {
+      label,
+      title: label,
+      ...(alias ? { documentId: target } : {}),
+    },
+  };
+}
+
+function parseInlineMarkdown(markdown: string): TiptapNode[] {
+  const nodes: TiptapNode[] = [];
+  let index = 0;
+
+  const pushPlainUntil = (nextIndex: number) => {
+    if (nextIndex > index) nodes.push(textNode(markdown.slice(index, nextIndex)));
+    index = nextIndex;
+  };
+
+  const nextSpecialIndex = () => {
+    const candidates = ["**", "~~", "`", "[[", "[", "*"]
+      .map((token) => markdown.indexOf(token, index))
+      .filter((position) => position >= 0);
+    return candidates.length ? Math.min(...candidates) : markdown.length;
+  };
+
+  while (index < markdown.length) {
+    if (markdown.startsWith("**", index)) {
+      const end = markdown.indexOf("**", index + 2);
+      if (end > index + 2) {
+        nodes.push(textNode(markdown.slice(index + 2, end), [{ type: "bold" }]));
+        index = end + 2;
+        continue;
+      }
+    }
+
+    if (markdown.startsWith("~~", index)) {
+      const end = markdown.indexOf("~~", index + 2);
+      if (end > index + 2) {
+        nodes.push(textNode(markdown.slice(index + 2, end), [{ type: "strike" }]));
+        index = end + 2;
+        continue;
+      }
+    }
+
+    if (markdown.startsWith("`", index)) {
+      const end = markdown.indexOf("`", index + 1);
+      if (end > index + 1) {
+        nodes.push(textNode(markdown.slice(index + 1, end), [{ type: "code" }]));
+        index = end + 1;
+        continue;
+      }
+    }
+
+    if (markdown.startsWith("[[", index)) {
+      const end = markdown.indexOf("]]", index + 2);
+      if (end > index + 2) {
+        nodes.push(readAnyInternalLinkNode(markdown.slice(index + 2, end)));
+        index = end + 2;
+        continue;
+      }
+    }
+
+    if (markdown.startsWith("[", index)) {
+      const match = markdown.slice(index).match(/^\[([^\]]+)\]\(([^)]+)\)/);
+      if (match) {
+        nodes.push(linkNode(match[1], match[2]));
+        index += match[0].length;
+        continue;
+      }
+    }
+
+    if (markdown.startsWith("*", index)) {
+      const end = markdown.indexOf("*", index + 1);
+      if (end > index + 1) {
+        nodes.push(textNode(markdown.slice(index + 1, end), [{ type: "italic" }]));
+        index = end + 1;
+        continue;
+      }
+    }
+
+    const nextIndex = nextSpecialIndex();
+    if (nextIndex > index) {
+      pushPlainUntil(nextIndex);
+    } else {
+      nodes.push(textNode(markdown[index]));
+      index += 1;
+    }
+  }
+
+  return nodes;
+}
+
+function splitMarkdownBlocks(markdown: string): string[] {
+  const blocks: string[] = [];
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  let buffer: string[] = [];
+  let inFence = false;
+
+  const flush = () => {
+    const block = buffer.join("\n").trim();
+    if (block) blocks.push(block);
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      buffer.push(line);
+      inFence = !inFence;
+      if (!inFence) flush();
+      continue;
+    }
+
+    if (!inFence && !line.trim()) {
+      flush();
+      continue;
+    }
+
+    buffer.push(line);
+  }
+
+  flush();
+  return blocks;
 }
 
 export function markdownToBasicTiptap(markdown: string): TiptapNode {
-  const blocks = markdown
-    .replace(/\r\n/g, "\n")
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
+  const blocks = splitMarkdownBlocks(markdown);
 
   const content = blocks.map<TiptapNode>((block) => {
+    const codeBlock = block.match(/^```([^\n]*)\n([\s\S]*?)\n?```$/);
+    if (codeBlock) {
+      return {
+        type: "codeBlock",
+        ...(codeBlock[1].trim() ? { attrs: { language: codeBlock[1].trim() } } : {}),
+        content: [textNode(codeBlock[2])],
+      };
+    }
+
+    const image = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (image) {
+      return {
+        type: "image",
+        attrs: {
+          alt: image[1],
+          src: image[2],
+        },
+      };
+    }
+
     const heading = block.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       return {
         type: "heading",
         attrs: { level: heading[1].length },
-        content: [textNode(heading[2])],
+        content: parseInlineMarkdown(heading[2]),
       };
     }
 

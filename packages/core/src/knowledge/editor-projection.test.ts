@@ -192,6 +192,87 @@ describe("editor projection", () => {
     });
   });
 
+  it("imports inline rich text into Tiptap marks and source nodes", () => {
+    const json = markdownToBasicTiptap(
+      [
+        "Read **deeply**, *slowly*, ~~carefully~~, and `quote accurately`.",
+        "Open [ReadAny](https://readany.example) and cite [Chapter 1](readany://cfi/epubcfi%28%2F6%2F2%29).",
+        "Link [[doc-1|Durable note]] and [[Loose idea]].",
+      ].join("\n\n"),
+    );
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Read " },
+            { type: "text", text: "deeply", marks: [{ type: "bold" }] },
+            { type: "text", text: ", " },
+            { type: "text", text: "slowly", marks: [{ type: "italic" }] },
+            { type: "text", text: ", " },
+            { type: "text", text: "carefully", marks: [{ type: "strike" }] },
+            { type: "text", text: ", and " },
+            { type: "text", text: "quote accurately", marks: [{ type: "code" }] },
+            { type: "text", text: "." },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Open " },
+            {
+              type: "text",
+              text: "ReadAny",
+              marks: [{ type: "link", attrs: { href: "https://readany.example" } }],
+            },
+            { type: "text", text: " and cite " },
+            {
+              type: "readanySourceReference",
+              attrs: { label: "Chapter 1", cfi: "epubcfi(/6/2)" },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Link " },
+            {
+              type: "readanyInternalLink",
+              attrs: { documentId: "doc-1", label: "Durable note", title: "Durable note" },
+            },
+            { type: "text", text: " and " },
+            {
+              type: "readanyInternalLink",
+              attrs: { label: "Loose idea", title: "Loose idea" },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("imports Markdown image and fenced code blocks without losing blank lines", () => {
+    const json = markdownToBasicTiptap(
+      ["![Cover](assets/cover.png)", "```ts\nconst a = 1;\n\nconst b = 2;\n```"].join("\n\n"),
+    );
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        { type: "image", attrs: { alt: "Cover", src: "assets/cover.png" } },
+        {
+          type: "codeBlock",
+          attrs: { language: "ts" },
+          content: [{ type: "text", text: "const a = 1;\n\nconst b = 2;" }],
+        },
+      ],
+    });
+  });
+
   it("imports Markdown task lists into task item nodes", () => {
     const json = markdownToBasicTiptap("- [x] Done\n- [ ] Later");
 

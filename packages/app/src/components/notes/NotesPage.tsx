@@ -2698,6 +2698,10 @@ function KnowledgeDocumentExplorer({
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
   const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
+  const orphanedDocumentIds = useMemo(
+    () => new Set(tree.orphaned.map((document) => document.id)),
+    [tree],
+  );
   const folderCount = useMemo(
     () => documents.filter((document) => document.type === "folder").length,
     [documents],
@@ -2744,6 +2748,7 @@ function KnowledgeDocumentExplorer({
     const isFolder = document.type === "folder";
     const isExpanded = expandedFolderIds.has(document.id);
     const isActive = document.id === activeDocumentId;
+    const isOrphaned = orphanedDocumentIds.has(document.id);
     const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
     const childCount = childCountByParentId.get(document.id) ?? 0;
     const canDelete =
@@ -2825,9 +2830,20 @@ function KnowledgeDocumentExplorer({
               >
                 {title}
               </span>
-              {!isFolder ? (
+              {!isFolder || isOrphaned ? (
                 <span className="block truncate text-[10px] text-muted-foreground">
-                  {knowledgeDocumentTypeLabel(document, t)}
+                  {!isFolder ? knowledgeDocumentTypeLabel(document, t) : null}
+                  {isOrphaned ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-0.5 rounded-sm bg-amber-500/10 px-1 text-[10px] font-medium text-amber-700 dark:text-amber-300",
+                        !isFolder && "ml-1",
+                      )}
+                    >
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                      {t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" })}
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </span>

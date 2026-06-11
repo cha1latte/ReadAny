@@ -2260,6 +2260,10 @@ function KnowledgeDocumentExplorer({
     () => buildKnowledgeDocumentTree(documents, homeDocumentId),
     [documents, homeDocumentId],
   );
+  const orphanedDocumentIds = useMemo(
+    () => new Set(tree.orphaned.map((document) => document.id)),
+    [tree],
+  );
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const document of documents) {
@@ -2394,6 +2398,7 @@ function KnowledgeDocumentExplorer({
                 activeDocumentId={activeDocumentId}
                 expandedFolderIds={expandedFolderIds}
                 childCountByParentId={childCountByParentId}
+                orphanedDocumentIds={orphanedDocumentIds}
                 onToggleFolder={toggleFolder}
                 onSelect={onSelect}
                 t={t}
@@ -2417,6 +2422,7 @@ function KnowledgeDocumentExplorer({
               activeDocumentId={activeDocumentId}
               expandedFolderIds={expandedFolderIds}
               childCountByParentId={childCountByParentId}
+              orphanedDocumentIds={orphanedDocumentIds}
               onToggleFolder={toggleFolder}
               onSelect={onSelect}
               t={t}
@@ -2435,6 +2441,7 @@ function KnowledgeDocumentTreeRow({
   activeDocumentId,
   expandedFolderIds,
   childCountByParentId,
+  orphanedDocumentIds,
   onToggleFolder,
   onSelect,
   t,
@@ -2446,6 +2453,7 @@ function KnowledgeDocumentTreeRow({
   activeDocumentId: string | null;
   expandedFolderIds: Set<string>;
   childCountByParentId: Map<string, number>;
+  orphanedDocumentIds: Set<string>;
   onToggleFolder: (id: string) => void;
   onSelect: (document: KnowledgeDocument) => void;
   t: TFunction;
@@ -2457,6 +2465,7 @@ function KnowledgeDocumentTreeRow({
   const isFolder = document.type === "folder";
   const isExpanded = expandedFolderIds.has(document.id);
   const isActive = document.id === activeDocumentId;
+  const isOrphaned = orphanedDocumentIds.has(document.id);
   const childCount = childCountByParentId.get(document.id) ?? 0;
   const title = document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
   const showChildren = isFolder && isExpanded && node.children.length > 0 && !forceLeaf;
@@ -2508,7 +2517,12 @@ function KnowledgeDocumentTreeRow({
             {title}
           </Text>
           <Text numberOfLines={1} style={styles.knowledgeTreeMeta}>
-            {knowledgeDocumentTypeLabel(document, t)}
+            {isOrphaned
+              ? `${knowledgeDocumentTypeLabel(document, t)} · ${t(
+                  "notes.knowledgeOrphanedDocument",
+                  "孤立",
+                )}`
+              : knowledgeDocumentTypeLabel(document, t)}
           </Text>
         </View>
         {isFolder ? (
@@ -2526,6 +2540,7 @@ function KnowledgeDocumentTreeRow({
               activeDocumentId={activeDocumentId}
               expandedFolderIds={expandedFolderIds}
               childCountByParentId={childCountByParentId}
+              orphanedDocumentIds={orphanedDocumentIds}
               onToggleFolder={onToggleFolder}
               onSelect={onSelect}
               t={t}

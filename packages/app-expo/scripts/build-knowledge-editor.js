@@ -18,6 +18,8 @@ async function buildKnowledgeEditor() {
   const entryContent = `
     import { Editor, Node, mergeAttributes } from "@tiptap/core";
     import Placeholder from "@tiptap/extension-placeholder";
+    import TaskItem from "@tiptap/extension-task-item";
+    import TaskList from "@tiptap/extension-task-list";
     import StarterKit from "@tiptap/starter-kit";
 
     const EMPTY_DOC = { type: "doc", content: [] };
@@ -74,6 +76,7 @@ async function buildKnowledgeEditor() {
           code: editor.isActive("code"),
           bulletList: editor.isActive("bulletList"),
           orderedList: editor.isActive("orderedList"),
+          taskList: editor.isActive("taskList") || editor.isActive("taskItem"),
           blockquote: editor.isActive("blockquote"),
           link: editor.isActive("link"),
         },
@@ -198,6 +201,10 @@ async function buildKnowledgeEditor() {
             dropcursor: false,
             gapcursor: false,
           }),
+          TaskList,
+          TaskItem.configure({
+            nested: true,
+          }),
           ReadAnyCard,
           Placeholder.configure({
             placeholder: payload.placeholder || "",
@@ -261,6 +268,9 @@ async function buildKnowledgeEditor() {
           break;
         case "orderedList":
           chain.toggleOrderedList().run();
+          break;
+        case "taskList":
+          chain.toggleTaskList().run();
           break;
         case "blockquote":
           chain.toggleBlockquote().run();

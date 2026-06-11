@@ -192,6 +192,31 @@ describe("editor projection", () => {
     });
   });
 
+  it("imports Markdown task lists into task item nodes", () => {
+    const json = markdownToBasicTiptap("- [x] Done\n- [ ] Later");
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "taskList",
+          content: [
+            {
+              type: "taskItem",
+              attrs: { checked: true },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "Done" }] }],
+            },
+            {
+              type: "taskItem",
+              attrs: { checked: false },
+              content: [{ type: "paragraph", content: [{ type: "text", text: "Later" }] }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("normalizes invalid content to an empty Tiptap document", () => {
     expect(normalizeTiptapDocument(null)).toEqual({ type: "doc", content: [] });
     expect(renderKnowledgeJsonToMarkdown(null)).toBe("");

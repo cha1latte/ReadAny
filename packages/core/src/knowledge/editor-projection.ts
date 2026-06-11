@@ -251,6 +251,20 @@ export function markdownToBasicTiptap(markdown: string): TiptapNode {
     }
 
     const lines = block.split("\n");
+    if (lines.every((line) => /^[-*]\s+\[[ xX]\]\s+/.test(line))) {
+      return {
+        type: "taskList",
+        content: lines.map((line) => {
+          const match = line.match(/^[-*]\s+\[([ xX])\]\s+(.+)$/);
+          return {
+            type: "taskItem",
+            attrs: { checked: match?.[1]?.toLowerCase() === "x" },
+            content: [paragraphNode(match?.[2] ?? "")],
+          };
+        }),
+      };
+    }
+
     if (lines.every((line) => /^[-*]\s+/.test(line))) {
       return {
         type: "bulletList",

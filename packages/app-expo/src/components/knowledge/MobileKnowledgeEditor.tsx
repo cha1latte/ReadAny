@@ -11,6 +11,7 @@ import {
   Link2Icon,
   ListIcon,
   ListOrderedIcon,
+  ListTodoIcon,
   MessageCirclePlusIcon,
   MinusIcon,
   QuoteIcon,
@@ -86,6 +87,7 @@ interface SelectionState {
     code?: boolean;
     bulletList?: boolean;
     orderedList?: boolean;
+    taskList?: boolean;
     blockquote?: boolean;
     link?: boolean;
   };
@@ -697,6 +699,7 @@ export function MobileKnowledgeEditor({
     },
     canUse("bulletList") ||
     canUse("orderedList") ||
+    canUse("taskList") ||
     canUse("blockquote") ||
     canUse("horizontalRule")
       ? {
@@ -726,6 +729,19 @@ export function MobileKnowledgeEditor({
                   <ListOrderedIcon
                     size={15}
                     color={selection.marks.orderedList ? colors.primary : colors.mutedForeground}
+                  />
+                </ToolbarButton>
+              ) : null}
+              {canUse("taskList") ? (
+                <ToolbarButton
+                  onPress={() => runCommand("taskList")}
+                  isActive={selection.marks.taskList}
+                  disabled={!isEditorReady}
+                  styles={styles}
+                >
+                  <ListTodoIcon
+                    size={15}
+                    color={selection.marks.taskList ? colors.primary : colors.mutedForeground}
                   />
                 </ToolbarButton>
               ) : null}

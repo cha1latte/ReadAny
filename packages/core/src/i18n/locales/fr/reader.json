@@ -123,6 +123,7 @@
     "link": "Lien",
     "bulletList": "Liste à puces",
     "orderedList": "Liste numérotée",
+    "taskList": "Liste de tâches",
     "blockquote": "Citation",
     "horizontalRule": "Ligne horizontale"
   },

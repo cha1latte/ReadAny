@@ -123,6 +123,7 @@
     "link": "링크",
     "bulletList": "글머리 목록",
     "orderedList": "번호 목록",
+    "taskList": "작업 목록",
     "blockquote": "인용구",
     "horizontalRule": "구분선"
   },

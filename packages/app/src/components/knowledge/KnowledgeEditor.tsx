@@ -15,6 +15,8 @@ import {
 import type { JSONValue } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import Placeholder from "@tiptap/extension-placeholder";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
 import {
   EditorContent,
   Node,
@@ -37,6 +39,7 @@ import {
   Link2,
   List,
   ListOrdered,
+  ListTodo,
   Map as MapIcon,
   MessageSquareQuote,
   Minus,
@@ -162,6 +165,10 @@ export function KnowledgeEditor({
         dropcursor: false,
         gapcursor: false,
       }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
       ReadAnyCardExtension,
       Placeholder.configure({
         placeholder: placeholder || "",
@@ -178,6 +185,7 @@ export function KnowledgeEditor({
       attributes: {
         class: cn(
           "prose prose-sm dark:prose-invert max-w-none min-h-[80px] outline-none",
+          "readany-knowledge-editor",
           "prose-headings:font-semibold prose-headings:tracking-tight",
           "prose-h1:text-xl prose-h1:mb-3 prose-h1:mt-4",
           "prose-h2:text-base prose-h2:mb-2 prose-h2:mt-4",
@@ -381,6 +389,7 @@ export function KnowledgeEditor({
     },
     canUse("bulletList") ||
     canUse("orderedList") ||
+    canUse("taskList") ||
     canUse("blockquote") ||
     canUse("horizontalRule")
       ? {
@@ -403,6 +412,15 @@ export function KnowledgeEditor({
                   title={t("editor.orderedList")}
                 >
                   <ListOrdered className="h-3.5 w-3.5" />
+                </ToolbarButton>
+              ) : null}
+              {canUse("taskList") ? (
+                <ToolbarButton
+                  onClick={() => editor.chain().focus().toggleTaskList().run()}
+                  isActive={editor.isActive("taskList")}
+                  title={t("editor.taskList")}
+                >
+                  <ListTodo className="h-3.5 w-3.5" />
                 </ToolbarButton>
               ) : null}
               {canUse("blockquote") ? (

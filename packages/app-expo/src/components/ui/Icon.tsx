@@ -612,6 +612,16 @@ export const ListOrderedIcon = icon(() => (
   </>
 ));
 
+export const ListTodoIcon = icon(() => (
+  <>
+    <Rect x="3" y="5" width="4" height="4" rx="1" />
+    <Path d="m4 7 1 1 2-2" />
+    <Line x1="11" x2="21" y1="7" y2="7" />
+    <Rect x="3" y="15" width="4" height="4" rx="1" />
+    <Line x1="11" x2="21" y1="17" y2="17" />
+  </>
+));
+
 export const CodeIcon = icon(() => (
   <>
     <Polyline points="16 18 22 12 16 6" />

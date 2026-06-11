@@ -123,6 +123,7 @@
     "link": "リンク",
     "bulletList": "箇条書き",
     "orderedList": "番号付きリスト",
+    "taskList": "タスクリスト",
     "blockquote": "引用",
     "horizontalRule": "水平線"
   },

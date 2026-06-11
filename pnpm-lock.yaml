@@ -117,6 +117,12 @@ importers:
       '@tiptap/extension-placeholder':
         specifier: ^3.20.0
         version: 3.20.1(@tiptap/extensions@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
+      '@tiptap/extension-task-item':
+        specifier: ^3.20.1
+        version: 3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
+      '@tiptap/extension-task-list':
+        specifier: ^3.20.1
+        version: 3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
       '@tiptap/markdown':
         specifier: ^3.20.0
         version: 3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1)
@@ -301,6 +307,12 @@ importers:
       '@tiptap/extension-placeholder':
         specifier: ^3.20.0
         version: 3.20.1(@tiptap/extensions@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
+      '@tiptap/extension-task-item':
+        specifier: ^3.20.1
+        version: 3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
+      '@tiptap/extension-task-list':
+        specifier: ^3.20.1
+        version: 3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))
       '@tiptap/starter-kit':
         specifier: ^3.20.0
         version: 3.20.1
@@ -3820,6 +3832,16 @@ packages:
     resolution: {integrity: sha512-EYgyma10lpsY+rwbVQL9u+gA7hBlKLSMFH7Zgd37FSxukOjr+HE8iKPQQ+SwbGejyDsPlLT8Z5Jnuxo5Ng90Pg==}
     peerDependencies:
       '@tiptap/core': ^3.20.1
+
+  '@tiptap/extension-task-item@3.20.1':
+    resolution: {integrity: sha512-ZdQld5Jzw/b/zl9TSA3KNkucmQhW5lHS/0YEKb+eFvxMwdHTKSpsTQzrfzbJixcdSqsuKJB+uUCwDDB+l0CRlA==}
+    peerDependencies:
+      '@tiptap/extension-list': ^3.20.1
+
+  '@tiptap/extension-task-list@3.20.1':
+    resolution: {integrity: sha512-fbWsbp2ybWZUn9zcdgvFIcVya7v8kISuy91SULM1lhLwIsjNC15IPqp/ZEFJJJDKWBVr0o6bvLMsXwph/azO+w==}
+    peerDependencies:
+      '@tiptap/extension-list': ^3.20.1
 
   '@tiptap/extension-text@3.20.1':
     resolution: {integrity: sha512-7PlIbYW8UenV6NPOXHmv8IcmPGlGx6HFq66RmkJAOJRPXPkTLAiX0N8rQtzUJ6jDEHqoJpaHFEHJw0xzW1yF+A==}
@@ -13246,6 +13268,14 @@ snapshots:
   '@tiptap/extension-strike@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))':
     dependencies:
       '@tiptap/core': 3.20.1(@tiptap/pm@3.20.1)
+
+  '@tiptap/extension-task-item@3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))':
+    dependencies:
+      '@tiptap/extension-list': 3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1)
+
+  '@tiptap/extension-task-list@3.20.1(@tiptap/extension-list@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1))':
+    dependencies:
+      '@tiptap/extension-list': 3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))(@tiptap/pm@3.20.1)
 
   '@tiptap/extension-text@3.20.1(@tiptap/core@3.20.1(@tiptap/pm@3.20.1))':
     dependencies:

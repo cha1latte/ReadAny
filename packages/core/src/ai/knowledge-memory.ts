@@ -4,9 +4,11 @@ import {
   type KnowledgeSummaryCompressionPlan,
   type KnowledgeSummaryCompressionState,
   type KnowledgeSummaryDocument,
+  createKnowledgeSummaryCompressionStateFromDocument,
   createKnowledgeSummaryCompressionState,
   prepareKnowledgeSummaryCompression,
 } from "../knowledge";
+import { updateKnowledgeDocumentSummary } from "../db/database";
 import type { AIConfig } from "../types";
 import { createChatModel } from "./llm-provider";
 
@@ -18,6 +20,11 @@ export interface KnowledgeSummaryCompressionResult {
   state?: KnowledgeSummaryCompressionState;
   summaryMd?: string;
   error?: string;
+}
+
+export interface PersistedKnowledgeSummaryCompressionResult
+  extends KnowledgeSummaryCompressionResult {
+  persisted: boolean;
 }
 
 function responseContentToText(content: unknown): string {
@@ -84,6 +91,32 @@ export async function maybeCompressKnowledgeSummary(
       status: "failed",
       plan,
       state,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function maybeCompressAndPersistKnowledgeSummary(
+  document: KnowledgeSummaryDocument,
+  aiConfig: AIConfig,
+  options: KnowledgeSummaryCompressionOptions = {},
+): Promise<PersistedKnowledgeSummaryCompressionResult> {
+  const existingState = createKnowledgeSummaryCompressionStateFromDocument(document);
+  const result = await maybeCompressKnowledgeSummary(document, aiConfig, existingState, options);
+
+  if (result.status !== "compressed" || !result.state) {
+    return { ...result, persisted: false };
+  }
+
+  try {
+    await updateKnowledgeDocumentSummary(document.id, result.state);
+    return { ...result, persisted: true };
+  } catch (error) {
+    console.warn("[knowledge-memory] Failed to persist knowledge document summary:", error);
+    return {
+      ...result,
+      status: "failed",
+      persisted: false,
       error: error instanceof Error ? error.message : String(error),
     };
   }

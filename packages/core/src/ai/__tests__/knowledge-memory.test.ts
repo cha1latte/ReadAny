@@ -6,12 +6,18 @@ const llmMocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   createChatModel: vi.fn(),
 }));
+const dbMocks = vi.hoisted(() => ({
+  updateKnowledgeDocumentSummary: vi.fn(),
+}));
 
 vi.mock("../llm-provider", () => ({
   createChatModel: llmMocks.createChatModel,
 }));
+vi.mock("../../db/database", () => dbMocks);
 
-const { maybeCompressKnowledgeSummary } = await import("../knowledge-memory");
+const { maybeCompressAndPersistKnowledgeSummary, maybeCompressKnowledgeSummary } = await import(
+  "../knowledge-memory"
+);
 
 function aiConfig(): AIConfig {
   return {
@@ -62,6 +68,7 @@ describe("knowledge memory compression", () => {
     vi.clearAllMocks();
     llmMocks.createChatModel.mockResolvedValue({ invoke: llmMocks.invoke });
     llmMocks.invoke.mockResolvedValue({ content: "## Durable memory\n- Keep this idea." });
+    dbMocks.updateKnowledgeDocumentSummary.mockResolvedValue(undefined);
   });
 
   it("skips short documents without calling the model", async () => {
@@ -109,5 +116,64 @@ describe("knowledge memory compression", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toBe("model offline");
     expect(result.plan.shouldCompress).toBe(true);
+  });
+
+  it("persists compressed summaries for long documents", async () => {
+    const result = await maybeCompressAndPersistKnowledgeSummary(
+      document({ contentMd: longMarkdown(), updatedAt: 200 }),
+      aiConfig(),
+      { minSourceChars: 200 },
+    );
+
+    expect(result.status).toBe("compressed");
+    expect(result.persisted).toBe(true);
+    expect(dbMocks.updateKnowledgeDocumentSummary).toHaveBeenCalledWith(
+      "doc-1",
+      expect.objectContaining({
+        summaryMd: "## Durable memory\n- Keep this idea.",
+        sourceFingerprint: result.plan.sourceFingerprint,
+        sourceUpdatedAt: 200,
+      }),
+    );
+  });
+
+  it("uses persisted summary state to skip unchanged documents", async () => {
+    const source = document({ contentMd: longMarkdown(), updatedAt: 200 });
+    const first = await maybeCompressAndPersistKnowledgeSummary(source, aiConfig(), {
+      minSourceChars: 200,
+    });
+    vi.clearAllMocks();
+
+    const result = await maybeCompressAndPersistKnowledgeSummary(
+      document({
+        ...source,
+        summaryMd: first.summaryMd,
+        summarySourceFingerprint: first.plan.sourceFingerprint,
+        summarySourceUpdatedAt: 200,
+        summaryUpdatedAt: 300,
+      }),
+      aiConfig(),
+      { minSourceChars: 200 },
+    );
+
+    expect(result.status).toBe("skipped");
+    expect(result.plan.reason).toBe("unchanged");
+    expect(result.persisted).toBe(false);
+    expect(llmMocks.createChatModel).not.toHaveBeenCalled();
+    expect(dbMocks.updateKnowledgeDocumentSummary).not.toHaveBeenCalled();
+  });
+
+  it("returns failed status when persisting the compressed summary fails", async () => {
+    dbMocks.updateKnowledgeDocumentSummary.mockRejectedValue(new Error("database locked"));
+
+    const result = await maybeCompressAndPersistKnowledgeSummary(
+      document({ contentMd: longMarkdown() }),
+      aiConfig(),
+      { minSourceChars: 200 },
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.persisted).toBe(false);
+    expect(result.error).toBe("database locked");
   });
 });

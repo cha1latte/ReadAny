@@ -10,10 +10,14 @@ export type { LLMOptions } from "./llm-provider";
 
 export { processMessages } from "./message-pipeline";
 export type { ProcessedMessage } from "./message-pipeline";
-export { maybeCompressKnowledgeSummary } from "./knowledge-memory";
+export {
+  maybeCompressAndPersistKnowledgeSummary,
+  maybeCompressKnowledgeSummary,
+} from "./knowledge-memory";
 export type {
   KnowledgeSummaryCompressionResult,
   KnowledgeSummaryCompressionStatus,
+  PersistedKnowledgeSummaryCompressionResult,
 } from "./knowledge-memory";
 
 export { generateSemanticContext, detectOperationType } from "./semantic-context";

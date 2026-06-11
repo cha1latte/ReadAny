@@ -17,11 +17,13 @@ const idMocks = vi.hoisted(() => ({
 
 vi.mock("../utils/generate-id", () => idMocks);
 
+const { eventBus } = await import("../utils/event-bus");
 const { applyKnowledgeWriteProposal, getKnowledgeWriteProposal } = await import("./proposals");
 
 describe("knowledge write proposals", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    eventBus.clear("knowledge:changed");
   });
 
   function document(overrides: Record<string, unknown> = {}) {
@@ -217,6 +219,63 @@ describe("knowledge write proposals", () => {
     });
   });
 
+  it("emits knowledge changed events after create and update proposals apply", async () => {
+    const events: unknown[] = [];
+    const unsubscribe = eventBus.on("knowledge:changed", (event) => events.push(event));
+
+    const createProposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      draft: {
+        type: "review",
+        title: "Review",
+        bookId: "book-1",
+        contentMd: "Body",
+        contentJson: { type: "doc", content: [] },
+      },
+    });
+    expect(createProposal).not.toBeNull();
+    if (!createProposal) throw new Error("Expected create proposal");
+    dbMocks.createKnowledgeDocument.mockResolvedValue({ id: "created-doc", bookId: "book-1" });
+
+    await applyKnowledgeWriteProposal(createProposal);
+
+    const updateProposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      patch: {
+        title: "Updated",
+      },
+      changedFields: ["title"],
+    });
+    expect(updateProposal).not.toBeNull();
+    if (!updateProposal) throw new Error("Expected update proposal");
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "doc-1", bookId: "book-1" }));
+
+    await applyKnowledgeWriteProposal(updateProposal);
+    unsubscribe();
+
+    expect(events).toEqual([
+      {
+        action: "create",
+        documentId: "created-doc",
+        bookId: "book-1",
+        timestamp: expect.any(Number),
+      },
+      {
+        action: "update",
+        documentId: "doc-1",
+        bookId: "book-1",
+        timestamp: expect.any(Number),
+      },
+    ]);
+  });
+
   it("validates parent folders before applying create proposals", async () => {
     const proposal = getKnowledgeWriteProposal({
       success: true,
@@ -330,5 +389,40 @@ describe("knowledge write proposals", () => {
       linkId: "existing-link",
       alreadyApplied: true,
     });
+  });
+
+  it("emits knowledge changed events after link proposals apply", async () => {
+    const events: unknown[] = [];
+    const unsubscribe = eventBus.on("knowledge:changed", (event) => events.push(event));
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      link: {
+        fromDocumentId: "doc-1",
+        toKind: "highlight",
+        toId: "hl-1",
+        relation: "source",
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected link proposal");
+
+    dbMocks.getKnowledgeLinks.mockResolvedValue([]);
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "doc-1", bookId: "book-1" }));
+
+    await applyKnowledgeWriteProposal(proposal);
+    unsubscribe();
+
+    expect(events).toEqual([
+      {
+        action: "link",
+        documentId: "doc-1",
+        linkId: "generated-link-id",
+        bookId: "book-1",
+        timestamp: expect.any(Number),
+      },
+    ]);
   });
 });

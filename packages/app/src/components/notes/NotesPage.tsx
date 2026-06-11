@@ -847,57 +847,92 @@ export function NotesPage() {
     setIsKnowledgeSaving(false);
   };
 
-  const refreshSelectedKnowledgeDocuments = async (preferredDocumentId?: string | null) => {
-    if (!selectedKnowledgeBookId) return;
+  const refreshSelectedKnowledgeDocuments = useCallback(
+    async (preferredDocumentId?: string | null) => {
+      if (!selectedKnowledgeBookId) return;
 
-    const homeDocument = await ensureBookHomeDocument(
-      selectedKnowledgeBookId,
-      selectedKnowledgeBookTitle,
-    );
-    const bookDocuments = await getKnowledgeDocuments({
-      bookId: selectedKnowledgeBookId,
-      limit: 200,
-    });
-    const documentsById = new Map<string, KnowledgeDocument>();
-    for (const document of [homeDocument, ...bookDocuments]) {
-      documentsById.set(document.id, document);
-    }
-    const nextDocuments = orderKnowledgeDocuments(
-      Array.from(documentsById.values()),
-      homeDocument.id,
-    );
-    const nextActiveDocument =
-      nextDocuments.find((document) => document.id === preferredDocumentId) ??
-      nextDocuments.find((document) => document.id === knowledgeHome?.id) ??
-      nextDocuments[0] ??
-      null;
+      const homeDocument = await ensureBookHomeDocument(
+        selectedKnowledgeBookId,
+        selectedKnowledgeBookTitle,
+      );
+      const bookDocuments = await getKnowledgeDocuments({
+        bookId: selectedKnowledgeBookId,
+        limit: 200,
+      });
+      const documentsById = new Map<string, KnowledgeDocument>();
+      for (const document of [homeDocument, ...bookDocuments]) {
+        documentsById.set(document.id, document);
+      }
+      const nextDocuments = orderKnowledgeDocuments(
+        Array.from(documentsById.values()),
+        homeDocument.id,
+      );
+      const nextActiveDocument =
+        nextDocuments.find((document) => document.id === preferredDocumentId) ??
+        nextDocuments.find((document) => document.id === knowledgeHome?.id) ??
+        nextDocuments[0] ??
+        null;
 
-    knowledgeSaveVersionRef.current += 1;
-    setKnowledgeDocuments(nextDocuments);
+      knowledgeSaveVersionRef.current += 1;
+      setKnowledgeDocuments(nextDocuments);
 
-    if (!nextActiveDocument) {
-      setSelectedKnowledgeDocumentId(null);
-      setKnowledgeHome(null);
-      setKnowledgeTitle("");
-      setKnowledgeTags([]);
-      const emptyValue = createEmptyKnowledgeValue();
-      setKnowledgeValue(emptyValue);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
+      if (!nextActiveDocument) {
+        setSelectedKnowledgeDocumentId(null);
+        setKnowledgeHome(null);
+        setKnowledgeTitle("");
+        setKnowledgeTags([]);
+        const emptyValue = createEmptyKnowledgeValue();
+        setKnowledgeValue(emptyValue);
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
+        setIsKnowledgeSaving(false);
+        return;
+      }
+
+      const nextValue = await createResolvedKnowledgeValueFromDocument(nextActiveDocument);
+      setSelectedKnowledgeDocumentId(nextActiveDocument.id);
+      setKnowledgeHome(nextActiveDocument);
+      setKnowledgeTitle(nextActiveDocument.title);
+      setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
+      setKnowledgeValue(nextValue);
+      setSavedKnowledgeFingerprint(
+        knowledgeDocumentFingerprint(nextActiveDocument.title, nextValue, nextActiveDocument.tags),
+      );
       setIsKnowledgeSaving(false);
-      return;
-    }
+    },
+    [knowledgeHome?.id, selectedKnowledgeBookId, selectedKnowledgeBookTitle],
+  );
 
-    const nextValue = await createResolvedKnowledgeValueFromDocument(nextActiveDocument);
-    setSelectedKnowledgeDocumentId(nextActiveDocument.id);
-    setKnowledgeHome(nextActiveDocument);
-    setKnowledgeTitle(nextActiveDocument.title);
-    setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
-    setKnowledgeValue(nextValue);
-    setSavedKnowledgeFingerprint(
-      knowledgeDocumentFingerprint(nextActiveDocument.title, nextValue, nextActiveDocument.tags),
-    );
-    setIsKnowledgeSaving(false);
-  };
+  useEffect(() => {
+    return eventBus.on("knowledge:changed", (event) => {
+      if (activeTabId !== "notes") return;
+      if (!selectedKnowledgeBookId) return;
+      if (event.bookId && event.bookId !== selectedKnowledgeBookId) return;
+
+      void (async () => {
+        try {
+          const preferredDocumentId =
+            event.action === "create" ? event.documentId : selectedKnowledgeDocumentId;
+          await refreshSelectedKnowledgeDocuments(preferredDocumentId);
+          if (event.action === "link" && event.documentId === activeKnowledgeDocumentId) {
+            const [links, backlinks] = await Promise.all([
+              getKnowledgeLinks(activeKnowledgeDocumentId),
+              getKnowledgeBacklinks(activeKnowledgeDocumentId),
+            ]);
+            setKnowledgeLinks(links);
+            setKnowledgeBacklinks(backlinks);
+          }
+        } catch (error) {
+          console.error("[Notes] Failed to refresh knowledge after proposal apply:", error);
+        }
+      })();
+    });
+  }, [
+    activeKnowledgeDocumentId,
+    activeTabId,
+    selectedKnowledgeBookId,
+    selectedKnowledgeDocumentId,
+    refreshSelectedKnowledgeDocuments,
+  ]);
 
   const handleCreateKnowledgeDocument = async (
     type: CreatableKnowledgeDocumentType = "standalone_note",

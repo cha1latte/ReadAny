@@ -16,6 +16,7 @@ import type {
   KnowledgeLinkTargetKind,
   KnowledgeSourceKind,
 } from "../types";
+import { eventBus } from "../utils/event-bus";
 import { generateId } from "../utils/generate-id";
 import { validateKnowledgeDocumentParent } from "./document-utils";
 
@@ -184,6 +185,18 @@ function createInvalidParentError(reason: string): Error {
   return new Error(`Invalid knowledge document parent: ${reason}`);
 }
 
+function emitKnowledgeChanged(data: {
+  action: KnowledgeProposalAction;
+  documentId?: string;
+  linkId?: string;
+  bookId?: string;
+}) {
+  eventBus.emit("knowledge:changed", {
+    ...data,
+    timestamp: Date.now(),
+  });
+}
+
 async function assertCreateProposalParent(proposal: KnowledgeDocumentCreateProposal) {
   const { parentId, type, bookId } = proposal.draft;
   if (!parentId) return;
@@ -197,11 +210,13 @@ async function assertCreateProposalParent(proposal: KnowledgeDocumentCreatePropo
   }
 }
 
-async function assertUpdateProposalParent(proposal: KnowledgeDocumentUpdateProposal) {
-  if (!Object.prototype.hasOwnProperty.call(proposal.patch, "parentId")) return;
-
+async function getValidatedUpdateDocument(
+  proposal: KnowledgeDocumentUpdateProposal,
+): Promise<KnowledgeDocument> {
   const document = await getKnowledgeDocument(proposal.documentId);
   if (!document) throw createInvalidParentError("missing_document");
+
+  if (!Object.prototype.hasOwnProperty.call(proposal.patch, "parentId")) return document;
 
   const documents = await getKnowledgeDocuments({
     ...(document.bookId ? { bookId: document.bookId } : {}),
@@ -214,12 +229,13 @@ async function assertUpdateProposalParent(proposal: KnowledgeDocumentUpdatePropo
   );
   if (!validation.ok) throw createInvalidParentError(validation.reason ?? "invalid_parent");
 
-  if (!proposal.patch.parentId) return;
+  if (!proposal.patch.parentId) return document;
   const parent = documents.find((item) => item.id === proposal.patch.parentId);
   if (!parent) throw createInvalidParentError("missing_parent");
   if (!sameOptionalString(parent.bookId, document.bookId)) {
     throw createInvalidParentError("book_mismatch");
   }
+  return document;
 }
 
 function normalizeCreateProposal(
@@ -374,12 +390,22 @@ export async function applyKnowledgeWriteProposal(
     }
     await assertCreateProposalParent(proposal);
     const document = await createKnowledgeDocument(proposal.draft);
+    emitKnowledgeChanged({
+      action: "create",
+      documentId: document.id,
+      bookId: document.bookId,
+    });
     return { action: "create", documentId: document.id };
   }
 
   if (proposal.action === "update") {
-    await assertUpdateProposalParent(proposal);
+    const document = await getValidatedUpdateDocument(proposal);
     await updateKnowledgeDocument(proposal.documentId, proposal.patch);
+    emitKnowledgeChanged({
+      action: "update",
+      documentId: proposal.documentId,
+      bookId: document.bookId,
+    });
     return { action: "update", documentId: proposal.documentId };
   }
 
@@ -414,5 +440,12 @@ export async function applyKnowledgeWriteProposal(
     updatedAt: now,
   };
   await insertKnowledgeLink(link);
+  const sourceDocument = await getKnowledgeDocument(link.fromDocumentId);
+  emitKnowledgeChanged({
+    action: "link",
+    documentId: link.fromDocumentId,
+    linkId: link.id,
+    bookId: sourceDocument?.bookId,
+  });
   return { action: "link", documentId: link.fromDocumentId, linkId: link.id };
 }

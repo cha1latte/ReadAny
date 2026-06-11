@@ -54,7 +54,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -1058,106 +1060,151 @@ export function MobileKnowledgeEditor({
       <Modal
         visible={showLinkModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowLinkModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.linkModal}>
-            <Text style={styles.linkModalTitle}>{t("common.insertLink", "插入链接")}</Text>
-            <TextInput
-              value={linkUrl}
-              onChangeText={setLinkUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder={t("common.enterLinkUrl", "输入链接地址")}
-              placeholderTextColor={colors.mutedForeground}
-              style={styles.linkInput}
-            />
-            <View style={styles.linkActions}>
-              <TouchableOpacity
-                style={styles.linkGhostButton}
-                onPress={() => {
-                  setShowLinkModal(false);
-                  setLinkUrl("");
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
-              </TouchableOpacity>
-              {selection.marks.link ? (
+        <View style={styles.cardSheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              setShowLinkModal(false);
+              setLinkUrl("");
+            }}
+          />
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View
+              style={[
+                styles.cardSheet,
+                styles.inputSheet,
+                { paddingBottom: Math.max(insets.bottom, 14) },
+              ]}
+            >
+              <View style={styles.cardSheetHandle} />
+              <View style={styles.cardSheetHeader}>
+                <Text style={styles.cardSheetTitle}>{t("common.insertLink", "插入链接")}</Text>
+                <Text style={styles.cardSheetHint}>{t("common.enterLinkUrl", "输入链接地址")}</Text>
+              </View>
+              <TextInput
+                value={linkUrl}
+                onChangeText={setLinkUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                placeholder={t("common.enterLinkUrl", "输入链接地址")}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.linkInput}
+              />
+              <View style={styles.linkActions}>
                 <TouchableOpacity
                   style={styles.linkGhostButton}
                   onPress={() => {
-                    runCommand("unsetLink");
                     setShowLinkModal(false);
                     setLinkUrl("");
                   }}
                   activeOpacity={0.75}
                 >
-                  <Text style={styles.linkDangerText}>{t("common.remove", "移除")}</Text>
+                  <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
                 </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                style={styles.linkPrimaryButton}
-                onPress={applyLink}
-                activeOpacity={0.82}
-              >
-                <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
-              </TouchableOpacity>
+                {selection.marks.link ? (
+                  <TouchableOpacity
+                    style={styles.linkGhostButton}
+                    onPress={() => {
+                      runCommand("unsetLink");
+                      setShowLinkModal(false);
+                      setLinkUrl("");
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.linkDangerText}>{t("common.remove", "移除")}</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.linkPrimaryButton}
+                  onPress={applyLink}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       <Modal
         visible={showImageModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowImageModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.linkModal}>
-            <Text style={styles.linkModalTitle}>{t("notes.knowledgeInsertImage", "插入图片")}</Text>
-            <TextInput
-              value={imageUrl}
-              onChangeText={setImageUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder={t("notes.knowledgeImageUrlPlaceholder", "图片 URL")}
-              placeholderTextColor={colors.mutedForeground}
-              style={styles.linkInput}
-            />
-            <TextInput
-              value={imageAlt}
-              onChangeText={setImageAlt}
-              placeholder={t("notes.knowledgeImageAltPlaceholder", "图片描述")}
-              placeholderTextColor={colors.mutedForeground}
-              style={styles.linkInput}
-            />
-            <View style={styles.linkActions}>
-              <TouchableOpacity
-                style={styles.linkGhostButton}
-                onPress={() => {
-                  setShowImageModal(false);
-                  setImageUrl("");
-                  setImageAlt("");
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.linkPrimaryButton, !imageUrl.trim() && styles.disabledButton]}
-                onPress={applyImage}
-                activeOpacity={0.82}
-                disabled={!imageUrl.trim()}
-              >
-                <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
-              </TouchableOpacity>
+        <View style={styles.cardSheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              setShowImageModal(false);
+              setImageUrl("");
+              setImageAlt("");
+            }}
+          />
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View
+              style={[
+                styles.cardSheet,
+                styles.inputSheet,
+                { paddingBottom: Math.max(insets.bottom, 14) },
+              ]}
+            >
+              <View style={styles.cardSheetHandle} />
+              <View style={styles.cardSheetHeader}>
+                <Text style={styles.cardSheetTitle}>
+                  {t("notes.knowledgeInsertImage", "插入图片")}
+                </Text>
+                <Text style={styles.cardSheetHint}>
+                  {t("notes.knowledgeImageUrlPlaceholder", "图片 URL")}
+                </Text>
+              </View>
+              <TextInput
+                value={imageUrl}
+                onChangeText={setImageUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                placeholder={t("notes.knowledgeImageUrlPlaceholder", "图片 URL")}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.linkInput}
+              />
+              <TextInput
+                value={imageAlt}
+                onChangeText={setImageAlt}
+                placeholder={t("notes.knowledgeImageAltPlaceholder", "图片描述")}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.linkInput}
+              />
+              <View style={styles.linkActions}>
+                <TouchableOpacity
+                  style={styles.linkGhostButton}
+                  onPress={() => {
+                    setShowImageModal(false);
+                    setImageUrl("");
+                    setImageAlt("");
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.linkPrimaryButton, !imageUrl.trim() && styles.disabledButton]}
+                  onPress={applyImage}
+                  activeOpacity={0.82}
+                  disabled={!imageUrl.trim()}
+                >
+                  <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1422,29 +1469,9 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       fontSize: fontSize.xs,
       fontWeight: fontWeight.semibold,
     },
-    modalOverlay: {
-      flex: 1,
-      justifyContent: "center",
-      paddingHorizontal: 24,
-      backgroundColor: withOpacity("#000000", 0.42),
-    },
-    linkModal: {
+    inputSheet: {
       gap: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      borderRadius: radius.lg,
-      backgroundColor: colors.card,
-      padding: 16,
-      shadowColor: "#000000",
-      shadowOpacity: 0.16,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 8,
-    },
-    linkModalTitle: {
-      color: colors.foreground,
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
+      paddingBottom: 14,
     },
     linkInput: {
       minHeight: 44,

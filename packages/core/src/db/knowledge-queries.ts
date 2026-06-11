@@ -20,6 +20,7 @@ import {
   nextUpdatedAt,
   parseJSON,
 } from "./db-core";
+import { syncKnowledgeDocumentToLegacySource } from "./knowledge-source-writeback";
 
 const KNOWLEDGE_SCHEMA_VERSION = 1;
 
@@ -254,13 +255,20 @@ function rowToKnowledgeCardTemplate(row: KnowledgeCardTemplateRow): KnowledgeCar
   };
 }
 
-export async function getKnowledgeDocument(id: string): Promise<KnowledgeDocument | null> {
-  const database = await getDB();
+async function getKnowledgeDocumentById(
+  database: Awaited<ReturnType<typeof getDB>>,
+  id: string,
+): Promise<KnowledgeDocument | null> {
   const rows = await database.select<KnowledgeDocumentRow>(
     "SELECT * FROM knowledge_documents WHERE id = ? LIMIT 1",
     [id],
   );
   return rows[0] ? rowToKnowledgeDocument(rows[0]) : null;
+}
+
+export async function getKnowledgeDocument(id: string): Promise<KnowledgeDocument | null> {
+  const database = await getDB();
+  return getKnowledgeDocumentById(database, id);
 }
 
 export async function getKnowledgeDocuments(
@@ -480,6 +488,11 @@ export async function updateKnowledgeDocument(
   values.push(id);
 
   await database.execute(`UPDATE knowledge_documents SET ${sets.join(", ")} WHERE id = ?`, values);
+
+  const updatedDocument = await getKnowledgeDocumentById(database, id);
+  if (updatedDocument) {
+    await syncKnowledgeDocumentToLegacySource(updatedDocument, database);
+  }
 }
 
 export async function deleteKnowledgeDocument(id: string): Promise<void> {

@@ -30,6 +30,8 @@ export {
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,
+  extractHighlightNoteContentForLegacyField,
+  extractLegacyNoteContentForLegacyField,
   hasHighlightNoteContent,
   hasLegacyNoteContent,
   isGeneratedHighlightNoteDocument,

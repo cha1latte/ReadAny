@@ -98,6 +98,11 @@ export type {
   KnowledgeDocumentFilters,
   KnowledgeDocumentSearchFilters,
 } from "./knowledge-queries";
+export { syncKnowledgeDocumentToLegacySource } from "./knowledge-source-writeback";
+export type {
+  KnowledgeSourceWritebackResult,
+  KnowledgeSourceWritebackStatus,
+} from "./knowledge-source-writeback";
 
 export {
   getBookmarks,

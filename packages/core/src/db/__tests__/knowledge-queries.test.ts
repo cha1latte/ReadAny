@@ -75,6 +75,8 @@ describe("knowledge-queries", () => {
     coreMocks.nextSyncVersion.mockResolvedValue(7);
     coreMocks.nextUpdatedAt.mockResolvedValue(2345);
     coreMocks.insertTombstone.mockResolvedValue(undefined);
+    mockSelect.mockResolvedValue([]);
+    mockExecute.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -220,8 +222,6 @@ describe("knowledge-queries", () => {
   });
 
   it("updates content, nullable fields, and sync tracking", async () => {
-    mockExecute.mockResolvedValue(undefined);
-
     await updateKnowledgeDocument("doc-1", {
       title: "Updated",
       contentJson: { type: "doc", content: [{ type: "paragraph" }] },
@@ -245,6 +245,50 @@ describe("knowledge-queries", () => {
     expect(params).toContain(2345);
     expect(params).toContain(7);
     expect(params).toContain("device-1");
+  });
+
+  it("writes projection document edits back to their legacy source", async () => {
+    mockSelect
+      .mockResolvedValueOnce([
+        {
+          ...docRow,
+          type: "highlight_note",
+          title: "New note",
+          content_md: `New note
+
+> Quoted source
+
+_Source: Chapter 1_`,
+          source_kind: "highlight",
+          source_id: "hl-1",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "hl-1",
+          text: "Quoted source",
+          note: "Old note",
+          chapter_title: "Chapter 1",
+        },
+      ]);
+
+    await updateKnowledgeDocument("doc-1", {
+      title: "New note",
+      contentMd: `New note
+
+> Quoted source
+
+_Source: Chapter 1_`,
+    });
+
+    expect(mockExecute).toHaveBeenCalledTimes(2);
+    expect(mockExecute).toHaveBeenNthCalledWith(2, expect.stringContaining("UPDATE highlights"), [
+      "New note",
+      2345,
+      7,
+      "device-1",
+      "hl-1",
+    ]);
   });
 
   it("deletes a knowledge document with a tombstone", async () => {

@@ -8,6 +8,8 @@ import {
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,
+  extractHighlightNoteContentForLegacyField,
+  extractLegacyNoteContentForLegacyField,
   isGeneratedHighlightNoteDocument,
   isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
@@ -152,6 +154,30 @@ _Source: Analects_`);
     expect(isGeneratedHighlightNoteDocument(edited, highlight)).toBe(false);
   });
 
+  it("extracts only user-authored content when writing highlight notes back to legacy fields", () => {
+    const highlight = {
+      text: "Source quote\nwith two lines",
+      chapterTitle: "Chapter 1",
+    };
+
+    const markdown = `My interpretation.
+
+> Source quote
+> with two lines
+
+_Source: Chapter 1_
+
+> A user-authored quote should stay.
+
+Follow-up idea.`;
+
+    expect(extractHighlightNoteContentForLegacyField(markdown, highlight)).toBe(`My interpretation.
+
+> A user-authored quote should stay.
+
+Follow-up idea.`);
+  });
+
   it("projects legacy notes into standalone knowledge documents", () => {
     const note = {
       id: "note-1",
@@ -206,5 +232,19 @@ _Source: Chapter 2_`);
     expect(isGeneratedLegacyNoteDocument(generated, note)).toBe(true);
     expect(isGeneratedLegacyNoteDocument(retitled, note)).toBe(false);
     expect(isGeneratedLegacyNoteDocument(expanded, note)).toBe(false);
+  });
+
+  it("removes generated source metadata when writing legacy notes back", () => {
+    const markdown = `Reading question.
+
+_Source: Chapter 2_
+
+Extra thought.`;
+
+    expect(extractLegacyNoteContentForLegacyField(markdown, { chapterTitle: "Chapter 2" })).toBe(
+      `Reading question.
+
+Extra thought.`,
+    );
   });
 });

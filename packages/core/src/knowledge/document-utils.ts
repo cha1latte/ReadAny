@@ -40,6 +40,50 @@ function normalizeGeneratedMarkdown(value: string): string {
   return value.replace(/\r\n/g, "\n").trim();
 }
 
+function normalizeComparableMarkdown(value: string): string {
+  return normalizeGeneratedMarkdown(value).replace(/\s+/g, " ");
+}
+
+function markdownBlocks(value: string): string[] {
+  return normalizeGeneratedMarkdown(value)
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
+function isBlockquoteBlock(block: string): boolean {
+  const lines = block.split("\n").filter((line) => line.trim());
+  return lines.length > 0 && lines.every((line) => line.trimStart().startsWith(">"));
+}
+
+function unquoteMarkdownBlock(block: string): string {
+  return block
+    .split("\n")
+    .map((line) => line.replace(/^\s*>\s?/, ""))
+    .join("\n")
+    .trim();
+}
+
+function isGeneratedQuoteBlock(block: string, quote: string): boolean {
+  return (
+    isBlockquoteBlock(block) &&
+    normalizeComparableMarkdown(unquoteMarkdownBlock(block)) === normalizeComparableMarkdown(quote)
+  );
+}
+
+function isGeneratedSourceBlock(block: string, chapterTitle?: string): boolean {
+  const normalizedBlock = normalizeComparableMarkdown(block);
+  const normalizedChapterTitle = chapterTitle?.trim();
+  if (normalizedChapterTitle) {
+    return normalizedBlock === normalizeComparableMarkdown(`_Source: ${normalizedChapterTitle}_`);
+  }
+  return /^_Source:\s.+_$/.test(normalizedBlock);
+}
+
+function joinMarkdownBlocks(blocks: string[]): string {
+  return blocks.join("\n\n").trim();
+}
+
 export function createKnowledgeExcerpt(markdown: string, maxLength = 220): string | undefined {
   const text = markdown
     .replace(/<!--[\s\S]*?-->/g, " ")
@@ -71,6 +115,19 @@ export function createHighlightNoteMarkdown(
   if (chapterTitle) sections.push(`_Source: ${chapterTitle}_`);
 
   return sections.join("\n\n");
+}
+
+export function extractHighlightNoteContentForLegacyField(
+  markdown: string,
+  highlight: Pick<Highlight, "text" | "chapterTitle">,
+): string {
+  return joinMarkdownBlocks(
+    markdownBlocks(markdown).filter(
+      (block) =>
+        !isGeneratedQuoteBlock(block, highlight.text) &&
+        !isGeneratedSourceBlock(block, highlight.chapterTitle),
+    ),
+  );
 }
 
 export function createHighlightNoteProjection(highlight: Highlight): HighlightNoteProjection {
@@ -110,6 +167,15 @@ export function createLegacyNoteMarkdown(note: Pick<Note, "content" | "chapterTi
   if (chapterTitle) sections.push(`_Source: ${chapterTitle}_`);
 
   return sections.join("\n\n");
+}
+
+export function extractLegacyNoteContentForLegacyField(
+  markdown: string,
+  note: Pick<Note, "chapterTitle">,
+): string {
+  return joinMarkdownBlocks(
+    markdownBlocks(markdown).filter((block) => !isGeneratedSourceBlock(block, note.chapterTitle)),
+  );
 }
 
 export function createLegacyNoteProjection(note: Note): LegacyNoteProjection {

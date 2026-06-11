@@ -68,6 +68,7 @@ export {
   deleteKnowledgeAttachment,
   getKnowledgeCardTemplates,
   upsertKnowledgeCardTemplate,
+  syncKnowledgeDocumentToLegacySource,
   // Bookmark queries
   getBookmarks,
   insertBookmark,
@@ -108,4 +109,6 @@ export type {
   KnowledgeBacklink,
   KnowledgeDocumentFilters,
   KnowledgeDocumentSearchFilters,
+  KnowledgeSourceWritebackResult,
+  KnowledgeSourceWritebackStatus,
 } from "./database";

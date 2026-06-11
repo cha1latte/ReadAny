@@ -14,6 +14,7 @@ import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
 import type { HighlightWithBook, KnowledgeBacklink } from "@/lib/db/database";
 import {
   createKnowledgeDocument,
+  deleteKnowledgeDocument,
   ensureBookHomeDocument,
   ensureHighlightNoteKnowledgeDocuments,
   ensureNoteKnowledgeDocuments,
@@ -101,6 +102,12 @@ function normalizeKnowledgeTags(tags: readonly string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b),
   );
+}
+
+function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
+  if (document.type === "book_home") return false;
+  if (document.sourceKind === "highlight" || document.sourceKind === "note") return false;
+  return true;
 }
 
 function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boolean {
@@ -727,6 +734,65 @@ export function NotesPage() {
     }
   };
 
+  const handleDeleteKnowledgeDocument = async (document: KnowledgeDocument) => {
+    if (!canDeleteKnowledgeDocument(document)) {
+      toast.error(t("notes.knowledgeDocumentDeleteBlocked"));
+      return;
+    }
+
+    if (!window.confirm(t("notes.knowledgeDocumentDeleteConfirm", { title: document.title }))) {
+      return;
+    }
+
+    const isDeletingActiveDocument = document.id === knowledgeHome?.id;
+    if (isDeletingActiveDocument) {
+      knowledgeSaveVersionRef.current += 1;
+    }
+
+    try {
+      await deleteKnowledgeDocument(document.id);
+      const remainingDocuments = orderKnowledgeDocuments(
+        knowledgeDocuments.filter((item) => item.id !== document.id),
+        knowledgeDocuments.find((item) => item.type === "book_home")?.id,
+      );
+      setKnowledgeDocuments(remainingDocuments);
+
+      if (isDeletingActiveDocument) {
+        const nextDocument =
+          remainingDocuments.find((item) => item.type === "book_home") ??
+          remainingDocuments[0] ??
+          null;
+        if (nextDocument) {
+          const nextValue = createKnowledgeValueFromDocument(nextDocument);
+          setSelectedKnowledgeDocumentId(nextDocument.id);
+          setKnowledgeHome(nextDocument);
+          setKnowledgeTitle(nextDocument.title);
+          setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
+          setKnowledgeValue(nextValue);
+          setSavedKnowledgeFingerprint(
+            knowledgeDocumentFingerprint(nextDocument.title, nextValue, nextDocument.tags),
+          );
+        } else {
+          setSelectedKnowledgeDocumentId(null);
+          setKnowledgeHome(null);
+          setKnowledgeTitle("");
+          setKnowledgeTags([]);
+          const emptyValue = createEmptyKnowledgeValue();
+          setKnowledgeValue(emptyValue);
+          setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
+        }
+        setIsKnowledgeSaving(false);
+      } else if (selectedKnowledgeDocumentId === document.id) {
+        setSelectedKnowledgeDocumentId(knowledgeHome?.id ?? null);
+      }
+
+      toast.success(t("notes.knowledgeDocumentDeleted"));
+    } catch (error) {
+      console.error("[Notes] Failed to delete knowledge document:", error);
+      toast.error(t("notes.knowledgeDocumentDeleteFailed"));
+    }
+  };
+
   const handleOpenBook = async (bookId: string, _title: string, cfi?: string) => {
     const book =
       books.find((item) => item.id === bookId) ??
@@ -1208,6 +1274,7 @@ export function NotesPage() {
                 onChange={setKnowledgeValue}
                 onSelectDocument={openKnowledgeDocument}
                 onCreateDocument={handleCreateKnowledgeDocument}
+                onDeleteDocument={handleDeleteKnowledgeDocument}
                 onExport={handleKnowledgeExport}
                 onExportVault={handleKnowledgeVaultExport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
@@ -1310,6 +1377,7 @@ interface KnowledgeHomePanelProps {
   onChange: (value: KnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: () => void;
+  onDeleteDocument: (document: KnowledgeDocument) => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
   onOpenBook: (cfi?: string) => void;
@@ -1339,6 +1407,7 @@ function KnowledgeHomePanel({
   onChange,
   onSelectDocument,
   onCreateDocument,
+  onDeleteDocument,
   onExport,
   onExportVault,
   onOpenBook,
@@ -1426,6 +1495,7 @@ function KnowledgeHomePanel({
             isCreating={isCreatingDocument}
             onSelect={onSelectDocument}
             onCreate={onCreateDocument}
+            onDelete={onDeleteDocument}
             t={t}
           />
 
@@ -1729,6 +1799,7 @@ function KnowledgeDocumentList({
   isCreating,
   onSelect,
   onCreate,
+  onDelete,
   t,
 }: {
   documents: KnowledgeDocument[];
@@ -1736,6 +1807,7 @@ function KnowledgeDocumentList({
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: () => void;
+  onDelete: (document: KnowledgeDocument) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
@@ -1758,41 +1830,57 @@ function KnowledgeDocumentList({
         {documents.map((document) => {
           const isActive = document.id === activeDocumentId;
           const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
+          const canDelete = canDeleteKnowledgeDocument(document);
 
           return (
-            <button
+            <div
               key={document.id}
-              type="button"
               className={cn(
-                "group w-full rounded-md border px-2.5 py-2 text-left transition-colors",
+                "group flex w-full items-stretch rounded-md border transition-colors",
                 isActive
                   ? "border-primary/30 bg-primary/10"
                   : "border-transparent hover:border-border/60 hover:bg-muted/45",
               )}
-              onClick={() => onSelect(document)}
             >
-              <div className="flex items-start gap-2">
-                <FileText
-                  className={cn(
-                    "mt-0.5 h-3.5 w-3.5 shrink-0",
-                    isActive ? "text-primary" : "text-muted-foreground",
-                  )}
-                />
-                <div className="min-w-0 flex-1">
-                  <p
+              <button
+                type="button"
+                className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                onClick={() => onSelect(document)}
+              >
+                <div className="flex items-start gap-2">
+                  <FileText
                     className={cn(
-                      "truncate text-xs font-medium",
-                      isActive ? "text-primary" : "text-foreground",
+                      "mt-0.5 h-3.5 w-3.5 shrink-0",
+                      isActive ? "text-primary" : "text-muted-foreground",
                     )}
-                  >
-                    {title}
-                  </p>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {knowledgeDocumentTypeLabel(document, t)}
-                  </p>
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        "truncate text-xs font-medium",
+                        isActive ? "text-primary" : "text-foreground",
+                      )}
+                    >
+                      {title}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {knowledgeDocumentTypeLabel(document, t)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  className="my-1 mr-1 flex w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={() => onDelete(document)}
+                  aria-label={t("notes.knowledgeDeleteDocument")}
+                  title={t("notes.knowledgeDeleteDocument")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>

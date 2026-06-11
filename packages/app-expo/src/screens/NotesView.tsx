@@ -13,6 +13,7 @@ import {
   SearchIcon,
   ShareIcon,
   SparklesIcon,
+  Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
 import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
@@ -27,6 +28,7 @@ import {
   type HighlightWithBook,
   type KnowledgeBacklink,
   createKnowledgeDocument,
+  deleteKnowledgeDocument,
   ensureBookHomeDocument,
   ensureHighlightNoteKnowledgeDocuments,
   ensureNoteKnowledgeDocuments,
@@ -100,6 +102,12 @@ function normalizeKnowledgeTags(tags: readonly string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b),
   );
+}
+
+function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
+  if (document.type === "book_home") return false;
+  if (document.sourceKind === "highlight" || document.sourceKind === "note") return false;
+  return true;
 }
 
 function isEmptyTiptapDocument(contentJson: KnowledgeDocument["contentJson"]): boolean {
@@ -673,6 +681,87 @@ export function NotesView({
     knowledgeDocuments.length,
   ]);
 
+  const handleDeleteKnowledgeDocument = useCallback(
+    (document: KnowledgeDocument) => {
+      if (!canDeleteKnowledgeDocument(document)) {
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentDeleteBlocked", "这个文档暂不支持直接删除"),
+        );
+        return;
+      }
+
+      Alert.alert(
+        t("notes.knowledgeDeleteDocument", "删除文档"),
+        t("notes.knowledgeDocumentDeleteConfirm", { title: document.title }),
+        [
+          { text: t("common.cancel", "取消"), style: "cancel" },
+          {
+            text: t("common.delete", "删除"),
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                const isDeletingActiveDocument = document.id === knowledgeHome?.id;
+                if (isDeletingActiveDocument) {
+                  knowledgeSaveVersionRef.current += 1;
+                }
+
+                try {
+                  await deleteKnowledgeDocument(document.id);
+                  const remainingDocuments = orderKnowledgeDocuments(
+                    knowledgeDocuments.filter((item) => item.id !== document.id),
+                    knowledgeDocuments.find((item) => item.type === "book_home")?.id,
+                  );
+                  setKnowledgeDocuments(remainingDocuments);
+
+                  if (isDeletingActiveDocument) {
+                    const nextDocument =
+                      remainingDocuments.find((item) => item.type === "book_home") ??
+                      remainingDocuments[0] ??
+                      null;
+                    if (nextDocument) {
+                      const nextValue = createKnowledgeValue(nextDocument);
+                      setSelectedKnowledgeDocumentId(nextDocument.id);
+                      setKnowledgeHome(nextDocument);
+                      setKnowledgeTitle(nextDocument.title);
+                      setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
+                      setKnowledgeValue(nextValue);
+                      setSavedKnowledgeFingerprint(
+                        knowledgeDocumentFingerprint(
+                          nextDocument.title,
+                          nextValue,
+                          nextDocument.tags,
+                        ),
+                      );
+                    } else {
+                      const emptyValue = createEmptyKnowledgeValue();
+                      setSelectedKnowledgeDocumentId(null);
+                      setKnowledgeHome(null);
+                      setKnowledgeTitle("");
+                      setKnowledgeTags([]);
+                      setKnowledgeValue(emptyValue);
+                      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
+                    }
+                    setIsKnowledgeSaving(false);
+                  } else if (selectedKnowledgeDocumentId === document.id) {
+                    setSelectedKnowledgeDocumentId(knowledgeHome?.id ?? null);
+                  }
+                } catch (error) {
+                  console.error("[Notes] Failed to delete knowledge document:", error);
+                  Alert.alert(
+                    t("common.error", "错误"),
+                    t("notes.knowledgeDocumentDeleteFailed", "知识文档删除失败"),
+                  );
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [knowledgeDocuments, knowledgeHome?.id, selectedKnowledgeDocumentId, t],
+  );
+
   const handleDeleteNote = useCallback(
     (highlight: HighlightWithBook) => {
       Alert.alert(t("common.confirm", "确认"), t("notes.deleteNoteConfirm", "确定删除此笔记？"), [
@@ -976,6 +1065,7 @@ export function NotesView({
             onChange={setKnowledgeValue}
             onSelectDocument={openKnowledgeDocument}
             onCreateDocument={handleCreateKnowledgeDocument}
+            onDeleteDocument={handleDeleteKnowledgeDocument}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -1186,6 +1276,7 @@ function KnowledgeHomePanel({
   onChange,
   onSelectDocument,
   onCreateDocument,
+  onDeleteDocument,
   onOpenBook,
   t,
   styles,
@@ -1217,6 +1308,7 @@ function KnowledgeHomePanel({
   onChange: (value: MobileKnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: () => void;
+  onDeleteDocument: (document: KnowledgeDocument) => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
@@ -1282,15 +1374,27 @@ function KnowledgeHomePanel({
               returnKeyType="done"
             />
           </View>
-          <View style={styles.knowledgeInlineStatus}>
-            <CheckCheckIcon size={13} color={colors.mutedForeground} />
-            <Text style={styles.knowledgeInlineStatusText}>
-              {isSaving
-                ? t("notes.knowledgeSaving", "保存中")
-                : isSaved
-                  ? t("notes.knowledgeSaved", "已保存")
-                  : t("notes.knowledgePending", "待保存")}
-            </Text>
+          <View style={styles.knowledgeHeaderActions}>
+            <View style={styles.knowledgeInlineStatus}>
+              <CheckCheckIcon size={13} color={colors.mutedForeground} />
+              <Text style={styles.knowledgeInlineStatusText}>
+                {isSaving
+                  ? t("notes.knowledgeSaving", "保存中")
+                  : isSaved
+                    ? t("notes.knowledgeSaved", "已保存")
+                    : t("notes.knowledgePending", "待保存")}
+              </Text>
+            </View>
+            {canDeleteKnowledgeDocument(document) ? (
+              <TouchableOpacity
+                activeOpacity={0.78}
+                style={styles.knowledgeDeleteButton}
+                onPress={() => onDeleteDocument(document)}
+                accessibilityLabel={t("notes.knowledgeDeleteDocument", "删除文档")}
+              >
+                <Trash2Icon size={14} color={colors.destructive} />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 

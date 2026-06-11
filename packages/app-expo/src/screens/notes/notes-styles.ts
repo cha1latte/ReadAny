@@ -311,6 +311,10 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       fontWeight: fontWeight.semibold,
     },
+    knowledgeHeaderActions: {
+      alignItems: "flex-end",
+      gap: 7,
+    },
     knowledgeInlineStatus: {
       minHeight: 34,
       flexDirection: "row",
@@ -325,6 +329,16 @@ export const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       color: colors.mutedForeground,
       fontWeight: fontWeight.medium,
+    },
+    knowledgeDeleteButton: {
+      width: 34,
+      height: 34,
+      borderRadius: radius.md,
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.destructive, 0.25),
+      backgroundColor: withOpacity(colors.destructive, 0.08),
+      alignItems: "center",
+      justifyContent: "center",
     },
     knowledgeTagWrap: { gap: 7 },
     knowledgeTagLabel: {

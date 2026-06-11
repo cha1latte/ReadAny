@@ -27,6 +27,7 @@ vi.mock("../knowledge-queries", () => knowledgeMocks);
 const {
   getHighlights,
   getAllHighlights,
+  ensureHighlightNoteKnowledgeDocuments,
   insertHighlight,
   updateHighlight,
   deleteHighlight,
@@ -167,6 +168,64 @@ describe("highlight-queries", () => {
         "SELECT * FROM highlights ORDER BY created_at DESC LIMIT ?",
         [50],
       );
+    });
+  });
+
+  describe("ensureHighlightNoteKnowledgeDocuments", () => {
+    it("projects existing highlight notes for a book", async () => {
+      mockSelect.mockResolvedValue([sampleHighlightRow]);
+
+      const changedCount = await ensureHighlightNoteKnowledgeDocuments("book-1");
+
+      expect(changedCount).toBe(1);
+      expect(mockSelect).toHaveBeenCalledWith(expect.stringContaining("WHERE book_id = ?"), [
+        "book-1",
+        500,
+      ]);
+      expect(knowledgeMocks.createKnowledgeDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookId: "book-1",
+          type: "highlight_note",
+          contentMd: createHighlightNoteMarkdown(sampleHighlight),
+          sourceKind: "highlight",
+          sourceId: "hl-1",
+        }),
+      );
+    });
+
+    it("does not rewrite a current generated highlight note document", async () => {
+      const existingDocument = knowledgeDocument({
+        contentJson: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "My note" }],
+            },
+            {
+              type: "blockquote",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Important text" }],
+                },
+              ],
+            },
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "_Source: Chapter 1_" }],
+            },
+          ],
+        },
+        excerpt: "My note Important text Source: Chapter 1",
+      });
+      mockSelect.mockResolvedValue([sampleHighlightRow]);
+      knowledgeMocks.getKnowledgeDocuments.mockResolvedValue([existingDocument]);
+
+      const changedCount = await ensureHighlightNoteKnowledgeDocuments("book-1");
+
+      expect(changedCount).toBe(0);
+      expect(knowledgeMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
     });
   });
 

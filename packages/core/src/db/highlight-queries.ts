@@ -64,10 +64,22 @@ async function getHighlightNoteDocuments(highlightId: string) {
   });
 }
 
+function isProjectionCurrent(
+  document: Awaited<ReturnType<typeof getHighlightNoteDocuments>>[number],
+  projection: ReturnType<typeof createHighlightNoteProjection>,
+): boolean {
+  return (
+    document.title.trim() === projection.title.trim() &&
+    document.contentMd.trim() === projection.contentMd.trim() &&
+    JSON.stringify(document.contentJson) === JSON.stringify(projection.contentJson) &&
+    (document.excerpt ?? undefined) === projection.excerpt
+  );
+}
+
 async function syncHighlightNoteDocument(
   highlight: Highlight,
   previousHighlight: Highlight = highlight,
-): Promise<void> {
+): Promise<number> {
   const documents = await getHighlightNoteDocuments(highlight.id);
   const generatedDocuments = documents.filter((document) =>
     isGeneratedHighlightNoteDocument(document, previousHighlight),
@@ -75,7 +87,7 @@ async function syncHighlightNoteDocument(
 
   if (!hasHighlightNoteContent(highlight)) {
     await Promise.all(generatedDocuments.map((document) => deleteKnowledgeDocument(document.id)));
-    return;
+    return generatedDocuments.length;
   }
 
   const projection = createHighlightNoteProjection(highlight);
@@ -91,11 +103,14 @@ async function syncHighlightNoteDocument(
       sourceKind: "highlight",
       sourceId: highlight.id,
     });
-    return;
+    return 1;
   }
 
+  const documentsToUpdate = generatedDocuments.filter(
+    (document) => !isProjectionCurrent(document, projection),
+  );
   await Promise.all(
-    generatedDocuments.map((document) =>
+    documentsToUpdate.map((document) =>
       updateKnowledgeDocument(document.id, {
         bookId: highlight.bookId,
         type: "highlight_note",
@@ -108,6 +123,7 @@ async function syncHighlightNoteDocument(
       }),
     ),
   );
+  return documentsToUpdate.length;
 }
 
 export async function getHighlights(bookId: string): Promise<Highlight[]> {
@@ -127,6 +143,26 @@ export async function getAllHighlights(limit = 50): Promise<Highlight[]> {
     [limit],
   );
   return rows.map(rowToHighlight);
+}
+
+export async function ensureHighlightNoteKnowledgeDocuments(
+  bookId: string,
+  limit = 500,
+): Promise<number> {
+  const database = await getDB();
+  const rows = await database.select<HighlightRow>(
+    `SELECT * FROM highlights
+     WHERE book_id = ? AND TRIM(COALESCE(note, '')) <> ''
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT ?`,
+    [bookId, limit],
+  );
+
+  let changedCount = 0;
+  for (const row of rows) {
+    changedCount += await syncHighlightNoteDocument(rowToHighlight(row));
+  }
+  return changedCount;
 }
 
 /** Get all highlights with book info (JOIN query) */

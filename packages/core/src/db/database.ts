@@ -56,6 +56,7 @@ export {
   getAllHighlights,
   getAllHighlightsWithBooks,
   getHighlightStats,
+  ensureHighlightNoteKnowledgeDocuments,
   insertHighlight,
   updateHighlight,
   deleteHighlight,

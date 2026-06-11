@@ -27,6 +27,7 @@ import {
   type HighlightWithBook,
   createKnowledgeDocument,
   ensureBookHomeDocument,
+  ensureHighlightNoteKnowledgeDocuments,
   getKnowledgeAttachments,
   getKnowledgeDocuments,
   getKnowledgeLinks,
@@ -371,6 +372,7 @@ export function NotesView({
           selectedKnowledgeBookId,
           selectedKnowledgeBookTitle,
         );
+        await ensureHighlightNoteKnowledgeDocuments(selectedKnowledgeBookId);
         const bookDocuments = await getKnowledgeDocuments({
           bookId: selectedKnowledgeBookId,
           limit: 200,

@@ -15,6 +15,7 @@ import type { HighlightWithBook } from "@/lib/db/database";
 import {
   createKnowledgeDocument,
   ensureBookHomeDocument,
+  ensureHighlightNoteKnowledgeDocuments,
   getBook as getBookRecord,
   getKnowledgeAttachments,
   getKnowledgeDocuments,
@@ -445,6 +446,7 @@ export function NotesPage() {
           selectedKnowledgeBookId,
           selectedKnowledgeBookTitle,
         );
+        await ensureHighlightNoteKnowledgeDocuments(selectedKnowledgeBookId);
         const bookDocuments = await getKnowledgeDocuments({
           bookId: selectedKnowledgeBookId,
           limit: 200,

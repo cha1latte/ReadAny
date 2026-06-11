@@ -114,6 +114,14 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
     const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     return `${name}="${escaped}"`;
   };
+  const dataAttr = () => {
+    if (attrs.data === undefined) return "";
+    try {
+      return attr("data", encodeURIComponent(JSON.stringify(attrs.data)));
+    } catch {
+      return "";
+    }
+  };
 
   const attrText = [
     attr("type", cardType),
@@ -121,7 +129,9 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
     attr("version", attrs.version ?? 1),
     attr("title", attrs.title),
     attr("source", attrs.sourceId),
+    attr("source-title", attrs.sourceTitle),
     attr("cfi", attrs.cfi),
+    dataAttr(),
   ]
     .filter(Boolean)
     .join(" ");
@@ -418,8 +428,15 @@ function parseReadAnyCardMetadata(rawAttrs: string): ReadAnyCardAttrs {
     else if (key === "id") attrs.id = value;
     else if (key === "title") attrs.title = value;
     else if (key === "source") attrs.sourceId = value;
+    else if (key === "source-title") attrs.sourceTitle = value;
     else if (key === "cfi") attrs.cfi = value;
-    else if (key === "version") {
+    else if (key === "data") {
+      try {
+        attrs.data = JSON.parse(decodeURIComponent(value));
+      } catch {
+        attrs.data = value;
+      }
+    } else if (key === "version") {
       const version = Number.parseInt(value, 10);
       if (Number.isFinite(version) && version > 0) attrs.version = version;
     }

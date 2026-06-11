@@ -196,6 +196,63 @@ describe("editor projection", () => {
     );
   });
 
+  it("preserves card source titles and structured data metadata when requested", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              cardType: "aiSummary",
+              id: "card-ai-1",
+              version: 3,
+              title: "AI memory",
+              sourceId: "doc-1",
+              sourceTitle: "Chapter 1",
+              markdown: "A compact answer.",
+              data: {
+                citations: [{ cfi: "epubcfi(/6/4)", text: "Evidence" }],
+                toolState: "confirmed",
+              },
+            },
+          },
+        ],
+      },
+      { includeReadAnyCardMetadata: true },
+    );
+
+    expect(markdown).toBe(
+      [
+        ':::readany-card type="aiSummary" id="card-ai-1" version="3" title="AI memory" source="doc-1" source-title="Chapter 1" data="%7B%22citations%22%3A%5B%7B%22cfi%22%3A%22epubcfi(%2F6%2F4)%22%2C%22text%22%3A%22Evidence%22%7D%5D%2C%22toolState%22%3A%22confirmed%22%7D"',
+        "A compact answer.",
+        ":::",
+      ].join("\n"),
+    );
+
+    expect(markdownToBasicTiptap(markdown)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "aiSummary",
+            id: "card-ai-1",
+            version: 3,
+            title: "AI memory",
+            sourceId: "doc-1",
+            sourceTitle: "Chapter 1",
+            markdown: "A compact answer.",
+            data: {
+              citations: [{ cfi: "epubcfi(/6/4)", text: "Evidence" }],
+              toolState: "confirmed",
+            },
+          },
+        },
+      ],
+    });
+  });
+
   it("imports ReadAny card metadata blocks without losing card attrs or body spacing", () => {
     const json = markdownToBasicTiptap(
       [

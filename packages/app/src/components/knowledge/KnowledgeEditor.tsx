@@ -90,6 +90,7 @@ interface KnowledgeEditorProps {
   className?: string;
   contentClassName?: string;
   autoFocus?: boolean;
+  chrome?: "default" | "canvas";
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
   onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
@@ -195,6 +196,7 @@ export function KnowledgeEditor({
   className,
   contentClassName,
   autoFocus = false,
+  chrome = "default",
   tier = "knowledge_doc",
   surface,
   onPickLocalImage,
@@ -753,17 +755,29 @@ export function KnowledgeEditor({
   const toolbarGroups = toolbarGroupCandidates.filter(
     (group): group is { key: string; node: ReactNode } => group !== null,
   );
+  const isCanvasChrome = chrome === "canvas";
 
   return (
     <div
       className={cn(
-        "group overflow-hidden rounded-lg border border-border/60 bg-background",
-        "focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 focus-within:ring-offset-1",
-        "transition-all duration-200",
+        isCanvasChrome
+          ? "group bg-transparent"
+          : [
+              "group overflow-hidden rounded-lg border border-border/60 bg-background",
+              "focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 focus-within:ring-offset-1",
+              "transition-all duration-200",
+            ],
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-1 border-b border-border/40 bg-muted/20 px-2 py-1.5">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-1",
+          isCanvasChrome
+            ? "sticky top-0 z-10 mx-auto mb-5 max-w-[820px] rounded-md border border-border/55 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur"
+            : "border-b border-border/40 bg-muted/20 px-2 py-1.5",
+        )}
+      >
         {toolbarGroups.map((group, index) => (
           <Fragment key={group.key}>
             {index > 0 ? <ToolbarDivider /> : null}
@@ -775,7 +789,7 @@ export function KnowledgeEditor({
       <EditorContent
         editor={editor}
         className={cn(
-          "overflow-y-auto px-4 py-3",
+          isCanvasChrome ? "px-0 py-0" : "overflow-y-auto px-4 py-3",
           "[&_.ProseMirror]:outline-none",
           "[&_.is-editor-empty:first-child::before]:text-muted-foreground/60",
           "[&_.is-editor-empty:first-child::before]:pointer-events-none",

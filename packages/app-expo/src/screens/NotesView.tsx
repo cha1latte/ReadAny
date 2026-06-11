@@ -1649,84 +1649,68 @@ function KnowledgeHomePanel({
       contentContainerStyle={styles.knowledgeContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.knowledgeVaultHeader}>
-        <View style={styles.knowledgeVaultIcon}>
-          <FolderIcon size={15} color={colors.primary} />
-        </View>
-        <View style={styles.knowledgeVaultText}>
-          <Text style={styles.knowledgeVaultEyebrow}>{t("notes.knowledgeEyebrow", "知识库")}</Text>
-          <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
-            {book.title}
-          </Text>
-          <Text style={styles.knowledgeVaultPath} numberOfLines={1}>
-            {activePath || t("notes.knowledgeVaultRoot", "知识库")}
-          </Text>
-        </View>
-        <View style={styles.knowledgeVaultStats}>
-          <Text style={styles.knowledgeVaultStatText}>
-            {documents.length} {t("notes.knowledgeDocuments", "文档")}
-          </Text>
-          <Text style={styles.knowledgeVaultStatText}>
-            {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.knowledgeWorkspaceTabs}>
-        <TouchableOpacity
-          activeOpacity={0.82}
-          style={[
-            styles.knowledgeWorkspaceTab,
-            workspaceMode === "vault" && styles.knowledgeWorkspaceTabActive,
-          ]}
-          onPress={() => setWorkspaceMode("vault")}
-          accessibilityRole="button"
-          accessibilityLabel={t("notes.knowledgeWorkspaceVault", "目录")}
-        >
-          <FolderIcon
-            size={14}
-            color={workspaceMode === "vault" ? colors.primary : colors.mutedForeground}
-          />
-          <Text
-            style={[
-              styles.knowledgeWorkspaceTabText,
-              workspaceMode === "vault" && styles.knowledgeWorkspaceTabTextActive,
-            ]}
-          >
-            {t("notes.knowledgeWorkspaceVault", "目录")}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={0.82}
-          style={[
-            styles.knowledgeWorkspaceTab,
-            workspaceMode === "document" && styles.knowledgeWorkspaceTabActive,
-            isFolderDocument && styles.knowledgeWorkspaceTabDisabled,
-          ]}
-          onPress={() => {
-            if (!isFolderDocument) setWorkspaceMode("document");
-          }}
-          disabled={isFolderDocument}
-          accessibilityRole="button"
-          accessibilityLabel={t("notes.knowledgeWorkspaceDocument", "文档")}
-        >
-          <ScrollTextIcon
-            size={14}
-            color={workspaceMode === "document" ? colors.primary : colors.mutedForeground}
-          />
-          <Text
-            style={[
-              styles.knowledgeWorkspaceTabText,
-              workspaceMode === "document" && styles.knowledgeWorkspaceTabTextActive,
-            ]}
-          >
-            {t("notes.knowledgeWorkspaceDocument", "文档")}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {workspaceMode === "vault" ? (
         <>
+          <View style={styles.knowledgeVaultHeader}>
+            <View style={styles.knowledgeVaultIcon}>
+              <FolderIcon size={15} color={colors.primary} />
+            </View>
+            <View style={styles.knowledgeVaultText}>
+              <Text style={styles.knowledgeVaultEyebrow}>
+                {t("notes.knowledgeEyebrow", "知识库")}
+              </Text>
+              <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
+                {book.title}
+              </Text>
+              <Text style={styles.knowledgeVaultPath} numberOfLines={1}>
+                {activePath || t("notes.knowledgeVaultRoot", "知识库")}
+              </Text>
+            </View>
+            <View style={styles.knowledgeVaultStats}>
+              <Text style={styles.knowledgeVaultStatText}>
+                {documents.length} {t("notes.knowledgeDocuments", "文档")}
+              </Text>
+              <Text style={styles.knowledgeVaultStatText}>
+                {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.knowledgeWorkspaceTabs}>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              style={[styles.knowledgeWorkspaceTab, styles.knowledgeWorkspaceTabActive]}
+              onPress={() => setWorkspaceMode("vault")}
+              accessibilityRole="button"
+              accessibilityLabel={t("notes.knowledgeWorkspaceVault", "目录")}
+            >
+              <FolderIcon size={14} color={colors.primary} />
+              <Text
+                style={[styles.knowledgeWorkspaceTabText, styles.knowledgeWorkspaceTabTextActive]}
+              >
+                {t("notes.knowledgeWorkspaceVault", "目录")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              style={[
+                styles.knowledgeWorkspaceTab,
+                isFolderDocument && styles.knowledgeWorkspaceTabDisabled,
+              ]}
+              onPress={() => {
+                if (!isFolderDocument) setWorkspaceMode("document");
+              }}
+              disabled={isFolderDocument}
+              accessibilityRole="button"
+              accessibilityLabel={t("notes.knowledgeWorkspaceDocument", "文档")}
+            >
+              <ScrollTextIcon size={14} color={colors.mutedForeground} />
+              <Text style={styles.knowledgeWorkspaceTabText}>
+                {t("notes.knowledgeWorkspaceDocument", "文档")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <KnowledgeDocumentExplorer
             documents={documents}
             activeDocument={document}
@@ -1779,136 +1763,145 @@ function KnowledgeHomePanel({
           )}
         </>
       ) : (
-        <>
-          <View style={styles.knowledgeEditorCard}>
-            <View style={styles.knowledgeDocumentHeader}>
-              <View style={styles.knowledgeDocumentTitleBlock}>
-                <Text style={styles.knowledgeDocumentEyebrow}>
-                  {t("notes.knowledgeDocuments", "文档")}
-                </Text>
-                <TextInput
-                  value={title}
-                  onChangeText={onTitleChange}
-                  placeholder={t("notes.knowledgeUntitledDocument", "未命名文档")}
-                  placeholderTextColor={colors.mutedForeground}
-                  style={styles.knowledgeTitleInput}
-                  returnKeyType="done"
-                />
-                <Text style={styles.knowledgeDocumentPath} numberOfLines={1}>
-                  {activePath}
-                </Text>
-              </View>
-              <View style={styles.knowledgeHeaderActions}>
-                <View style={styles.knowledgeInlineStatus}>
-                  <CheckCheckIcon size={13} color={colors.mutedForeground} />
-                  <Text style={styles.knowledgeInlineStatusText}>
-                    {isSaving
-                      ? t("notes.knowledgeSaving", "保存中")
-                      : isSaved
-                        ? t("notes.knowledgeSaved", "已保存")
-                        : t("notes.knowledgePending", "待保存")}
-                  </Text>
-                </View>
-                {canDeleteKnowledgeDocument(document) ? (
-                  <TouchableOpacity
-                    activeOpacity={0.78}
-                    style={styles.knowledgeDeleteButton}
-                    onPress={() => onDeleteDocument(document)}
-                    accessibilityLabel={t("notes.knowledgeDeleteDocument", "删除文档")}
-                  >
-                    <Trash2Icon size={14} color={colors.destructive} />
-                  </TouchableOpacity>
-                ) : null}
-                {moveTargets.length > 0 ? (
-                  <TouchableOpacity
-                    activeOpacity={0.78}
-                    style={styles.knowledgeMoveButton}
-                    onPress={showMovePicker}
-                    accessibilityLabel={t("notes.knowledgeMoveDocument", "移动文档")}
-                  >
-                    <FolderInputIcon size={14} color={colors.primary} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </View>
+        <View style={styles.knowledgeDocumentScreen}>
+          <View style={styles.knowledgeDocumentCanvasHeader}>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              style={styles.knowledgeDocumentBackButton}
+              onPress={() => setWorkspaceMode("vault")}
+              accessibilityRole="button"
+              accessibilityLabel={t("notes.knowledgeWorkspaceVault", "目录")}
+            >
+              <ChevronLeftIcon size={18} color={colors.foreground} />
+            </TouchableOpacity>
 
-            <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
-
-            <View style={styles.knowledgeEditorFrame}>
-              <MobileKnowledgeEditor
-                tier="knowledge_doc"
-                surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
-                documentId={document.id}
-                value={value}
-                onChange={onChange}
-                isSaved={isSaved}
-                placeholder={t(
-                  "notes.knowledgePlaceholder",
-                  "记录这本书的摘要、问题、想法和长期知识...",
-                )}
+            <View style={styles.knowledgeDocumentCanvasTitleBlock}>
+              <TextInput
+                value={title}
+                onChangeText={onTitleChange}
+                placeholder={t("notes.knowledgeUntitledDocument", "未命名文档")}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.knowledgeCanvasTitleInput}
+                returnKeyType="done"
               />
-            </View>
-          </View>
-
-          <KnowledgeRelationsCard
-            links={links}
-            backlinks={backlinks}
-            highlights={book.highlights}
-            isLoading={isRelationsLoading}
-            onSelectDocument={handleSelectKnowledgeDocument}
-            onOpenBook={onOpenBook}
-            t={t}
-            styles={styles}
-          />
-
-          <KnowledgeSummaryMemoryCard
-            document={document}
-            isCompressing={isSummaryCompressing}
-            onCompress={onCompressSummary}
-            t={t}
-            styles={styles}
-            colors={colors}
-          />
-
-          <View style={styles.knowledgeSourcesCard}>
-            <View style={styles.knowledgeSourcesHeader}>
-              <Text style={styles.knowledgeSectionTitle}>
-                {t("notes.knowledgeRecentExcerpts", "最近摘录")}
+              <Text style={styles.knowledgeCanvasPath} numberOfLines={1}>
+                {activePath}
               </Text>
-              <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
-                <Text style={styles.knowledgeOpenButtonText}>
-                  {t("notes.openBook", "打开书籍")}
-                </Text>
-              </TouchableOpacity>
             </View>
 
-            {recentHighlights.length === 0 ? (
-              <Text style={styles.knowledgeEmptySources}>
-                {t("notes.knowledgeNoSources", "暂无摘录")}
-              </Text>
-            ) : (
-              <View style={styles.knowledgeSourceList}>
-                {recentHighlights.map((highlight) => (
-                  <TouchableOpacity
-                    key={highlight.id}
-                    style={styles.knowledgeSourceItem}
-                    activeOpacity={0.75}
-                    onPress={() => onOpenBook(highlight.cfi)}
-                  >
-                    <Text style={styles.knowledgeSourceText} numberOfLines={3}>
-                      "{highlight.text}"
-                    </Text>
-                    {!!highlight.chapterTitle && (
-                      <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
-                        {highlight.chapterTitle}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.knowledgeDocumentActionRail}>
+              <View style={styles.knowledgeCanvasStatus}>
+                <CheckCheckIcon size={13} color={colors.mutedForeground} />
               </View>
-            )}
+              {moveTargets.length > 0 ? (
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={styles.knowledgeCanvasIconButton}
+                  onPress={showMovePicker}
+                  accessibilityLabel={t("notes.knowledgeMoveDocument", "移动文档")}
+                >
+                  <FolderInputIcon size={14} color={colors.foreground} />
+                </TouchableOpacity>
+              ) : null}
+              {canDeleteKnowledgeDocument(document) ? (
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={styles.knowledgeCanvasIconButton}
+                  onPress={() => onDeleteDocument(document)}
+                  accessibilityLabel={t("notes.knowledgeDeleteDocument", "删除文档")}
+                >
+                  <Trash2Icon size={14} color={colors.destructive} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
-        </>
+
+          <Text style={styles.knowledgeCanvasSaveText}>
+            {isSaving
+              ? t("notes.knowledgeSaving", "保存中")
+              : isSaved
+                ? t("notes.knowledgeSaved", "已保存")
+                : t("notes.knowledgePending", "待保存")}
+          </Text>
+
+          <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
+
+          <View style={styles.knowledgeDocumentCanvas}>
+            <MobileKnowledgeEditor
+              tier="knowledge_doc"
+              surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
+              documentId={document.id}
+              value={value}
+              onChange={onChange}
+              isSaved={isSaved}
+              placeholder={t(
+                "notes.knowledgePlaceholder",
+                "记录这本书的摘要、问题、想法和长期知识...",
+              )}
+            />
+          </View>
+
+          <View style={styles.knowledgeContextStack}>
+            <KnowledgeRelationsCard
+              links={links}
+              backlinks={backlinks}
+              highlights={book.highlights}
+              isLoading={isRelationsLoading}
+              onSelectDocument={handleSelectKnowledgeDocument}
+              onOpenBook={onOpenBook}
+              t={t}
+              styles={styles}
+            />
+
+            <KnowledgeSummaryMemoryCard
+              document={document}
+              isCompressing={isSummaryCompressing}
+              onCompress={onCompressSummary}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+
+            <View style={styles.knowledgeSourcesCard}>
+              <View style={styles.knowledgeSourcesHeader}>
+                <Text style={styles.knowledgeSectionTitle}>
+                  {t("notes.knowledgeRecentExcerpts", "最近摘录")}
+                </Text>
+                <TouchableOpacity style={styles.knowledgeOpenButton} onPress={() => onOpenBook()}>
+                  <Text style={styles.knowledgeOpenButtonText}>
+                    {t("notes.openBook", "打开书籍")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {recentHighlights.length === 0 ? (
+                <Text style={styles.knowledgeEmptySources}>
+                  {t("notes.knowledgeNoSources", "暂无摘录")}
+                </Text>
+              ) : (
+                <View style={styles.knowledgeSourceList}>
+                  {recentHighlights.map((highlight) => (
+                    <TouchableOpacity
+                      key={highlight.id}
+                      style={styles.knowledgeSourceItem}
+                      activeOpacity={0.75}
+                      onPress={() => onOpenBook(highlight.cfi)}
+                    >
+                      <Text style={styles.knowledgeSourceText} numberOfLines={3}>
+                        "{highlight.text}"
+                      </Text>
+                      {!!highlight.chapterTitle && (
+                        <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                          {highlight.chapterTitle}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
       )}
 
       <Modal
@@ -2330,6 +2323,15 @@ function knowledgeDocumentPathText(
   ].join(" / ");
 }
 
+function knowledgeDocumentParentPathText(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: TFunction,
+): string {
+  const parts = knowledgeDocumentPathText(document, documents, t).split(" / ");
+  return parts.slice(0, -1).join(" / ");
+}
+
 function KnowledgeDocumentExplorer({
   documents,
   activeDocument,
@@ -2505,6 +2507,7 @@ function KnowledgeDocumentExplorer({
                 styles={styles}
                 colors={colors}
                 forceLeaf
+                pathLabel={knowledgeDocumentParentPathText(node.document, documents, t)}
               />
             ))
           )
@@ -2548,6 +2551,7 @@ function KnowledgeDocumentTreeRow({
   styles,
   colors,
   forceLeaf,
+  pathLabel,
 }: {
   node: KnowledgeDocumentTreeNode;
   activeDocumentId: string | null;
@@ -2560,6 +2564,7 @@ function KnowledgeDocumentTreeRow({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
   forceLeaf?: boolean;
+  pathLabel?: string;
 }) {
   const document = node.document;
   const isFolder = document.type === "folder";
@@ -2617,12 +2622,13 @@ function KnowledgeDocumentTreeRow({
             {title}
           </Text>
           <Text numberOfLines={1} style={styles.knowledgeTreeMeta}>
-            {isOrphaned
-              ? `${knowledgeDocumentTypeLabel(document, t)} · ${t(
-                  "notes.knowledgeOrphanedDocument",
-                  "孤立",
-                )}`
-              : knowledgeDocumentTypeLabel(document, t)}
+            {pathLabel ||
+              (isOrphaned
+                ? `${knowledgeDocumentTypeLabel(document, t)} · ${t(
+                    "notes.knowledgeOrphanedDocument",
+                    "孤立",
+                  )}`
+                : knowledgeDocumentTypeLabel(document, t))}
           </Text>
         </View>
         {isFolder ? (

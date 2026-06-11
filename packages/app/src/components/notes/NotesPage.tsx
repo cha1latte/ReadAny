@@ -38,11 +38,14 @@ import {
   type KnowledgeExportFormat,
   type KnowledgeExportManifest,
   type KnowledgeExportObservedFile,
+  type KnowledgeImportWriteProposal,
   type KnowledgeVaultImportPlan,
   annotationExporter,
+  createKnowledgeImportWriteProposal,
   createKnowledgeVaultImportPlan,
   createKnowledgeVaultImportWriteProposals,
   knowledgeExporter,
+  parseKnowledgeMarkdownDocument,
 } from "@readany/core/export";
 import {
   createKnowledgeExcerpt,
@@ -121,6 +124,16 @@ interface KnowledgeVaultImportReview {
   proposals: KnowledgeDocumentUpdateProposal[];
 }
 
+interface KnowledgeMarkdownImportReviewItem {
+  path: string;
+  proposal: KnowledgeImportWriteProposal;
+  warnings: string[];
+}
+
+interface KnowledgeMarkdownImportReview {
+  items: KnowledgeMarkdownImportReviewItem[];
+}
+
 function createEmptyKnowledgeValue(): KnowledgeEditorValue {
   return {
     contentJson: { type: "doc", content: [] },
@@ -191,6 +204,10 @@ function exportFileDirectory(path: string): string | null {
 
 function uniqueExportPaths(paths: string[]): string[] {
   return Array.from(new Set(paths.map(normalizeExportPath))).filter(Boolean);
+}
+
+function desktopFileName(path: string): string {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? path;
 }
 
 async function joinDesktopPath(rootPath: string, relativePath: string): Promise<string> {
@@ -364,11 +381,15 @@ export function NotesPage() {
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
+  const [isKnowledgeMarkdownImporting, setIsKnowledgeMarkdownImporting] = useState(false);
+  const [isKnowledgeMarkdownImportApplying, setIsKnowledgeMarkdownImportApplying] = useState(false);
   const [isKnowledgeVaultExporting, setIsKnowledgeVaultExporting] = useState(false);
   const [isKnowledgeVaultImporting, setIsKnowledgeVaultImporting] = useState(false);
   const [isKnowledgeVaultImportApplying, setIsKnowledgeVaultImportApplying] = useState(false);
   const [knowledgeVaultConflicts, setKnowledgeVaultConflicts] =
     useState<KnowledgeVaultConflictNotice | null>(null);
+  const [knowledgeMarkdownImportReview, setKnowledgeMarkdownImportReview] =
+    useState<KnowledgeMarkdownImportReview | null>(null);
   const [knowledgeVaultImportReview, setKnowledgeVaultImportReview] =
     useState<KnowledgeVaultImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
@@ -1082,6 +1103,7 @@ export function NotesPage() {
 
     setIsKnowledgeVaultExporting(true);
     setKnowledgeVaultConflicts(null);
+    setKnowledgeMarkdownImportReview(null);
     setKnowledgeVaultImportReview(null);
 
     try {
@@ -1170,11 +1192,106 @@ export function NotesPage() {
     }
   };
 
+  const handleKnowledgeMarkdownImport = async () => {
+    if (
+      !selectedKnowledgeBookId ||
+      isKnowledgeMarkdownImporting ||
+      isKnowledgeMarkdownImportApplying
+    ) {
+      return;
+    }
+
+    setIsKnowledgeMarkdownImporting(true);
+    setKnowledgeVaultConflicts(null);
+    setKnowledgeVaultImportReview(null);
+    setKnowledgeMarkdownImportReview(null);
+
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        multiple: true,
+        title: t("notes.knowledgeMarkdownImportSelectFiles"),
+        filters: [
+          {
+            name: "Markdown",
+            extensions: ["md", "markdown", "MD", "MARKDOWN"],
+          },
+        ],
+      });
+      if (!selected) return;
+
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length === 0) return;
+
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      const { readTextFile } = await import("@tauri-apps/plugin-fs");
+      const items: KnowledgeMarkdownImportReviewItem[] = [];
+      for (const path of paths) {
+        const content = await readTextFile(path);
+        const imported = parseKnowledgeMarkdownDocument({
+          path,
+          content,
+          bookId: selectedKnowledgeBookId,
+        });
+        items.push({
+          path,
+          proposal: createKnowledgeImportWriteProposal(imported, {
+            message: t("notes.knowledgeMarkdownImportProposalMessage", {
+              file: desktopFileName(path),
+            }),
+          }),
+          warnings: imported.warnings,
+        });
+      }
+
+      setKnowledgeMarkdownImportReview({ items });
+      toast.success(t("notes.knowledgeMarkdownImportReady"), {
+        description: t("notes.knowledgeMarkdownImportReadyDetail", { count: items.length }),
+      });
+    } catch (error) {
+      toast.error(t("notes.knowledgeMarkdownImportFailed"));
+      console.error("[Notes] Knowledge Markdown import failed:", error);
+    } finally {
+      setIsKnowledgeMarkdownImporting(false);
+    }
+  };
+
+  const handleApplyKnowledgeMarkdownImport = async () => {
+    if (!knowledgeMarkdownImportReview || isKnowledgeMarkdownImportApplying) return;
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    setIsKnowledgeMarkdownImportApplying(true);
+    try {
+      const importedDocumentIds: string[] = [];
+      for (const item of knowledgeMarkdownImportReview.items) {
+        const result = await applyKnowledgeWriteProposal(item.proposal);
+        if (result.documentId) importedDocumentIds.push(result.documentId);
+      }
+      await refreshSelectedKnowledgeDocuments(importedDocumentIds[0] ?? knowledgeHome?.id);
+      toast.success(t("notes.knowledgeMarkdownImportApplied"), {
+        description: t("notes.knowledgeMarkdownImportAppliedDetail", {
+          count: knowledgeMarkdownImportReview.items.length,
+        }),
+      });
+      setKnowledgeMarkdownImportReview(null);
+    } catch (error) {
+      toast.error(t("notes.knowledgeMarkdownImportApplyFailed"));
+      console.error("[Notes] Failed to apply knowledge Markdown import:", error);
+    } finally {
+      setIsKnowledgeMarkdownImportApplying(false);
+    }
+  };
+
   const handleKnowledgeVaultImport = async () => {
     if (isKnowledgeVaultImporting || isKnowledgeVaultImportApplying) return;
 
     setIsKnowledgeVaultImporting(true);
     setKnowledgeVaultConflicts(null);
+    setKnowledgeMarkdownImportReview(null);
     setKnowledgeVaultImportReview(null);
 
     try {
@@ -1560,14 +1677,20 @@ export function NotesPage() {
                 onDeleteDocument={handleDeleteKnowledgeDocument}
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
+                onImportMarkdown={handleKnowledgeMarkdownImport}
                 onExportVault={handleKnowledgeVaultExport}
                 onImportVault={handleKnowledgeVaultImport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
+                isMarkdownImporting={isKnowledgeMarkdownImporting}
+                isMarkdownImportApplying={isKnowledgeMarkdownImportApplying}
                 isVaultExporting={isKnowledgeVaultExporting}
                 isVaultImporting={isKnowledgeVaultImporting}
                 isVaultImportApplying={isKnowledgeVaultImportApplying}
                 vaultConflicts={knowledgeVaultConflicts}
                 onDismissVaultConflicts={() => setKnowledgeVaultConflicts(null)}
+                markdownImportReview={knowledgeMarkdownImportReview}
+                onApplyMarkdownImport={handleApplyKnowledgeMarkdownImport}
+                onDismissMarkdownImport={() => setKnowledgeMarkdownImportReview(null)}
                 vaultImportReview={knowledgeVaultImportReview}
                 onApplyVaultImport={handleApplyKnowledgeVaultImport}
                 onDismissVaultImport={() => setKnowledgeVaultImportReview(null)}
@@ -1671,14 +1794,20 @@ interface KnowledgeHomePanelProps {
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
+  onImportMarkdown: () => void;
   onExportVault: () => void;
   onImportVault: () => void;
   onOpenBook: (cfi?: string) => void;
+  isMarkdownImporting: boolean;
+  isMarkdownImportApplying: boolean;
   isVaultExporting: boolean;
   isVaultImporting: boolean;
   isVaultImportApplying: boolean;
   vaultConflicts: KnowledgeVaultConflictNotice | null;
   onDismissVaultConflicts: () => void;
+  markdownImportReview: KnowledgeMarkdownImportReview | null;
+  onApplyMarkdownImport: () => void;
+  onDismissMarkdownImport: () => void;
   vaultImportReview: KnowledgeVaultImportReview | null;
   onApplyVaultImport: () => void;
   onDismissVaultImport: () => void;
@@ -1709,14 +1838,20 @@ function KnowledgeHomePanel({
   onDeleteDocument,
   onCompressSummary,
   onExport,
+  onImportMarkdown,
   onExportVault,
   onImportVault,
   onOpenBook,
+  isMarkdownImporting,
+  isMarkdownImportApplying,
   isVaultExporting,
   isVaultImporting,
   isVaultImportApplying,
   vaultConflicts,
   onDismissVaultConflicts,
+  markdownImportReview,
+  onApplyMarkdownImport,
+  onDismissMarkdownImport,
   vaultImportReview,
   onApplyVaultImport,
   onDismissVaultImport,
@@ -1768,8 +1903,10 @@ function KnowledgeHomePanel({
               </div>
               <KnowledgeExportMenu
                 onExport={onExport}
+                onImportMarkdown={onImportMarkdown}
                 onExportVault={onExportVault}
                 onImportVault={onImportVault}
+                isMarkdownImporting={isMarkdownImporting}
                 isVaultExporting={isVaultExporting}
                 isVaultImporting={isVaultImporting}
                 t={t}
@@ -1781,6 +1918,16 @@ function KnowledgeHomePanel({
             <KnowledgeVaultConflictCard
               notice={vaultConflicts}
               onDismiss={onDismissVaultConflicts}
+              t={t}
+            />
+          ) : null}
+
+          {markdownImportReview ? (
+            <KnowledgeMarkdownImportReviewCard
+              review={markdownImportReview}
+              isApplying={isMarkdownImportApplying}
+              onApply={onApplyMarkdownImport}
+              onDismiss={onDismissMarkdownImport}
               t={t}
             />
           ) : null}
@@ -2428,6 +2575,154 @@ function KnowledgeVaultConflictCard({
   );
 }
 
+function KnowledgeMarkdownImportReviewCard({
+  review,
+  isApplying,
+  onApply,
+  onDismiss,
+  t,
+}: {
+  review: KnowledgeMarkdownImportReview;
+  isApplying: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const visibleItems = review.items.slice(0, 5);
+  const hiddenCount = Math.max(0, review.items.length - visibleItems.length);
+
+  return (
+    <div className="mb-3 overflow-hidden rounded-lg border border-border/70 bg-card text-sm shadow-sm">
+      <div className="border-b border-border/60 bg-muted/25 px-3 py-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FileText className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">
+                {t("notes.knowledgeMarkdownImportTitle")}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {t("notes.knowledgeMarkdownImportDescription", { count: review.items.length })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+            onClick={onDismiss}
+            aria-label={t("common.close")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2 p-3">
+        {visibleItems.map((item) => {
+          const proposal = item.proposal;
+          const title =
+            proposal.action === "create"
+              ? proposal.draft.title
+              : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
+          const tags =
+            proposal.action === "create"
+              ? (proposal.draft.tags ?? [])
+              : (proposal.patch.tags ?? proposal.current?.tags ?? []);
+          const preview =
+            proposal.action === "create"
+              ? proposal.draft.excerpt || proposal.draft.contentMd
+              : proposal.patch.excerpt ||
+                proposal.patch.contentMd ||
+                proposal.current?.excerpt ||
+                "";
+
+          return (
+            <div
+              key={item.path}
+              className="rounded-md border border-border/55 bg-background px-3 py-2.5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-foreground">{title}</p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {desktopFileName(item.path)}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                  {proposal.action === "create"
+                    ? t("notes.knowledgeMarkdownImportWillCreate")
+                    : t("notes.knowledgeVaultImportWillUpdate")}
+                </span>
+              </div>
+
+              {preview ? (
+                <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                  {preview}
+                </p>
+              ) : null}
+
+              {tags.length > 0 || item.warnings.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {tags.slice(0, 5).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {tags.length > 5 ? (
+                    <span className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+                      +{tags.length - 5}
+                    </span>
+                  ) : null}
+                  {item.warnings.length > 0 ? (
+                    <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                      {t("notes.knowledgeMarkdownImportWarningCount", {
+                        count: item.warnings.length,
+                      })}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+
+        {hiddenCount > 0 ? (
+          <p className="px-1 text-[11px] text-muted-foreground">
+            {t("notes.knowledgeMarkdownImportMoreFiles", { count: hiddenCount })}
+          </p>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <p className="min-w-0 text-xs text-muted-foreground">
+            {t("notes.knowledgeMarkdownImportSafeHint")}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7"
+              disabled={isApplying || review.items.length === 0}
+              onClick={onApply}
+            >
+              {isApplying
+                ? t("notes.knowledgeMarkdownImportApplying")
+                : t("notes.knowledgeMarkdownImportApply")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KnowledgeVaultImportReviewCard({
   review,
   isApplying,
@@ -2598,15 +2893,19 @@ function KnowledgeVaultImportReviewCard({
 
 function KnowledgeExportMenu({
   onExport,
+  onImportMarkdown,
   onExportVault,
   onImportVault,
+  isMarkdownImporting,
   isVaultExporting,
   isVaultImporting,
   t,
 }: {
   onExport: (format: KnowledgeExportFormat) => void;
+  onImportMarkdown: () => void;
   onExportVault: () => void;
   onImportVault: () => void;
+  isMarkdownImporting: boolean;
   isVaultExporting: boolean;
   isVaultImporting: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -2629,6 +2928,12 @@ function KnowledgeExportMenu({
           {t("notes.exportMarkdown")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onImportMarkdown} disabled={isMarkdownImporting}>
+          <FileText className="mr-2 h-4 w-4" />
+          {isMarkdownImporting
+            ? t("notes.knowledgeMarkdownImporting")
+            : t("notes.knowledgeImportMarkdown")}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={onExportVault} disabled={isVaultExporting}>
           <FolderUp className="mr-2 h-4 w-4" />
           {isVaultExporting ? t("notes.knowledgeVaultExporting") : t("notes.knowledgeExportVault")}

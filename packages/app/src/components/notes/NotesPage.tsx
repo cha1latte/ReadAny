@@ -36,6 +36,7 @@ import {
 } from "@readany/core/export";
 import {
   createKnowledgeExcerpt,
+  getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
   orderKnowledgeDocuments,
@@ -1309,6 +1310,7 @@ function KnowledgeHomePanel({
 
           <KnowledgeEditor
             tier="knowledge_doc"
+            surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
             value={value}
             onChange={onChange}
             placeholder={t("notes.knowledgePlaceholder")}

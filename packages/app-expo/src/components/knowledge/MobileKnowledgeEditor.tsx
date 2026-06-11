@@ -24,10 +24,13 @@ import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
 import {
   type KnowledgeEditorFeature,
+  type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,
+  getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
   markdownToBasicTiptap,
   renderKnowledgeJsonToMarkdown,
@@ -64,6 +67,7 @@ interface MobileKnowledgeEditorProps {
   placeholder?: string;
   autoFocus?: boolean;
   tier?: KnowledgeEditorTier;
+  surface?: KnowledgeEditorSurface;
 }
 
 interface SelectionState {
@@ -177,6 +181,7 @@ export function MobileKnowledgeEditor({
   placeholder,
   autoFocus = false,
   tier = "knowledge_doc",
+  surface,
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -201,10 +206,24 @@ export function MobileKnowledgeEditor({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showCardMenu, setShowCardMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
-  const editorProfile = useMemo(() => getKnowledgeEditorProfile(tier), [tier]);
+  const editorProfile = useMemo(
+    () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
+    [surface, tier],
+  );
   const canUse = useCallback(
     (feature: KnowledgeEditorFeature) => hasKnowledgeEditorFeature(editorProfile, feature),
     [editorProfile],
+  );
+  const canInsertCard = useCallback(
+    (cardType: string) => {
+      const feature = getKnowledgeEditorFeatureForCardType(cardType);
+      return canUse("readAnyCards") || (feature ? canUse(feature) : false);
+    },
+    [canUse],
+  );
+  const allowedCards = useMemo(
+    () => builtInReadAnyCards.filter((card) => canInsertCard(card.cardType)),
+    [canInsertCard],
   );
 
   const theme = useMemo<EditorTheme>(
@@ -351,7 +370,7 @@ export function MobileKnowledgeEditor({
 
   const insertCard = useCallback(
     (cardType: string) => {
-      if (!canUse("readAnyCards")) return;
+      if (!canInsertCard(cardType)) return;
       const definition = builtInReadAnyCards.find((card) => card.cardType === cardType);
       if (!definition) return;
       const title = t(`notes.knowledgeCards.${cardType}`, {
@@ -364,7 +383,7 @@ export function MobileKnowledgeEditor({
       runCommand("insertCard", attrs as Record<string, unknown>);
       setShowCardMenu(false);
     },
-    [canUse, runCommand, t],
+    [canInsertCard, runCommand, t],
   );
 
   const handleFallbackChange = useCallback(
@@ -587,7 +606,7 @@ export function MobileKnowledgeEditor({
           ),
         }
       : null,
-    canUse("readAnyCards")
+    allowedCards.length > 0
       ? {
           key: "cards",
           node: (
@@ -612,6 +631,7 @@ export function MobileKnowledgeEditor({
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <RichTextEditor
           tier={tier}
+          surface={surface}
           initialContent={value.contentMd}
           onChange={handleFallbackChange}
           placeholder={placeholder}
@@ -767,7 +787,7 @@ export function MobileKnowledgeEditor({
               contentContainerStyle={styles.cardOptionList}
               showsVerticalScrollIndicator={false}
             >
-              {builtInReadAnyCards.map((card) => {
+              {allowedCards.map((card) => {
                 const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
                 return (
                   <TouchableOpacity

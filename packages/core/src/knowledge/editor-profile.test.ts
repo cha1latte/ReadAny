@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceForDocumentType,
   getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
 } from "./editor-profile";
@@ -94,5 +96,27 @@ describe("knowledge editor profile", () => {
     expect(hasKnowledgeEditorFeature(profile, "quoteCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "readAnyCards")).toBe(false);
     expect(hasKnowledgeEditorFeature(profile, "diagramCard")).toBe(false);
+  });
+
+  it("maps knowledge document types to editor surfaces", () => {
+    expect(getKnowledgeEditorSurfaceForDocumentType("book_home")).toBe("book_home");
+    expect(getKnowledgeEditorSurfaceForDocumentType("highlight_note")).toBe("highlight_note");
+    expect(getKnowledgeEditorSurfaceForDocumentType("review")).toBe("review");
+    expect(getKnowledgeEditorSurfaceForDocumentType("standalone_note")).toBe("standalone_note");
+    expect(getKnowledgeEditorSurfaceForDocumentType("summary")).toBe("standalone_note");
+    expect(getKnowledgeEditorSurfaceForDocumentType("imported_markdown")).toBe("standalone_note");
+  });
+
+  it("maps built-in card types to surface features", () => {
+    expect(getKnowledgeEditorFeatureForCardType("bookQuote")).toBe("quoteCard");
+    expect(getKnowledgeEditorFeatureForCardType("callout")).toBe("calloutCard");
+    expect(getKnowledgeEditorFeatureForCardType("bookMetadata")).toBe("metadataCard");
+    expect(getKnowledgeEditorFeatureForCardType("aiSummary")).toBe("aiCard");
+    expect(getKnowledgeEditorFeatureForCardType("qa")).toBe("aiCard");
+    expect(getKnowledgeEditorFeatureForCardType("review")).toBe("reviewCard");
+    expect(getKnowledgeEditorFeatureForCardType("mindmap")).toBe("diagramCard");
+    expect(getKnowledgeEditorFeatureForCardType("mermaid")).toBe("diagramCard");
+    expect(getKnowledgeEditorFeatureForCardType("relatedNotes")).toBe("relatedNotesCard");
+    expect(getKnowledgeEditorFeatureForCardType("unknown")).toBeUndefined();
   });
 });

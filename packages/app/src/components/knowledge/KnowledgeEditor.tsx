@@ -1,10 +1,13 @@
 import {
   type KnowledgeEditorFeature,
+  type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
   type ReadAnyCardAttrs,
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,
+  getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
   normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
@@ -62,6 +65,7 @@ interface KnowledgeEditorProps {
   contentClassName?: string;
   autoFocus?: boolean;
   tier?: KnowledgeEditorTier;
+  surface?: KnowledgeEditorSurface;
 }
 
 const cardIconMap = {
@@ -126,14 +130,29 @@ export function KnowledgeEditor({
   contentClassName,
   autoFocus = false,
   tier = "knowledge_doc",
+  surface,
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
   const isInternalUpdate = useRef(false);
-  const editorProfile = useMemo(() => getKnowledgeEditorProfile(tier), [tier]);
+  const editorProfile = useMemo(
+    () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
+    [surface, tier],
+  );
   const canUse = useCallback(
     (feature: KnowledgeEditorFeature) => hasKnowledgeEditorFeature(editorProfile, feature),
     [editorProfile],
+  );
+  const canInsertCard = useCallback(
+    (cardType: string) => {
+      const feature = getKnowledgeEditorFeatureForCardType(cardType);
+      return canUse("readAnyCards") || (feature ? canUse(feature) : false);
+    },
+    [canUse],
+  );
+  const allowedCards = useMemo(
+    () => builtInReadAnyCards.filter((card) => canInsertCard(card.cardType)),
+    [canInsertCard],
   );
 
   const extensions = useMemo(
@@ -219,7 +238,7 @@ export function KnowledgeEditor({
 
   const insertCard = useCallback(
     (cardType: string) => {
-      if (!editor || !canUse("readAnyCards")) return;
+      if (!editor || !canInsertCard(cardType)) return;
       const definition = builtInReadAnyCards.find((card) => card.cardType === cardType);
       if (!definition) return;
       const title = t(`notes.knowledgeCards.${cardType}`, {
@@ -239,7 +258,7 @@ export function KnowledgeEditor({
         .run();
       setIsInsertOpen(false);
     },
-    [canUse, editor, t],
+    [canInsertCard, editor, t],
   );
 
   if (!editor) return null;
@@ -407,7 +426,7 @@ export function KnowledgeEditor({
           ),
         }
       : null,
-    canUse("readAnyCards")
+    allowedCards.length > 0
       ? {
           key: "cards",
           node: (
@@ -422,7 +441,7 @@ export function KnowledgeEditor({
 
               {isInsertOpen && (
                 <div className="absolute left-0 top-8 z-20 w-56 rounded-lg border border-border/70 bg-popover p-1.5 shadow-lg">
-                  {builtInReadAnyCards.map((card) => {
+                  {allowedCards.map((card) => {
                     const Icon = cardIconMap[card.cardType as keyof typeof cardIconMap] ?? Sparkles;
                     return (
                       <button

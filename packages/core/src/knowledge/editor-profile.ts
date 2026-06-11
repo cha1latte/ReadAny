@@ -1,3 +1,5 @@
+import type { KnowledgeDocumentType } from "../types";
+
 export type KnowledgeEditorTier = "inline_note" | "knowledge_doc" | "publishable_doc";
 
 export type KnowledgeEditorSurface =
@@ -171,6 +173,18 @@ const SURFACE_PROFILES: Record<KnowledgeEditorSurface, KnowledgeEditorProfile> =
   },
 };
 
+const CARD_FEATURES: Record<string, KnowledgeEditorFeature> = {
+  bookQuote: "quoteCard",
+  callout: "calloutCard",
+  bookMetadata: "metadataCard",
+  aiSummary: "aiCard",
+  qa: "aiCard",
+  review: "reviewCard",
+  mindmap: "diagramCard",
+  mermaid: "diagramCard",
+  relatedNotes: "relatedNotesCard",
+};
+
 export function getKnowledgeEditorProfile(tier: KnowledgeEditorTier): KnowledgeEditorProfile {
   return EDITOR_PROFILES[tier];
 }
@@ -179,6 +193,29 @@ export function getKnowledgeEditorSurfaceProfile(
   surface: KnowledgeEditorSurface,
 ): KnowledgeEditorProfile {
   return SURFACE_PROFILES[surface];
+}
+
+export function getKnowledgeEditorSurfaceForDocumentType(
+  type: KnowledgeDocumentType,
+): KnowledgeEditorSurface {
+  switch (type) {
+    case "book_home":
+      return "book_home";
+    case "highlight_note":
+      return "highlight_note";
+    case "review":
+      return "review";
+    case "standalone_note":
+    case "summary":
+    case "imported_markdown":
+      return "standalone_note";
+  }
+}
+
+export function getKnowledgeEditorFeatureForCardType(
+  cardType: string,
+): KnowledgeEditorFeature | undefined {
+  return CARD_FEATURES[cardType];
 }
 
 export function hasKnowledgeEditorFeature(

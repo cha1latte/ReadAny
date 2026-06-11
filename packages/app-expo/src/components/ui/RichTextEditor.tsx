@@ -18,8 +18,10 @@ import {
 import { radius, useColors } from "@/styles/theme";
 import {
   type KnowledgeEditorFeature,
+  type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
   getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
 } from "@readany/core/knowledge";
 import { Fragment, useCallback, useMemo, useRef, useState } from "react";
@@ -40,6 +42,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   autoFocus?: boolean;
   tier?: KnowledgeEditorTier;
+  surface?: KnowledgeEditorSurface;
 }
 
 export function RichTextEditor({
@@ -48,6 +51,7 @@ export function RichTextEditor({
   placeholder,
   autoFocus = false,
   tier = "inline_note",
+  surface,
 }: RichTextEditorProps) {
   const colors = useColors();
   const { t } = useTranslation();
@@ -58,7 +62,10 @@ export function RichTextEditor({
   const [linkText, setLinkText] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const editorProfile = useMemo(() => getKnowledgeEditorProfile(tier), [tier]);
+  const editorProfile = useMemo(
+    () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
+    [surface, tier],
+  );
   const canUse = useCallback(
     (feature: KnowledgeEditorFeature) => hasKnowledgeEditorFeature(editorProfile, feature),
     [editorProfile],

@@ -41,6 +41,7 @@ import {
 } from "@readany/core/export";
 import {
   createKnowledgeExcerpt,
+  getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
@@ -1209,6 +1210,7 @@ function KnowledgeHomePanel({
         <View style={styles.knowledgeEditorFrame}>
           <MobileKnowledgeEditor
             tier="knowledge_doc"
+            surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
             documentId={document.id}
             value={value}
             onChange={onChange}

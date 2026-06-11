@@ -10,7 +10,9 @@ export type {
   TiptapNode,
 } from "./editor-projection";
 export {
+  getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
+  getKnowledgeEditorSurfaceForDocumentType,
   getKnowledgeEditorSurfaceProfile,
   hasKnowledgeEditorFeature,
 } from "./editor-profile";

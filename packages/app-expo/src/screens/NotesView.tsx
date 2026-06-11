@@ -54,7 +54,13 @@ import {
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Book, Highlight, KnowledgeDocument, KnowledgeLink } from "@readany/core/types";
+import type {
+  Book,
+  Highlight,
+  KnowledgeDocument,
+  KnowledgeDocumentType,
+  KnowledgeLink,
+} from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
 import type { TFunction } from "i18next";
 /**
@@ -89,6 +95,10 @@ const NOTE_DARK_PNG = require("../../assets/note-dark.png");
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "knowledge" | "notes" | "highlights";
+type CreatableKnowledgeDocumentType = Extract<
+  KnowledgeDocumentType,
+  "standalone_note" | "review" | "summary"
+>;
 
 function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
   return {
@@ -108,6 +118,16 @@ function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
   if (document.type === "book_home") return false;
   if (document.sourceKind === "highlight" || document.sourceKind === "note") return false;
   return true;
+}
+
+function knowledgeDocumentCreateTitle(
+  type: CreatableKnowledgeDocumentType,
+  count: number,
+  t: TFunction,
+): string {
+  if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
+  if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
+  return t("notes.knowledgeNewNoteTitle", { count });
 }
 
 function isEmptyTiptapDocument(contentJson: KnowledgeDocument["contentJson"]): boolean {
@@ -630,56 +650,61 @@ export function NotesView({
     [knowledgeHome?.id, saveActiveKnowledgeDocumentNow],
   );
 
-  const handleCreateKnowledgeDocument = useCallback(async () => {
-    if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
-    const saved = await saveActiveKnowledgeDocumentNow();
-    if (!saved) return;
+  const handleCreateKnowledgeDocument = useCallback(
+    async (type: CreatableKnowledgeDocumentType = "standalone_note") => {
+      if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
 
-    setIsKnowledgeDocumentCreating(true);
-    try {
-      const emptyValue = createEmptyKnowledgeValue();
-      const document = await createKnowledgeDocument({
-        bookId: selectedKnowledgeBookId,
-        type: "standalone_note",
-        title: t("notes.knowledgeNewDocumentTitle", {
-          count: Math.max(1, knowledgeDocuments.length),
-        }),
-        contentJson: emptyValue.contentJson,
-        contentMd: "",
-        excerpt: undefined,
-        tags: [],
-        sourceKind: "book",
-        sourceId: selectedKnowledgeBookId,
-      });
-      const nextValue = createKnowledgeValue(document);
-      setKnowledgeDocuments((documents) =>
-        orderKnowledgeDocuments(
-          [document, ...documents],
-          documents.find((item) => item.type === "book_home")?.id,
-        ),
-      );
-      setSelectedKnowledgeDocumentId(document.id);
-      setKnowledgeHome(document);
-      setKnowledgeTitle(document.title);
-      setKnowledgeTags([]);
-      setKnowledgeValue(nextValue);
-      setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
-    } catch (error) {
-      console.error("[Notes] Failed to create knowledge document:", error);
-      Alert.alert(
-        t("common.error", "错误"),
-        t("notes.knowledgeDocumentCreateFailed", "知识文档创建失败"),
-      );
-    } finally {
-      setIsKnowledgeDocumentCreating(false);
-    }
-  }, [
-    selectedKnowledgeBookId,
-    isKnowledgeDocumentCreating,
-    saveActiveKnowledgeDocumentNow,
-    t,
-    knowledgeDocuments.length,
-  ]);
+      setIsKnowledgeDocumentCreating(true);
+      try {
+        const emptyValue = createEmptyKnowledgeValue();
+        const count = Math.max(
+          1,
+          knowledgeDocuments.filter((document) => document.type === type).length + 1,
+        );
+        const document = await createKnowledgeDocument({
+          bookId: selectedKnowledgeBookId,
+          type,
+          title: knowledgeDocumentCreateTitle(type, count, t),
+          contentJson: emptyValue.contentJson,
+          contentMd: "",
+          excerpt: undefined,
+          tags: [],
+          sourceKind: "book",
+          sourceId: selectedKnowledgeBookId,
+        });
+        const nextValue = createKnowledgeValue(document);
+        setKnowledgeDocuments((documents) =>
+          orderKnowledgeDocuments(
+            [document, ...documents],
+            documents.find((item) => item.type === "book_home")?.id,
+          ),
+        );
+        setSelectedKnowledgeDocumentId(document.id);
+        setKnowledgeHome(document);
+        setKnowledgeTitle(document.title);
+        setKnowledgeTags([]);
+        setKnowledgeValue(nextValue);
+        setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
+      } catch (error) {
+        console.error("[Notes] Failed to create knowledge document:", error);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentCreateFailed", "知识文档创建失败"),
+        );
+      } finally {
+        setIsKnowledgeDocumentCreating(false);
+      }
+    },
+    [
+      selectedKnowledgeBookId,
+      isKnowledgeDocumentCreating,
+      saveActiveKnowledgeDocumentNow,
+      t,
+      knowledgeDocuments,
+    ],
+  );
 
   const handleDeleteKnowledgeDocument = useCallback(
     (document: KnowledgeDocument) => {
@@ -1307,7 +1332,7 @@ function KnowledgeHomePanel({
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
-  onCreateDocument: () => void;
+  onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
@@ -1703,60 +1728,113 @@ function KnowledgeDocumentStrip({
   activeDocumentId: string | null;
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
-  onCreate: () => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
-  return (
-    <View style={styles.knowledgeDocumentStrip}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.knowledgeDocumentStripContent}
-      >
-        {documents.map((document) => {
-          const isActive = document.id === activeDocumentId;
-          const label = document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
-          return (
-            <TouchableOpacity
-              key={document.id}
-              activeOpacity={0.78}
-              style={[styles.knowledgeDocumentChip, isActive && styles.knowledgeDocumentChipActive]}
-              onPress={() => onSelect(document)}
-            >
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.knowledgeDocumentChipTitle,
-                  isActive && styles.knowledgeDocumentChipTitleActive,
-                ]}
-              >
-                {label}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.knowledgeDocumentChipMeta,
-                  isActive && styles.knowledgeDocumentChipMetaActive,
-                ]}
-              >
-                {knowledgeDocumentTypeLabel(document, t)}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+  const [query, setQuery] = useState("");
+  const visibleDocuments = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return documents;
 
-      <TouchableOpacity
-        activeOpacity={0.78}
-        style={[styles.knowledgeDocumentCreateButton, isCreating && { opacity: 0.55 }]}
-        onPress={onCreate}
-        disabled={isCreating}
-        accessibilityLabel={t("notes.knowledgeNewDocument", "新建文档")}
-      >
-        <PlusIcon size={17} color={colors.primary} />
-      </TouchableOpacity>
+    return documents.filter((document) => {
+      const haystack = [
+        document.title,
+        knowledgeDocumentTypeLabel(document, t),
+        document.excerpt ?? "",
+        document.contentMd,
+        ...document.tags,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [documents, query, t]);
+
+  const showCreatePicker = useCallback(() => {
+    Alert.alert(t("notes.knowledgeNewDocument", "新建文档"), undefined, [
+      { text: t("notes.knowledgeNewNote", "新建笔记"), onPress: () => onCreate("standalone_note") },
+      { text: t("notes.knowledgeNewReview", "新建书评"), onPress: () => onCreate("review") },
+      { text: t("notes.knowledgeNewSummary", "新建摘要"), onPress: () => onCreate("summary") },
+      { text: t("common.cancel", "取消"), style: "cancel" },
+    ]);
+  }, [onCreate, t]);
+
+  return (
+    <View style={styles.knowledgeDocumentStripWrap}>
+      <View style={styles.knowledgeDocumentSearch}>
+        <SearchIcon size={13} color={colors.mutedForeground} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t("notes.knowledgeDocumentSearchPlaceholder", "搜索文档")}
+          placeholderTextColor={colors.mutedForeground}
+          style={styles.knowledgeDocumentSearchInput}
+          returnKeyType="search"
+        />
+      </View>
+
+      <View style={styles.knowledgeDocumentStrip}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.knowledgeDocumentStripContent}
+        >
+          {visibleDocuments.map((document) => {
+            const isActive = document.id === activeDocumentId;
+            const label =
+              document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
+            return (
+              <TouchableOpacity
+                key={document.id}
+                activeOpacity={0.78}
+                style={[
+                  styles.knowledgeDocumentChip,
+                  isActive && styles.knowledgeDocumentChipActive,
+                ]}
+                onPress={() => onSelect(document)}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.knowledgeDocumentChipTitle,
+                    isActive && styles.knowledgeDocumentChipTitleActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.knowledgeDocumentChipMeta,
+                    isActive && styles.knowledgeDocumentChipMetaActive,
+                  ]}
+                >
+                  {knowledgeDocumentTypeLabel(document, t)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          {visibleDocuments.length === 0 ? (
+            <View style={styles.knowledgeDocumentEmptyResult}>
+              <Text style={styles.knowledgeDocumentEmptyResultText}>
+                {t("notes.knowledgeNoDocumentResults", "没有匹配的文档")}
+              </Text>
+            </View>
+          ) : null}
+        </ScrollView>
+
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[styles.knowledgeDocumentCreateButton, isCreating && { opacity: 0.55 }]}
+          onPress={showCreatePicker}
+          disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewDocument", "新建文档")}
+        >
+          <PlusIcon size={17} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

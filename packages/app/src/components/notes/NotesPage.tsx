@@ -46,7 +46,14 @@ import {
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import type { Book, Highlight, KnowledgeDocument, KnowledgeLink, Note } from "@readany/core/types";
+import type {
+  Book,
+  Highlight,
+  KnowledgeDocument,
+  KnowledgeDocumentType,
+  KnowledgeLink,
+  Note,
+} from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -83,6 +90,10 @@ import { toast } from "sonner";
 import { ExportDropdown } from "./ExportDropdown";
 
 type DetailTab = "knowledge" | "notes" | "highlights";
+type CreatableKnowledgeDocumentType = Extract<
+  KnowledgeDocumentType,
+  "standalone_note" | "review" | "summary"
+>;
 
 interface KnowledgeVaultConflictNotice {
   rootPath: string;
@@ -108,6 +119,16 @@ function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
   if (document.type === "book_home") return false;
   if (document.sourceKind === "highlight" || document.sourceKind === "note") return false;
   return true;
+}
+
+function knowledgeDocumentCreateTitle(
+  type: CreatableKnowledgeDocumentType,
+  count: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
+  if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
+  return t("notes.knowledgeNewNoteTitle", { count });
 }
 
 function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boolean {
@@ -692,19 +713,23 @@ export function NotesPage() {
     setIsKnowledgeSaving(false);
   };
 
-  const handleCreateKnowledgeDocument = async () => {
+  const handleCreateKnowledgeDocument = async (
+    type: CreatableKnowledgeDocumentType = "standalone_note",
+  ) => {
     if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
     const saved = await saveActiveKnowledgeDocumentNow();
     if (!saved) return;
 
     setIsKnowledgeDocumentCreating(true);
     try {
+      const count = Math.max(
+        1,
+        knowledgeDocuments.filter((document) => document.type === type).length + 1,
+      );
       const document = await createKnowledgeDocument({
         bookId: selectedKnowledgeBookId,
-        type: "standalone_note",
-        title: t("notes.knowledgeNewDocumentTitle", {
-          count: Math.max(1, knowledgeDocuments.length),
-        }),
+        type,
+        title: knowledgeDocumentCreateTitle(type, count, t),
         contentJson: createEmptyKnowledgeValue().contentJson,
         contentMd: "",
         excerpt: undefined,
@@ -1376,7 +1401,7 @@ interface KnowledgeHomePanelProps {
   onTagsChange: (tags: string[]) => void;
   onChange: (value: KnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
-  onCreateDocument: () => void;
+  onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onExportVault: () => void;
@@ -1806,28 +1831,79 @@ function KnowledgeDocumentList({
   activeDocumentId: string | null;
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
-  onCreate: () => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType) => void;
   onDelete: (document: KnowledgeDocument) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const [query, setQuery] = useState("");
+  const visibleDocuments = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return documents;
+
+    return documents.filter((document) => {
+      const haystack = [
+        document.title,
+        knowledgeDocumentTypeLabel(document, t),
+        document.excerpt ?? "",
+        document.contentMd,
+        ...document.tags,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [documents, query, t]);
+
   return (
     <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
-        <button
-          type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={onCreate}
-          disabled={isCreating}
-          aria-label={t("notes.knowledgeNewDocument")}
-          title={t("notes.knowledgeNewDocument")}
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isCreating}
+              aria-label={t("notes.knowledgeNewDocument")}
+              title={t("notes.knowledgeNewDocument")}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onCreate("standalone_note")}>
+              <FileText className="mr-2 h-4 w-4" />
+              {t("notes.knowledgeNewNote")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onCreate("review")}>
+              <NotebookPen className="mr-2 h-4 w-4" />
+              {t("notes.knowledgeNewReview")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onCreate("summary")}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {t("notes.knowledgeNewSummary")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="relative mb-2">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("notes.knowledgeDocumentSearchPlaceholder")}
+          className="h-7 pl-7 text-xs"
+        />
       </div>
 
       <div className="space-y-1">
-        {documents.map((document) => {
+        {visibleDocuments.length === 0 ? (
+          <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
+            {t("notes.knowledgeNoDocumentResults")}
+          </p>
+        ) : null}
+        {visibleDocuments.map((document) => {
           const isActive = document.id === activeDocumentId;
           const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
           const canDelete = canDeleteKnowledgeDocument(document);

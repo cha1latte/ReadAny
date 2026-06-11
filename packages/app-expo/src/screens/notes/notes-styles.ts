@@ -393,6 +393,27 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeTagInputPlaceholder: {
       color: colors.mutedForeground,
     },
+    knowledgeDocumentStripWrap: {
+      gap: 9,
+    },
+    knowledgeDocumentSearch: {
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      borderRadius: radius.md,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      paddingHorizontal: 10,
+    },
+    knowledgeDocumentSearchInput: {
+      flex: 1,
+      minHeight: 32,
+      paddingVertical: 6,
+      fontSize: fontSize.xs,
+      color: colors.foreground,
+    },
     knowledgeDocumentStrip: {
       flexDirection: "row",
       alignItems: "stretch",
@@ -428,6 +449,20 @@ export const makeStyles = (colors: ThemeColors) =>
       lineHeight: 14,
     },
     knowledgeDocumentChipMetaActive: { color: withOpacity(colors.primary, 0.75) },
+    knowledgeDocumentEmptyResult: {
+      width: 180,
+      minHeight: 54,
+      borderRadius: radius.lg,
+      backgroundColor: colors.muted,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 12,
+    },
+    knowledgeDocumentEmptyResultText: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: "center",
+    },
     knowledgeDocumentCreateButton: {
       width: 44,
       minHeight: 54,

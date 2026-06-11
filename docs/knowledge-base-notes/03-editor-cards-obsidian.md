@@ -681,6 +681,79 @@ The same document should render in different modes:
 
 The knowledge base should feel like a reading workspace, not a generic note app.
 
+### Product Shape
+
+ReadAny's knowledge space should be a book-centered vault:
+
+- The left/navigation layer answers "where am I in this vault?"
+- The editor answers "what am I writing?"
+- The context layer answers "what sources, backlinks, AI outputs, and related
+  notes are connected to this document?"
+
+These jobs should not collapse into one large form. Metadata, tags, source
+links, and AI proposals can support the document, but the center of gravity is a
+WYSIWYG document canvas.
+
+### Desktop Layout
+
+Use a quiet three-zone layout:
+
+- Navigation rail: book/workspace switcher and a vault tree with folders,
+  document nodes, search, create, move, and collapse state.
+- Editor canvas: breadcrumb, editable title, small status row, then the Tiptap
+  WYSIWYG page. The toolbar should be compact and contextual rather than a
+  permanent wall of buttons.
+- Context panel: sources, backlinks, selected-card details, document outline,
+  AI proposals, and export/sync status.
+
+Visual rules:
+
+- Keep the editor page calm, with enough breathing room and no nested card
+  stacks around the main writing area.
+- Use indentation, connector lines, and icon weight to communicate hierarchy.
+- Prefer inline title editing and autosave over explicit save buttons.
+- Empty folder states should invite one clear action: create a note or folder
+  inside the current folder.
+- Long documents need an outline/context panel instead of making the main canvas
+  visually noisy.
+
+### Mobile Layout
+
+Mobile should not mirror the desktop grid. It needs two focused modes:
+
+- Vault browse mode: native list/tree, search, path display, create/move bottom
+  sheets, and compact folder overviews.
+- Writing mode: a full-screen WYSIWYG editor with a native compact toolbar,
+  keyboard-aware controls, and card/image insertion through focused sheets.
+
+Mobile visual rules:
+
+- Show the current path near the title, but keep it compact.
+- Avoid modal-on-modal editing. Deep edits should push into a focused screen or
+  bottom sheet.
+- The document body should feel like a document, not a stack of input boxes.
+- Folder screens should feel browsable: children as clear rows/cards, not a
+  hidden dropdown.
+
+### WYSIWYG Contract
+
+The user should edit the thing they will later read, sync, export, and ask AI
+about. Markdown remains a projection, not the primary interface.
+
+Required behavior:
+
+- Desktop and mobile both use Tiptap-backed document editing for knowledge
+  documents.
+- Blocks such as headings, lists, quotes, images, source cards, callouts, and AI
+  cards render as real blocks in the editor.
+- Markdown import/export must preserve enough structure that Obsidian round trips
+  do not destroy the document.
+- Unsupported card versions must show readable fallback cards rather than raw
+  JSON or stripped content.
+- URL images are a first step; local attachment upload must later connect to
+  `knowledge_attachments` and file sync before it is advertised as full asset
+  support.
+
 Desktop:
 
 - Left: library/knowledge navigation.

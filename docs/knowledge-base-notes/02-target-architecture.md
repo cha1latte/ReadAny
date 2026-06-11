@@ -17,6 +17,8 @@ Recommended concepts:
   - Editable Tiptap document.
   - Can be a book home page, standalone note, highlight note, review, summary,
     imported Markdown file, AI-generated note, or custom user document.
+  - Participates in a vault-style hierarchy through `parent_id`; folders and
+    documents are first-class siblings, not a flat note list with fake labels.
 - Knowledge link
   - Connects documents to books, highlights, CFIs, other documents, external
     URLs, Obsidian paths, or AI messages.
@@ -25,6 +27,45 @@ Recommended concepts:
 - Knowledge card
   - Structured Tiptap node with a type, version, attrs, optional content, and a
     Markdown fallback renderer.
+
+## Vault Hierarchy
+
+The knowledge base should feel closer to an Obsidian vault than a notes table.
+The tree is part of the product model, not only a view concern.
+
+Rules:
+
+- A book owns one `book_home` document at the root of its knowledge vault.
+- `folder` documents are structural nodes. They can contain other folders,
+  standalone notes, reviews, summaries, imported Markdown, and AI-created
+  documents.
+- Non-folder documents can have a `parent_id`, but they cannot contain children.
+- `book_home` is pinned at the top and cannot be moved under another document.
+- Moving a document updates only `parent_id`; content and links remain stable.
+- Cycles are invalid. If a parent is missing after import or sync, the document
+  is treated as an orphaned root and surfaced in the UI rather than hidden.
+- Search should ignore collapse state and search the whole vault.
+- AI tools and importers must accept `parentId` so proposed documents land in
+  the user's chosen folder instead of always appearing at the root.
+
+Navigation model:
+
+- Desktop uses a persistent left tree, a center editor, and optional right
+  context. The tree must show indentation, folder expand/collapse, active path,
+  and quick create/move affordances.
+- Mobile uses a native vault browser first, then a focused editor screen. It
+  should show the current path and use bottom sheets for create/move actions so
+  the editor remains calm.
+- The current path is a real breadcrumb: `Knowledge base / Folder / Document`.
+  It should be visible near the document title and preserved through export.
+
+Export model:
+
+- Obsidian export maps the ReadAny hierarchy to folders where possible.
+- Stable document IDs stay in frontmatter and manifest data so renames and moves
+  can be reconciled safely.
+- Folder documents can export as folder-level `README.md` or index files when
+  they contain body content; empty folders can still appear in the manifest.
 
 ## Proposed Tables
 
@@ -216,4 +257,3 @@ Then integrate with existing vectorization:
 - Knowledge documents can be vectorized independently from books.
 - Book text, highlights, and knowledge documents should be separate source types
   in retrieval results.
-

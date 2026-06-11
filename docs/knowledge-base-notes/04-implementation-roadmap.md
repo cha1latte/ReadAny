@@ -58,6 +58,11 @@ Work:
 
 - Add `KnowledgeEditor` using Tiptap JSON canonical storage.
 - Auto-create and open the book home document.
+- Treat knowledge documents as a vault hierarchy, not a flat list:
+  - Add folder documents.
+  - Build a tree from `parent_id`.
+  - Support create-inside-folder, move-to-folder, breadcrumbs, orphan surfacing,
+    and search across the whole tree.
 - Show linked highlights and notes as source cards.
 - Allow standalone book notes.
 - Add basic tags and backlinks display.
@@ -67,6 +72,8 @@ Verification:
 
 - Existing notes page still works.
 - Book home document persists and syncs.
+- Folder hierarchy persists, syncs, and survives invalid or missing parents
+  without hiding documents.
 - Editing a highlight note updates the linked document and old note preview.
 - Export still includes old notes and new knowledge documents.
 
@@ -117,6 +124,8 @@ Work:
 - Add desktop Markdown file import as confirmation-required create proposals.
 - Add desktop linked-folder import/reconcile as confirmation-required update
   proposals.
+- Preserve document hierarchy when exporting to an Obsidian-style vault and when
+  reconciling imported files.
 
 Verification:
 
@@ -124,6 +133,7 @@ Verification:
 - Wikilinks and assets resolve.
 - Re-export updates existing files by ID.
 - External edits are detected before overwrite.
+- Folder moves and renames reconcile by stable document ID, not only by path.
 - Markdown imports preview the target documents before saving.
 - Vault imports surface modified, missing, and unreadable files before applying
   updates.

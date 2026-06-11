@@ -232,6 +232,72 @@ async function buildKnowledgeEditor() {
       },
     });
 
+    const KnowledgeImage = Node.create({
+      name: "image",
+      group: "block",
+      atom: true,
+      draggable: true,
+
+      addAttributes() {
+        return {
+          src: { default: null },
+          alt: { default: null },
+          title: { default: null },
+        };
+      },
+
+      parseHTML() {
+        return [{ tag: "img[src]" }];
+      },
+
+      renderHTML({ HTMLAttributes }) {
+        return ["img", mergeAttributes(HTMLAttributes, { "data-readany-image": "true" })];
+      },
+
+      addNodeView() {
+        return ({ node }) => {
+          const attrs = node.attrs || {};
+          const figure = document.createElement("figure");
+          figure.className = "readany-image";
+          figure.contentEditable = "false";
+
+          const image = document.createElement("img");
+          image.src = attrs.src || "";
+          image.alt = attrs.alt || "";
+          image.title = attrs.title || "";
+          figure.appendChild(image);
+
+          if (attrs.alt) {
+            const caption = document.createElement("figcaption");
+            caption.textContent = attrs.alt;
+            figure.appendChild(caption);
+          }
+
+          return {
+            dom: figure,
+            update(nextNode) {
+              if (nextNode.type.name !== "image") return false;
+              const nextAttrs = nextNode.attrs || {};
+              image.src = nextAttrs.src || "";
+              image.alt = nextAttrs.alt || "";
+              image.title = nextAttrs.title || "";
+              const nextAlt = nextAttrs.alt || "";
+              let caption = figure.querySelector("figcaption");
+              if (nextAlt && !caption) {
+                caption = document.createElement("figcaption");
+                figure.appendChild(caption);
+              }
+              if (caption) {
+                if (nextAlt) caption.textContent = nextAlt;
+                else caption.remove();
+              }
+              return true;
+            },
+          };
+        };
+      },
+    });
+
     const createEditor = (payload = {}) => {
       const el = document.getElementById("editor");
       if (!el) throw new Error("Editor root not found");
@@ -253,6 +319,7 @@ async function buildKnowledgeEditor() {
           TaskItem.configure({
             nested: true,
           }),
+          KnowledgeImage,
           ReadAnyCard,
           Placeholder.configure({
             placeholder: payload.placeholder || "",
@@ -326,6 +393,20 @@ async function buildKnowledgeEditor() {
         case "horizontalRule":
           chain.setHorizontalRule().run();
           break;
+        case "insertImage": {
+          if (typeof attrs.src === "string" && attrs.src.trim()) {
+            chain
+              .insertContent({
+                type: "image",
+                attrs: {
+                  src: attrs.src.trim(),
+                  alt: typeof attrs.alt === "string" ? attrs.alt.trim() : "",
+                },
+              })
+              .run();
+          }
+          break;
+        }
         case "insertCard": {
           const cardAttrs = attrs && typeof attrs === "object" ? attrs : {};
           chain

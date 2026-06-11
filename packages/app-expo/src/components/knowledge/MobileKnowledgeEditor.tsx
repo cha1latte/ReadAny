@@ -6,6 +6,7 @@ import {
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
+  ImagePlusIcon,
   ItalicIcon,
   LightbulbIcon,
   Link2Icon,
@@ -236,7 +237,10 @@ export function MobileKnowledgeEditor({
   });
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showCardMenu, setShowCardMenu] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageAlt, setImageAlt] = useState("");
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -582,6 +586,25 @@ export function MobileKnowledgeEditor({
     setLinkUrl("");
   }, [linkUrl, runCommand]);
 
+  const openImageModal = useCallback(() => {
+    if (!canUse("image")) return;
+    setImageUrl("");
+    setImageAlt("");
+    setShowImageModal(true);
+  }, [canUse]);
+
+  const applyImage = useCallback(() => {
+    const src = imageUrl.trim();
+    if (!src) return;
+    runCommand("insertImage", {
+      src,
+      alt: imageAlt.trim(),
+    });
+    setShowImageModal(false);
+    setImageUrl("");
+    setImageAlt("");
+  }, [imageAlt, imageUrl, runCommand]);
+
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
       if (!canInsertCard(card.cardType)) return;
@@ -831,16 +854,32 @@ export function MobileKnowledgeEditor({
       ? {
           key: "cards",
           node: (
-            <ToolbarButton
-              onPress={() => setShowCardMenu(true)}
-              disabled={!isEditorReady}
-              styles={styles}
-            >
-              <SparklesIcon size={15} color={colors.mutedForeground} />
-            </ToolbarButton>
+            <Fragment>
+              {canUse("image") ? (
+                <ToolbarButton onPress={openImageModal} disabled={!isEditorReady} styles={styles}>
+                  <ImagePlusIcon size={15} color={colors.mutedForeground} />
+                </ToolbarButton>
+              ) : null}
+              <ToolbarButton
+                onPress={() => setShowCardMenu(true)}
+                disabled={!isEditorReady}
+                styles={styles}
+              >
+                <SparklesIcon size={15} color={colors.mutedForeground} />
+              </ToolbarButton>
+            </Fragment>
           ),
         }
-      : null,
+      : canUse("image")
+        ? {
+            key: "media",
+            node: (
+              <ToolbarButton onPress={openImageModal} disabled={!isEditorReady} styles={styles}>
+                <ImagePlusIcon size={15} color={colors.mutedForeground} />
+              </ToolbarButton>
+            ),
+          }
+        : null,
   ];
   const toolbarGroups = toolbarGroupCandidates.filter(
     (group): group is { key: string; node: React.ReactNode } => group !== null,
@@ -1063,6 +1102,57 @@ export function MobileKnowledgeEditor({
                 style={styles.linkPrimaryButton}
                 onPress={applyLink}
                 activeOpacity={0.82}
+              >
+                <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showImageModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.linkModal}>
+            <Text style={styles.linkModalTitle}>{t("notes.knowledgeInsertImage", "插入图片")}</Text>
+            <TextInput
+              value={imageUrl}
+              onChangeText={setImageUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder={t("notes.knowledgeImageUrlPlaceholder", "图片 URL")}
+              placeholderTextColor={colors.mutedForeground}
+              style={styles.linkInput}
+            />
+            <TextInput
+              value={imageAlt}
+              onChangeText={setImageAlt}
+              placeholder={t("notes.knowledgeImageAltPlaceholder", "图片描述")}
+              placeholderTextColor={colors.mutedForeground}
+              style={styles.linkInput}
+            />
+            <View style={styles.linkActions}>
+              <TouchableOpacity
+                style={styles.linkGhostButton}
+                onPress={() => {
+                  setShowImageModal(false);
+                  setImageUrl("");
+                  setImageAlt("");
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.linkPrimaryButton, !imageUrl.trim() && styles.disabledButton]}
+                onPress={applyImage}
+                activeOpacity={0.82}
+                disabled={!imageUrl.trim()}
               >
                 <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
               </TouchableOpacity>
@@ -1394,6 +1484,9 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       borderRadius: radius.md,
       backgroundColor: colors.primary,
       paddingHorizontal: 14,
+    },
+    disabledButton: {
+      opacity: 0.48,
     },
     linkPrimaryText: {
       color: colors.primaryForeground,

@@ -86,6 +86,16 @@ export const PlusIcon = icon(() => (
   </>
 ));
 
+export const ImagePlusIcon = icon(() => (
+  <>
+    <Path d="M16 5h6" />
+    <Path d="M19 2v6" />
+    <Path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5" />
+    <Circle cx="9" cy="9" r="2" />
+    <Path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+  </>
+));
+
 export const SearchIcon = icon(() => (
   <>
     <Circle cx="11" cy="11" r="8" />

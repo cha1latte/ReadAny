@@ -40,6 +40,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  ImagePlus,
   Italic,
   Link2,
   List,
@@ -56,7 +57,16 @@ import {
   TextQuote,
   Undo2,
 } from "lucide-react";
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 export interface KnowledgeEditorValue {
@@ -134,6 +144,35 @@ const ReadAnyCardExtension = Node.create({
   },
 });
 
+const KnowledgeImageExtension = Node.create({
+  name: "image",
+  group: "block",
+  atom: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: null },
+      title: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "img[src]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "img",
+      mergeAttributes(HTMLAttributes, {
+        class:
+          "mx-auto my-4 max-h-[520px] max-w-full rounded-md border border-border/60 object-contain",
+      }),
+    ];
+  },
+});
+
 function contentJsonEquals(left: JSONValue, right: JSONValue): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -150,6 +189,11 @@ export function KnowledgeEditor({
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
+  const [isImageInsertOpen, setIsImageInsertOpen] = useState(false);
+  const [imageSrc, setImageSrc] = useState("");
+  const [imageAlt, setImageAlt] = useState("");
+  const imageSrcInputId = useId();
+  const imageAltInputId = useId();
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const isInternalUpdate = useRef(false);
   const editorProfile = useMemo(
@@ -232,6 +276,7 @@ export function KnowledgeEditor({
       TaskItem.configure({
         nested: true,
       }),
+      KnowledgeImageExtension,
       ReadAnyCardExtension,
       Placeholder.configure({
         placeholder: placeholder || "",
@@ -306,6 +351,26 @@ export function KnowledgeEditor({
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [canUse, editor, t]);
+
+  const insertImage = useCallback(() => {
+    if (!editor || !canUse("image")) return;
+    const src = imageSrc.trim();
+    if (!src) return;
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "image",
+        attrs: {
+          src,
+          alt: imageAlt.trim(),
+        },
+      })
+      .run();
+    setImageSrc("");
+    setImageAlt("");
+    setIsImageInsertOpen(false);
+  }, [canUse, editor, imageAlt, imageSrc]);
 
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
@@ -498,13 +563,98 @@ export function KnowledgeEditor({
           ),
         }
       : null,
+    canUse("image")
+      ? {
+          key: "media",
+          node: (
+            <div className="relative">
+              <ToolbarGroup>
+                <ToolbarButton
+                  onClick={() => {
+                    setIsImageInsertOpen((open) => !open);
+                    setIsInsertOpen(false);
+                  }}
+                  title={t("notes.knowledgeInsertImage")}
+                  disabled={!canUse("image")}
+                  isActive={isImageInsertOpen}
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                </ToolbarButton>
+              </ToolbarGroup>
+
+              {isImageInsertOpen && (
+                <form
+                  className="absolute left-0 top-8 z-20 w-72 rounded-lg border border-border/70 bg-popover p-2.5 shadow-lg"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    insertImage();
+                  }}
+                >
+                  <div className="mb-2 text-xs font-medium text-popover-foreground">
+                    {t("notes.knowledgeInsertImage")}
+                  </div>
+                  <label
+                    htmlFor={imageSrcInputId}
+                    className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                  >
+                    {t("notes.knowledgeImageUrlPlaceholder")}
+                  </label>
+                  <input
+                    id={imageSrcInputId}
+                    value={imageSrc}
+                    onChange={(event) => setImageSrc(event.target.value)}
+                    placeholder="https://..."
+                    className="mb-2 h-8 w-full rounded-md border border-border/70 bg-background px-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/10"
+                  />
+                  <label
+                    htmlFor={imageAltInputId}
+                    className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                  >
+                    {t("notes.knowledgeImageAltPlaceholder")}
+                  </label>
+                  <input
+                    id={imageAltInputId}
+                    value={imageAlt}
+                    onChange={(event) => setImageAlt(event.target.value)}
+                    placeholder={t("notes.knowledgeImageAltPrompt")}
+                    className="h-8 w-full rounded-md border border-border/70 bg-background px-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/10"
+                  />
+                  <div className="mt-2.5 flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      className="h-7 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      onClick={() => {
+                        setIsImageInsertOpen(false);
+                        setImageSrc("");
+                        setImageAlt("");
+                      }}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                    <button
+                      type="submit"
+                      className="h-7 rounded-md bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-opacity disabled:opacity-45"
+                      disabled={!imageSrc.trim()}
+                    >
+                      {t("common.confirm")}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ),
+        }
+      : null,
     allowedCards.length > 0
       ? {
           key: "cards",
           node: (
             <div className="relative">
               <ToolbarButton
-                onClick={() => setIsInsertOpen((open) => !open)}
+                onClick={() => {
+                  setIsInsertOpen((open) => !open);
+                  setIsImageInsertOpen(false);
+                }}
                 isActive={isInsertOpen}
                 title={t("notes.knowledgeInsertCard", { defaultValue: "Insert card" })}
               >

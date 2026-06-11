@@ -48,8 +48,11 @@ import {
   parseKnowledgeMarkdownDocument,
 } from "@readany/core/export";
 import {
+  type KnowledgeDocumentTreeNode,
+  buildKnowledgeDocumentTree,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
+  flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -78,10 +81,13 @@ import {
   Brain,
   Check,
   ChevronLeft,
+  ChevronRight,
   Download,
   Edit3,
   FileText,
+  Folder,
   FolderDown,
+  FolderOpen,
   FolderUp,
   Highlighter,
   Link2,
@@ -99,7 +105,14 @@ import {
  * Layout: Left panel (book notebooks grid) + Right panel (selected book's notes & highlights)
  * Notes and highlights are displayed separately.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ImgHTMLAttributes,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -109,7 +122,7 @@ import { ExportDropdown } from "./ExportDropdown";
 type DetailTab = "knowledge" | "notes" | "highlights";
 type CreatableKnowledgeDocumentType = Extract<
   KnowledgeDocumentType,
-  "standalone_note" | "review" | "summary"
+  "folder" | "standalone_note" | "review" | "summary"
 >;
 
 interface KnowledgeVaultConflictNotice {
@@ -159,6 +172,7 @@ function knowledgeDocumentCreateTitle(
   count: number,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
+  if (type === "folder") return t("notes.knowledgeNewFolderTitle", { count });
   if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
   if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
   return t("notes.knowledgeNewNoteTitle", { count });
@@ -314,9 +328,9 @@ async function collectBookKnowledgeExportInput(
 }
 
 // Helper component to resolve and display cover images
-interface CoverImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface CoverImageProps extends ImgHTMLAttributes<HTMLImageElement> {
   url: string | undefined | null;
-  fallback?: React.ReactNode;
+  fallback?: ReactNode;
 }
 
 function CoverImage({ url, fallback, alt = "", ...imgProps }: CoverImageProps) {
@@ -823,6 +837,7 @@ export function NotesPage() {
 
   const handleCreateKnowledgeDocument = async (
     type: CreatableKnowledgeDocumentType = "standalone_note",
+    parentId?: string,
   ) => {
     if (!selectedKnowledgeBookId || isKnowledgeDocumentCreating) return;
     const saved = await saveActiveKnowledgeDocumentNow();
@@ -832,10 +847,13 @@ export function NotesPage() {
     try {
       const count = Math.max(
         1,
-        knowledgeDocuments.filter((document) => document.type === type).length + 1,
+        knowledgeDocuments.filter(
+          (document) => document.type === type && document.parentId === parentId,
+        ).length + 1,
       );
       const document = await createKnowledgeDocument({
         bookId: selectedKnowledgeBookId,
+        parentId,
         type,
         title: knowledgeDocumentCreateTitle(type, count, t),
         contentJson: createEmptyKnowledgeValue().contentJson,
@@ -870,6 +888,13 @@ export function NotesPage() {
   const handleDeleteKnowledgeDocument = async (document: KnowledgeDocument) => {
     if (!canDeleteKnowledgeDocument(document)) {
       toast.error(t("notes.knowledgeDocumentDeleteBlocked"));
+      return;
+    }
+    if (
+      document.type === "folder" &&
+      knowledgeDocuments.some((item) => item.parentId === document.id)
+    ) {
+      toast.error(t("notes.knowledgeFolderDeleteBlocked"));
       return;
     }
 
@@ -1816,7 +1841,7 @@ interface KnowledgeHomePanelProps {
   onTagsChange: (tags: string[]) => void;
   onChange: (value: KnowledgeEditorValue) => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
-  onCreateDocument: (type?: CreatableKnowledgeDocumentType) => void;
+  onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
@@ -1887,6 +1912,10 @@ function KnowledgeHomePanel({
     () => sortAnnotationsByPosition(book.highlights).slice(0, 4),
     [book.highlights],
   );
+  const activeDocumentChildren = useMemo(
+    () => (document ? documents.filter((item) => item.parentId === document.id) : []),
+    [document, documents],
+  );
 
   if (isLoading || !document) {
     return (
@@ -1899,97 +1928,118 @@ function KnowledgeHomePanel({
     );
   }
 
+  const isFolderDocument = document.type === "folder";
+
   return (
-    <div className="min-h-full p-5">
-      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_280px] gap-5">
-        <section className="min-w-0">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                {t("notes.knowledgeEyebrow")}
-              </p>
-              <input
-                value={title}
-                onChange={(event) => onTitleChange(event.target.value)}
-                aria-label={t("notes.knowledgeDocumentTitle")}
-                placeholder={t("notes.knowledgeUntitledDocument")}
-                className="mt-1 w-full min-w-0 truncate bg-transparent text-lg font-semibold text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
-              />
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.title}</p>
-              <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs text-muted-foreground">
-                <Save className="h-3.5 w-3.5" />
-                {isSaving
-                  ? t("notes.knowledgeSaving")
-                  : isSaved
-                    ? t("notes.knowledgeSaved")
-                    : t("notes.knowledgePending")}
+    <div className="min-h-full bg-background p-4">
+      <div className="mx-auto grid min-h-[calc(100vh-7rem)] max-w-[1480px] grid-cols-[280px_minmax(0,1fr)_300px] gap-4">
+        <KnowledgeDocumentExplorer
+          documents={documents}
+          activeDocumentId={activeDocumentId}
+          isCreating={isCreatingDocument}
+          onSelect={onSelectDocument}
+          onCreate={onCreateDocument}
+          onDelete={onDeleteDocument}
+          t={t}
+        />
+
+        <section className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-card shadow-sm">
+          <div className="border-b border-border/50 bg-background/65 px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <span>{t("notes.knowledgeEyebrow")}</span>
+                  <span className="h-1 w-1 rounded-full bg-border" />
+                  <span>{knowledgeDocumentTypeLabel(document, t)}</span>
+                </div>
+                <input
+                  value={title}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  aria-label={t("notes.knowledgeDocumentTitle")}
+                  placeholder={t("notes.knowledgeUntitledDocument")}
+                  className="w-full min-w-0 bg-transparent text-2xl font-semibold leading-tight text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
+                />
+                <p className="mt-1 truncate text-xs text-muted-foreground">{book.title}</p>
+                {!isFolderDocument ? (
+                  <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
+                ) : null}
               </div>
-              <KnowledgeExportMenu
-                onExport={onExport}
-                onImportMarkdown={onImportMarkdown}
-                onExportVault={onExportVault}
-                onImportVault={onImportVault}
-                isMarkdownImporting={isMarkdownImporting}
-                isVaultExporting={isVaultExporting}
-                isVaultImporting={isVaultImporting}
-                t={t}
-              />
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="flex h-8 items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-2.5 text-xs text-muted-foreground">
+                  <Save className="h-3.5 w-3.5" />
+                  {isSaving
+                    ? t("notes.knowledgeSaving")
+                    : isSaved
+                      ? t("notes.knowledgeSaved")
+                      : t("notes.knowledgePending")}
+                </div>
+                <KnowledgeExportMenu
+                  onExport={onExport}
+                  onImportMarkdown={onImportMarkdown}
+                  onExportVault={onExportVault}
+                  onImportVault={onImportVault}
+                  isMarkdownImporting={isMarkdownImporting}
+                  isVaultExporting={isVaultExporting}
+                  isVaultImporting={isVaultImporting}
+                  t={t}
+                />
+              </div>
             </div>
           </div>
 
-          {vaultConflicts ? (
-            <KnowledgeVaultConflictCard
-              notice={vaultConflicts}
-              onDismiss={onDismissVaultConflicts}
-              t={t}
-            />
-          ) : null}
+          <div className="max-h-[calc(100vh-13rem)] overflow-y-auto px-5 py-4">
+            {vaultConflicts ? (
+              <KnowledgeVaultConflictCard
+                notice={vaultConflicts}
+                onDismiss={onDismissVaultConflicts}
+                t={t}
+              />
+            ) : null}
 
-          {markdownImportReview ? (
-            <KnowledgeMarkdownImportReviewCard
-              review={markdownImportReview}
-              isApplying={isMarkdownImportApplying}
-              onApply={onApplyMarkdownImport}
-              onDismiss={onDismissMarkdownImport}
-              t={t}
-            />
-          ) : null}
+            {markdownImportReview ? (
+              <KnowledgeMarkdownImportReviewCard
+                review={markdownImportReview}
+                isApplying={isMarkdownImportApplying}
+                onApply={onApplyMarkdownImport}
+                onDismiss={onDismissMarkdownImport}
+                t={t}
+              />
+            ) : null}
 
-          {vaultImportReview ? (
-            <KnowledgeVaultImportReviewCard
-              review={vaultImportReview}
-              isApplying={isVaultImportApplying}
-              onApply={onApplyVaultImport}
-              onDismiss={onDismissVaultImport}
-              t={t}
-            />
-          ) : null}
+            {vaultImportReview ? (
+              <KnowledgeVaultImportReviewCard
+                review={vaultImportReview}
+                isApplying={isVaultImportApplying}
+                onApply={onApplyVaultImport}
+                onDismiss={onDismissVaultImport}
+                t={t}
+              />
+            ) : null}
 
-          <KnowledgeEditor
-            tier="knowledge_doc"
-            surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
-            value={value}
-            onChange={onChange}
-            placeholder={t("notes.knowledgePlaceholder")}
-            className="border-border/70 bg-card shadow-sm"
-            contentClassName="max-h-none min-h-[520px] px-6 py-5 [&_.ProseMirror]:min-h-[480px]"
-          />
+            {isFolderDocument ? (
+              <KnowledgeFolderOverview
+                folder={document}
+                items={activeDocumentChildren}
+                isCreating={isCreatingDocument}
+                onSelect={onSelectDocument}
+                onCreate={onCreateDocument}
+                t={t}
+              />
+            ) : (
+              <KnowledgeEditor
+                tier="knowledge_doc"
+                surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
+                value={value}
+                onChange={onChange}
+                placeholder={t("notes.knowledgePlaceholder")}
+                className="border-border/45 bg-background shadow-none"
+                contentClassName="max-h-none min-h-[640px] px-8 py-7 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[590px] [&_.ProseMirror]:max-w-[760px]"
+              />
+            )}
+          </div>
         </section>
 
-        <aside className="space-y-3">
-          <KnowledgeDocumentList
-            documents={documents}
-            activeDocumentId={activeDocumentId}
-            isCreating={isCreatingDocument}
-            onSelect={onSelectDocument}
-            onCreate={onCreateDocument}
-            onDelete={onDeleteDocument}
-            t={t}
-          />
-
+        <aside className="min-w-0 space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
             <div className="mb-2 flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -2017,12 +2067,14 @@ function KnowledgeHomePanel({
             t={t}
           />
 
-          <KnowledgeSummaryMemoryCard
-            document={document}
-            isCompressing={isSummaryCompressing}
-            onCompress={onCompressSummary}
-            t={t}
-          />
+          {!isFolderDocument ? (
+            <KnowledgeSummaryMemoryCard
+              document={document}
+              isCompressing={isSummaryCompressing}
+              onCompress={onCompressSummary}
+              t={t}
+            />
+          ) : null}
 
           <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
@@ -2389,10 +2441,26 @@ function knowledgeDocumentTypeLabel(
   if (document.type === "review") return t("notes.knowledgeDocumentReview");
   if (document.type === "summary") return t("notes.knowledgeDocumentSummary");
   if (document.type === "highlight_note") return t("notes.knowledgeDocumentHighlight");
+  if (document.type === "folder") return t("notes.knowledgeDocumentFolder");
   return t("notes.knowledgeDocumentNote");
 }
 
-function KnowledgeDocumentList({
+function knowledgeDocumentSearchText(
+  document: KnowledgeDocument,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return [
+    document.title,
+    knowledgeDocumentTypeLabel(document, t),
+    document.excerpt ?? "",
+    document.contentMd,
+    ...document.tags,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function KnowledgeDocumentExplorer({
   documents,
   activeDocumentId,
   isCreating,
@@ -2405,135 +2473,334 @@ function KnowledgeDocumentList({
   activeDocumentId: string | null;
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
-  onCreate: (type?: CreatableKnowledgeDocumentType) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [query, setQuery] = useState("");
-  const visibleDocuments = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return documents;
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
+  const tree = useMemo(
+    () => buildKnowledgeDocumentTree(documents, homeDocumentId),
+    [documents, homeDocumentId],
+  );
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? null;
+  const activeCreateParentId =
+    activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
+  const normalizedQuery = query.trim().toLowerCase();
+  const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
+  const visibleSearchNodes = useMemo(() => {
+    if (!normalizedQuery) return [];
+    return flatNodes.filter((node) =>
+      knowledgeDocumentSearchText(node.document, t).includes(normalizedQuery),
+    );
+  }, [flatNodes, normalizedQuery, t]);
 
-    return documents.filter((document) => {
-      const haystack = [
-        document.title,
-        knowledgeDocumentTypeLabel(document, t),
-        document.excerpt ?? "",
-        document.contentMd,
-        ...document.tags,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(normalizedQuery);
+  useEffect(() => {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      for (const document of documents) {
+        if (document.type === "folder") next.add(document.id);
+      }
+
+      let parentId = activeDocument?.parentId;
+      while (parentId) {
+        next.add(parentId);
+        parentId = documents.find((document) => document.id === parentId)?.parentId;
+      }
+
+      return next;
     });
-  }, [documents, query, t]);
+  }, [activeDocument?.parentId, documents]);
 
-  return (
-    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+  const toggleFolder = (id: string) => {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderNode = (node: KnowledgeDocumentTreeNode): ReactNode => {
+    const document = node.document;
+    const isFolder = document.type === "folder";
+    const isExpanded = expandedFolderIds.has(document.id);
+    const isActive = document.id === activeDocumentId;
+    const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
+    const childCount = childCountByParentId.get(document.id) ?? 0;
+    const canDelete =
+      canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
+    const Icon = isFolder ? (isExpanded ? FolderOpen : Folder) : FileText;
+
+    return (
+      <div key={document.id}>
+        <div
+          className={cn(
+            "group flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
+            isActive
+              ? "border-primary/25 bg-primary/10 text-primary"
+              : "text-foreground hover:border-border/55 hover:bg-muted/45",
+          )}
+          style={{ paddingLeft: `${8 + Math.min(node.depth, 7) * 14}px` }}
+        >
+          {isFolder ? (
             <button
               type="button"
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isCreating}
-              aria-label={t("notes.knowledgeNewDocument")}
-              title={t("notes.knowledgeNewDocument")}
+              className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleFolder(document.id);
+              }}
+              aria-label={
+                isExpanded ? t("notes.knowledgeCollapseFolder") : t("notes.knowledgeExpandFolder")
+              }
+              title={
+                isExpanded ? t("notes.knowledgeCollapseFolder") : t("notes.knowledgeExpandFolder")
+              }
             >
-              <Plus className="h-3.5 w-3.5" />
+              <ChevronRight
+                className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-90")}
+              />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onCreate("standalone_note")}>
-              <FileText className="mr-2 h-4 w-4" />
-              {t("notes.knowledgeNewNote")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onCreate("review")}>
-              <NotebookPen className="mr-2 h-4 w-4" />
-              {t("notes.knowledgeNewReview")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onCreate("summary")}>
-              <Sparkles className="mr-2 h-4 w-4" />
-              {t("notes.knowledgeNewSummary")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          ) : (
+            <span className="h-6 w-5 shrink-0" />
+          )}
+
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
+            onClick={() => onSelect(document)}
+          >
+            <Icon
+              className={cn(
+                "h-3.5 w-3.5 shrink-0",
+                isActive
+                  ? "text-primary"
+                  : isFolder
+                    ? "text-foreground/75"
+                    : "text-muted-foreground",
+              )}
+            />
+            <span className="min-w-0 flex-1">
+              <span
+                className={cn(
+                  "block truncate text-xs font-medium",
+                  isActive ? "text-primary" : "text-foreground",
+                )}
+              >
+                {title}
+              </span>
+              {!isFolder ? (
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {knowledgeDocumentTypeLabel(document, t)}
+                </span>
+              ) : null}
+            </span>
+            {isFolder ? (
+              <span className="shrink-0 text-[10px] text-muted-foreground">{childCount}</span>
+            ) : null}
+          </button>
+
+          {canDelete ? (
+            <button
+              type="button"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+              onClick={() => onDelete(document)}
+              aria-label={t("notes.knowledgeDeleteDocument")}
+              title={t("notes.knowledgeDeleteDocument")}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <span className="h-6 w-6 shrink-0" />
+          )}
+        </div>
+        {isFolder && isExpanded && node.children.length > 0
+          ? node.children.map((child) => renderNode(child))
+          : null}
+      </div>
+    );
+  };
+
+  return (
+    <aside className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-card shadow-sm">
+      <div className="border-b border-border/50 bg-background/65 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {t("notes.knowledgeExplorerHint")}
+            </p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isCreating}
+                aria-label={t("notes.knowledgeNewDocument")}
+                title={t("notes.knowledgeNewDocument")}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onCreate("folder", activeCreateParentId)}>
+                <Folder className="mr-2 h-4 w-4" />
+                {t("notes.knowledgeNewFolder")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onCreate("standalone_note", activeCreateParentId)}>
+                <FileText className="mr-2 h-4 w-4" />
+                {t("notes.knowledgeNewNote")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onCreate("review", activeCreateParentId)}>
+                <NotebookPen className="mr-2 h-4 w-4" />
+                {t("notes.knowledgeNewReview")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onCreate("summary", activeCreateParentId)}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {t("notes.knowledgeNewSummary")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("notes.knowledgeDocumentSearchPlaceholder")}
+            className="h-8 border-border/55 bg-card pl-8 text-xs"
+          />
+        </div>
       </div>
 
-      <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("notes.knowledgeDocumentSearchPlaceholder")}
-          className="h-7 pl-7 text-xs"
-        />
-      </div>
-
-      <div className="space-y-1">
-        {visibleDocuments.length === 0 ? (
+      <div className="max-h-[calc(100vh-13rem)] space-y-0.5 overflow-y-auto p-2">
+        {normalizedQuery ? (
+          visibleSearchNodes.length === 0 ? (
+            <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
+              {t("notes.knowledgeNoDocumentResults")}
+            </p>
+          ) : (
+            visibleSearchNodes.map((node) => renderNode({ ...node, depth: 0 }))
+          )
+        ) : tree.roots.length === 0 ? (
           <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
             {t("notes.knowledgeNoDocumentResults")}
           </p>
-        ) : null}
-        {visibleDocuments.map((document) => {
-          const isActive = document.id === activeDocumentId;
-          const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
-          const canDelete = canDeleteKnowledgeDocument(document);
+        ) : (
+          tree.roots.map((node) => renderNode(node))
+        )}
+      </div>
+    </aside>
+  );
+}
 
-          return (
-            <div
-              key={document.id}
-              className={cn(
-                "group flex w-full items-stretch rounded-md border transition-colors",
-                isActive
-                  ? "border-primary/30 bg-primary/10"
-                  : "border-transparent hover:border-border/60 hover:bg-muted/45",
-              )}
-            >
+function KnowledgeFolderOverview({
+  folder,
+  items,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+}: {
+  folder: KnowledgeDocument;
+  items: KnowledgeDocument[];
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
+
+  return (
+    <div className="min-h-[640px] rounded-lg border border-border/45 bg-background px-6 py-5">
+      <div className="mb-5 flex items-start justify-between gap-4 border-b border-border/45 pb-4">
+        <div className="min-w-0">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <FolderOpen className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-foreground">
+            {folder.title || t("notes.knowledgeUntitledDocument")}
+          </p>
+          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+            {t("notes.knowledgeFolderDescription")}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isCreating}
+            onClick={() => onCreate("folder", folder.id)}
+          >
+            <Folder className="mr-2 h-3.5 w-3.5" />
+            {t("notes.knowledgeNewFolder")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isCreating}
+            onClick={() => onCreate("standalone_note", folder.id)}
+          >
+            <FileText className="mr-2 h-3.5 w-3.5" />
+            {t("notes.knowledgeNewNote")}
+          </Button>
+        </div>
+      </div>
+
+      {orderedChildren.length === 0 ? (
+        <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20 px-6 py-10 text-center">
+          <div className="max-w-sm">
+            <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {t("notes.knowledgeFolderEmptyHint")}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {orderedChildren.map((document) => {
+            const isFolder = document.type === "folder";
+            const Icon = isFolder ? Folder : FileText;
+            return (
               <button
+                key={document.id}
                 type="button"
-                className="min-w-0 flex-1 px-2.5 py-2 text-left"
+                className="flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-colors hover:border-border/60 hover:bg-muted/35"
                 onClick={() => onSelect(document)}
               >
-                <div className="flex items-start gap-2">
-                  <FileText
-                    className={cn(
-                      "mt-0.5 h-3.5 w-3.5 shrink-0",
-                      isActive ? "text-primary" : "text-muted-foreground",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={cn(
-                        "truncate text-xs font-medium",
-                        isActive ? "text-primary" : "text-foreground",
-                      )}
-                    >
-                      {title}
-                    </p>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {knowledgeDocumentTypeLabel(document, t)}
-                    </p>
-                  </div>
-                </div>
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isFolder ? "text-foreground/70" : "text-muted-foreground",
+                  )}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {document.title || t("notes.knowledgeUntitledDocument")}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    {knowledgeDocumentTypeLabel(document, t)}
+                  </span>
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
-              {canDelete ? (
-                <button
-                  type="button"
-                  className="my-1 mr-1 flex w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-                  onClick={() => onDelete(document)}
-                  aria-label={t("notes.knowledgeDeleteDocument")}
-                  title={t("notes.knowledgeDeleteDocument")}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

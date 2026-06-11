@@ -322,6 +322,69 @@ describe("Knowledge markdown importer", () => {
     ]);
   });
 
+  it("detects local and Obsidian edits as vault import conflicts", () => {
+    const exporter = new KnowledgeExporter();
+    const original = knowledgeDocument({ bookId: undefined, sourceKind: undefined });
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [original],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+
+    const obsidianContent = documentFile.content.replace(
+      "A durable idea.",
+      "A durable idea edited in Obsidian.",
+    );
+    const localVault = exporter.buildVaultPackage(
+      {
+        documents: [
+          knowledgeDocument({
+            bookId: undefined,
+            sourceKind: undefined,
+            contentJson: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "A durable idea edited in ReadAny." }],
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      {
+        exportedAt: 1700000300000,
+        previousManifest: vault.manifest,
+      },
+    );
+    const currentFile = localVault.files.find((file) => file.path === documentFile.path);
+    if (!currentFile) throw new Error("Expected current local document file");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: obsidianContent }],
+      currentFiles: [{ path: currentFile.path, content: currentFile.content }],
+    });
+
+    expect(plan.modified).toEqual([]);
+    expect(plan.conflicts).toEqual([
+      expect.objectContaining({
+        documentId: "doc-1",
+        path: documentFile.path,
+        status: "conflict",
+        previousHash: vault.manifest.documents["doc-1"].hash,
+        existingHash: expect.any(String),
+        currentHash: expect.any(String),
+        warnings: ["local_and_remote_modified"],
+      }),
+    ]);
+    expect(createKnowledgeVaultImportWriteProposals(plan)).toEqual([]);
+  });
+
   it("keeps unchanged manifest files out of the modified import list", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage({

@@ -47,7 +47,8 @@ export type KnowledgeVaultImportEntryStatus =
   | "unchanged"
   | "modified"
   | "missing"
-  | "modified_unreadable";
+  | "modified_unreadable"
+  | "conflict";
 
 export interface KnowledgeVaultImportEntry {
   documentId: string;
@@ -55,6 +56,7 @@ export interface KnowledgeVaultImportEntry {
   status: KnowledgeVaultImportEntryStatus;
   previousHash: string;
   existingHash?: string;
+  currentHash?: string;
   draft?: KnowledgeImportDocumentDraft;
   warnings: string[];
 }
@@ -65,11 +67,13 @@ export interface KnowledgeVaultImportPlan {
   modified: KnowledgeVaultImportEntry[];
   missing: KnowledgeVaultImportEntry[];
   unreadable: KnowledgeVaultImportEntry[];
+  conflicts: KnowledgeVaultImportEntry[];
 }
 
 export interface KnowledgeVaultImportPlanInput {
   manifest: KnowledgeExportManifest;
   files: KnowledgeExportObservedFile[];
+  currentFiles?: KnowledgeExportObservedFile[];
 }
 
 export interface KnowledgeImportProposalOptions {
@@ -329,11 +333,18 @@ export function createKnowledgeVaultImportPlan(
   input: KnowledgeVaultImportPlanInput,
 ): KnowledgeVaultImportPlan {
   const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
+  const currentHashesByPath = new Map(
+    (input.currentFiles ?? [])
+      .map((file) => [normalizePath(file.path), observedFileHash(file)] as const)
+      .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+  );
   const entries: KnowledgeVaultImportEntry[] = [];
 
   for (const [documentId, manifestDocument] of Object.entries(input.manifest.documents)) {
     const path = normalizePath(manifestDocument.path);
     const file = filesByPath.get(path);
+    const currentHash = currentHashesByPath.get(path);
+    const hasLocalChange = Boolean(currentHash && currentHash !== manifestDocument.hash);
 
     if (!file) {
       entries.push({
@@ -341,6 +352,7 @@ export function createKnowledgeVaultImportPlan(
         path,
         status: "missing",
         previousHash: manifestDocument.hash,
+        currentHash,
         warnings: ["manifest_file_missing"],
       });
       continue;
@@ -354,7 +366,34 @@ export function createKnowledgeVaultImportPlan(
         status: "unchanged",
         previousHash: manifestDocument.hash,
         existingHash,
+        currentHash,
         warnings: [],
+      });
+      continue;
+    }
+
+    if (existingHash && hasLocalChange && existingHash === currentHash) {
+      entries.push({
+        documentId,
+        path,
+        status: "unchanged",
+        previousHash: manifestDocument.hash,
+        existingHash,
+        currentHash,
+        warnings: ["remote_matches_current_local"],
+      });
+      continue;
+    }
+
+    if (existingHash && hasLocalChange) {
+      entries.push({
+        documentId,
+        path,
+        status: "conflict",
+        previousHash: manifestDocument.hash,
+        existingHash,
+        currentHash,
+        warnings: ["local_and_remote_modified"],
       });
       continue;
     }
@@ -366,6 +405,7 @@ export function createKnowledgeVaultImportPlan(
         status: "modified_unreadable",
         previousHash: manifestDocument.hash,
         existingHash,
+        currentHash,
         warnings: ["modified_file_content_missing"],
       });
       continue;
@@ -393,6 +433,7 @@ export function createKnowledgeVaultImportPlan(
       status: "modified",
       previousHash: manifestDocument.hash,
       existingHash: createKnowledgeExportHash(file.content),
+      currentHash,
       draft,
       warnings,
     });
@@ -404,6 +445,7 @@ export function createKnowledgeVaultImportPlan(
     modified: entries.filter((entry) => entry.status === "modified"),
     missing: entries.filter((entry) => entry.status === "missing"),
     unreadable: entries.filter((entry) => entry.status === "modified_unreadable"),
+    conflicts: entries.filter((entry) => entry.status === "conflict"),
   };
 }
 

@@ -1324,10 +1324,36 @@ export function NotesPage() {
         selected,
         Object.values(manifest.documents).map((entry) => entry.path),
       );
-      const plan = createKnowledgeVaultImportPlan({ manifest, files });
+      const liveDocument: KnowledgeDocument | null = knowledgeHome
+        ? {
+            ...knowledgeHome,
+            title: knowledgeTitle.trim() || knowledgeHome.title,
+            contentJson: knowledgeValue.contentJson,
+            contentMd: knowledgeValue.contentMd,
+            excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+            tags: normalizeKnowledgeTags(knowledgeTags),
+            updatedAt: Date.now(),
+          }
+        : null;
+      const currentFiles = liveDocument
+        ? knowledgeExporter.buildVaultPackage(
+            await collectKnowledgeVaultInput(liveDocument, books),
+            {
+              format: "obsidian",
+              rootDir: "",
+              previousManifest: manifest,
+            },
+          ).files
+        : [];
+      const plan = createKnowledgeVaultImportPlan({ manifest, files, currentFiles });
       const proposals = createKnowledgeVaultImportWriteProposals(plan);
 
-      if (plan.modified.length === 0 && plan.missing.length === 0 && plan.unreadable.length === 0) {
+      if (
+        plan.modified.length === 0 &&
+        plan.missing.length === 0 &&
+        plan.unreadable.length === 0 &&
+        plan.conflicts.length === 0
+      ) {
         toast.success(t("notes.knowledgeVaultImportUpToDate"));
         return;
       }
@@ -2737,7 +2763,11 @@ function KnowledgeVaultImportReviewCard({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const visibleModified = review.plan.modified.slice(0, 4);
-  const issueEntries = [...review.plan.missing, ...review.plan.unreadable];
+  const issueEntries = [
+    ...review.plan.conflicts,
+    ...review.plan.missing,
+    ...review.plan.unreadable,
+  ];
   const visibleIssues = issueEntries.slice(0, 3);
   const hiddenModifiedCount = Math.max(0, review.plan.modified.length - visibleModified.length);
   const hiddenIssueCount = Math.max(0, issueEntries.length - visibleIssues.length);
@@ -2769,13 +2799,21 @@ function KnowledgeVaultImportReviewCard({
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-2">
             <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
               <p className="text-base font-semibold text-foreground">
                 {review.plan.modified.length}
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {t("notes.knowledgeVaultImportModified")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
+              <p className="text-base font-semibold text-foreground">
+                {review.plan.conflicts.length}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("notes.knowledgeVaultImportConflicts")}
               </p>
             </div>
             <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
@@ -2845,12 +2883,21 @@ function KnowledgeVaultImportReviewCard({
                 </div>
                 <div className="space-y-1">
                   {visibleIssues.map((entry) => (
-                    <p
+                    <div
                       key={`${entry.status}:${entry.path}`}
-                      className="truncate font-mono text-[11px] text-foreground/80"
+                      className="flex min-w-0 items-center justify-between gap-2"
                     >
-                      {entry.path}
-                    </p>
+                      <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+                        {entry.path}
+                      </p>
+                      <span className="shrink-0 rounded-md bg-background/75 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        {entry.status === "conflict"
+                          ? t("notes.knowledgeVaultImportConflictIssue")
+                          : entry.status === "missing"
+                            ? t("notes.knowledgeVaultImportMissingIssue")
+                            : t("notes.knowledgeVaultImportUnreadableIssue")}
+                      </span>
+                    </div>
                   ))}
                   {hiddenIssueCount > 0 ? (
                     <p className="text-[11px] text-muted-foreground">
@@ -2864,9 +2911,11 @@ function KnowledgeVaultImportReviewCard({
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <p className="min-w-0 text-xs text-muted-foreground">
-              {review.proposals.length > 0
-                ? t("notes.knowledgeVaultImportSafeHint")
-                : t("notes.knowledgeVaultImportNoApplicableChanges")}
+              {review.plan.conflicts.length > 0
+                ? t("notes.knowledgeVaultImportConflictSafeHint")
+                : review.proposals.length > 0
+                  ? t("notes.knowledgeVaultImportSafeHint")
+                  : t("notes.knowledgeVaultImportNoApplicableChanges")}
             </p>
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>

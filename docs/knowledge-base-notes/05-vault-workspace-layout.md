@@ -22,6 +22,20 @@ The user should always understand three things:
 The interface must avoid the old "form full of fields" feeling. A knowledge
 document is a document, not a settings panel.
 
+## Non-Negotiable Product Shape
+
+These decisions are part of the feature contract, not implementation details:
+
+- The knowledge base is a vault. A flat document list with filters is not enough.
+- The folder tree is spatial navigation, like Obsidian. Tags and groups are
+  secondary organization layers.
+- The editor is a WYSIWYG writing canvas. Users should not feel like they are
+  editing Markdown, JSON, or a large textarea.
+- Desktop and mobile should share the same information model, but not the same
+  layout.
+- The workspace must look like a focused reader/writer tool, not a dashboard,
+  settings page, or note-card wall.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.
@@ -49,6 +63,39 @@ The tree should support:
 - Rename inline where it feels natural.
 - Context actions without overwhelming every row.
 
+### Obsidian-Like Hierarchy Expectations
+
+Users should be able to build a mental map of their book knowledge:
+
+```text
+Book Knowledge Vault
+├── Book Home
+├── Chapter Notes
+│   ├── Chapter 01.md
+│   ├── Chapter 02.md
+│   └── Themes
+│       └── Fate and Choice.md
+├── Characters
+│   ├── Main Characters.md
+│   └── Relationships.md
+└── Reading Reviews
+    └── First Read.md
+```
+
+Implications:
+
+- The breadcrumb, tree indentation, export path, and sync path must all describe
+  the same hierarchy.
+- Creating a document while a folder is selected creates it inside that folder.
+- Moving a folder moves the whole subtree and must update visible paths
+  immediately.
+- Duplicate names are allowed in different folders, but not ambiguous inside the
+  same folder unless the UI clearly disambiguates them.
+- Deleted or missing parents after sync are shown in an orphan area instead of
+  silently flattening the document.
+- Obsidian export should preserve this tree as real folders and Markdown files,
+  not only as frontmatter fields.
+
 ## WYSIWYG Contract
 
 The primary editing surface must be WYSIWYG. Markdown is an export and
@@ -69,9 +116,35 @@ Required behavior:
 Do not expose arbitrary font, color, layout, raw HTML, or iframe editing in v1.
 Those make mobile editing, sync, Obsidian export, and AI retrieval unreliable.
 
+### WYSIWYG Interaction Expectations
+
+The editor should behave like a modern document editor:
+
+- Click in the body and type directly.
+- Use a small floating toolbar for selected text.
+- Use a slash menu or insert button for blocks: heading, quote, list, divider,
+  image, source card, AI card, review card, callout, and custom ReadAny cards.
+- Drag or use block handles for block reordering on desktop when feasible.
+- Mobile uses a keyboard-aware insert toolbar and focused bottom sheets for
+  block configuration.
+- Markdown shortcuts are welcome, but they transform into rich blocks
+  immediately.
+- Markdown source view can exist later as an advanced/export/debug mode, never
+  as the default authoring experience.
+
 ## Desktop Workspace
 
 Desktop should use a calm three-zone workspace.
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Book switcher / vault title / search / compact actions                      │
+├───────────────┬───────────────────────────────────────┬─────────────────────┤
+│ Vault tree    │ WYSIWYG document canvas               │ Context panel       │
+│ folders/docs  │ breadcrumb, title, body, blocks        │ sources, backlinks  │
+│ search/move   │ folder overview when folder selected   │ outline, AI memory  │
+└───────────────┴───────────────────────────────────────┴─────────────────────┘
+```
 
 ### Left: Vault Navigator
 
@@ -94,6 +167,9 @@ Visual direction:
 - Folders show child counts only when useful.
 - Row actions appear on hover/focus.
 - No giant hero card above the tree.
+- Width should be stable, roughly 240-300px, with graceful collapse on small
+  desktop windows.
+- The tree is the primary navigation, not a side decoration.
 
 ### Center: Document Canvas
 
@@ -118,6 +194,10 @@ Visual direction:
 - Use CSS variables from the app theme for all colors.
 - Avoid marketing-style hero sections, large metrics blocks, and decorative
   panels inside the writing path.
+- Empty documents should show one elegant writing placeholder and focused insert
+  affordances, not a stack of setup cards.
+- Folder nodes should show a compact folder overview with child rows; they must
+  not show a blank editor pretending to be a note.
 
 ### Right: Context Panel
 
@@ -137,10 +217,28 @@ Rules:
 - The right panel is supportive and collapsible.
 - It should not steal vertical space from the document.
 - On smaller desktop widths, collapse it behind a context button.
+- The right panel should feel like an inspector, not another feed. Keep it
+  quiet, scannable, and secondary to the document.
+
+### Desktop Layout Anti-Patterns
+
+Do not ship a desktop knowledge layout that:
+
+- Starts with a large dashboard/header card instead of the vault tree and
+  current document.
+- Shows every document as a card grid while hiding hierarchy.
+- Puts the editor inside multiple nested cards.
+- Treats title, tags, source, and body as a long settings form.
+- Uses oversized empty states that push the editor below the fold.
+- Makes the right context panel visually heavier than the writing canvas.
 
 ## Mobile Workspace
 
 Mobile should not mirror the desktop grid. It needs a native, focused flow.
+
+```text
+Vault Browser -> Document Editor -> Context / Insert Sheets
+```
 
 ### Screen 1: Vault Browser
 
@@ -154,6 +252,7 @@ The browser screen contains:
 - Native tree/list with folder indentation.
 - Create button.
 - Folder overview and children.
+- Recently edited documents can be a small section, but never replace the tree.
 
 Visual direction:
 
@@ -161,6 +260,8 @@ Visual direction:
 - Avoid stacking explorer, editor, relations, and AI cards in one long scroll.
 - Use rows and grouped sections, not a dashboard.
 - Create/move actions use bottom sheets.
+- The current path should be visible and horizontally scrollable when long.
+- Folder rows open into the folder; document rows open into the editor.
 
 ### Screen 2: Document Editor
 
@@ -181,6 +282,21 @@ Rules:
 - Title editing can be inline, but long-form body editing owns most of the
   viewport.
 - Folder nodes open a folder browser, not an empty editor.
+- Context, tags, sources, backlinks, and AI actions open from a compact header
+  action or bottom sheet. They should not sit above the writing surface as a
+  permanent block.
+
+### Mobile Layout Anti-Patterns
+
+Do not ship a mobile knowledge layout that:
+
+- Stacks vault navigation, document body, sources, AI, tags, and stats in one
+  long scroll.
+- Uses desktop-like side panels squeezed into mobile.
+- Forces long-form body editing through a tiny modal input.
+- Lets the keyboard cover the editor toolbar or the active line.
+- Hides the user's folder path while they are browsing.
+- Uses decorative hero/metric cards before the user can reach their documents.
 
 ## Folder View
 
@@ -198,6 +314,40 @@ It should not show:
 - A giant decorative icon block.
 - Blank editor space.
 - Heavy cards that make the folder feel like a dashboard.
+
+## Layout Quality Bar
+
+The knowledge workspace should feel closer to a quiet writing app with a
+powerful vault sidebar than to a CRUD admin page.
+
+Quality requirements:
+
+- The first screen must make hierarchy obvious within two seconds.
+- The current document title and body must be visually dominant.
+- The editor body should preserve readable line length and calm whitespace.
+- Navigation density should be high enough for real libraries, but never cramped.
+- Metadata appears as supporting context, not as the main content.
+- Every editable affordance should be discoverable through placement, hover,
+  focus, or a small icon button with accessible label.
+- Visual states must be clear: active folder, active document, unsaved/synced,
+  collapsed, orphaned, missing attachment, and conflict.
+- Desktop should support keyboard-heavy users; mobile should support thumb-first
+  navigation and keyboard-aware editing.
+
+## Implementation Order for Layout
+
+Build the workspace in this order so the feature does not drift back into a
+flat notes page:
+
+1. Lock the data hierarchy: folder nodes, document nodes, path/breadcrumb,
+   move/rename/delete, orphan handling, and export path projection.
+2. Build the desktop vault shell: left tree, center canvas, right inspector,
+   responsive collapse.
+3. Build the mobile vault browser and focused editor as separate screens.
+4. Replace form-like editing with Tiptap WYSIWYG block editing and contextual
+   toolbars.
+5. Add custom ReadAny cards and attachment rendering inside the editor canvas.
+6. Add Obsidian export/import polish once hierarchy and editor state are stable.
 
 ## Visual Principles
 

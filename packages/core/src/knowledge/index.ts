@@ -10,6 +10,17 @@ export type {
   TiptapNode,
 } from "./editor-projection";
 export {
+  READANY_ATTACHMENT_URI_PREFIX,
+  basenameFromPath,
+  createKnowledgeAttachmentHash,
+  createKnowledgeAttachmentUri,
+  extensionFromFileName,
+  inferKnowledgeAttachmentKind,
+  inferKnowledgeAttachmentMimeType,
+  parseKnowledgeAttachmentUri,
+  sanitizeKnowledgeAttachmentFileName,
+} from "./attachments";
+export {
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceForDocumentType,

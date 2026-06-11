@@ -346,6 +346,47 @@ describe("KnowledgeExporter", () => {
     });
   });
 
+  it("rewrites inline attachment images to Obsidian asset paths", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [
+        knowledgeDocument({
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "image",
+                attrs: {
+                  attachmentId: "att-1",
+                  src: "asset://localhost/local/cover.png",
+                  alt: "Cover",
+                },
+              },
+            ],
+          },
+        }),
+      ],
+      attachments: [
+        {
+          id: "att-1",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "cover.png",
+          mimeType: "image/png",
+          localPath: "local/cover.png",
+          size: 42,
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ],
+    });
+
+    const document = vault.files.find((file) => file.path.endsWith("README.md"));
+    expect(document?.content).toContain("![Cover](../../Assets/cover.png)");
+    expect(document?.content).not.toContain("asset://localhost");
+  });
+
   it("keeps duplicate attachment paths unique and synced with the manifest", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage({

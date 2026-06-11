@@ -1,4 +1,8 @@
-import { KnowledgeEditor, type KnowledgeEditorValue } from "@/components/knowledge/KnowledgeEditor";
+import {
+  KnowledgeEditor,
+  type KnowledgeEditorValue,
+  type KnowledgeImageInsertAttrs,
+} from "@/components/knowledge/KnowledgeEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +30,7 @@ import {
   getKnowledgeLinks,
   updateKnowledgeDocument,
 } from "@/lib/db/database";
+import { pickAndPersistKnowledgeImageAttachment } from "@/lib/knowledge/attachment-assets";
 import { openDesktopBook } from "@/lib/library/open-book";
 import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
@@ -109,6 +114,7 @@ import {
 import {
   type ImgHTMLAttributes,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -991,6 +997,22 @@ export function NotesPage() {
     }
   };
 
+  const handlePickKnowledgeImageAttachment = useCallback(
+    async (document: KnowledgeDocument): Promise<KnowledgeImageInsertAttrs | null> => {
+      try {
+        const result = await pickAndPersistKnowledgeImageAttachment(document.id);
+        if (!result) return null;
+        toast.success(t("notes.knowledgeAttachmentAdded", { name: result.attachment.fileName }));
+        return result.attrs;
+      } catch (error) {
+        console.error("[Notes] Failed to add knowledge image attachment:", error);
+        toast.error(t("notes.knowledgeAttachmentAddFailed"));
+        return null;
+      }
+    },
+    [t],
+  );
+
   const handleCompressKnowledgeSummary = async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1767,6 +1789,7 @@ export function NotesPage() {
                 onCreateDocument={handleCreateKnowledgeDocument}
                 onDeleteDocument={handleDeleteKnowledgeDocument}
                 onMoveDocument={handleMoveKnowledgeDocument}
+                onPickImageAttachment={handlePickKnowledgeImageAttachment}
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
                 onImportMarkdown={handleKnowledgeMarkdownImport}
@@ -1885,6 +1908,7 @@ interface KnowledgeHomePanelProps {
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onPickImageAttachment: (document: KnowledgeDocument) => Promise<KnowledgeImageInsertAttrs | null>;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onImportMarkdown: () => void;
@@ -1930,6 +1954,7 @@ function KnowledgeHomePanel({
   onCreateDocument,
   onDeleteDocument,
   onMoveDocument,
+  onPickImageAttachment,
   onCompressSummary,
   onExport,
   onImportMarkdown,
@@ -2081,6 +2106,7 @@ function KnowledgeHomePanel({
                 surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
                 value={value}
                 onChange={onChange}
+                onPickLocalImage={() => onPickImageAttachment(document)}
                 placeholder={t("notes.knowledgePlaceholder")}
                 className="border-border/35 bg-background shadow-none"
                 contentClassName="max-h-none min-h-[650px] px-8 py-7 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[600px] [&_.ProseMirror]:max-w-[780px]"

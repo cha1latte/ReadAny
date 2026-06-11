@@ -54,6 +54,7 @@ describe("editor projection", () => {
         },
         { type: "horizontalRule" },
         { type: "image", attrs: { src: "cover.png", alt: "Cover" } },
+        { type: "image", attrs: { attachmentId: "att-1", src: "asset://cover.png", alt: "Local" } },
       ],
     });
 
@@ -66,8 +67,29 @@ describe("editor projection", () => {
         "- [x] Review",
         "---",
         "![Cover](cover.png)",
+        "![Local](readany-attachment://att-1)",
       ].join("\n\n"),
     );
+  });
+
+  it("allows export callers to resolve image attachment targets", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "image",
+            attrs: { attachmentId: "att-1", src: "asset://cover.png", alt: "Cover" },
+          },
+        ],
+      },
+      {
+        resolveImageSrc: (attrs) =>
+          attrs.attachmentId === "att-1" ? "../Assets/cover.png" : undefined,
+      },
+    );
+
+    expect(markdown).toBe("![Cover](../Assets/cover.png)");
   });
 
   it("renders ReadAny cards as Obsidian-friendly callouts by default", () => {

@@ -1,5 +1,6 @@
 import type { JSONValue } from "../types";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
+import { createKnowledgeAttachmentUri, parseKnowledgeAttachmentUri } from "./attachments";
 import { type ReadAnyCardAttrs, renderReadAnyCardMarkdownFallback } from "./card-registry";
 export type { ReadAnyCardAttrs } from "./card-registry";
 
@@ -19,6 +20,8 @@ export interface TiptapNode {
 export interface MarkdownProjectionOptions {
   /** Preserve custom card metadata with fenced ReadAny blocks. */
   includeReadAnyCardMetadata?: boolean;
+  /** Resolve image targets for exports, attachments, and platform-specific rendering. */
+  resolveImageSrc?: (attrs: Record<string, unknown>, fallbackSrc: string) => string | undefined;
 }
 
 function isObject(value: JSONValue | unknown): value is Record<string, unknown> {
@@ -204,7 +207,12 @@ function renderBlock(
     case "image": {
       const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
-      return src ? `![${alt}](${src})` : "";
+      const attachmentId =
+        typeof node.attrs?.attachmentId === "string" ? node.attrs.attachmentId : "";
+      const resolvedSrc =
+        options.resolveImageSrc?.(node.attrs ?? {}, src) ||
+        (attachmentId ? createKnowledgeAttachmentUri(attachmentId) : src);
+      return resolvedSrc ? `![${alt}](${resolvedSrc})` : "";
     }
     case "readanyCard":
       return renderReadAnyCard(node, options);
@@ -448,11 +456,13 @@ export function markdownToBasicTiptap(markdown: string): TiptapNode {
 
     const image = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (image) {
+      const attachmentId = parseKnowledgeAttachmentUri(image[2]);
       return {
         type: "image",
         attrs: {
           alt: image[1],
           src: image[2],
+          ...(attachmentId ? { attachmentId } : {}),
         },
       };
     }

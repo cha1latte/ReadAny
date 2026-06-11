@@ -1,3 +1,4 @@
+import { createKnowledgeAttachmentUri } from "../knowledge/attachments";
 import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
 import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
 
@@ -215,10 +216,23 @@ function createContext(
   };
 }
 
-function documentBody(document: KnowledgeDocument, options: Required<KnowledgeExportOptions>) {
+function documentBody(
+  document: KnowledgeDocument,
+  context: ExportContext,
+  options: Required<KnowledgeExportOptions>,
+  documentFilePath?: string,
+) {
   return (
     renderKnowledgeJsonToMarkdown(document.contentJson, {
       includeReadAnyCardMetadata: options.includeReadAnyCardMetadata,
+      resolveImageSrc: (attrs, fallbackSrc) => {
+        if (!documentFilePath) return undefined;
+        const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId : "";
+        if (!attachmentId) return undefined;
+        const exportedPath = context.attachmentExportPathsById.get(attachmentId);
+        if (exportedPath) return relativeMarkdownPath(documentFilePath, exportedPath);
+        return fallbackSrc || createKnowledgeAttachmentUri(attachmentId);
+      },
     }) ||
     document.contentMd ||
     ""
@@ -356,7 +370,7 @@ function renderDocument(
   options: ResolvedKnowledgeExportOptions,
   path: string,
 ): string {
-  const body = documentBody(document, options);
+  const body = documentBody(document, context, options, path);
   const sections = [
     ...(options.format === "obsidian" ? renderFrontmatter(document, context) : []),
     `# ${document.title}`,

@@ -75,6 +75,14 @@ export interface KnowledgeEditorValue {
   plainText: string;
 }
 
+export interface KnowledgeImageInsertAttrs {
+  src: string;
+  alt?: string;
+  title?: string;
+  attachmentId?: string;
+  fileName?: string;
+}
+
 interface KnowledgeEditorProps {
   value: KnowledgeEditorValue;
   onChange: (value: KnowledgeEditorValue) => void;
@@ -84,6 +92,7 @@ interface KnowledgeEditorProps {
   autoFocus?: boolean;
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
+  onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
 }
 
 const cardIconMap = {
@@ -155,6 +164,8 @@ const KnowledgeImageExtension = Node.create({
       src: { default: null },
       alt: { default: null },
       title: { default: null },
+      attachmentId: { default: null },
+      fileName: { default: null },
     };
   },
 
@@ -186,12 +197,14 @@ export function KnowledgeEditor({
   autoFocus = false,
   tier = "knowledge_doc",
   surface,
+  onPickLocalImage,
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
   const [isImageInsertOpen, setIsImageInsertOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState("");
   const [imageAlt, setImageAlt] = useState("");
+  const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const imageSrcInputId = useId();
   const imageAltInputId = useId();
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
@@ -352,25 +365,49 @@ export function KnowledgeEditor({
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [canUse, editor, t]);
 
+  const insertImageAttrs = useCallback(
+    (attrs: KnowledgeImageInsertAttrs) => {
+      if (!editor || !canUse("image")) return;
+      const src = attrs.src.trim();
+      if (!src) return;
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "image",
+          attrs: {
+            src,
+            alt: attrs.alt?.trim() ?? "",
+            title: attrs.title?.trim() ?? "",
+            attachmentId: attrs.attachmentId?.trim() ?? "",
+            fileName: attrs.fileName?.trim() ?? "",
+          },
+        })
+        .run();
+      setImageSrc("");
+      setImageAlt("");
+      setIsImageInsertOpen(false);
+    },
+    [canUse, editor],
+  );
+
   const insertImage = useCallback(() => {
     if (!editor || !canUse("image")) return;
     const src = imageSrc.trim();
     if (!src) return;
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: "image",
-        attrs: {
-          src,
-          alt: imageAlt.trim(),
-        },
-      })
-      .run();
-    setImageSrc("");
-    setImageAlt("");
-    setIsImageInsertOpen(false);
-  }, [canUse, editor, imageAlt, imageSrc]);
+    insertImageAttrs({ src, alt: imageAlt });
+  }, [canUse, editor, imageAlt, imageSrc, insertImageAttrs]);
+
+  const pickLocalImage = useCallback(async () => {
+    if (!onPickLocalImage || isPickingLocalImage) return;
+    setIsPickingLocalImage(true);
+    try {
+      const attrs = await onPickLocalImage();
+      if (attrs) insertImageAttrs(attrs);
+    } finally {
+      setIsPickingLocalImage(false);
+    }
+  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage]);
 
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
@@ -593,6 +630,28 @@ export function KnowledgeEditor({
                   <div className="mb-2 text-xs font-medium text-popover-foreground">
                     {t("notes.knowledgeInsertImage")}
                   </div>
+                  {onPickLocalImage ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mb-2 flex h-8 w-full items-center justify-center gap-2 rounded-md border border-border/70 bg-muted/30 px-2 text-xs font-medium text-foreground transition-colors hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={pickLocalImage}
+                        disabled={isPickingLocalImage}
+                      >
+                        <ImagePlus className="h-3.5 w-3.5 text-primary" />
+                        {isPickingLocalImage
+                          ? t("notes.knowledgeAttachmentAdding")
+                          : t("notes.knowledgeInsertLocalImage")}
+                      </button>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="h-px flex-1 bg-border/60" />
+                        <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                          URL
+                        </span>
+                        <span className="h-px flex-1 bg-border/60" />
+                      </div>
+                    </>
+                  ) : null}
                   <label
                     htmlFor={imageSrcInputId}
                     className="mb-1 block text-[11px] font-medium text-muted-foreground"

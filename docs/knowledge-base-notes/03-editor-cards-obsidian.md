@@ -750,9 +750,10 @@ Required behavior:
   do not destroy the document.
 - Unsupported card versions must show readable fallback cards rather than raw
   JSON or stripped content.
-- URL images are a first step; local attachment upload must later connect to
-  `knowledge_attachments` and file sync before it is advertised as full asset
-  support.
+- URL images and desktop local image attachments are the first asset slice.
+  Mobile local attachment upload and cross-device file bytes still need to
+  connect to `knowledge_attachments` and file sync before this is advertised as
+  full asset support.
 
 Desktop:
 

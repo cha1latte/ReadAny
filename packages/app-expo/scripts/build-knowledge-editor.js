@@ -243,6 +243,8 @@ async function buildKnowledgeEditor() {
           src: { default: null },
           alt: { default: null },
           title: { default: null },
+          attachmentId: { default: null },
+          fileName: { default: null },
         };
       },
 
@@ -401,6 +403,9 @@ async function buildKnowledgeEditor() {
                 attrs: {
                   src: attrs.src.trim(),
                   alt: typeof attrs.alt === "string" ? attrs.alt.trim() : "",
+                  attachmentId:
+                    typeof attrs.attachmentId === "string" ? attrs.attachmentId.trim() : "",
+                  fileName: typeof attrs.fileName === "string" ? attrs.fileName.trim() : "",
                 },
               })
               .run();

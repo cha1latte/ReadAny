@@ -1,7 +1,11 @@
 import type { CreateKnowledgeDocumentInput } from "../db/database";
 import { createKnowledgeExcerpt, markdownToBasicTiptap } from "../knowledge";
 import type { JSONValue, KnowledgeDocumentType, KnowledgeSourceKind } from "../types";
-import { createKnowledgeExportHash } from "./knowledge-exporter";
+import {
+  type KnowledgeExportManifest,
+  type KnowledgeExportObservedFile,
+  createKnowledgeExportHash,
+} from "./knowledge-exporter";
 
 export interface KnowledgeMarkdownImportInput {
   path?: string;
@@ -33,6 +37,35 @@ export interface KnowledgeImportDocumentDraft {
   contentMd: string;
   draft: CreateKnowledgeDocumentInput;
   warnings: string[];
+}
+
+export type KnowledgeVaultImportEntryStatus =
+  | "unchanged"
+  | "modified"
+  | "missing"
+  | "modified_unreadable";
+
+export interface KnowledgeVaultImportEntry {
+  documentId: string;
+  path: string;
+  status: KnowledgeVaultImportEntryStatus;
+  previousHash: string;
+  existingHash?: string;
+  draft?: KnowledgeImportDocumentDraft;
+  warnings: string[];
+}
+
+export interface KnowledgeVaultImportPlan {
+  manifest: KnowledgeExportManifest;
+  entries: KnowledgeVaultImportEntry[];
+  modified: KnowledgeVaultImportEntry[];
+  missing: KnowledgeVaultImportEntry[];
+  unreadable: KnowledgeVaultImportEntry[];
+}
+
+export interface KnowledgeVaultImportPlanInput {
+  manifest: KnowledgeExportManifest;
+  files: KnowledgeExportObservedFile[];
 }
 
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
@@ -169,6 +202,13 @@ function fileTitle(path?: string): string | undefined {
   return fileName?.replace(/\.[^.]+$/, "").trim() || undefined;
 }
 
+function normalizePath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .replace(/\/+/g, "/");
+}
+
 function firstHeadingTitle(markdown: string): string | undefined {
   const match = markdown.match(/^#\s+(.+)$/m);
   return match?.[1]?.trim();
@@ -261,5 +301,93 @@ export function parseKnowledgeMarkdownDocument(
       sourceId,
     },
     warnings,
+  };
+}
+
+function observedFileHash(file: KnowledgeExportObservedFile): string | undefined {
+  if (file.hash) return file.hash;
+  if (typeof file.content === "string") return createKnowledgeExportHash(file.content);
+  return undefined;
+}
+
+export function createKnowledgeVaultImportPlan(
+  input: KnowledgeVaultImportPlanInput,
+): KnowledgeVaultImportPlan {
+  const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
+  const entries: KnowledgeVaultImportEntry[] = [];
+
+  for (const [documentId, manifestDocument] of Object.entries(input.manifest.documents)) {
+    const path = normalizePath(manifestDocument.path);
+    const file = filesByPath.get(path);
+
+    if (!file) {
+      entries.push({
+        documentId,
+        path,
+        status: "missing",
+        previousHash: manifestDocument.hash,
+        warnings: ["manifest_file_missing"],
+      });
+      continue;
+    }
+
+    const existingHash = observedFileHash(file);
+    if (existingHash === manifestDocument.hash) {
+      entries.push({
+        documentId,
+        path,
+        status: "unchanged",
+        previousHash: manifestDocument.hash,
+        existingHash,
+        warnings: [],
+      });
+      continue;
+    }
+
+    if (typeof file.content !== "string") {
+      entries.push({
+        documentId,
+        path,
+        status: "modified_unreadable",
+        previousHash: manifestDocument.hash,
+        existingHash,
+        warnings: ["modified_file_content_missing"],
+      });
+      continue;
+    }
+
+    const draft = parseKnowledgeMarkdownDocument({
+      path,
+      content: file.content,
+      defaultType: manifestDocument.type,
+      bookId: manifestDocument.bookId,
+    });
+    const warnings = [...draft.warnings];
+    if (!draft.draft.id) {
+      warnings.push("frontmatter_id_missing_using_manifest");
+      draft.draft.id = documentId;
+    }
+    draft.draft.type = draft.draft.type ?? manifestDocument.type;
+    draft.draft.bookId = draft.draft.bookId ?? manifestDocument.bookId;
+    draft.draft.sourceKind = draft.draft.sourceKind ?? manifestDocument.sourceKind;
+    draft.draft.sourceId = draft.draft.sourceId ?? manifestDocument.sourceId;
+
+    entries.push({
+      documentId,
+      path,
+      status: "modified",
+      previousHash: manifestDocument.hash,
+      existingHash: createKnowledgeExportHash(file.content),
+      draft,
+      warnings,
+    });
+  }
+
+  return {
+    manifest: input.manifest,
+    entries,
+    modified: entries.filter((entry) => entry.status === "modified"),
+    missing: entries.filter((entry) => entry.status === "missing"),
+    unreadable: entries.filter((entry) => entry.status === "modified_unreadable"),
   };
 }

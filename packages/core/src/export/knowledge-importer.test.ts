@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeDocument } from "../types";
 import { KnowledgeExporter } from "./knowledge-exporter";
-import { parseKnowledgeMarkdownDocument } from "./knowledge-importer";
+import {
+  createKnowledgeVaultImportPlan,
+  parseKnowledgeMarkdownDocument,
+} from "./knowledge-importer";
 
 function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
   return {
@@ -181,5 +184,99 @@ describe("Knowledge markdown importer", () => {
     expect(imported.draft.title).toBe("Untitled Note");
     expect(imported.draft.contentMd).toBe("A note without a heading.");
     expect(imported.draft.sourceKind).toBe("obsidian");
+  });
+
+  it("creates a vault import plan for modified manifest-tracked documents", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+    const editedContent = documentFile.content.replace(
+      "A durable idea.",
+      "A durable idea edited in Obsidian.",
+    );
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: editedContent }],
+    });
+
+    expect(plan.entries).toHaveLength(1);
+    expect(plan.missing).toEqual([]);
+    expect(plan.unreadable).toEqual([]);
+    expect(plan.modified).toHaveLength(1);
+    expect(plan.modified[0]).toMatchObject({
+      documentId: "doc-1",
+      path: documentFile.path,
+      status: "modified",
+      previousHash: vault.manifest.documents["doc-1"].hash,
+    });
+    expect(plan.modified[0].draft?.draft).toMatchObject({
+      id: "doc-1",
+      type: "book_home",
+      title: "Book Home",
+      contentMd: expect.stringContaining("edited in Obsidian"),
+    });
+  });
+
+  it("keeps unchanged manifest files out of the modified import list", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      documents: [knowledgeDocument({ bookId: undefined })],
+    });
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: documentFile.content }],
+    });
+
+    expect(plan.modified).toEqual([]);
+    expect(plan.entries).toEqual([
+      expect.objectContaining({
+        documentId: "doc-1",
+        status: "unchanged",
+        previousHash: vault.manifest.documents["doc-1"].hash,
+        existingHash: vault.manifest.documents["doc-1"].hash,
+      }),
+    ]);
+  });
+
+  it("reports missing and unreadable modified vault files", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      documents: [
+        knowledgeDocument({ id: "doc-missing", bookId: undefined }),
+        knowledgeDocument({ id: "doc-unreadable", bookId: undefined, title: "Unreadable" }),
+      ],
+    });
+    const unreadablePath = vault.manifest.documents["doc-unreadable"].path;
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: unreadablePath, hash: "fnv1a32:changed" }],
+    });
+
+    expect(plan.missing).toEqual([
+      expect.objectContaining({
+        documentId: "doc-missing",
+        status: "missing",
+        warnings: ["manifest_file_missing"],
+      }),
+    ]);
+    expect(plan.unreadable).toEqual([
+      expect.objectContaining({
+        documentId: "doc-unreadable",
+        status: "modified_unreadable",
+        existingHash: "fnv1a32:changed",
+        warnings: ["modified_file_content_missing"],
+      }),
+    ]);
   });
 });

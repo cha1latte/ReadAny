@@ -1,5 +1,9 @@
 import type { CreateKnowledgeDocumentInput } from "../db/database";
 import { createKnowledgeExcerpt, markdownToBasicTiptap } from "../knowledge";
+import type {
+  KnowledgeDocumentCreateProposal,
+  KnowledgeDocumentUpdateProposal,
+} from "../knowledge/proposals";
 import type { JSONValue, KnowledgeDocumentType, KnowledgeSourceKind } from "../types";
 import {
   type KnowledgeExportManifest,
@@ -67,6 +71,17 @@ export interface KnowledgeVaultImportPlanInput {
   manifest: KnowledgeExportManifest;
   files: KnowledgeExportObservedFile[];
 }
+
+export interface KnowledgeImportProposalOptions {
+  mode?: "create" | "update";
+  documentId?: string;
+  message?: string;
+  current?: KnowledgeDocumentUpdateProposal["current"];
+}
+
+export type KnowledgeImportWriteProposal =
+  | KnowledgeDocumentCreateProposal
+  | KnowledgeDocumentUpdateProposal;
 
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "book_home",
@@ -390,4 +405,103 @@ export function createKnowledgeVaultImportPlan(
     missing: entries.filter((entry) => entry.status === "missing"),
     unreadable: entries.filter((entry) => entry.status === "modified_unreadable"),
   };
+}
+
+function requireImportedContentJson(imported: KnowledgeImportDocumentDraft): JSONValue {
+  return imported.draft.contentJson ?? ({ type: "doc", content: [] } as unknown as JSONValue);
+}
+
+function createKnowledgeImportCreateProposal(
+  imported: KnowledgeImportDocumentDraft,
+  message?: string,
+): KnowledgeDocumentCreateProposal {
+  return {
+    success: true,
+    action: "create",
+    requiresConfirmation: true,
+    confirmationKind: "knowledge_document_create",
+    message: message ?? "Imported knowledge draft generated. No document has been saved.",
+    draft: {
+      ...imported.draft,
+      contentJson: requireImportedContentJson(imported),
+      contentMd: imported.contentMd,
+      tags: imported.draft.tags ?? [],
+      sourceKind: imported.draft.sourceKind ?? (imported.path ? "obsidian" : "external"),
+      sourceId: imported.draft.sourceId ?? imported.path,
+    },
+  };
+}
+
+function createKnowledgeImportUpdateProposal(
+  imported: KnowledgeImportDocumentDraft,
+  options: KnowledgeImportProposalOptions,
+): KnowledgeDocumentUpdateProposal {
+  const documentId = options.documentId ?? imported.draft.id;
+  if (!documentId) {
+    throw new Error("documentId is required to create a knowledge import update proposal");
+  }
+
+  const patch: KnowledgeDocumentUpdateProposal["patch"] = {
+    title: imported.draft.title ?? options.current?.title ?? "Imported Knowledge",
+    contentMd: imported.contentMd,
+    contentJson: requireImportedContentJson(imported),
+    excerpt: imported.draft.excerpt,
+    tags: imported.draft.tags ?? [],
+  };
+
+  const changedFields = ["title", "contentMd", "contentJson", "excerpt", "tags"].filter((field) => {
+    if (field === "title") return patch.title !== options.current?.title;
+    if (field === "tags") {
+      return JSON.stringify(patch.tags ?? []) !== JSON.stringify(options.current?.tags ?? []);
+    }
+    return true;
+  });
+
+  return {
+    success: true,
+    action: "update",
+    requiresConfirmation: true,
+    confirmationKind: "knowledge_document_update",
+    message:
+      options.message ??
+      "Imported knowledge update generated. The existing document has not been changed.",
+    documentId,
+    current: options.current,
+    patch,
+    changedFields,
+  };
+}
+
+export function createKnowledgeImportWriteProposal(
+  imported: KnowledgeImportDocumentDraft,
+  options: KnowledgeImportProposalOptions = {},
+): KnowledgeImportWriteProposal {
+  if (options.mode === "update" || options.documentId) {
+    return createKnowledgeImportUpdateProposal(imported, options);
+  }
+  return createKnowledgeImportCreateProposal(imported, options.message);
+}
+
+export function createKnowledgeVaultImportWriteProposals(
+  plan: KnowledgeVaultImportPlan,
+): KnowledgeDocumentUpdateProposal[] {
+  return plan.modified
+    .filter((entry): entry is KnowledgeVaultImportEntry & { draft: KnowledgeImportDocumentDraft } =>
+      Boolean(entry.draft),
+    )
+    .map((entry) => {
+      const manifestDocument = plan.manifest.documents[entry.documentId];
+      return createKnowledgeImportUpdateProposal(entry.draft, {
+        mode: "update",
+        documentId: entry.documentId,
+        message: `Imported changes from ${entry.path}. The knowledge document has not been changed.`,
+        current: {
+          id: entry.documentId,
+          bookId: manifestDocument?.bookId,
+          type: manifestDocument?.type,
+          title: manifestDocument?.title,
+          updatedAt: manifestDocument?.updatedAt,
+        },
+      });
+    });
 }

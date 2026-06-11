@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { KnowledgeDocument } from "../types";
 import { KnowledgeExporter } from "./knowledge-exporter";
 import {
+  createKnowledgeImportWriteProposal,
   createKnowledgeVaultImportPlan,
+  createKnowledgeVaultImportWriteProposals,
   parseKnowledgeMarkdownDocument,
 } from "./knowledge-importer";
 
@@ -186,6 +188,82 @@ describe("Knowledge markdown importer", () => {
     expect(imported.draft.sourceKind).toBe("obsidian");
   });
 
+  it("turns a single imported Markdown draft into a confirmation-required create proposal", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Vault/Ideas/Slow Reading.md",
+      content: "# Slow Reading\n\nRead slowly.",
+    });
+
+    const proposal = createKnowledgeImportWriteProposal(imported);
+
+    expect(proposal).toEqual({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      message: "Imported knowledge draft generated. No document has been saved.",
+      draft: expect.objectContaining({
+        type: "imported_markdown",
+        title: "Slow Reading",
+        contentMd: "Read slowly.",
+        tags: [],
+        sourceKind: "obsidian",
+        sourceId: "Vault/Ideas/Slow Reading.md",
+      }),
+    });
+  });
+
+  it("turns an imported ReadAny document into a confirmation-required update proposal", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      content: [
+        "---",
+        "type: readany-knowledge",
+        'id: "doc-1"',
+        'documentType: "standalone_note"',
+        'title: "Updated Note"',
+        "tags:",
+        '  - "reading"',
+        "---",
+        "# Updated Note",
+        "",
+        "Updated in Obsidian.",
+      ].join("\n"),
+    });
+
+    const proposal = createKnowledgeImportWriteProposal(imported, {
+      mode: "update",
+      current: {
+        id: "doc-1",
+        type: "standalone_note",
+        title: "Old Note",
+        tags: [],
+        updatedAt: 1000,
+      },
+    });
+
+    expect(proposal).toEqual({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      message: "Imported knowledge update generated. The existing document has not been changed.",
+      documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        type: "standalone_note",
+        title: "Old Note",
+        tags: [],
+        updatedAt: 1000,
+      },
+      patch: expect.objectContaining({
+        title: "Updated Note",
+        contentMd: "Updated in Obsidian.",
+        tags: ["reading"],
+      }),
+      changedFields: ["title", "contentMd", "contentJson", "excerpt", "tags"],
+    });
+  });
+
   it("creates a vault import plan for modified manifest-tracked documents", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage(
@@ -222,6 +300,26 @@ describe("Knowledge markdown importer", () => {
       title: "Book Home",
       contentMd: expect.stringContaining("edited in Obsidian"),
     });
+
+    const proposals = createKnowledgeVaultImportWriteProposals(plan);
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        action: "update",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_document_update",
+        documentId: "doc-1",
+        current: expect.objectContaining({
+          id: "doc-1",
+          type: "book_home",
+          title: "Book Home",
+        }),
+        patch: expect.objectContaining({
+          title: "Book Home",
+          contentMd: expect.stringContaining("edited in Obsidian"),
+        }),
+        changedFields: expect.arrayContaining(["contentMd", "contentJson", "excerpt", "tags"]),
+      }),
+    ]);
   });
 
   it("keeps unchanged manifest files out of the modified import list", () => {

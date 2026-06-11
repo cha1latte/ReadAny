@@ -1543,6 +1543,10 @@ function KnowledgeHomePanel({
       ...folderTargets,
     ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
   }, [document, documents, t]);
+  const activePath = useMemo(
+    () => (document ? knowledgeDocumentPathText(document, documents, t, title) : ""),
+    [document, documents, t, title],
+  );
 
   const showMovePicker = useCallback(() => {
     if (!document || moveTargets.length === 0) return;
@@ -1586,15 +1590,14 @@ function KnowledgeHomePanel({
         <Text style={styles.knowledgeHeroSubtitle} numberOfLines={1}>
           {book.author}
         </Text>
-        <View style={styles.knowledgeMetricRow}>
-          <View style={styles.knowledgeMetric}>
-            <Text style={styles.knowledgeMetricValue}>{book.notesCount}</Text>
-            <Text style={styles.knowledgeMetricLabel}>{t("notes.notesCount", "条笔记")}</Text>
-          </View>
-          <View style={styles.knowledgeMetric}>
-            <Text style={styles.knowledgeMetricValue}>{book.highlightsOnlyCount}</Text>
-            <Text style={styles.knowledgeMetricLabel}>{t("notes.highlightsCount", "条高亮")}</Text>
-          </View>
+        <View style={styles.knowledgeMetricRail}>
+          <Text style={styles.knowledgeMetricText}>
+            {documents.length} {t("notes.knowledgeDocuments", "文档")}
+          </Text>
+          <View style={styles.knowledgeMetricDot} />
+          <Text style={styles.knowledgeMetricText}>
+            {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
+          </Text>
         </View>
       </View>
 
@@ -1626,6 +1629,9 @@ function KnowledgeHomePanel({
               style={styles.knowledgeTitleInput}
               returnKeyType="done"
             />
+            <Text style={styles.knowledgeDocumentPath} numberOfLines={1}>
+              {activePath}
+            </Text>
           </View>
           <View style={styles.knowledgeHeaderActions}>
             <View style={styles.knowledgeInlineStatus}>
@@ -2149,6 +2155,33 @@ function knowledgeDocumentTypeLabel(document: KnowledgeDocument, t: TFunction): 
   return t("notes.knowledgeDocumentNote", "笔记");
 }
 
+function knowledgeDocumentPathText(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: TFunction,
+  activeTitle?: string,
+): string {
+  const byId = new Map(documents.map((item) => [item.id, item]));
+  const path: KnowledgeDocument[] = [];
+  const seen = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.unshift(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+
+  return [
+    t("notes.knowledgeVaultRoot", "知识库"),
+    ...path.map((item, index) =>
+      index === path.length - 1 && activeTitle?.trim()
+        ? activeTitle.trim()
+        : item.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+    ),
+  ].join(" / ");
+}
+
 function KnowledgeDocumentExplorer({
   documents,
   activeDocument,
@@ -2187,6 +2220,10 @@ function KnowledgeDocumentExplorer({
     }
     return counts;
   }, [documents]);
+  const folderCount = useMemo(
+    () => documents.filter((document) => document.type === "folder").length,
+    [documents],
+  );
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
   const activeCreateParentId =
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
@@ -2265,7 +2302,9 @@ function KnowledgeDocumentExplorer({
         <View style={styles.knowledgeExplorerTitleBlock}>
           <Text style={styles.knowledgeSectionTitle}>{t("notes.knowledgeDocuments", "文档")}</Text>
           <Text style={styles.knowledgeExplorerHint} numberOfLines={1}>
-            {t("notes.knowledgeExplorerHint", "文件夹与文档")}
+            {t("notes.knowledgeVaultRoot", "知识库")} · {documents.length}{" "}
+            {t("notes.knowledgeDocuments", "文档")} · {folderCount}{" "}
+            {t("notes.knowledgeDocumentFolder", "文件夹")}
           </Text>
         </View>
         <TouchableOpacity

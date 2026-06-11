@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "知识主页保存失败",
     "knowledgeDocuments": "文档",
     "knowledgeExplorerHint": "文件夹与文档",
+    "knowledgeVaultRoot": "知识库",
+    "knowledgeDocumentPath": "文档路径",
     "knowledgeDocumentTitle": "知识文档标题",
     "knowledgeUntitledDocument": "未命名文档",
     "knowledgeNewDocument": "新建文档",
@@ -212,6 +214,9 @@
     "knowledgeCardPickerHint": "选择一种结构，插入后会随知识文档同步和导出。",
     "knowledgeCardEmpty": "空卡片，稍后可编辑。",
     "knowledgeCardSource": "来源",
+    "knowledgeCardTitleLabel": "卡片标题",
+    "knowledgeCardBodyLabel": "卡片正文",
+    "knowledgeCardBodyPlaceholder": "直接在卡片里书写...",
     "knowledgeCards": {
       "bookQuote": "书摘卡",
       "callout": "提示卡",

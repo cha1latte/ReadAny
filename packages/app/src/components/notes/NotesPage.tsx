@@ -1974,8 +1974,8 @@ function KnowledgeHomePanel({
   const isFolderDocument = document.type === "folder";
 
   return (
-    <div className="min-h-full bg-background p-4">
-      <div className="mx-auto grid min-h-[calc(100vh-7rem)] max-w-[1480px] grid-cols-[280px_minmax(0,1fr)_300px] gap-4">
+    <div className="min-h-full bg-muted/20 p-3">
+      <div className="mx-auto grid min-h-[calc(100vh-6.5rem)] max-w-[1500px] grid-cols-[270px_minmax(0,1fr)_286px] gap-3">
         <KnowledgeDocumentExplorer
           documents={documents}
           activeDocumentId={activeDocumentId}
@@ -1987,23 +1987,29 @@ function KnowledgeHomePanel({
           t={t}
         />
 
-        <section className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-card shadow-sm">
-          <div className="border-b border-border/50 bg-background/65 px-5 py-4">
+        <section className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-background shadow-sm">
+          <div className="border-b border-border/45 bg-card px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  <span>{t("notes.knowledgeEyebrow")}</span>
-                  <span className="h-1 w-1 rounded-full bg-border" />
-                  <span>{knowledgeDocumentTypeLabel(document, t)}</span>
-                </div>
+                <KnowledgeDocumentBreadcrumbs
+                  document={document}
+                  documents={documents}
+                  activeTitle={title}
+                  t={t}
+                  className="mb-1.5"
+                />
                 <input
                   value={title}
                   onChange={(event) => onTitleChange(event.target.value)}
                   aria-label={t("notes.knowledgeDocumentTitle")}
                   placeholder={t("notes.knowledgeUntitledDocument")}
-                  className="w-full min-w-0 bg-transparent text-2xl font-semibold leading-tight text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
+                  className="w-full min-w-0 bg-transparent text-[26px] font-semibold leading-tight text-foreground outline-none placeholder:text-muted-foreground focus-visible:text-primary"
                 />
-                <p className="mt-1 truncate text-xs text-muted-foreground">{book.title}</p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">{book.title}</span>
+                  <span className="h-1 w-1 rounded-full bg-border" />
+                  <span>{knowledgeDocumentTypeLabel(document, t)}</span>
+                </div>
                 {!isFolderDocument ? (
                   <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
                 ) : null}
@@ -2031,7 +2037,7 @@ function KnowledgeHomePanel({
             </div>
           </div>
 
-          <div className="max-h-[calc(100vh-13rem)] overflow-y-auto px-5 py-4">
+          <div className="max-h-[calc(100vh-12.5rem)] overflow-y-auto px-5 py-4">
             {vaultConflicts ? (
               <KnowledgeVaultConflictCard
                 notice={vaultConflicts}
@@ -2076,8 +2082,8 @@ function KnowledgeHomePanel({
                 value={value}
                 onChange={onChange}
                 placeholder={t("notes.knowledgePlaceholder")}
-                className="border-border/45 bg-background shadow-none"
-                contentClassName="max-h-none min-h-[640px] px-8 py-7 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[590px] [&_.ProseMirror]:max-w-[760px]"
+                className="border-border/35 bg-background shadow-none"
+                contentClassName="max-h-none min-h-[650px] px-8 py-7 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[600px] [&_.ProseMirror]:max-w-[780px]"
               />
             )}
           </div>
@@ -2489,6 +2495,79 @@ function knowledgeDocumentTypeLabel(
   return t("notes.knowledgeDocumentNote");
 }
 
+function knowledgeDocumentPath(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+  activeTitle?: string,
+): { id: string; title: string; type?: KnowledgeDocumentType }[] {
+  const byId = new Map(documents.map((item) => [item.id, item]));
+  const path: KnowledgeDocument[] = [];
+  const seen = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.unshift(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+
+  return [
+    {
+      id: "__vault__",
+      title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+    },
+    ...path.map((item, index) => ({
+      id: item.id,
+      type: item.type,
+      title:
+        index === path.length - 1 && activeTitle?.trim()
+          ? activeTitle.trim()
+          : item.title.trim() || t("notes.knowledgeUntitledDocument"),
+    })),
+  ];
+}
+
+function KnowledgeDocumentBreadcrumbs({
+  document,
+  documents,
+  activeTitle,
+  t,
+  className,
+}: {
+  document: KnowledgeDocument;
+  documents: KnowledgeDocument[];
+  activeTitle?: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  className?: string;
+}) {
+  const path = knowledgeDocumentPath(document, documents, t, activeTitle);
+
+  return (
+    <nav
+      className={cn(
+        "flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-medium text-muted-foreground",
+        className,
+      )}
+      aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
+    >
+      {path.map((item, index) => (
+        <span key={item.id} className="inline-flex min-w-0 items-center gap-1">
+          {index > 0 ? <span className="text-border">/</span> : null}
+          <span
+            className={cn(
+              "max-w-40 truncate",
+              index === path.length - 1 ? "text-foreground/80" : "text-muted-foreground",
+            )}
+          >
+            {item.title}
+          </span>
+        </span>
+      ))}
+    </nav>
+  );
+}
+
 function knowledgeDocumentSearchText(
   document: KnowledgeDocument,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -2543,6 +2622,10 @@ function KnowledgeDocumentExplorer({
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
   const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
+  const folderCount = useMemo(
+    () => documents.filter((document) => document.type === "folder").length,
+    [documents],
+  );
   const folderNodes = useMemo(
     () => flatNodes.filter((node) => node.document.type === "folder"),
     [flatNodes],
@@ -2606,13 +2689,19 @@ function KnowledgeDocumentExplorer({
       <div key={document.id}>
         <div
           className={cn(
-            "group flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
+            "group relative flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
             isActive
               ? "border-primary/25 bg-primary/10 text-primary"
               : "text-foreground hover:border-border/55 hover:bg-muted/45",
           )}
           style={{ paddingLeft: `${8 + Math.min(node.depth, 7) * 14}px` }}
         >
+          {node.depth > 0 ? (
+            <span
+              className="pointer-events-none absolute bottom-1 top-1 w-px bg-border/45"
+              style={{ left: `${11 + Math.min(node.depth - 1, 6) * 14}px` }}
+            />
+          ) : null}
           {isFolder ? (
             <button
               type="button"
@@ -2731,8 +2820,20 @@ function KnowledgeDocumentExplorer({
   };
 
   return (
-    <aside className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-card shadow-sm">
-      <div className="border-b border-border/50 bg-background/65 p-3">
+    <aside className="min-w-0 overflow-hidden rounded-lg border border-border/55 bg-background shadow-sm">
+      <div className="border-b border-border/45 bg-card p-3">
+        <div className="mb-3 rounded-md border border-border/45 bg-background px-2.5 py-2">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="h-3.5 w-3.5 text-primary" />
+            <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+              {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+            </p>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {documents.length} {t("notes.knowledgeDocuments")} · {folderCount}{" "}
+            {t("notes.knowledgeDocumentFolder")}
+          </p>
+        </div>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-foreground">{t("notes.knowledgeDocuments")}</p>
@@ -2823,15 +2924,22 @@ function KnowledgeFolderOverview({
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
 
   return (
-    <div className="min-h-[640px] rounded-lg border border-border/45 bg-background px-6 py-5">
-      <div className="mb-5 flex items-start justify-between gap-4 border-b border-border/45 pb-4">
+    <div className="min-h-[650px] rounded-lg border border-border/35 bg-background px-6 py-5">
+      <div className="mb-5 flex items-start justify-between gap-4 border-b border-border/40 pb-4">
         <div className="min-w-0">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <FolderOpen className="h-5 w-5" />
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FolderOpen className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-foreground">
+                {folder.title || t("notes.knowledgeUntitledDocument")}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {orderedChildren.length} {t("notes.knowledgeDocuments")}
+              </p>
+            </div>
           </div>
-          <p className="text-sm font-semibold text-foreground">
-            {folder.title || t("notes.knowledgeUntitledDocument")}
-          </p>
           <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
             {t("notes.knowledgeFolderDescription")}
           </p>
@@ -2869,7 +2977,7 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
           {orderedChildren.map((document) => {
             const isFolder = document.type === "folder";
             const Icon = isFolder ? Folder : FileText;
@@ -2877,7 +2985,7 @@ function KnowledgeFolderOverview({
               <button
                 key={document.id}
                 type="button"
-                className="flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-colors hover:border-border/60 hover:bg-muted/35"
+                className="flex w-full items-center gap-3 rounded-md border border-border/45 bg-card px-3 py-3 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
                 onClick={() => onSelect(document)}
               >
                 <Icon
@@ -2890,8 +2998,9 @@ function KnowledgeFolderOverview({
                   <span className="block truncate text-sm font-medium text-foreground">
                     {document.title || t("notes.knowledgeUntitledDocument")}
                   </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  <span className="mt-1 block truncate text-[11px] text-muted-foreground">
                     {knowledgeDocumentTypeLabel(document, t)}
+                    {document.excerpt ? ` · ${document.excerpt}` : ""}
                   </span>
                 </span>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />

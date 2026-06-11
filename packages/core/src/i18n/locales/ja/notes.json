@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "ナレッジホームの保存に失敗しました",
     "knowledgeDocuments": "ドキュメント",
     "knowledgeExplorerHint": "フォルダーとドキュメント",
+    "knowledgeVaultRoot": "ナレッジベース",
+    "knowledgeDocumentPath": "ドキュメントのパス",
     "knowledgeDocumentTitle": "ナレッジドキュメントのタイトル",
     "knowledgeUntitledDocument": "無題のドキュメント",
     "knowledgeNewDocument": "新規ドキュメント",
@@ -212,6 +214,9 @@
     "knowledgeCardPickerHint": "構造を選んで挿入します。カードは文書と同期され、きれいにエクスポートできます。",
     "knowledgeCardEmpty": "空のカードです。あとで編集できます。",
     "knowledgeCardSource": "出典",
+    "knowledgeCardTitleLabel": "カードタイトル",
+    "knowledgeCardBodyLabel": "カード本文",
+    "knowledgeCardBodyPlaceholder": "このカードに直接書き込む...",
     "knowledgeCards": {
       "bookQuote": "引用カード",
       "callout": "コールアウト",

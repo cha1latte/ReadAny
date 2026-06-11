@@ -29,6 +29,7 @@ import {
   mergeAttributes,
   useEditor,
 } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   Bold,
@@ -579,39 +580,69 @@ export function KnowledgeEditor({
   );
 }
 
-function ReadAnyCardView({ node }: { node: { attrs: ReadAnyCardAttrs } }) {
+function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
-  const attrs = node.attrs;
+  const attrs = node.attrs as ReadAnyCardAttrs;
   const cardType = attrs.cardType || "callout";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
-  const title = attrs.title || t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
+  const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
+  const title = attrs.title || "";
   const body = attrs.markdown || attrs.text || "";
+  const updateTitle = (nextTitle: string) => {
+    updateAttributes({ title: nextTitle });
+  };
+  const updateBody = (nextBody: string) => {
+    updateAttributes({ markdown: nextBody, text: nextBody });
+  };
 
   return (
     <NodeViewWrapper
-      className="not-prose my-3 rounded-lg border border-border/70 bg-card p-3 shadow-sm"
+      className={cn(
+        "not-prose my-4 rounded-lg border bg-card shadow-sm transition-all duration-200",
+        selected
+          ? "border-primary/45 ring-2 ring-primary/10"
+          : "border-border/65 hover:border-border",
+      )}
       data-readany-card-type={cardType}
+      contentEditable={false}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 p-3">
         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <input
+              value={title}
+              onChange={(event) => updateTitle(event.target.value)}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              aria-label={t("notes.knowledgeCardTitleLabel", {
+                defaultValue: "Card title",
+              })}
+              placeholder={fallbackTitle}
+              className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/70 focus:text-primary"
+            />
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {cardType}
             </span>
           </div>
-          {body ? (
-            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-              {body}
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground/80">
-              {t("notes.knowledgeCardEmpty", { defaultValue: "Empty card, ready to edit later." })}
-            </p>
-          )}
+          <textarea
+            value={body}
+            onChange={(event) => updateBody(event.target.value)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            aria-label={t("notes.knowledgeCardBodyLabel", {
+              defaultValue: "Card body",
+            })}
+            placeholder={t("notes.knowledgeCardBodyPlaceholder", {
+              defaultValue: "Write directly inside this card...",
+            })}
+            rows={Math.max(3, Math.min(10, body.split("\n").length + 1))}
+            className="mt-2 w-full resize-y rounded-md border border-transparent bg-muted/25 px-2.5 py-2 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary/25 focus:bg-background"
+          />
           {attrs.sourceTitle && (
             <p className="mt-2 text-[11px] text-muted-foreground">
               {t("notes.knowledgeCardSource", { defaultValue: "Source" })}: {attrs.sourceTitle}

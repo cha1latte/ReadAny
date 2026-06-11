@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "Failed to save knowledge home",
     "knowledgeDocuments": "Documents",
     "knowledgeExplorerHint": "Folders and documents",
+    "knowledgeVaultRoot": "Knowledge base",
+    "knowledgeDocumentPath": "Document path",
     "knowledgeDocumentTitle": "Knowledge document title",
     "knowledgeUntitledDocument": "Untitled document",
     "knowledgeNewDocument": "New document",
@@ -212,6 +214,9 @@
     "knowledgeCardPickerHint": "Choose a structure to insert. Cards sync with the document and export cleanly.",
     "knowledgeCardEmpty": "Empty card, ready to edit later.",
     "knowledgeCardSource": "Source",
+    "knowledgeCardTitleLabel": "Card title",
+    "knowledgeCardBodyLabel": "Card body",
+    "knowledgeCardBodyPlaceholder": "Write directly inside this card...",
     "knowledgeCards": {
       "bookQuote": "Quote card",
       "callout": "Callout",

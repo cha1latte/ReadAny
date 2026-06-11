@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "知識首頁儲存失敗",
     "knowledgeDocuments": "文件",
     "knowledgeExplorerHint": "資料夾與文件",
+    "knowledgeVaultRoot": "知識庫",
+    "knowledgeDocumentPath": "文件路徑",
     "knowledgeDocumentTitle": "知識文件標題",
     "knowledgeUntitledDocument": "未命名文件",
     "knowledgeNewDocument": "新增文件",
@@ -212,6 +214,9 @@
     "knowledgeCardPickerHint": "選擇一種結構，插入後會隨知識文件同步並乾淨匯出。",
     "knowledgeCardEmpty": "空卡片，稍後可編輯。",
     "knowledgeCardSource": "來源",
+    "knowledgeCardTitleLabel": "卡片標題",
+    "knowledgeCardBodyLabel": "卡片正文",
+    "knowledgeCardBodyPlaceholder": "直接在卡片裡書寫...",
     "knowledgeCards": {
       "bookQuote": "書摘卡",
       "callout": "提示卡",

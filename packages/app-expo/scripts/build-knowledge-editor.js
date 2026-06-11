@@ -27,6 +27,7 @@ async function buildKnowledgeEditor() {
     let ready = false;
     let pendingInit = null;
     let changeTimer = null;
+    let cardBodyPlaceholder = "Write inside this card...";
 
     const post = (payload) => {
       try {
@@ -110,6 +111,16 @@ async function buildKnowledgeEditor() {
       }, 180);
     };
 
+    const updateCardAttrs = (node, getPos, attrs) => {
+      if (!editor || typeof getPos !== "function") return;
+      const pos = getPos();
+      if (typeof pos !== "number") return;
+      const nextAttrs = { ...(node.attrs || {}), ...attrs };
+      editor.view.dispatch(editor.view.state.tr.setNodeMarkup(pos, undefined, nextAttrs));
+      postContent();
+      scheduleHeight();
+    };
+
     const ReadAnyCard = Node.create({
       name: "readanyCard",
       group: "block",
@@ -147,8 +158,9 @@ async function buildKnowledgeEditor() {
       },
 
       addNodeView() {
-        return ({ node }) => {
-          const attrs = node.attrs || {};
+        return ({ node, getPos }) => {
+          let currentNode = node;
+          const attrs = currentNode.attrs || {};
           const dom = document.createElement("div");
           dom.className = "readany-card";
           dom.contentEditable = "false";
@@ -161,18 +173,35 @@ async function buildKnowledgeEditor() {
           const body = document.createElement("div");
           body.className = "readany-card-body";
 
-          const title = document.createElement("div");
+          const meta = document.createElement("div");
+          meta.className = "readany-card-meta";
+          meta.textContent = attrs.cardType || "Card";
+          body.appendChild(meta);
+
+          const title = document.createElement("input");
           title.className = "readany-card-title";
-          title.textContent = attrs.title || attrs.cardType || "Card";
+          title.type = "text";
+          title.value = attrs.title || "";
+          title.placeholder = attrs.cardType || "Card";
+          title.addEventListener("input", () => {
+            updateCardAttrs(currentNode, getPos, { title: title.value });
+          });
           body.appendChild(title);
 
           const text = attrs.markdown || attrs.text || "";
-          if (text) {
-            const preview = document.createElement("div");
-            preview.className = "readany-card-preview";
-            preview.textContent = text;
-            body.appendChild(preview);
-          }
+          const preview = document.createElement("textarea");
+          preview.className = "readany-card-preview";
+          preview.value = text;
+          preview.placeholder = cardBodyPlaceholder;
+          preview.rows = Math.max(3, Math.min(8, String(text).split("\\n").length + 1));
+          preview.addEventListener("input", () => {
+            preview.rows = Math.max(3, Math.min(8, preview.value.split("\\n").length + 1));
+            updateCardAttrs(currentNode, getPos, {
+              markdown: preview.value,
+              text: preview.value,
+            });
+          });
+          body.appendChild(preview);
 
           if (attrs.sourceTitle) {
             const source = document.createElement("div");
@@ -183,7 +212,22 @@ async function buildKnowledgeEditor() {
 
           dom.appendChild(icon);
           dom.appendChild(body);
-          return { dom };
+          return {
+            dom,
+            update(nextNode) {
+              if (nextNode.type.name !== "readanyCard") return false;
+              currentNode = nextNode;
+              const nextAttrs = nextNode.attrs || {};
+              dom.dataset.cardType = nextAttrs.cardType || "callout";
+              meta.textContent = nextAttrs.cardType || "Card";
+              title.value = nextAttrs.title || "";
+              title.placeholder = nextAttrs.cardType || "Card";
+              const nextText = nextAttrs.markdown || nextAttrs.text || "";
+              if (preview.value !== nextText) preview.value = nextText;
+              preview.rows = Math.max(3, Math.min(8, String(nextText).split("\\n").length + 1));
+              return true;
+            },
+          };
         };
       },
     });
@@ -192,6 +236,10 @@ async function buildKnowledgeEditor() {
       const el = document.getElementById("editor");
       if (!el) throw new Error("Editor root not found");
       setTheme(payload.theme);
+      cardBodyPlaceholder =
+        typeof payload.cardBodyPlaceholder === "string" && payload.cardBodyPlaceholder
+          ? payload.cardBodyPlaceholder
+          : "Write inside this card...";
       editor?.destroy();
       editor = new Editor({
         element: el,

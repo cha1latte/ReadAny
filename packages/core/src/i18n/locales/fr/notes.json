@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "Impossible d'enregistrer la page de savoir",
     "knowledgeDocuments": "Documents",
     "knowledgeExplorerHint": "Dossiers et documents",
+    "knowledgeVaultRoot": "Base de savoir",
+    "knowledgeDocumentPath": "Chemin du document",
     "knowledgeDocumentTitle": "Titre du document de savoir",
     "knowledgeUntitledDocument": "Document sans titre",
     "knowledgeNewDocument": "Nouveau document",
@@ -210,6 +212,9 @@
     "knowledgeInsertCard": "Insérer une carte",
     "knowledgeCardEmpty": "Carte vide, prête à être modifiée plus tard.",
     "knowledgeCardSource": "Source",
+    "knowledgeCardTitleLabel": "Titre de la carte",
+    "knowledgeCardBodyLabel": "Corps de la carte",
+    "knowledgeCardBodyPlaceholder": "Écrivez directement dans cette carte...",
     "knowledgeCards": {
       "bookQuote": "Carte de citation",
       "callout": "Encadré",

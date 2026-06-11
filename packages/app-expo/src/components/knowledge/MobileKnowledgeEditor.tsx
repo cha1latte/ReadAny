@@ -122,6 +122,7 @@ type EditorCommand =
       contentJson: JSONValue;
       theme: EditorTheme;
       placeholder?: string;
+      cardBodyPlaceholder?: string;
       readOnly?: boolean;
     }
   | { type: "setContent"; contentJson: JSONValue }
@@ -470,13 +471,14 @@ export function MobileKnowledgeEditor({
       type: "init",
       contentJson: current.contentJson,
       placeholder,
+      cardBodyPlaceholder: t("notes.knowledgeCardBodyPlaceholder", "直接在卡片里书写..."),
       readOnly: false,
       theme,
     });
     if (autoFocus) {
       injectCommand({ type: "runCommand", command: "focus", attrs: { position: "end" } });
     }
-  }, [autoFocus, injectCommand, placeholder, theme]);
+  }, [autoFocus, injectCommand, placeholder, t, theme]);
 
   useEffect(() => {
     if (!isBridgeReady) return;

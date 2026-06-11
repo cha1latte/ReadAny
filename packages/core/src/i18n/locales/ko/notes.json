@@ -157,6 +157,8 @@
     "knowledgeSaveFailed": "지식 홈을 저장하지 못했어요",
     "knowledgeDocuments": "문서",
     "knowledgeExplorerHint": "폴더와 문서",
+    "knowledgeVaultRoot": "지식 베이스",
+    "knowledgeDocumentPath": "문서 경로",
     "knowledgeDocumentTitle": "지식 문서 제목",
     "knowledgeUntitledDocument": "제목 없는 문서",
     "knowledgeNewDocument": "새 문서",
@@ -212,6 +214,9 @@
     "knowledgeCardPickerHint": "구조를 선택해 삽입하세요. 카드는 문서와 함께 동기화되고 깔끔하게 내보내집니다.",
     "knowledgeCardEmpty": "빈 카드입니다. 나중에 편집할 수 있어요.",
     "knowledgeCardSource": "출처",
+    "knowledgeCardTitleLabel": "카드 제목",
+    "knowledgeCardBodyLabel": "카드 본문",
+    "knowledgeCardBodyPlaceholder": "이 카드 안에 바로 작성하세요...",
     "knowledgeCards": {
       "bookQuote": "인용 카드",
       "callout": "콜아웃",

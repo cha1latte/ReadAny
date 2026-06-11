@@ -238,8 +238,9 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.xl,
       borderWidth: 0.5,
       borderColor: colors.border,
-      padding: 16,
-      gap: 10,
+      paddingHorizontal: 15,
+      paddingVertical: 14,
+      gap: 8,
     },
     knowledgeHeroTop: { flexDirection: "row", alignItems: "center", gap: 8 },
     knowledgeHeroIcon: {
@@ -263,6 +264,28 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.bold,
     },
     knowledgeHeroSubtitle: { fontSize: fontSize.sm, color: colors.mutedForeground },
+    knowledgeMetricRail: {
+      minHeight: 30,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      borderTopWidth: 0.5,
+      borderTopColor: colors.border,
+      marginTop: 2,
+      paddingTop: 9,
+    },
+    knowledgeMetricText: {
+      flexShrink: 1,
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+    },
+    knowledgeMetricDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+    },
     knowledgeMetricRow: { flexDirection: "row", gap: 10, marginTop: 2 },
     knowledgeMetric: {
       flex: 1,
@@ -310,6 +333,12 @@ export const makeStyles = (colors: ThemeColors) =>
       lineHeight: 20,
       color: colors.foreground,
       fontWeight: fontWeight.semibold,
+    },
+    knowledgeDocumentPath: {
+      marginTop: 7,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.mutedForeground,
     },
     knowledgeHeaderActions: {
       alignItems: "flex-end",

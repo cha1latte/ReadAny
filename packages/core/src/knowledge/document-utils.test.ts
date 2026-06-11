@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeDocument } from "../types";
 import {
+  createHighlightNoteMarkdown,
+  createHighlightNoteProjection,
+  createHighlightNoteTitle,
   createKnowledgeExcerpt,
+  isGeneratedHighlightNoteDocument,
   knowledgeDocumentFingerprint,
   orderKnowledgeDocuments,
 } from "./document-utils";
@@ -61,6 +65,8 @@ describe("knowledge document utilities", () => {
 
 > quoted **text**
 
+<!-- internal marker -->
+
 \`\`\`ts
 const hidden = true;
 \`\`\`
@@ -68,5 +74,63 @@ const hidden = true;
 - final point`);
 
     expect(excerpt).toBe("Title quoted text final point");
+  });
+
+  it("projects highlight notes into readable knowledge markdown", () => {
+    const highlight = {
+      id: "hl-1",
+      bookId: "book-1",
+      cfi: "epubcfi(/6/2)",
+      text: "Learning without thought is labor lost.\nThought without learning is perilous.",
+      color: "yellow" as const,
+      note: "Modern meaning: study and reflection need each other.",
+      chapterTitle: "Analects",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    expect(createHighlightNoteTitle(highlight)).toBe(
+      "Modern meaning: study and reflection need each other.",
+    );
+    expect(
+      createHighlightNoteMarkdown(highlight),
+    ).toBe(`Modern meaning: study and reflection need each other.
+
+> Learning without thought is labor lost.
+> Thought without learning is perilous.
+
+_Source: Analects_`);
+
+    const projection = createHighlightNoteProjection(highlight);
+    expect(projection.contentJson).toMatchObject({ type: "doc" });
+    expect(projection.excerpt).toContain("Modern meaning");
+  });
+
+  it("detects generated highlight note documents without treating user edits as generated", () => {
+    const highlight = {
+      id: "hl-1",
+      bookId: "book-1",
+      cfi: "epubcfi(/6/2)",
+      text: "Source quote",
+      color: "yellow" as const,
+      note: "Original note",
+      chapterTitle: "Chapter 1",
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const generated = document({
+      id: "doc-1",
+      type: "highlight_note",
+      sourceKind: "highlight",
+      sourceId: "hl-1",
+      contentMd: createHighlightNoteMarkdown(highlight),
+    });
+    const edited = document({
+      ...generated,
+      contentMd: `${createHighlightNoteMarkdown(highlight)}\n\nUser expansion`,
+    });
+
+    expect(isGeneratedHighlightNoteDocument(generated, highlight)).toBe(true);
+    expect(isGeneratedHighlightNoteDocument(edited, highlight)).toBe(false);
   });
 });

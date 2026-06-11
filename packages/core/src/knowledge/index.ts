@@ -21,12 +21,17 @@ export type {
   KnowledgeEditorTier,
 } from "./editor-profile";
 export {
+  createHighlightNoteMarkdown,
+  createHighlightNoteProjection,
+  createHighlightNoteTitle,
   createKnowledgeExcerpt,
+  hasHighlightNoteContent,
+  isGeneratedHighlightNoteDocument,
   knowledgeDocumentFingerprint,
   knowledgeValueFingerprint,
   orderKnowledgeDocuments,
 } from "./document-utils";
-export type { KnowledgeDocumentSnapshot } from "./document-utils";
+export type { HighlightNoteProjection, KnowledgeDocumentSnapshot } from "./document-utils";
 export {
   builtInReadAnyCards,
   createDefaultReadAnyCardAttrs,

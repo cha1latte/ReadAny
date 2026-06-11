@@ -32,6 +32,7 @@ export {
   deleteNote,
   getKnowledgeDocument,
   getKnowledgeDocuments,
+  searchKnowledgeDocuments,
   getBookHomeDocument,
   createKnowledgeDocument,
   ensureBookHomeDocument,
@@ -77,4 +78,5 @@ export type {
   HighlightWithBook,
   KnowledgeBacklink,
   KnowledgeDocumentFilters,
+  KnowledgeDocumentSearchFilters,
 } from "@readany/core/db/database";

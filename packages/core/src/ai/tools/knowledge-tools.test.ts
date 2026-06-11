@@ -4,6 +4,7 @@ import type { KnowledgeDocument } from "../../types";
 const dbMocks = vi.hoisted(() => ({
   getKnowledgeDocument: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
+  searchKnowledgeDocuments: vi.fn(),
 }));
 
 vi.mock("../../db/database", () => dbMocks);
@@ -41,7 +42,7 @@ describe("knowledge tools", () => {
   });
 
   it("searches knowledge documents by title, tags, excerpt, and content", async () => {
-    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([
       doc({ id: "doc-1", title: "Deep Reading Home", updatedAt: 3000 }),
       doc({
         id: "doc-2",
@@ -69,7 +70,8 @@ describe("knowledge tools", () => {
       limit: 2,
     })) as { total: number; showing: number; documents: Array<{ id: string; snippet: string }> };
 
-    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({
+    expect(dbMocks.searchKnowledgeDocuments).toHaveBeenCalledWith({
+      query: "memory",
       bookId: "book-1",
       type: undefined,
       limit: 200,

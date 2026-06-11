@@ -75,6 +75,7 @@ export {
 export {
   getKnowledgeDocument,
   getKnowledgeDocuments,
+  searchKnowledgeDocuments,
   getBookHomeDocument,
   createKnowledgeDocument,
   ensureBookHomeDocument,
@@ -95,6 +96,7 @@ export type {
   CreateKnowledgeDocumentInput,
   KnowledgeBacklink,
   KnowledgeDocumentFilters,
+  KnowledgeDocumentSearchFilters,
 } from "./knowledge-queries";
 
 export {

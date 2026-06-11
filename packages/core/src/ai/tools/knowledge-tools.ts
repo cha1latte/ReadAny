@@ -5,7 +5,11 @@
  * go through a confirmation-capable UI flow so AI never silently overwrites a
  * user's durable notes.
  */
-import { getKnowledgeDocument, getKnowledgeDocuments } from "../../db/database";
+import {
+  getKnowledgeDocument,
+  getKnowledgeDocuments,
+  searchKnowledgeDocuments,
+} from "../../db/database";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
 import type {
   JSONValue,
@@ -192,7 +196,8 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
       const bookId = String(args.bookId ?? "").trim() || undefined;
       const type = normalizeType(args.type);
       const limit = asPositiveLimit(args.limit, DEFAULT_RESULT_LIMIT);
-      const documents = await getKnowledgeDocuments({
+      const documents = await searchKnowledgeDocuments({
+        query,
         bookId,
         type,
         limit: SEARCH_SCAN_LIMIT,

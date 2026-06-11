@@ -120,9 +120,52 @@ export interface KnowledgeDocumentFilters {
   limit?: number;
 }
 
+export interface KnowledgeDocumentSearchFilters extends KnowledgeDocumentFilters {
+  query?: string;
+}
+
 export interface KnowledgeBacklink {
   link: KnowledgeLink;
   fromDocument: KnowledgeDocument;
+}
+
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+function knowledgeDocumentWhereClauses(filters: KnowledgeDocumentFilters): {
+  where: string[];
+  params: unknown[];
+} {
+  const where: string[] = ["deleted_at IS NULL"];
+  const params: unknown[] = [];
+
+  if (filters.bookId !== undefined) {
+    where.push("book_id = ?");
+    params.push(filters.bookId);
+  }
+  if (Object.prototype.hasOwnProperty.call(filters, "parentId")) {
+    if (filters.parentId === null) {
+      where.push("parent_id IS NULL");
+    } else {
+      where.push("parent_id = ?");
+      params.push(filters.parentId);
+    }
+  }
+  if (filters.type !== undefined) {
+    where.push("type = ?");
+    params.push(filters.type);
+  }
+  if (filters.sourceKind !== undefined) {
+    where.push("source_kind = ?");
+    params.push(filters.sourceKind);
+  }
+  if (filters.sourceId !== undefined) {
+    where.push("source_id = ?");
+    params.push(filters.sourceId);
+  }
+
+  return { where, params };
 }
 
 function rowToKnowledgeDocument(row: KnowledgeDocumentRow): KnowledgeDocument {
@@ -224,32 +267,43 @@ export async function getKnowledgeDocuments(
   filters: KnowledgeDocumentFilters = {},
 ): Promise<KnowledgeDocument[]> {
   const database = await getDB();
-  const where: string[] = ["deleted_at IS NULL"];
-  const params: unknown[] = [];
+  const { where, params } = knowledgeDocumentWhereClauses(filters);
 
-  if (filters.bookId !== undefined) {
-    where.push("book_id = ?");
-    params.push(filters.bookId);
-  }
-  if (Object.prototype.hasOwnProperty.call(filters, "parentId")) {
-    if (filters.parentId === null) {
-      where.push("parent_id IS NULL");
-    } else {
-      where.push("parent_id = ?");
-      params.push(filters.parentId);
-    }
-  }
-  if (filters.type !== undefined) {
-    where.push("type = ?");
-    params.push(filters.type);
-  }
-  if (filters.sourceKind !== undefined) {
-    where.push("source_kind = ?");
-    params.push(filters.sourceKind);
-  }
-  if (filters.sourceId !== undefined) {
-    where.push("source_id = ?");
-    params.push(filters.sourceId);
+  params.push(filters.limit ?? 200);
+  const rows = await database.select<KnowledgeDocumentRow>(
+    `SELECT * FROM knowledge_documents
+     WHERE ${where.join(" AND ")}
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT ?`,
+    params,
+  );
+  return rows.map(rowToKnowledgeDocument);
+}
+
+export async function searchKnowledgeDocuments(
+  filters: KnowledgeDocumentSearchFilters = {},
+): Promise<KnowledgeDocument[]> {
+  const query = filters.query?.trim();
+  if (!query) return getKnowledgeDocuments(filters);
+
+  const database = await getDB();
+  const { where, params } = knowledgeDocumentWhereClauses(filters);
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  for (const token of tokens) {
+    const pattern = `%${escapeSqlLike(token)}%`;
+    where.push(`(
+      LOWER(title) LIKE ? ESCAPE '\\'
+      OR LOWER(excerpt) LIKE ? ESCAPE '\\'
+      OR LOWER(content_md) LIKE ? ESCAPE '\\'
+      OR LOWER(tags) LIKE ? ESCAPE '\\'
+    )`);
+    params.push(pattern, pattern, pattern, pattern);
   }
 
   params.push(filters.limit ?? 200);

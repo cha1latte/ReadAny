@@ -52,6 +52,7 @@ export {
   // Knowledge queries
   getKnowledgeDocument,
   getKnowledgeDocuments,
+  searchKnowledgeDocuments,
   getBookHomeDocument,
   createKnowledgeDocument,
   ensureBookHomeDocument,
@@ -106,4 +107,5 @@ export type {
   CreateKnowledgeDocumentInput,
   KnowledgeBacklink,
   KnowledgeDocumentFilters,
+  KnowledgeDocumentSearchFilters,
 } from "./database";

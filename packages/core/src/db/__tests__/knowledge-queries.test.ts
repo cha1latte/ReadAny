@@ -43,6 +43,7 @@ const {
   insertKnowledgeAttachment,
   insertKnowledgeDocument,
   insertKnowledgeLink,
+  searchKnowledgeDocuments,
   updateKnowledgeDocument,
   upsertKnowledgeCardTemplate,
 } = await import("../knowledge-queries");
@@ -122,6 +123,38 @@ describe("knowledge-queries", () => {
     expect(sql).toContain("source_kind = ?");
     expect(sql).toContain("source_id = ?");
     expect(params).toEqual(["book-1", "book_home", "book", "book-1", 5]);
+  });
+
+  it("searches knowledge documents across title, excerpt, content, and tags", async () => {
+    mockSelect.mockResolvedValue([docRow]);
+
+    const docs = await searchKnowledgeDocuments({
+      query: "Deep 100%",
+      bookId: "book-1",
+      type: "standalone_note",
+      limit: 3,
+    });
+
+    const [sql, params] = mockSelect.mock.calls[0];
+    expect(docs).toHaveLength(1);
+    expect(sql).toContain("deleted_at IS NULL");
+    expect(sql).toContain("book_id = ?");
+    expect(sql).toContain("type = ?");
+    expect(sql).toContain("LOWER(title) LIKE ? ESCAPE '\\'");
+    expect(sql).toContain("LOWER(content_md) LIKE ? ESCAPE '\\'");
+    expect(params).toEqual([
+      "book-1",
+      "standalone_note",
+      "%deep%",
+      "%deep%",
+      "%deep%",
+      "%deep%",
+      "%100\\%%",
+      "%100\\%%",
+      "%100\\%%",
+      "%100\\%%",
+      3,
+    ]);
   });
 
   it("creates a knowledge document with defaults and sync tracking", async () => {

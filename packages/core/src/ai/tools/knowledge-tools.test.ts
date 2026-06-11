@@ -1,21 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { KnowledgeDocument } from "../../types";
+import type { AIConfig, KnowledgeDocument } from "../../types";
 
 const dbMocks = vi.hoisted(() => ({
   getKnowledgeDocument: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
   searchKnowledgeDocuments: vi.fn(),
 }));
+const knowledgeMemoryMocks = vi.hoisted(() => ({
+  maybeCompressAndPersistKnowledgeSummary: vi.fn(),
+}));
 
 vi.mock("../../db/database", () => dbMocks);
+vi.mock("../knowledge-memory", () => knowledgeMemoryMocks);
 
 const {
+  createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentUpdateTool,
   createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
 } = await import("./knowledge-tools");
+
+function aiConfig(): AIConfig {
+  return {
+    endpoints: [
+      {
+        id: "endpoint-1",
+        name: "Mock",
+        provider: "custom",
+        apiKey: "",
+        baseUrl: "https://example.com/v1",
+        models: ["mock-model"],
+        modelsFetched: true,
+      },
+    ],
+    activeEndpointId: "endpoint-1",
+    activeModel: "mock-model",
+    temperature: 0.7,
+    maxTokens: 1000,
+    slidingWindowSize: 8,
+  };
+}
 
 function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
   return {
@@ -39,6 +65,25 @@ function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
 describe("knowledge tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    knowledgeMemoryMocks.maybeCompressAndPersistKnowledgeSummary.mockResolvedValue({
+      status: "compressed",
+      persisted: true,
+      summaryMd: "## Durable memory\n- Read slowly.",
+      plan: {
+        shouldCompress: true,
+        reason: "missing_summary",
+        sourceFingerprint: "hash-1",
+        sourceUpdatedAt: 2000,
+        sourceChars: 4000,
+        maxSummaryChars: 2400,
+      },
+      state: {
+        summaryMd: "## Durable memory\n- Read slowly.",
+        sourceFingerprint: "hash-1",
+        sourceUpdatedAt: 2000,
+        compressedAt: 3000,
+      },
+    });
   });
 
   it("searches knowledge documents by title, tags, excerpt, and content", async () => {
@@ -134,6 +179,43 @@ describe("knowledge tools", () => {
       id: "doc-1",
       content: "Reading slowly helps memory and reflection.",
       snippet: "Reading slowly helps memory.",
+    });
+  });
+
+  it("compresses and persists derived knowledge summaries without changing content", async () => {
+    const source = doc({ id: "doc-long", contentMd: "Long durable note.".repeat(300) });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+
+    const tool = createCompressKnowledgeDocumentSummaryTool(aiConfig());
+    const result = (await tool.execute({
+      reasoning: "Need compact memory for retrieval",
+      documentId: "doc-long",
+      minSourceChars: 100,
+      maxSummaryChars: 500,
+    })) as {
+      success: boolean;
+      status: string;
+      persisted: boolean;
+      documentId: string;
+      reason: string;
+      sourceChars: number;
+      summaryMd: string;
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-long");
+    expect(knowledgeMemoryMocks.maybeCompressAndPersistKnowledgeSummary).toHaveBeenCalledWith(
+      source,
+      expect.objectContaining({ activeModel: "mock-model" }),
+      { minSourceChars: 100, maxSummaryChars: 500 },
+    );
+    expect(result).toMatchObject({
+      success: true,
+      status: "compressed",
+      persisted: true,
+      documentId: "doc-long",
+      reason: "missing_summary",
+      sourceChars: 4000,
+      summaryMd: "## Durable memory\n- Read slowly.",
     });
   });
 

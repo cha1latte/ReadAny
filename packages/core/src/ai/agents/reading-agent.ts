@@ -59,6 +59,7 @@ export interface ReadingAgentOptions {
     bookId: string | null;
     isVectorized: boolean;
     enabledSkills: Skill[];
+    aiConfig?: AIConfig;
   }) => ToolDefinition[];
   /** Abort signal for immediate cancellation */
   signal?: AbortSignal;
@@ -153,6 +154,7 @@ export async function* streamReadingAgent(
       bookId: effectiveBookId,
       isVectorized,
       enabledSkills,
+      aiConfig,
     });
 
     // Build system prompt

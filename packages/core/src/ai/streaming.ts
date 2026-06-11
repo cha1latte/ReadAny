@@ -25,6 +25,7 @@ export interface StreamingOptions {
     bookId: string | null;
     isVectorized: boolean;
     enabledSkills: Skill[];
+    aiConfig?: AIConfig;
   }) => ToolDefinition[];
   onToken: (token: string) => void;
   onComplete: (

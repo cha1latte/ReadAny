@@ -11,7 +11,9 @@ import {
   searchKnowledgeDocuments,
 } from "../../db/database";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
+import { maybeCompressAndPersistKnowledgeSummary } from "../knowledge-memory";
 import type {
+  AIConfig,
   JSONValue,
   KnowledgeDocument,
   KnowledgeDocumentType,
@@ -44,6 +46,11 @@ const LINK_RELATIONS = new Set<KnowledgeLinkRelation>([
 function asPositiveLimit(value: unknown, fallback: number): number {
   const limit = Number(value);
   return Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 30) : fallback;
+}
+
+function asPositiveNumber(value: unknown): number | undefined {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : undefined;
 }
 
 function normalizeQuery(value: unknown): string {
@@ -257,6 +264,73 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
         bookId,
         total: documents.length,
         documents: documents.map((document) => documentSummary(document, "", includeContent)),
+      };
+    },
+  };
+}
+
+export function createCompressKnowledgeDocumentSummaryTool(aiConfig: AIConfig): ToolDefinition {
+  return {
+    name: "compressKnowledgeDocumentSummary",
+    description:
+      "Compress and persist a derived summary cache for a long ReadAny knowledge document. This does not rewrite the user's document content; it only updates the summary used for future retrieval and memory.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why this knowledge document needs compact memory",
+        required: true,
+      },
+      documentId: {
+        type: "string",
+        description: "Knowledge document id to summarize",
+        required: true,
+      },
+      minSourceChars: {
+        type: "number",
+        description:
+          "Optional minimum source length before compression. Defaults to the app threshold.",
+      },
+      maxSourceChars: {
+        type: "number",
+        description:
+          "Optional maximum source characters sent to the model. Defaults to the app threshold.",
+      },
+      maxSummaryChars: {
+        type: "number",
+        description:
+          "Optional maximum summary characters to persist. Defaults to the app threshold.",
+      },
+    },
+    execute: async (args) => {
+      const documentId = String(args.documentId ?? "").trim();
+      if (!documentId) return { success: false, error: "documentId is required" };
+
+      const document = await getKnowledgeDocument(documentId);
+      if (!document) return { success: false, error: "Knowledge document not found" };
+
+      const minSourceChars = asPositiveNumber(args.minSourceChars);
+      const maxSourceChars = asPositiveNumber(args.maxSourceChars);
+      const maxSummaryChars = asPositiveNumber(args.maxSummaryChars);
+      const compressionOptions = {
+        ...(minSourceChars ? { minSourceChars } : {}),
+        ...(maxSourceChars ? { maxSourceChars } : {}),
+        ...(maxSummaryChars ? { maxSummaryChars } : {}),
+      };
+      const result = await maybeCompressAndPersistKnowledgeSummary(
+        document,
+        aiConfig,
+        compressionOptions,
+      );
+
+      return {
+        success: result.status !== "failed",
+        status: result.status,
+        persisted: result.persisted,
+        documentId,
+        reason: result.plan.reason,
+        sourceChars: result.plan.sourceChars,
+        summaryMd: result.summaryMd ?? result.state?.summaryMd ?? document.summaryMd,
+        error: result.error,
       };
     },
   };

@@ -111,6 +111,9 @@ function buildToolsSection(
   tools.push(
     "- **proposeKnowledgeLinkCreate**: Draft a link between knowledge documents, highlights, CFIs, books, URLs, Obsidian paths, or AI messages for user confirmation only; it does NOT save anything (params: reasoning, fromDocumentId, toKind, toId, relation, label, cfi)",
   );
+  tools.push(
+    "- **compressKnowledgeDocumentSummary**: Update only the derived compact summary cache for a long knowledge document; it does NOT rewrite the user's document content (params: reasoning, documentId, minSourceChars, maxSourceChars, maxSummaryChars)",
+  );
   tools.push("- **getReadingStats**: Get reading statistics (params: reasoning, days)");
   tools.push("- **getSkills**: Query available skills/SOPs for guidance (params: reasoning, task)");
   tools.push(
@@ -197,6 +200,9 @@ function buildToolsSection(
   tools.push("");
   tools.push(
     "Knowledge write safety: proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, and proposeKnowledgeLinkCreate only return confirmation-required drafts. Never tell the user a knowledge document or link was saved or changed until the app has explicitly confirmed applying the proposal.",
+  );
+  tools.push(
+    "Knowledge memory safety: compressKnowledgeDocumentSummary may persist a derived summary cache for retrieval, but it must never be described as editing, replacing, or saving the user's note content.",
   );
 
   // Custom skills

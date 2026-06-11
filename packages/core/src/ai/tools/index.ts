@@ -9,12 +9,12 @@
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
  * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge, proposeKnowledgeDocumentCreate,
- *   proposeKnowledgeDocumentUpdate
+ *   proposeKnowledgeDocumentUpdate, compressKnowledgeDocumentSummary
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap
  * - Context Tools: getCurrentChapter, getSelection, getReadingProgress, getRecentHighlights, getSurroundingContext
  */
-import type { Skill } from "../../types";
+import type { AIConfig, Skill } from "../../types";
 import {
   createAnalyzeArgumentsTool,
   createCompareSectionsTool,
@@ -30,6 +30,7 @@ import {
   createFallbackTocTool,
 } from "./fallback-content-tools";
 import {
+  createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentUpdateTool,
@@ -57,8 +58,8 @@ export type { ToolDefinition, ToolParameter } from "./tool-types";
 export { getContextTools } from "./context-tools";
 
 /** Get general (non-book-specific) tools */
-function getGeneralTools(): ToolDefinition[] {
-  return [
+function getGeneralTools(options: { aiConfig?: AIConfig } = {}): ToolDefinition[] {
+  const tools = [
     createListBooksTool(),
     createSearchAllHighlightsTool(),
     createSearchAllNotesTool(),
@@ -75,6 +76,12 @@ function getGeneralTools(): ToolDefinition[] {
     createUpdateBookMetadataTool(),
     createManageBookGroupsTool(),
   ];
+
+  if (options.aiConfig) {
+    tools.push(createCompressKnowledgeDocumentSummaryTool(options.aiConfig));
+  }
+
+  return tools;
 }
 
 /** Get available tools based on current state */
@@ -82,11 +89,12 @@ export function getAvailableTools(options: {
   bookId?: string | null;
   isVectorized: boolean;
   enabledSkills: Skill[];
+  aiConfig?: AIConfig;
 }): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
 
   // General tools are always available (no bookId required)
-  tools.push(...getGeneralTools());
+  tools.push(...getGeneralTools({ aiConfig: options.aiConfig }));
 
   if (options.bookId) {
     // Context tools (always available when book is loaded)

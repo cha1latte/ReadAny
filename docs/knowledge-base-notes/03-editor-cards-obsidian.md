@@ -680,6 +680,9 @@ The same document should render in different modes:
 ## UX Direction
 
 The knowledge base should feel like a reading workspace, not a generic note app.
+The detailed workspace contract lives in
+[Vault Workspace Layout](05-vault-workspace-layout.md). This section records the
+editor-specific rules that must stay aligned with that layout.
 
 ### Product Shape
 
@@ -693,6 +696,10 @@ ReadAny's knowledge space should be a book-centered vault:
 These jobs should not collapse into one large form. Metadata, tags, source
 links, and AI proposals can support the document, but the center of gravity is a
 WYSIWYG document canvas.
+
+The workspace should never make users feel they are editing raw Markdown or a
+database row. They should be able to look at the screen and immediately
+understand that they are inside a document at a specific path in a vault.
 
 ### Desktop Layout
 
@@ -716,6 +723,10 @@ Visual rules:
   inside the current folder.
 - Long documents need an outline/context panel instead of making the main canvas
   visually noisy.
+- Folder screens should be navigational surfaces with child documents and
+  folders, not a blank editor wrapped in a decorative empty state.
+- The document title, breadcrumb, body, and source cards should carry the
+  experience. Hero-style metric cards should stay out of the writing path.
 
 ### Mobile Layout
 
@@ -734,6 +745,9 @@ Mobile visual rules:
 - The document body should feel like a document, not a stack of input boxes.
 - Folder screens should feel browsable: children as clear rows/cards, not a
   hidden dropdown.
+- Prefer a two-screen flow: a vault browser for hierarchy, then a focused
+  editor screen for writing. Do not stack explorer, editor, sources, and AI
+  panels in one long dashboard scroll.
 
 ### WYSIWYG Contract
 

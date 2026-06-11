@@ -24,6 +24,10 @@ The target system should support:
 - Backlinks, tags, book grouping, search, AI retrieval, and source citations.
 - Extensible custom cards that can render rich interactive UI inside ReadAny and
   degrade cleanly to Markdown outside ReadAny.
+- A real vault-style hierarchy with folders, breadcrumbs, and Obsidian-friendly
+  paths, not a flat notes list disguised with tags.
+- A WYSIWYG document canvas on desktop and mobile; Markdown stays as a
+  projection for export, search, Obsidian, and fallback.
 
 ## Key Recommendation
 
@@ -92,3 +96,4 @@ External docs checked:
 - [Target Architecture](02-target-architecture.md)
 - [Editor, Cards, and Obsidian](03-editor-cards-obsidian.md)
 - [Roadmap](04-implementation-roadmap.md)
+- [Vault Workspace Layout](05-vault-workspace-layout.md)

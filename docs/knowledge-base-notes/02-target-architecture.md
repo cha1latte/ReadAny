@@ -33,6 +33,12 @@ Recommended concepts:
 The knowledge base should feel closer to an Obsidian vault than a notes table.
 The tree is part of the product model, not only a view concern.
 
+This hierarchy is not the same thing as tags or book groups. Tags answer
+"what is this about?" while the vault tree answers "where does this document
+live?" ReadAny must support both, but folder structure is the user's spatial
+organization and should remain visible in navigation, breadcrumbs, export paths,
+and sync reconciliation.
+
 Rules:
 
 - A book owns one `book_home` document at the root of its knowledge vault.
@@ -47,6 +53,9 @@ Rules:
 - Search should ignore collapse state and search the whole vault.
 - AI tools and importers must accept `parentId` so proposed documents land in
   the user's chosen folder instead of always appearing at the root.
+- WYSIWYG document editing is the primary surface. Markdown paths are kept for
+  projection, import/export, search, Obsidian, and fallback, not as the default
+  editing UI.
 
 Navigation model:
 
@@ -58,6 +67,8 @@ Navigation model:
   the editor remains calm.
 - The current path is a real breadcrumb: `Knowledge base / Folder / Document`.
   It should be visible near the document title and preserved through export.
+- Folder nodes open a folder browsing surface. They should not show a blank
+  writing editor unless the product later introduces folder README content.
 
 Export model:
 

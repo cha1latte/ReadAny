@@ -63,6 +63,13 @@ Work:
   - Build a tree from `parent_id`.
   - Support create-inside-folder, move-to-folder, breadcrumbs, orphan surfacing,
     and search across the whole tree.
+- Align the desktop UI with the workspace contract:
+  - Left vault navigator for hierarchy.
+  - Center WYSIWYG document canvas.
+  - Right collapsible context panel for sources, backlinks, outline, and AI
+    memory.
+  - Reduce card nesting around the editor so the document, not the chrome, is
+    the visual focus.
 - Show linked highlights and notes as source cards.
 - Allow standalone book notes.
 - Add basic tags and backlinks display.
@@ -74,6 +81,8 @@ Verification:
 - Book home document persists and syncs.
 - Folder hierarchy persists, syncs, and survives invalid or missing parents
   without hiding documents.
+- The editor reads as a WYSIWYG document canvas, not a textarea or metadata
+  form.
 - Editing a highlight note updates the linked document and old note preview.
 - Export still includes old notes and new knowledge documents.
 
@@ -93,6 +102,9 @@ Work:
 - Add native toolbar state.
 - Add autosave and explicit error states.
 - Update `NoteCard`, `ReaderNoteViewModal`, and `SelectionPopover`.
+- Rework the knowledge mobile layout into a native vault-browser screen and a
+  focused document-editor screen instead of one long stacked dashboard.
+- Use bottom sheets for create, move, insert-card, image, and context actions.
 
 Verification:
 
@@ -100,6 +112,7 @@ Verification:
 - Keyboard does not cover the editor controls.
 - WebView errors are visible and actionable.
 - Existing reader selection flow remains fast.
+- Folder screens behave like browsers with child rows, not empty editor pages.
 
 ## Phase 4: Export and Obsidian v1
 
@@ -202,6 +215,9 @@ Verification:
    - AI tools and retrieval integration.
 7. `feat/kb-custom-cards`
    - Built-in rich cards and card UI polish.
+8. `feat/kb-workspace-polish`
+   - Obsidian-style vault navigation, WYSIWYG-first desktop/mobile layout,
+     folder browsing screens, and context-panel polish.
 
 ## Test Plan by Layer
 

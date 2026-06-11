@@ -78,6 +78,13 @@ function normalizeDocumentType(value: unknown): KnowledgeDocumentType {
   return normalizeType(value) ?? "standalone_note";
 }
 
+function normalizeParentId(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = String(value).trim();
+  if (!raw || ["root", "none", "null"].includes(raw.toLowerCase())) return undefined;
+  return raw;
+}
+
 function normalizeLinkTargetKind(value: unknown): KnowledgeLinkTargetKind | null {
   const kind = String(value ?? "").trim();
   return LINK_TARGET_KINDS.has(kind as KnowledgeLinkTargetKind)
@@ -162,6 +169,7 @@ function documentSummary(document: KnowledgeDocument, query = "", includeContent
   return {
     id: document.id,
     bookId: document.bookId,
+    parentId: document.parentId,
     type: document.type,
     title: document.title,
     tags: document.tags,
@@ -367,6 +375,11 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
         type: "string",
         description: "Optional book id to attach the draft to a book",
       },
+      parentId: {
+        type: "string",
+        description:
+          "Optional parent folder document id. Use root, none, null, or omit to place the draft at the knowledge root.",
+      },
       tags: {
         type: "string",
         description: 'Optional tags as comma-separated text or JSON array, e.g. "reading,summary"',
@@ -385,6 +398,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       }
 
       const bookId = String(args.bookId ?? "").trim() || undefined;
+      const parentId = normalizeParentId(args.parentId);
       const type = normalizeDocumentType(args.type);
       const contentJson = markdownToKnowledgeJson(contentMd);
 
@@ -399,6 +413,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
           type,
           title,
           bookId,
+          parentId,
           tags: tags ?? [],
           contentMd,
           contentJson,
@@ -439,6 +454,11 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         type: "string",
         description: "Optional replacement tags as comma-separated text or JSON array",
       },
+      parentId: {
+        type: "string",
+        description:
+          "Optional parent folder document id to move the document. Use root, none, or null to move it to the knowledge root.",
+      },
     },
     execute: async (args) => {
       const documentId = String(args.documentId ?? "").trim();
@@ -448,9 +468,20 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
       if (!document) return { success: false, error: "Knowledge document not found" };
 
       const patch: Partial<
-        Pick<KnowledgeDocument, "title" | "contentMd" | "contentJson" | "excerpt" | "tags">
+        Pick<
+          KnowledgeDocument,
+          "parentId" | "title" | "contentMd" | "contentJson" | "excerpt" | "tags"
+        >
       > = {};
       const changedFields: string[] = [];
+
+      if (Object.prototype.hasOwnProperty.call(args, "parentId")) {
+        const parentId = normalizeParentId(args.parentId);
+        if ((parentId || undefined) !== (document.parentId || undefined)) {
+          patch.parentId = parentId;
+          changedFields.push("parentId");
+        }
+      }
 
       if (Object.prototype.hasOwnProperty.call(args, "title")) {
         const title = String(args.title ?? "").trim();

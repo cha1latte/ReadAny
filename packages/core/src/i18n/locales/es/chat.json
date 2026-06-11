@@ -118,6 +118,12 @@
     "applied": "Aplicado",
     "applySuccess": "Guardado en la base de conocimiento",
     "applyFailed": "No se pudo aplicar la propuesta",
+    "fields": {
+      "parentFolder": "Carpeta",
+      "title": "Título",
+      "content": "Contenido",
+      "tags": "Etiquetas"
+    },
     "types": {
       "knowledgeDocument": "Documento de conocimiento",
       "bookHome": "Inicio del libro",

@@ -120,6 +120,12 @@
     "applied": "已套用",
     "applySuccess": "已儲存到知識庫",
     "applyFailed": "套用知識庫提案失敗",
+    "fields": {
+      "parentFolder": "所在資料夾",
+      "title": "標題",
+      "content": "內容",
+      "tags": "標籤"
+    },
     "types": {
       "knowledgeDocument": "知識文件",
       "bookHome": "書籍首頁",

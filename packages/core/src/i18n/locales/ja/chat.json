@@ -120,6 +120,12 @@
     "applied": "適用済み",
     "applySuccess": "ナレッジベースに保存しました",
     "applyFailed": "ナレッジ提案の適用に失敗しました",
+    "fields": {
+      "parentFolder": "フォルダー",
+      "title": "タイトル",
+      "content": "内容",
+      "tags": "タグ"
+    },
     "types": {
       "knowledgeDocument": "ナレッジ文書",
       "bookHome": "本のホーム",

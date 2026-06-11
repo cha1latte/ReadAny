@@ -120,6 +120,12 @@
     "applied": "Applied",
     "applySuccess": "Saved to knowledge base",
     "applyFailed": "Failed to apply knowledge proposal",
+    "fields": {
+      "parentFolder": "Folder",
+      "title": "Title",
+      "content": "Content",
+      "tags": "Tags"
+    },
     "types": {
       "knowledgeDocument": "Knowledge document",
       "bookHome": "Book home",

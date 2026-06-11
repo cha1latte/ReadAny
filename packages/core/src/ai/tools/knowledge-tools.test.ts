@@ -145,12 +145,13 @@ describe("knowledge tools", () => {
       query: "vector",
     })) as {
       total: number;
-      documents: Array<{ id: string; summary?: string; snippet: string }>;
+      documents: Array<{ id: string; parentId?: string; summary?: string; snippet: string }>;
     };
 
     expect(result.total).toBe(1);
     expect(result.documents[0]).toMatchObject({
       id: "doc-summary",
+      parentId: undefined,
       summary: "Vector memory: durable insight about context windows.",
       snippet: "Vector memory: durable insight about context windows.",
     });
@@ -227,6 +228,7 @@ describe("knowledge tools", () => {
       contentMd: "## Summary\nSlow reading helps memory.",
       type: "summary",
       bookId: "book-1",
+      parentId: "folder-1",
       tags: '["reading","memory","reading"]',
     })) as {
       success: boolean;
@@ -235,6 +237,7 @@ describe("knowledge tools", () => {
         title: string;
         type: string;
         bookId: string;
+        parentId?: string;
         tags: string[];
         contentMd: string;
         contentJson: { type: string };
@@ -248,6 +251,7 @@ describe("knowledge tools", () => {
       title: "Reading Summary",
       type: "summary",
       bookId: "book-1",
+      parentId: "folder-1",
       tags: ["reading", "memory"],
       contentMd: "## Summary\nSlow reading helps memory.",
       contentJson: { type: "doc" },
@@ -264,6 +268,7 @@ describe("knowledge tools", () => {
     const result = (await tool.execute({
       reasoning: "User asked to refine the note",
       documentId: "doc-1",
+      parentId: "folder-1",
       title: "Deep Reading Notes",
       contentMd: "Updated durable note.",
       tags: "reading, reflection",
@@ -272,6 +277,7 @@ describe("knowledge tools", () => {
       requiresConfirmation: boolean;
       documentId: string;
       patch: {
+        parentId?: string;
         title?: string;
         contentMd?: string;
         contentJson?: { type: string };
@@ -285,12 +291,20 @@ describe("knowledge tools", () => {
     expect(result.requiresConfirmation).toBe(true);
     expect(result.documentId).toBe("doc-1");
     expect(result.patch).toMatchObject({
+      parentId: "folder-1",
       title: "Deep Reading Notes",
       contentMd: "Updated durable note.",
       contentJson: { type: "doc" },
       tags: ["reading", "reflection"],
     });
-    expect(result.changedFields).toEqual(["title", "contentMd", "contentJson", "excerpt", "tags"]);
+    expect(result.changedFields).toEqual([
+      "parentId",
+      "title",
+      "contentMd",
+      "contentJson",
+      "excerpt",
+      "tags",
+    ]);
   });
 
   it("does not create an update proposal when nothing changes", async () => {

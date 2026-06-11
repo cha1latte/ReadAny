@@ -118,6 +118,12 @@
     "applied": "Appliqué",
     "applySuccess": "Enregistré dans la base de connaissances",
     "applyFailed": "Impossible d'appliquer la proposition",
+    "fields": {
+      "parentFolder": "Dossier",
+      "title": "Titre",
+      "content": "Contenu",
+      "tags": "Étiquettes"
+    },
     "types": {
       "knowledgeDocument": "Document de connaissance",
       "bookHome": "Accueil du livre",

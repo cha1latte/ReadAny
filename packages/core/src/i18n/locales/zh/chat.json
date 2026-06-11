@@ -120,6 +120,12 @@
     "applied": "已应用",
     "applySuccess": "已保存到知识库",
     "applyFailed": "应用知识库提案失败",
+    "fields": {
+      "parentFolder": "所在文件夹",
+      "title": "标题",
+      "content": "内容",
+      "tags": "标签"
+    },
     "types": {
       "knowledgeDocument": "知识文档",
       "bookHome": "书籍主页",

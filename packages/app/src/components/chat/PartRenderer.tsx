@@ -242,6 +242,30 @@ const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
   imported_markdown: "knowledgeProposal.types.importedMarkdown",
 };
 
+const KNOWLEDGE_CHANGED_FIELD_KEYS: Record<string, string> = {
+  parentId: "knowledgeProposal.fields.parentFolder",
+  title: "knowledgeProposal.fields.title",
+  contentMd: "knowledgeProposal.fields.content",
+  contentJson: "knowledgeProposal.fields.content",
+  excerpt: "knowledgeProposal.fields.content",
+  tags: "knowledgeProposal.fields.tags",
+};
+
+function formatKnowledgeChangedFields(
+  fields: string[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string[] {
+  return [
+    ...new Set(
+      fields.map((field) =>
+        t(KNOWLEDGE_CHANGED_FIELD_KEYS[field] ?? `knowledgeProposal.fields.${field}`, {
+          defaultValue: field,
+        }),
+      ),
+    ),
+  ];
+}
+
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const { t } = useTranslation();
   const hasError = part.status === "error" || Boolean(part.error);
@@ -455,6 +479,7 @@ function KnowledgeProposalCard({
       .join("\n");
     changedFields = [proposal.link.relation];
   }
+  const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
 
   return (
     <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
@@ -490,12 +515,12 @@ function KnowledgeProposalCard({
           </div>
         )}
 
-        {changedFields.length > 0 && (
+        {changedFieldLabels.length > 0 && (
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               {t("knowledgeProposal.changes")}
             </div>
-            <div className="text-xs text-foreground">{changedFields.join(", ")}</div>
+            <div className="text-xs text-foreground">{changedFieldLabels.join(", ")}</div>
           </div>
         )}
 

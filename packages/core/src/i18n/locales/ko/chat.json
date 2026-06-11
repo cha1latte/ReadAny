@@ -120,6 +120,12 @@
     "applied": "적용됨",
     "applySuccess": "지식 베이스에 저장했어요",
     "applyFailed": "지식 제안을 적용하지 못했어요",
+    "fields": {
+      "parentFolder": "폴더",
+      "title": "제목",
+      "content": "내용",
+      "tags": "태그"
+    },
     "types": {
       "knowledgeDocument": "지식 문서",
       "bookHome": "책 홈",

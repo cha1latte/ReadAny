@@ -185,6 +185,30 @@ const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
   imported_markdown: "knowledgeProposal.types.importedMarkdown",
 };
 
+const KNOWLEDGE_CHANGED_FIELD_KEYS: Record<string, string> = {
+  parentId: "knowledgeProposal.fields.parentFolder",
+  title: "knowledgeProposal.fields.title",
+  contentMd: "knowledgeProposal.fields.content",
+  contentJson: "knowledgeProposal.fields.content",
+  excerpt: "knowledgeProposal.fields.content",
+  tags: "knowledgeProposal.fields.tags",
+};
+
+function formatKnowledgeChangedFields(
+  fields: string[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string[] {
+  return [
+    ...new Set(
+      fields.map((field) =>
+        t(KNOWLEDGE_CHANGED_FIELD_KEYS[field] ?? `knowledgeProposal.fields.${field}`, {
+          defaultValue: field,
+        }),
+      ),
+    ),
+  ];
+}
+
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const hasError = part.status === "error" || Boolean(part.error);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
@@ -372,6 +396,7 @@ function KnowledgeProposalCard({
       .join("\n");
     changedFields = [proposal.link.relation];
   }
+  const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
 
   return (
     <View style={s.proposalCard}>
@@ -409,10 +434,10 @@ function KnowledgeProposalCard({
           </View>
         ) : null}
 
-        {changedFields.length > 0 ? (
+        {changedFieldLabels.length > 0 ? (
           <View style={s.proposalMetaBlock}>
             <Text style={s.proposalMetaLabel}>{t("knowledgeProposal.changes", "变更")}</Text>
-            <Text style={s.proposalMetaText}>{changedFields.join(", ")}</Text>
+            <Text style={s.proposalMetaText}>{changedFieldLabels.join(", ")}</Text>
           </View>
         ) : null}
 

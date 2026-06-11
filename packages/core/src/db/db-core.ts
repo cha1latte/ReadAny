@@ -418,6 +418,10 @@ export async function initDatabase(): Promise<void> {
       content_md TEXT NOT NULL DEFAULT '',
       content_schema_version INTEGER NOT NULL DEFAULT 1,
       excerpt TEXT,
+      summary_md TEXT,
+      summary_source_fingerprint TEXT,
+      summary_source_updated_at INTEGER,
+      summary_updated_at INTEGER,
       tags TEXT DEFAULT '[]',
       source_kind TEXT,
       source_id TEXT,
@@ -783,6 +787,20 @@ export async function initDatabase(): Promise<void> {
         );
       } catch {
         // Older installs may fail to add the column on the first pass; don't block startup.
+      }
+
+      const knowledgeSummaryColumns = [
+        "summary_md TEXT",
+        "summary_source_fingerprint TEXT",
+        "summary_source_updated_at INTEGER",
+        "summary_updated_at INTEGER",
+      ];
+      for (const column of knowledgeSummaryColumns) {
+        try {
+          await database.execute(`ALTER TABLE knowledge_documents ADD COLUMN ${column}`);
+        } catch {
+          // Column already exists or table doesn't exist yet.
+        }
       }
 
       // Migration: Create feedback table

@@ -10,6 +10,7 @@ import type {
   KnowledgeLinkTargetKind,
   KnowledgeSourceKind,
 } from "../types";
+import type { KnowledgeSummaryCompressionState } from "../knowledge/compact-summary";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { generateId } from "../utils/generate-id";
 import {
@@ -34,6 +35,10 @@ interface KnowledgeDocumentRow {
   content_md: string;
   content_schema_version: number | null;
   excerpt: string | null;
+  summary_md: string | null;
+  summary_source_fingerprint: string | null;
+  summary_source_updated_at: number | null;
+  summary_updated_at: number | null;
   tags: string;
   source_kind: string | null;
   source_id: string | null;
@@ -64,6 +69,10 @@ interface KnowledgeBacklinkRow extends KnowledgeLinkRow {
   document_content_md: string;
   document_content_schema_version: number | null;
   document_excerpt: string | null;
+  document_summary_md: string | null;
+  document_summary_source_fingerprint: string | null;
+  document_summary_source_updated_at: number | null;
+  document_summary_updated_at: number | null;
   document_tags: string;
   document_source_kind: string | null;
   document_source_id: string | null;
@@ -107,6 +116,10 @@ export interface CreateKnowledgeDocumentInput {
   contentMd?: string;
   contentSchemaVersion?: number;
   excerpt?: string;
+  summaryMd?: string;
+  summarySourceFingerprint?: string;
+  summarySourceUpdatedAt?: number;
+  summaryUpdatedAt?: number;
   tags?: string[];
   sourceKind?: KnowledgeSourceKind;
   sourceId?: string;
@@ -180,6 +193,10 @@ function rowToKnowledgeDocument(row: KnowledgeDocumentRow): KnowledgeDocument {
     contentMd: row.content_md || "",
     contentSchemaVersion: row.content_schema_version ?? KNOWLEDGE_SCHEMA_VERSION,
     excerpt: row.excerpt || undefined,
+    summaryMd: row.summary_md || undefined,
+    summarySourceFingerprint: row.summary_source_fingerprint || undefined,
+    summarySourceUpdatedAt: row.summary_source_updated_at || undefined,
+    summaryUpdatedAt: row.summary_updated_at || undefined,
     tags: parseJSON(row.tags, []) as string[],
     sourceKind: (row.source_kind as KnowledgeSourceKind | null) || undefined,
     sourceId: row.source_id || undefined,
@@ -216,6 +233,10 @@ function rowToKnowledgeBacklink(row: KnowledgeBacklinkRow): KnowledgeBacklink {
       content_md: row.document_content_md,
       content_schema_version: row.document_content_schema_version,
       excerpt: row.document_excerpt,
+      summary_md: row.document_summary_md,
+      summary_source_fingerprint: row.document_summary_source_fingerprint,
+      summary_source_updated_at: row.document_summary_source_updated_at,
+      summary_updated_at: row.document_summary_updated_at,
       tags: row.document_tags,
       source_kind: row.document_source_kind,
       source_id: row.document_source_id,
@@ -308,10 +329,11 @@ export async function searchKnowledgeDocuments(
     where.push(`(
       LOWER(title) LIKE ? ESCAPE '\\'
       OR LOWER(excerpt) LIKE ? ESCAPE '\\'
+      OR LOWER(summary_md) LIKE ? ESCAPE '\\'
       OR LOWER(content_md) LIKE ? ESCAPE '\\'
       OR LOWER(tags) LIKE ? ESCAPE '\\'
     )`);
-    params.push(pattern, pattern, pattern, pattern);
+    params.push(pattern, pattern, pattern, pattern, pattern);
   }
 
   params.push(filters.limit ?? 200);
@@ -344,6 +366,10 @@ export async function createKnowledgeDocument(
     contentMd: input.contentMd ?? "",
     contentSchemaVersion: input.contentSchemaVersion ?? KNOWLEDGE_SCHEMA_VERSION,
     excerpt: input.excerpt,
+    summaryMd: input.summaryMd,
+    summarySourceFingerprint: input.summarySourceFingerprint,
+    summarySourceUpdatedAt: input.summarySourceUpdatedAt,
+    summaryUpdatedAt: input.summaryUpdatedAt,
     tags: input.tags ?? [],
     sourceKind: input.sourceKind,
     sourceId: input.sourceId,
@@ -377,9 +403,10 @@ export async function insertKnowledgeDocument(document: KnowledgeDocument): Prom
   await database.execute(
     `INSERT INTO knowledge_documents (
        id, book_id, parent_id, type, title, content_json, content_md,
-       content_schema_version, excerpt, tags, source_kind, source_id,
+       content_schema_version, excerpt, summary_md, summary_source_fingerprint,
+       summary_source_updated_at, summary_updated_at, tags, source_kind, source_id,
        created_at, updated_at, deleted_at, sync_version, last_modified_by
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       document.id,
       document.bookId ?? null,
@@ -390,6 +417,10 @@ export async function insertKnowledgeDocument(document: KnowledgeDocument): Prom
       document.contentMd,
       document.contentSchemaVersion,
       document.excerpt ?? null,
+      document.summaryMd ?? null,
+      document.summarySourceFingerprint ?? null,
+      document.summarySourceUpdatedAt ?? null,
+      document.summaryUpdatedAt ?? null,
       JSON.stringify(document.tags),
       document.sourceKind ?? null,
       document.sourceId ?? null,
@@ -495,6 +526,39 @@ export async function updateKnowledgeDocument(
   }
 }
 
+export async function updateKnowledgeDocumentSummary(
+  id: string,
+  state: KnowledgeSummaryCompressionState | null,
+): Promise<void> {
+  const database = await getDB();
+  const deviceId = await getDeviceId();
+  const updatedAt = await nextUpdatedAt(database, "knowledge_documents", id);
+  const syncVersion = await nextSyncVersion(database, "knowledge_documents");
+  const summaryMd = state?.summaryMd?.trim() || null;
+
+  await database.execute(
+    `UPDATE knowledge_documents
+     SET summary_md = ?,
+         summary_source_fingerprint = ?,
+         summary_source_updated_at = ?,
+         summary_updated_at = ?,
+         updated_at = ?,
+         sync_version = ?,
+         last_modified_by = ?
+     WHERE id = ?`,
+    [
+      summaryMd,
+      summaryMd ? (state?.sourceFingerprint ?? null) : null,
+      summaryMd ? (state?.sourceUpdatedAt ?? null) : null,
+      summaryMd ? (state?.compressedAt ?? updatedAt) : null,
+      updatedAt,
+      syncVersion,
+      deviceId,
+      id,
+    ],
+  );
+}
+
 export async function deleteKnowledgeDocument(id: string): Promise<void> {
   const database = await getDB();
   await insertTombstone(database, id, "knowledge_documents");
@@ -530,6 +594,10 @@ export async function getKnowledgeBacklinks(
        kd.content_md AS document_content_md,
        kd.content_schema_version AS document_content_schema_version,
        kd.excerpt AS document_excerpt,
+       kd.summary_md AS document_summary_md,
+       kd.summary_source_fingerprint AS document_summary_source_fingerprint,
+       kd.summary_source_updated_at AS document_summary_source_updated_at,
+       kd.summary_updated_at AS document_summary_updated_at,
        kd.tags AS document_tags,
        kd.source_kind AS document_source_kind,
        kd.source_id AS document_source_id,

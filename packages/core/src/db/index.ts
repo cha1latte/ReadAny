@@ -58,6 +58,7 @@ export {
   ensureBookHomeDocument,
   insertKnowledgeDocument,
   updateKnowledgeDocument,
+  updateKnowledgeDocumentSummary,
   deleteKnowledgeDocument,
   getKnowledgeBacklinks,
   getKnowledgeLinks,

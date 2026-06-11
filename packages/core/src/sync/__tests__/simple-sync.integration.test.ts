@@ -84,6 +84,10 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     "content_md",
     "content_schema_version",
     "excerpt",
+    "summary_md",
+    "summary_source_fingerprint",
+    "summary_source_updated_at",
+    "summary_updated_at",
     "tags",
     "source_kind",
     "source_id",
@@ -545,6 +549,10 @@ function knowledgeDocumentRow(overrides: Row = {}): Row {
     content_md: "# Book home",
     content_schema_version: 1,
     excerpt: "Book home",
+    summary_md: "Compact durable memory",
+    summary_source_fingerprint: "fnv1a32:12345678",
+    summary_source_updated_at: 900,
+    summary_updated_at: 950,
     tags: "[]",
     source_kind: "book",
     source_id: "book-1",
@@ -711,6 +719,8 @@ describe("simple sync convergence", () => {
     expect(result.success).toBe(true);
     expect(deviceB.get("knowledge_documents", "doc-1")).toMatchObject({
       title: "Book home",
+      summary_md: "Compact durable memory",
+      summary_source_fingerprint: "fnv1a32:12345678",
       source_kind: "book",
     });
     expect(deviceB.get("knowledge_links", "knowledge-link-1")).toMatchObject({

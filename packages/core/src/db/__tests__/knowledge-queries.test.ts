@@ -45,6 +45,7 @@ const {
   insertKnowledgeLink,
   searchKnowledgeDocuments,
   updateKnowledgeDocument,
+  updateKnowledgeDocumentSummary,
   upsertKnowledgeCardTemplate,
 } = await import("../knowledge-queries");
 
@@ -58,6 +59,10 @@ const docRow = {
   content_md: "# Book Home",
   content_schema_version: 1,
   excerpt: "Short",
+  summary_md: "Compact durable memory",
+  summary_source_fingerprint: "fnv1a32:12345678",
+  summary_source_updated_at: 900,
+  summary_updated_at: 950,
   tags: '["tag-a"]',
   source_kind: "book",
   source_id: "book-1",
@@ -95,6 +100,10 @@ describe("knowledge-queries", () => {
       title: "Book Home",
       contentJson: { type: "doc", content: [] },
       contentMd: "# Book Home",
+      summaryMd: "Compact durable memory",
+      summarySourceFingerprint: "fnv1a32:12345678",
+      summarySourceUpdatedAt: 900,
+      summaryUpdatedAt: 950,
       tags: ["tag-a"],
       sourceKind: "book",
       sourceId: "book-1",
@@ -143,6 +152,7 @@ describe("knowledge-queries", () => {
     expect(sql).toContain("book_id = ?");
     expect(sql).toContain("type = ?");
     expect(sql).toContain("LOWER(title) LIKE ? ESCAPE '\\'");
+    expect(sql).toContain("LOWER(summary_md) LIKE ? ESCAPE '\\'");
     expect(sql).toContain("LOWER(content_md) LIKE ? ESCAPE '\\'");
     expect(params).toEqual([
       "book-1",
@@ -151,6 +161,8 @@ describe("knowledge-queries", () => {
       "%deep%",
       "%deep%",
       "%deep%",
+      "%deep%",
+      "%100\\%%",
       "%100\\%%",
       "%100\\%%",
       "%100\\%%",
@@ -186,8 +198,8 @@ describe("knowledge-queries", () => {
     expect(params[0]).toBe("generated-id");
     expect(params[1]).toBe("book-1");
     expect(params[5]).toBe('{"type":"doc","content":[]}');
-    expect(params[15]).toBe(7);
-    expect(params[16]).toBe("device-1");
+    expect(params[19]).toBe(7);
+    expect(params[20]).toBe("device-1");
   });
 
   it("ensures book home document by returning the existing document first", async () => {
@@ -218,7 +230,7 @@ describe("knowledge-queries", () => {
     const [sql, params] = mockExecute.mock.calls[0];
     expect(sql).toContain("INSERT INTO knowledge_documents");
     expect(params[0]).toBe("doc-2");
-    expect(params[9]).toBe('["x"]');
+    expect(params[13]).toBe('["x"]');
   });
 
   it("updates content, nullable fields, and sync tracking", async () => {
@@ -245,6 +257,33 @@ describe("knowledge-queries", () => {
     expect(params).toContain(2345);
     expect(params).toContain(7);
     expect(params).toContain("device-1");
+  });
+
+  it("updates compact summary state without writing back to legacy notes", async () => {
+    await updateKnowledgeDocumentSummary("doc-1", {
+      summaryMd: "  ## Memory\n- Keep this.  ",
+      sourceFingerprint: "fnv1a32:abcdef12",
+      sourceUpdatedAt: 3000,
+      compressedAt: 4000,
+    });
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("summary_md = ?");
+    expect(sql).toContain("summary_source_fingerprint = ?");
+    expect(sql).toContain("summary_source_updated_at = ?");
+    expect(sql).toContain("summary_updated_at = ?");
+    expect(sql).toContain("sync_version = ?");
+    expect(params).toEqual([
+      "## Memory\n- Keep this.",
+      "fnv1a32:abcdef12",
+      3000,
+      4000,
+      2345,
+      7,
+      "device-1",
+      "doc-1",
+    ]);
+    expect(mockSelect).not.toHaveBeenCalled();
   });
 
   it("writes projection document edits back to their legacy source", async () => {

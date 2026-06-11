@@ -82,6 +82,35 @@ describe("knowledge tools", () => {
     expect(result.documents[0].snippet).toContain("Memory note");
   });
 
+  it("scores and returns compact summaries in knowledge search results", async () => {
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([
+      doc({
+        id: "doc-summary",
+        title: "Untitled",
+        excerpt: undefined,
+        contentMd: "Long body without the key term.",
+        summaryMd: "Vector memory: durable insight about context windows.",
+        tags: [],
+      }),
+    ]);
+
+    const tool = createSearchKnowledgeBaseTool();
+    const result = (await tool.execute({
+      reasoning: "Need compact knowledge",
+      query: "vector",
+    })) as {
+      total: number;
+      documents: Array<{ id: string; summary?: string; snippet: string }>;
+    };
+
+    expect(result.total).toBe(1);
+    expect(result.documents[0]).toMatchObject({
+      id: "doc-summary",
+      summary: "Vector memory: durable insight about context windows.",
+      snippet: "Vector memory: durable insight about context windows.",
+    });
+  });
+
   it("returns current book knowledge and can include full content", async () => {
     dbMocks.getKnowledgeDocuments.mockResolvedValue([doc()]);
 

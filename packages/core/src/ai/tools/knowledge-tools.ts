@@ -117,7 +117,7 @@ function markdownToKnowledgeJson(markdown: string): JSONValue {
 }
 
 function createSnippet(document: KnowledgeDocument, query: string): string {
-  const source = compactText(document.excerpt || document.contentMd || "");
+  const source = compactText(document.excerpt || document.summaryMd || document.contentMd || "");
   if (!source) return "";
   if (!query) return source.slice(0, 320);
 
@@ -138,12 +138,14 @@ function scoreDocument(document: KnowledgeDocument, query: string): number {
   let score = 0;
   const title = document.title.toLowerCase();
   const excerpt = (document.excerpt || "").toLowerCase();
+  const summary = (document.summaryMd || "").toLowerCase();
   const content = document.contentMd.toLowerCase();
   const tags = document.tags.join(" ").toLowerCase();
 
   if (title.includes(query)) score += 8;
   if (tags.includes(query)) score += 5;
   if (excerpt.includes(query)) score += 3;
+  if (summary.includes(query)) score += 2;
   if (content.includes(query)) score += 1;
   return score;
 }
@@ -156,6 +158,7 @@ function documentSummary(document: KnowledgeDocument, query = "", includeContent
     title: document.title,
     tags: document.tags,
     excerpt: document.excerpt,
+    summary: document.summaryMd,
     snippet: createSnippet(document, query),
     updatedAt: document.updatedAt,
     content: includeContent ? document.contentMd : undefined,

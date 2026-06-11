@@ -49,6 +49,10 @@ export interface KnowledgeDocument {
   contentMd: string;
   contentSchemaVersion: number;
   excerpt?: string;
+  summaryMd?: string;
+  summarySourceFingerprint?: string;
+  summarySourceUpdatedAt?: number;
+  summaryUpdatedAt?: number;
   tags: string[];
   sourceKind?: KnowledgeSourceKind;
   sourceId?: string;

@@ -183,6 +183,10 @@ Editor:
 
 - JSON to Markdown projection is deterministic.
 - Markdown import creates valid Tiptap JSON.
+- Surface profiles expose only the rich-text features allowed for that scenario.
+- Rich-text preservation tests cover desktop save, mobile save, sync apply, and
+  export projection for headings, lists, source refs, cards, links, attachments,
+  and AI provenance.
 - Custom card nodes preserve attrs.
 - Unsupported cards render fallback.
 
@@ -211,4 +215,3 @@ Export:
 - Which custom cards are required for v1?
 - Should AI-created documents require explicit confirmation every time?
 - How much of the old Notes page should remain after the knowledge page ships?
-

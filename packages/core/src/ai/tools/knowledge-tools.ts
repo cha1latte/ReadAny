@@ -10,7 +10,10 @@ import {
   getKnowledgeDocuments,
   searchKnowledgeDocuments,
 } from "../../db/database";
-import { validateKnowledgeDocumentParent } from "../../knowledge/document-utils";
+import {
+  orderKnowledgeDocuments,
+  validateKnowledgeDocumentParent,
+} from "../../knowledge/document-utils";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
 import type {
   AIConfig,
@@ -26,6 +29,7 @@ import type { ToolDefinition } from "./tool-types";
 
 const SEARCH_SCAN_LIMIT = 200;
 const DEFAULT_RESULT_LIMIT = 8;
+const MAX_CHILD_CONTEXT_COUNT = 8;
 const LINK_TARGET_KINDS = new Set<KnowledgeLinkTargetKind>([
   "book",
   "highlight",
@@ -274,6 +278,24 @@ function createDocumentMap(documents: KnowledgeDocument[]): Map<string, Knowledg
   return new Map(documents.map((document) => [document.id, document]));
 }
 
+function createChildrenByParentId(
+  documents: KnowledgeDocument[],
+): Map<string, KnowledgeDocument[]> {
+  const childrenByParentId = new Map<string, KnowledgeDocument[]>();
+  for (const document of documents) {
+    if (!document.parentId) continue;
+    const children = childrenByParentId.get(document.parentId) ?? [];
+    children.push(document);
+    childrenByParentId.set(document.parentId, children);
+  }
+
+  for (const [parentId, children] of childrenByParentId) {
+    childrenByParentId.set(parentId, orderKnowledgeDocuments(children));
+  }
+
+  return childrenByParentId;
+}
+
 async function createPathContext(bookId?: string): Promise<Map<string, KnowledgeDocument>> {
   const documents = await getKnowledgeDocuments({ ...(bookId ? { bookId } : {}), limit: 5000 });
   return createDocumentMap(documents);
@@ -301,18 +323,31 @@ function documentSummary(
   query = "",
   includeContent = false,
   documentsById = createDocumentMap([document]),
+  childrenByParentId = createChildrenByParentId([...documentsById.values()]),
 ) {
+  const parent = document.parentId ? documentsById.get(document.parentId) : undefined;
+  const children = childrenByParentId.get(document.id) ?? [];
   return {
     id: document.id,
     bookId: document.bookId,
     parentId: document.parentId,
+    parentTitle: parent?.title,
     path: createDocumentPath(document, documentsById),
     type: document.type,
+    isFolder: document.type === "folder",
     title: document.title,
     tags: document.tags,
     excerpt: document.excerpt,
     summary: document.summaryMd,
     snippet: createSnippet(document, query),
+    childCount: children.length,
+    children: children.slice(0, MAX_CHILD_CONTEXT_COUNT).map((child) => ({
+      id: child.id,
+      type: child.type,
+      title: child.title,
+      path: createDocumentPath(child, documentsById),
+      updatedAt: child.updatedAt,
+    })),
     updatedAt: document.updatedAt,
     content: includeContent ? document.contentMd : undefined,
   };
@@ -363,6 +398,7 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
         limit: 5000,
       });
       const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       const scored = documents
         .map((document) => ({ document, score: scoreDocument(document, query) }))
@@ -374,7 +410,9 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
         showing: Math.min(scored.length, limit),
         documents: scored
           .slice(0, limit)
-          .map((item) => documentSummary(item.document, query, false, documentsById)),
+          .map((item) =>
+            documentSummary(item.document, query, false, documentsById, childrenByParentId),
+          ),
       };
     },
   };
@@ -412,12 +450,13 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
       const documents = await getKnowledgeDocuments({ bookId, type, limit });
       const pathContextDocuments = await getKnowledgeDocuments({ bookId, limit: 5000 });
       const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       return {
         bookId,
         total: documents.length,
         documents: documents.map((document) =>
-          documentSummary(document, "", includeContent, documentsById),
+          documentSummary(document, "", includeContent, documentsById, childrenByParentId),
         ),
       };
     },
@@ -683,6 +722,9 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         limit: 5000,
       });
       const currentDocumentsById = createDocumentMap([...pathContextDocuments, document]);
+      const currentChildrenByParentId = createChildrenByParentId([
+        ...currentDocumentsById.values(),
+      ]);
       const projectedDocument: KnowledgeDocument = {
         ...document,
         ...(patch.parentId !== undefined || Object.prototype.hasOwnProperty.call(patch, "parentId")
@@ -691,6 +733,7 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         ...(patch.title ? { title: patch.title } : {}),
       };
       const targetDocumentsById = createDocumentMap([...pathContextDocuments, projectedDocument]);
+      const targetChildrenByParentId = createChildrenByParentId([...targetDocumentsById.values()]);
 
       return {
         success: true,
@@ -699,8 +742,21 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         confirmationKind: "knowledge_document_update",
         message: "Patch generated only. The existing knowledge document has not been changed.",
         documentId,
-        current: documentSummary(document, "", false, currentDocumentsById),
+        current: documentSummary(
+          document,
+          "",
+          false,
+          currentDocumentsById,
+          currentChildrenByParentId,
+        ),
         targetPath: createDocumentPath(projectedDocument, targetDocumentsById),
+        target: documentSummary(
+          projectedDocument,
+          "",
+          false,
+          targetDocumentsById,
+          targetChildrenByParentId,
+        ),
         patch,
         changedFields,
       };
@@ -766,6 +822,7 @@ export function createProposeKnowledgeDocumentTagsUpdateTool(): ToolDefinition {
         limit: 5000,
       });
       const documentsById = createDocumentMap([...pathContextDocuments, document]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       return {
         success: true,
@@ -774,8 +831,15 @@ export function createProposeKnowledgeDocumentTagsUpdateTool(): ToolDefinition {
         confirmationKind: "knowledge_document_update",
         message: "Tag update generated only. The existing knowledge document has not been changed.",
         documentId,
-        current: documentSummary(document, "", false, documentsById),
+        current: documentSummary(document, "", false, documentsById, childrenByParentId),
         targetPath: createDocumentPath(document, documentsById),
+        target: documentSummary(
+          { ...document, tags: nextTags },
+          "",
+          false,
+          documentsById,
+          childrenByParentId,
+        ),
         patch: {
           tags: nextTags,
         },

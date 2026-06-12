@@ -155,8 +155,9 @@ Verification:
 ## Phase 5: AI Knowledge Tools
 
 Status: partially implemented. Search/get/propose/create/update/tag/link
-tooling, confirmation proposals, compact summaries, and proposal cards exist.
-Broader retrieval UX and end-to-end validation still need work.
+tooling, confirmation proposals, compact summaries, proposal cards, and
+vault-aware result context exist. Broader retrieval UX and end-to-end validation
+still need work.
 
 Goal:
 

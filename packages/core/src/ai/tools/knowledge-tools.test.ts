@@ -128,7 +128,13 @@ describe("knowledge tools", () => {
     })) as {
       total: number;
       showing: number;
-      documents: Array<{ id: string; path: string; snippet: string }>;
+      documents: Array<{
+        id: string;
+        parentTitle?: string;
+        path: string;
+        snippet: string;
+        childCount: number;
+      }>;
     };
 
     expect(dbMocks.searchKnowledgeDocuments).toHaveBeenCalledWith({
@@ -141,8 +147,10 @@ describe("knowledge tools", () => {
     expect(result.total).toBe(2);
     expect(result.showing).toBe(2);
     expect(result.documents.map((item) => item.id)).toEqual(["doc-3", "doc-1"]);
+    expect(result.documents[0].parentTitle).toBe("Chapter Notes");
     expect(result.documents[0].path).toBe("Knowledge base / Chapter Notes / Memory");
     expect(result.documents[0].snippet).toContain("Memory note");
+    expect(result.documents[0].childCount).toBe(0);
   });
 
   it("scores and returns compact summaries in knowledge search results", async () => {
@@ -232,9 +240,75 @@ describe("knowledge tools", () => {
     expect(result.bookId).toBe("book-1");
     expect(result.documents[0]).toMatchObject({
       id: "doc-1",
+      parentTitle: "Reading Journal",
       path: "Knowledge base / Reading Journal / Deep Reading Home",
       content: "Reading slowly helps memory and reflection.",
       snippet: "Reading slowly helps memory.",
+      childCount: 0,
+    });
+  });
+
+  it("returns direct children for folder knowledge results", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Journal",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const nestedNote = doc({
+      id: "doc-child",
+      type: "standalone_note",
+      title: "Chapter 1",
+      parentId: "folder-1",
+      updatedAt: 3000,
+    });
+    const nestedFolder = doc({
+      id: "folder-child",
+      type: "folder",
+      title: "Themes",
+      parentId: "folder-1",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+      updatedAt: 4000,
+    });
+    dbMocks.getKnowledgeDocuments
+      .mockResolvedValueOnce([folder])
+      .mockResolvedValueOnce([folder, nestedNote, nestedFolder]);
+
+    const tool = createGetBookKnowledgeTool("book-1");
+    const result = (await tool.execute({
+      reasoning: "Need folder context",
+      type: "folder",
+    })) as {
+      documents: Array<{
+        id: string;
+        isFolder: boolean;
+        childCount: number;
+        children: Array<{ id: string; title: string; type: string; path: string }>;
+      }>;
+    };
+
+    expect(result.documents[0]).toMatchObject({
+      id: "folder-1",
+      isFolder: true,
+      childCount: 2,
+      children: [
+        {
+          id: "folder-child",
+          title: "Themes",
+          type: "folder",
+          path: "Knowledge base / Reading Journal / Themes",
+        },
+        {
+          id: "doc-child",
+          title: "Chapter 1",
+          type: "standalone_note",
+          path: "Knowledge base / Reading Journal / Chapter 1",
+        },
+      ],
     });
   });
 

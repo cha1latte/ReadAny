@@ -3,6 +3,7 @@ import {
   type KnowledgeEditorOutlineTarget,
   type KnowledgeEditorValue,
   type KnowledgeImageInsertAttrs,
+  type KnowledgeInternalLinkTarget,
 } from "@/components/knowledge/KnowledgeEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { Button } from "@/components/ui/button";
@@ -2088,6 +2089,24 @@ function KnowledgeHomePanel({
         : [],
     [document, isFolderDocument, value.contentJson, value.contentMd],
   );
+  const internalLinkTargets = useMemo<KnowledgeInternalLinkTarget[]>(
+    () =>
+      documents
+        .filter((item) => item.id !== document?.id)
+        .map((item) => {
+          const path = knowledgeDocumentPath(item, documents, t)
+            .slice(1, -1)
+            .map((part) => part.title)
+            .join(" / ");
+          return {
+            id: item.id,
+            title: item.title.trim() || t("notes.knowledgeUntitledDocument"),
+            path,
+            typeLabel: knowledgeDocumentTypeLabel(item, t),
+          };
+        }),
+    [document?.id, documents, t],
+  );
   const [outlineTarget, setOutlineTarget] = useState<KnowledgeEditorOutlineTarget | null>(null);
   const [isContextInspectorOpen, setIsContextInspectorOpen] = useState(true);
   const handleSelectOutlineItem = useCallback((item: KnowledgeDocumentOutlineItem) => {
@@ -2243,6 +2262,7 @@ function KnowledgeHomePanel({
                 placeholder={t("notes.knowledgePlaceholder")}
                 chrome="canvas"
                 outlineTarget={outlineTarget}
+                internalLinkTargets={internalLinkTargets}
                 contentClassName="max-h-none min-h-[700px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[680px] [&_.ProseMirror]:max-w-[800px] [&_.ProseMirror]:rounded-md [&_.ProseMirror]:border [&_.ProseMirror]:border-border/35 [&_.ProseMirror]:bg-background [&_.ProseMirror]:px-12 [&_.ProseMirror]:py-10 [&_.ProseMirror]:shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:[&_.ProseMirror]:shadow-none [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}

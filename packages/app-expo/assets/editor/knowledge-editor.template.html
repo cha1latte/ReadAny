@@ -171,6 +171,40 @@
         text-decoration: none;
       }
 
+      .readany-internal-link,
+      .readany-source-reference {
+        display: inline-flex;
+        max-width: 92%;
+        align-items: center;
+        gap: 4px;
+        transform: translateY(2px);
+        border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--primary) 10%, transparent);
+        padding: 1px 6px;
+        color: var(--primary);
+        font-size: 0.88em;
+        font-weight: 600;
+        line-height: 1.45;
+        vertical-align: baseline;
+      }
+
+      .readany-internal-link::before {
+        content: "#";
+        opacity: 0.7;
+      }
+
+      .readany-source-reference {
+        border-color: var(--border);
+        background: var(--muted);
+        color: var(--muted-foreground);
+      }
+
+      .readany-source-reference::before {
+        content: "src";
+        opacity: 0.72;
+      }
+
       .readany-image {
         margin: 14px 0;
         text-align: center;

@@ -232,6 +232,116 @@ async function buildKnowledgeEditor() {
       },
     });
 
+    const ReadAnyInternalLink = Node.create({
+      name: "readanyInternalLink",
+      group: "inline",
+      inline: true,
+      atom: true,
+      selectable: true,
+
+      addAttributes() {
+        return {
+          documentId: { default: null },
+          label: { default: null },
+          title: { default: null },
+        };
+      },
+
+      parseHTML() {
+        return [{ tag: "span[data-readany-internal-link]" }];
+      },
+
+      renderHTML({ HTMLAttributes }) {
+        const label = HTMLAttributes.label || HTMLAttributes.title || HTMLAttributes.documentId || "";
+        return [
+          "span",
+          mergeAttributes(HTMLAttributes, {
+            "data-readany-internal-link": HTMLAttributes.documentId || label,
+            class: "readany-internal-link",
+          }),
+          label,
+        ];
+      },
+
+      addNodeView() {
+        return ({ node }) => {
+          const span = document.createElement("span");
+          span.className = "readany-internal-link";
+          span.contentEditable = "false";
+          const update = (nextNode) => {
+            const attrs = nextNode.attrs || {};
+            const label = attrs.label || attrs.title || attrs.documentId || "Linked note";
+            span.dataset.readanyInternalLink = attrs.documentId || label;
+            span.textContent = label;
+          };
+          update(node);
+          return {
+            dom: span,
+            update(nextNode) {
+              if (nextNode.type.name !== "readanyInternalLink") return false;
+              update(nextNode);
+              return true;
+            },
+          };
+        };
+      },
+    });
+
+    const ReadAnySourceReference = Node.create({
+      name: "readanySourceReference",
+      group: "inline",
+      inline: true,
+      atom: true,
+      selectable: true,
+
+      addAttributes() {
+        return {
+          label: { default: null },
+          sourceTitle: { default: null },
+          cfi: { default: null },
+        };
+      },
+
+      parseHTML() {
+        return [{ tag: "span[data-readany-source-reference]" }];
+      },
+
+      renderHTML({ HTMLAttributes }) {
+        const label = HTMLAttributes.label || HTMLAttributes.sourceTitle || "Source reference";
+        return [
+          "span",
+          mergeAttributes(HTMLAttributes, {
+            "data-readany-source-reference": HTMLAttributes.cfi || label,
+            class: "readany-source-reference",
+          }),
+          label,
+        ];
+      },
+
+      addNodeView() {
+        return ({ node }) => {
+          const span = document.createElement("span");
+          span.className = "readany-source-reference";
+          span.contentEditable = "false";
+          const update = (nextNode) => {
+            const attrs = nextNode.attrs || {};
+            const label = attrs.label || attrs.sourceTitle || "Source reference";
+            span.dataset.readanySourceReference = attrs.cfi || label;
+            span.textContent = label;
+          };
+          update(node);
+          return {
+            dom: span,
+            update(nextNode) {
+              if (nextNode.type.name !== "readanySourceReference") return false;
+              update(nextNode);
+              return true;
+            },
+          };
+        };
+      },
+    });
+
     const KnowledgeImage = Node.create({
       name: "image",
       group: "block",
@@ -321,6 +431,8 @@ async function buildKnowledgeEditor() {
           TaskItem.configure({
             nested: true,
           }),
+          ReadAnyInternalLink,
+          ReadAnySourceReference,
           KnowledgeImage,
           ReadAnyCard,
           Placeholder.configure({
@@ -426,6 +538,33 @@ async function buildKnowledgeEditor() {
                   attachmentId:
                     typeof attrs.attachmentId === "string" ? attrs.attachmentId.trim() : "",
                   fileName: typeof attrs.fileName === "string" ? attrs.fileName.trim() : "",
+                },
+              })
+              .run();
+          }
+          break;
+        }
+        case "insertInternalLink": {
+          const linkAttrs = attrs && typeof attrs === "object" ? attrs : {};
+          const label =
+            typeof linkAttrs.label === "string" && linkAttrs.label.trim()
+              ? linkAttrs.label.trim()
+              : typeof linkAttrs.title === "string" && linkAttrs.title.trim()
+                ? linkAttrs.title.trim()
+                : typeof linkAttrs.documentId === "string"
+                  ? linkAttrs.documentId.trim()
+                  : "";
+          if (label) {
+            chain
+              .insertContent({
+                type: "readanyInternalLink",
+                attrs: {
+                  label,
+                  title: label,
+                  documentId:
+                    typeof linkAttrs.documentId === "string" && linkAttrs.documentId.trim()
+                      ? linkAttrs.documentId.trim()
+                      : null,
                 },
               })
               .run();

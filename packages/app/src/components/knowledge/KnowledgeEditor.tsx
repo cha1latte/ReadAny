@@ -88,6 +88,13 @@ export interface KnowledgeEditorOutlineTarget {
   requestId: number;
 }
 
+export interface KnowledgeInternalLinkTarget {
+  id: string;
+  title: string;
+  path?: string;
+  typeLabel?: string;
+}
+
 interface KnowledgeEditorProps {
   value: KnowledgeEditorValue;
   onChange: (value: KnowledgeEditorValue) => void;
@@ -100,6 +107,7 @@ interface KnowledgeEditorProps {
   surface?: KnowledgeEditorSurface;
   onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
   outlineTarget?: KnowledgeEditorOutlineTarget | null;
+  internalLinkTargets?: KnowledgeInternalLinkTarget[];
 }
 
 const cardIconMap = {
@@ -160,6 +168,78 @@ const ReadAnyCardExtension = Node.create({
   },
 });
 
+const ReadAnyInternalLinkExtension = Node.create({
+  name: "readanyInternalLink",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      documentId: { default: null },
+      label: { default: null },
+      title: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "span[data-readany-internal-link]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const label = HTMLAttributes.label || HTMLAttributes.title || HTMLAttributes.documentId || "";
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, {
+        "data-readany-internal-link": HTMLAttributes.documentId || label,
+        class: "readany-internal-link",
+      }),
+      label,
+    ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ReadAnyInternalLinkView);
+  },
+});
+
+const ReadAnySourceReferenceExtension = Node.create({
+  name: "readanySourceReference",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      label: { default: null },
+      sourceTitle: { default: null },
+      cfi: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "span[data-readany-source-reference]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const label = HTMLAttributes.label || HTMLAttributes.sourceTitle || "Source";
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, {
+        "data-readany-source-reference": HTMLAttributes.cfi || label,
+        class: "readany-source-reference",
+      }),
+      label,
+    ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ReadAnySourceReferenceView);
+  },
+});
+
 const KnowledgeImageExtension = Node.create({
   name: "image",
   group: "block",
@@ -207,10 +287,13 @@ export function KnowledgeEditor({
   surface,
   onPickLocalImage,
   outlineTarget,
+  internalLinkTargets = [],
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
   const [isImageInsertOpen, setIsImageInsertOpen] = useState(false);
+  const [isInternalLinkOpen, setIsInternalLinkOpen] = useState(false);
+  const [internalLinkQuery, setInternalLinkQuery] = useState("");
   const [imageSrc, setImageSrc] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
@@ -218,6 +301,7 @@ export function KnowledgeEditor({
   const imageAltInputId = useId();
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const isInternalUpdate = useRef(false);
+  const internalLinkInputRef = useRef<HTMLInputElement | null>(null);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
     [surface, tier],
@@ -287,6 +371,13 @@ export function KnowledgeEditor({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isInternalLinkOpen) return;
+    window.requestAnimationFrame(() => {
+      internalLinkInputRef.current?.focus();
+    });
+  }, [isInternalLinkOpen]);
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({
@@ -294,6 +385,8 @@ export function KnowledgeEditor({
         dropcursor: false,
         gapcursor: false,
       }),
+      ReadAnyInternalLinkExtension,
+      ReadAnySourceReferenceExtension,
       TaskList,
       TaskItem.configure({
         nested: true,
@@ -307,6 +400,18 @@ export function KnowledgeEditor({
     ],
     [placeholder],
   );
+  const visibleInternalLinkTargets = useMemo(() => {
+    const query = internalLinkQuery.trim().toLowerCase();
+    const source = query
+      ? internalLinkTargets.filter((target) =>
+          [target.title, target.path ?? "", target.typeLabel ?? "", target.id]
+            .join(" ")
+            .toLowerCase()
+            .includes(query),
+        )
+      : internalLinkTargets;
+    return source.slice(0, 8);
+  }, [internalLinkQuery, internalLinkTargets]);
 
   const editor = useEditor({
     extensions,
@@ -391,6 +496,29 @@ export function KnowledgeEditor({
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [canUse, editor, t]);
+
+  const insertInternalLink = useCallback(
+    (target?: KnowledgeInternalLinkTarget) => {
+      if (!editor || !canUse("internalLink")) return;
+      const label = (target?.title ?? internalLinkQuery).trim();
+      if (!label) return;
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "readanyInternalLink",
+          attrs: {
+            label,
+            title: label,
+            ...(target?.id ? { documentId: target.id } : {}),
+          },
+        })
+        .run();
+      setInternalLinkQuery("");
+      setIsInternalLinkOpen(false);
+    },
+    [canUse, editor, internalLinkQuery],
+  );
 
   const insertImageAttrs = useCallback(
     (attrs: KnowledgeImageInsertAttrs) => {
@@ -566,6 +694,73 @@ export function KnowledgeEditor({
             >
               <Link2 className="h-3.5 w-3.5" />
             </ToolbarButton>
+          ) : null}
+          {canUse("internalLink") ? (
+            <div className="relative">
+              <ToolbarButton
+                onClick={() => {
+                  setIsInternalLinkOpen((open) => !open);
+                  setIsImageInsertOpen(false);
+                  setIsInsertOpen(false);
+                }}
+                isActive={isInternalLinkOpen}
+                title={t("notes.knowledgeInsertInternalLink")}
+              >
+                <Network className="h-3.5 w-3.5" />
+              </ToolbarButton>
+
+              {isInternalLinkOpen ? (
+                <div className="absolute left-0 top-8 z-20 w-72 rounded-lg border border-border/70 bg-popover p-2 shadow-lg">
+                  <div className="mb-2 text-xs font-medium text-popover-foreground">
+                    {t("notes.knowledgeInsertInternalLink")}
+                  </div>
+                  <input
+                    ref={internalLinkInputRef}
+                    value={internalLinkQuery}
+                    onChange={(event) => setInternalLinkQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        insertInternalLink(visibleInternalLinkTargets[0]);
+                      }
+                    }}
+                    placeholder={t("notes.knowledgeInternalLinkSearchPlaceholder")}
+                    className="mb-2 h-8 w-full rounded-md border border-border/70 bg-background px-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/10"
+                  />
+                  <div className="max-h-56 space-y-1 overflow-y-auto">
+                    {visibleInternalLinkTargets.map((target) => (
+                      <button
+                        key={target.id}
+                        type="button"
+                        className="flex w-full min-w-0 flex-col rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
+                        onClick={() => insertInternalLink(target)}
+                      >
+                        <span className="truncate text-xs font-medium text-popover-foreground">
+                          {target.title}
+                        </span>
+                        <span className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {[target.typeLabel, target.path].filter(Boolean).join(" · ")}
+                        </span>
+                      </button>
+                    ))}
+                    {internalLinkQuery.trim() ? (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-md border border-dashed border-border/70 px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-foreground"
+                        onClick={() => insertInternalLink()}
+                      >
+                        <span className="truncate">
+                          {t("notes.knowledgeInsertLooseInternalLink", {
+                            title: internalLinkQuery.trim(),
+                          })}
+                        </span>
+                        <Network className="h-3.5 w-3.5 shrink-0" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </ToolbarGroup>
       ),
@@ -898,6 +1093,53 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
           )}
         </div>
       </div>
+    </NodeViewWrapper>
+  );
+}
+
+function ReadAnyInternalLinkView({ node, selected }: NodeViewProps) {
+  const label =
+    String(node.attrs.label || node.attrs.title || node.attrs.documentId || "").trim() ||
+    "Linked note";
+
+  return (
+    <NodeViewWrapper
+      as="span"
+      className={cn(
+        "not-prose inline-flex max-w-[18rem] translate-y-[2px] items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[0.86em] font-medium",
+        selected
+          ? "border-primary/45 bg-primary/15 text-primary ring-2 ring-primary/10"
+          : "border-primary/20 bg-primary/10 text-primary",
+      )}
+      contentEditable={false}
+      data-readany-internal-link={node.attrs.documentId || label}
+      title={label}
+    >
+      <Network className="h-3 w-3 shrink-0" />
+      <span className="truncate">{label}</span>
+    </NodeViewWrapper>
+  );
+}
+
+function ReadAnySourceReferenceView({ node, selected }: NodeViewProps) {
+  const label =
+    String(node.attrs.label || node.attrs.sourceTitle || "").trim() || "Source reference";
+
+  return (
+    <NodeViewWrapper
+      as="span"
+      className={cn(
+        "not-prose inline-flex max-w-[18rem] translate-y-[2px] items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[0.86em] font-medium",
+        selected
+          ? "border-border bg-muted text-foreground ring-2 ring-primary/10"
+          : "border-border/60 bg-muted/55 text-muted-foreground",
+      )}
+      contentEditable={false}
+      data-readany-source-reference={node.attrs.cfi || label}
+      title={label}
+    >
+      <BookOpen className="h-3 w-3 shrink-0" />
+      <span className="truncate">{label}</span>
     </NodeViewWrapper>
   );
 }

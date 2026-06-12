@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   BrainIcon,
   CodeIcon,
+  HashIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
@@ -80,6 +81,13 @@ export interface MobileKnowledgeEditorOutlineTarget {
   requestId: number;
 }
 
+export interface MobileKnowledgeInternalLinkTarget {
+  id: string;
+  title: string;
+  path?: string;
+  typeLabel?: string;
+}
+
 interface MobileKnowledgeEditorProps {
   documentId?: string;
   value: MobileKnowledgeEditorValue;
@@ -90,6 +98,7 @@ interface MobileKnowledgeEditorProps {
   surface?: KnowledgeEditorSurface;
   isSaved?: boolean;
   outlineTarget?: MobileKnowledgeEditorOutlineTarget | null;
+  internalLinkTargets?: MobileKnowledgeInternalLinkTarget[];
 }
 
 interface SelectionState {
@@ -218,6 +227,7 @@ export function MobileKnowledgeEditor({
   surface,
   isSaved,
   outlineTarget,
+  internalLinkTargets = [],
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -245,9 +255,11 @@ export function MobileKnowledgeEditor({
     canRedo: false,
   });
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showInternalLinkModal, setShowInternalLinkModal] = useState(false);
   const [showCardMenu, setShowCardMenu] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [internalLinkQuery, setInternalLinkQuery] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
@@ -305,6 +317,18 @@ export function MobileKnowledgeEditor({
     ],
     [canInsertCard, cardTemplates, t],
   );
+  const visibleInternalLinkTargets = useMemo(() => {
+    const query = internalLinkQuery.trim().toLowerCase();
+    const source = query
+      ? internalLinkTargets.filter((target) =>
+          [target.title, target.path ?? "", target.typeLabel ?? "", target.id]
+            .join(" ")
+            .toLowerCase()
+            .includes(query),
+        )
+      : internalLinkTargets;
+    return source.slice(0, 10);
+  }, [internalLinkQuery, internalLinkTargets]);
 
   const theme = useMemo<EditorTheme>(
     () => ({
@@ -604,6 +628,22 @@ export function MobileKnowledgeEditor({
     setLinkUrl("");
   }, [linkUrl, runCommand]);
 
+  const insertInternalLink = useCallback(
+    (target?: MobileKnowledgeInternalLinkTarget) => {
+      if (!canUse("internalLink")) return;
+      const label = (target?.title ?? internalLinkQuery).trim();
+      if (!label) return;
+      runCommand("insertInternalLink", {
+        label,
+        title: label,
+        ...(target?.id ? { documentId: target.id } : {}),
+      });
+      setShowInternalLinkModal(false);
+      setInternalLinkQuery("");
+    },
+    [canUse, internalLinkQuery, runCommand],
+  );
+
   const openImageModal = useCallback(() => {
     if (!canUse("image")) return;
     setImageUrl("");
@@ -789,6 +829,18 @@ export function MobileKnowledgeEditor({
                 size={15}
                 color={selection.marks.link ? colors.primary : colors.mutedForeground}
               />
+            </ToolbarButton>
+          ) : null}
+          {canUse("internalLink") ? (
+            <ToolbarButton
+              onPress={() => {
+                setInternalLinkQuery("");
+                setShowInternalLinkModal(true);
+              }}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <HashIcon size={15} color={colors.mutedForeground} />
             </ToolbarButton>
           ) : null}
         </Fragment>
@@ -1149,6 +1201,115 @@ export function MobileKnowledgeEditor({
       </Modal>
 
       <Modal
+        visible={showInternalLinkModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInternalLinkModal(false)}
+      >
+        <View style={styles.cardSheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              setShowInternalLinkModal(false);
+              setInternalLinkQuery("");
+            }}
+          />
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View
+              style={[
+                styles.cardSheet,
+                styles.inputSheet,
+                { paddingBottom: Math.max(insets.bottom, 14) },
+              ]}
+            >
+              <View style={styles.cardSheetHandle} />
+              <View style={styles.cardSheetHeader}>
+                <Text style={styles.cardSheetTitle}>
+                  {t("notes.knowledgeInsertInternalLink", "插入内部链接")}
+                </Text>
+                <Text style={styles.cardSheetHint}>
+                  {t("notes.knowledgeInternalLinkHint", "连接到当前知识库里的另一篇文档")}
+                </Text>
+              </View>
+              <TextInput
+                value={internalLinkQuery}
+                onChangeText={setInternalLinkQuery}
+                placeholder={t(
+                  "notes.knowledgeInternalLinkSearchPlaceholder",
+                  "搜索文档或输入标题",
+                )}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.linkInput}
+                returnKeyType="done"
+                onSubmitEditing={() => insertInternalLink(visibleInternalLinkTargets[0])}
+              />
+              <ScrollView
+                style={styles.internalLinkResultScroll}
+                contentContainerStyle={styles.internalLinkResultList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {visibleInternalLinkTargets.map((target) => (
+                  <TouchableOpacity
+                    key={target.id}
+                    activeOpacity={0.78}
+                    style={styles.internalLinkResult}
+                    onPress={() => insertInternalLink(target)}
+                  >
+                    <View style={styles.internalLinkResultIcon}>
+                      <HashIcon size={14} color={colors.primary} />
+                    </View>
+                    <View style={styles.internalLinkResultText}>
+                      <Text style={styles.internalLinkResultTitle} numberOfLines={1}>
+                        {target.title}
+                      </Text>
+                      <Text style={styles.internalLinkResultMeta} numberOfLines={1}>
+                        {[target.typeLabel, target.path].filter(Boolean).join(" · ")}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                {internalLinkQuery.trim() ? (
+                  <TouchableOpacity
+                    activeOpacity={0.78}
+                    style={[styles.internalLinkResult, styles.internalLinkLooseResult]}
+                    onPress={() => insertInternalLink()}
+                  >
+                    <View style={styles.internalLinkResultIcon}>
+                      <HashIcon size={14} color={colors.mutedForeground} />
+                    </View>
+                    <View style={styles.internalLinkResultText}>
+                      <Text style={styles.internalLinkResultTitle} numberOfLines={1}>
+                        {t("notes.knowledgeInsertLooseInternalLink", {
+                          title: internalLinkQuery.trim(),
+                        })}
+                      </Text>
+                      <Text style={styles.internalLinkResultMeta} numberOfLines={1}>
+                        {t("notes.knowledgeInternalLinkLooseHint", "作为 Obsidian 风格链接保留")}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
+              </ScrollView>
+              <View style={styles.linkActions}>
+                <TouchableOpacity
+                  style={styles.linkGhostButton}
+                  onPress={() => {
+                    setShowInternalLinkModal(false);
+                    setInternalLinkQuery("");
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal
         visible={showImageModal}
         transparent
         animationType="slide"
@@ -1498,6 +1659,54 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       paddingHorizontal: 12,
       color: colors.foreground,
       fontSize: fontSize.sm,
+    },
+    internalLinkResultScroll: {
+      flexGrow: 0,
+      maxHeight: 260,
+    },
+    internalLinkResultList: {
+      gap: 7,
+      paddingBottom: 2,
+    },
+    internalLinkResult: {
+      minHeight: 52,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.background,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    internalLinkLooseResult: {
+      borderStyle: "dashed",
+      backgroundColor: withOpacity(colors.primary, 0.05),
+    },
+    internalLinkResultIcon: {
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    internalLinkResultText: {
+      minWidth: 0,
+      flex: 1,
+    },
+    internalLinkResultTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      lineHeight: 18,
+    },
+    internalLinkResultMeta: {
+      marginTop: 2,
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 16,
     },
     linkActions: {
       flexDirection: "row",

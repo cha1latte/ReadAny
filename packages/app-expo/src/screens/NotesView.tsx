@@ -3,6 +3,7 @@ import {
   MobileKnowledgeEditor,
   type MobileKnowledgeEditorOutlineTarget,
   type MobileKnowledgeEditorValue,
+  type MobileKnowledgeInternalLinkTarget,
 } from "@/components/knowledge/MobileKnowledgeEditor";
 import {
   BookOpenIcon,
@@ -1868,6 +1869,24 @@ function KnowledgeHomePanel({
         : [],
     [document, isFolderDocument, value.contentJson, value.contentMd],
   );
+  const internalLinkTargets = useMemo<MobileKnowledgeInternalLinkTarget[]>(
+    () =>
+      documents
+        .filter((item) => item.id !== document?.id)
+        .map((item) => {
+          const path = knowledgeDocumentPathItems(item, documents, t)
+            .slice(1, -1)
+            .map((part) => part.title)
+            .join(" / ");
+          return {
+            id: item.id,
+            title: item.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+            path,
+            typeLabel: knowledgeDocumentTypeLabel(item, t),
+          };
+        }),
+    [document?.id, documents, t],
+  );
   const [outlineTarget, setOutlineTarget] = useState<MobileKnowledgeEditorOutlineTarget | null>(
     null,
   );
@@ -2124,6 +2143,7 @@ function KnowledgeHomePanel({
               onChange={onChange}
               isSaved={isSaved}
               outlineTarget={outlineTarget}
+              internalLinkTargets={internalLinkTargets}
               placeholder={t(
                 "notes.knowledgePlaceholder",
                 "记录这本书的摘要、问题、想法和长期知识...",

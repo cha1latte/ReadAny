@@ -2302,6 +2302,7 @@ function KnowledgeHomePanel({
             <KnowledgeRelationsPanel
               links={links}
               backlinks={backlinks}
+              documents={documents}
               highlights={book.highlights}
               isLoading={isRelationsLoading}
               onSelectDocument={onSelectDocument}
@@ -2523,6 +2524,7 @@ function KnowledgeDocumentOutlinePanel({
 function KnowledgeRelationsPanel({
   links,
   backlinks,
+  documents,
   highlights,
   isLoading,
   onSelectDocument,
@@ -2531,6 +2533,7 @@ function KnowledgeRelationsPanel({
 }: {
   links: KnowledgeLink[];
   backlinks: KnowledgeBacklink[];
+  documents: KnowledgeDocument[];
   highlights: HighlightWithBook[];
   isLoading: boolean;
   onSelectDocument: (document: KnowledgeDocument) => void;
@@ -2538,7 +2541,12 @@ function KnowledgeRelationsPanel({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const sourceLinks = links.filter((link) => link.relation === "source").slice(0, 4);
+  const relatedLinks = links.filter((link) => link.relation !== "source").slice(0, 4);
   const visibleBacklinks = backlinks.slice(0, 4);
+  const documentById = useMemo(
+    () => new Map(documents.map((document) => [document.id, document])),
+    [documents],
+  );
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
@@ -2578,6 +2586,67 @@ function KnowledgeRelationsPanel({
                     title={canOpen ? t("notes.knowledgeOpenRelation") : undefined}
                   >
                     <p className="truncate text-xs font-medium text-foreground">{target.title}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                      {target.detail}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+            {t("notes.knowledgeRelatedLinks")}
+          </p>
+          {relatedLinks.length === 0 ? (
+            <p className="rounded-md bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+              {t("notes.knowledgeNoRelatedLinks")}
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {relatedLinks.map((link) => {
+                const targetDocument =
+                  link.toKind === "document" ? documentById.get(link.toId) : undefined;
+                const target = targetDocument
+                  ? {
+                      title:
+                        link.label || targetDocument.title || t("notes.knowledgeUntitledDocument"),
+                      detail: knowledgeDocumentTypeLabel(targetDocument, t),
+                      cfi: undefined,
+                    }
+                  : knowledgeLinkTargetLabel(link, highlights, t);
+                const canOpenDocument = !!targetDocument;
+                const canOpenBook = !canOpenDocument && (!!target.cfi || link.toKind === "book");
+
+                return (
+                  <button
+                    key={link.id}
+                    type="button"
+                    className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors enabled:hover:border-primary/30 enabled:hover:bg-primary/5 disabled:cursor-default"
+                    onClick={() => {
+                      if (targetDocument) {
+                        onSelectDocument(targetDocument);
+                        return;
+                      }
+                      onOpenBook(target.cfi);
+                    }}
+                    disabled={!canOpenDocument && !canOpenBook}
+                    title={
+                      canOpenDocument
+                        ? t("notes.knowledgeOpenRelatedDocument")
+                        : canOpenBook
+                          ? t("notes.knowledgeOpenRelation")
+                          : undefined
+                    }
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {targetDocument ? (
+                        <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      ) : null}
+                      <p className="truncate text-xs font-medium text-foreground">{target.title}</p>
+                    </div>
                     <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
                       {target.detail}
                     </p>

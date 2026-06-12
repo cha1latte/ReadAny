@@ -2059,6 +2059,7 @@ function KnowledgeHomePanel({
             <KnowledgeRelationsCard
               links={links}
               backlinks={backlinks}
+              documents={documents}
               highlights={book.highlights}
               isLoading={isRelationsLoading}
               onSelectDocument={handleSelectContextDocument}
@@ -2289,6 +2290,7 @@ function knowledgeLinkTargetLabel(
 function KnowledgeRelationsCard({
   links,
   backlinks,
+  documents,
   highlights,
   isLoading,
   onSelectDocument,
@@ -2298,6 +2300,7 @@ function KnowledgeRelationsCard({
 }: {
   links: KnowledgeLink[];
   backlinks: KnowledgeBacklink[];
+  documents: KnowledgeDocument[];
   highlights: HighlightWithBook[];
   isLoading: boolean;
   onSelectDocument: (document: KnowledgeDocument) => void;
@@ -2306,7 +2309,12 @@ function KnowledgeRelationsCard({
   styles: ReturnType<typeof makeStyles>;
 }) {
   const sourceLinks = links.filter((link) => link.relation === "source").slice(0, 4);
+  const relatedLinks = links.filter((link) => link.relation !== "source").slice(0, 4);
   const visibleBacklinks = backlinks.slice(0, 4);
+  const documentById = useMemo(
+    () => new Map(documents.map((document) => [document.id, document])),
+    [documents],
+  );
 
   return (
     <View style={styles.knowledgeSourcesCard}>
@@ -2338,6 +2346,57 @@ function KnowledgeRelationsCard({
                 activeOpacity={canOpen ? 0.75 : 1}
                 disabled={!canOpen}
                 onPress={() => onOpenBook(target.cfi)}
+              >
+                <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                  {target.title}
+                </Text>
+                <Text style={styles.knowledgeSourceText} numberOfLines={2}>
+                  {target.detail}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={styles.knowledgeRelationGroupTitle}>
+        {t("notes.knowledgeRelatedLinks", "关联文档")}
+      </Text>
+      {relatedLinks.length === 0 ? (
+        <Text style={styles.knowledgeEmptySources}>
+          {t("notes.knowledgeNoRelatedLinks", "暂无关联文档")}
+        </Text>
+      ) : (
+        <View style={styles.knowledgeSourceList}>
+          {relatedLinks.map((link) => {
+            const targetDocument =
+              link.toKind === "document" ? documentById.get(link.toId) : undefined;
+            const target = targetDocument
+              ? {
+                  title:
+                    link.label ||
+                    targetDocument.title ||
+                    t("notes.knowledgeUntitledDocument", "未命名文档"),
+                  detail: knowledgeDocumentTypeLabel(targetDocument, t),
+                  cfi: undefined,
+                }
+              : knowledgeLinkTargetLabel(link, highlights, t);
+            const canOpenDocument = !!targetDocument;
+            const canOpenBook = !canOpenDocument && (!!target.cfi || link.toKind === "book");
+
+            return (
+              <TouchableOpacity
+                key={link.id}
+                style={styles.knowledgeSourceItem}
+                activeOpacity={canOpenDocument || canOpenBook ? 0.75 : 1}
+                disabled={!canOpenDocument && !canOpenBook}
+                onPress={() => {
+                  if (targetDocument) {
+                    onSelectDocument(targetDocument);
+                    return;
+                  }
+                  onOpenBook(target.cfi);
+                }}
               >
                 <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
                   {target.title}

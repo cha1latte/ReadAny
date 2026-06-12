@@ -54,6 +54,31 @@ This means hierarchy, editor fidelity, and layout are inseparable acceptance
 criteria. If any of them regresses, the feature has drifted back into the old
 notes system.
 
+### Layout Correction After Review
+
+The product should be reviewed as a vault workspace before it is reviewed as a
+notes feature. A user opening the knowledge base should not wonder whether the
+documents are flat notes, grouped tags, or a settings page. The first visible
+structure must communicate "this is a folder tree and I am editing a real
+document inside it."
+
+Concrete correction:
+
+- Directory hierarchy is not optional polish. It is the main navigation model,
+  like Obsidian's file explorer.
+- The root, folders, documents, and orphaned documents must be shown as a
+  spatial tree with indentation, active ancestry, and child counts where useful.
+- Folder overview screens are browsing screens. They should feel like opening a
+  folder in a file-based note app, not like a dashboard section.
+- Document screens are writing screens. Title and body should read as one
+  WYSIWYG document, with metadata and context staying quiet.
+- If a layout makes folders look like tags, documents look like cards, or the
+  editor look like a form, the layout is wrong even if the data model is
+  technically correct.
+- Mobile may use sheets and stacked screens, but it must still preserve the
+  same mental model: vault browser first, focused WYSIWYG editor second,
+  context/actions in sheets.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.

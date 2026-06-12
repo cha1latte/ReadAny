@@ -151,6 +151,14 @@ type EditorBridgeMessage =
   | { type: "focusChanged"; focused?: unknown }
   | { type: "error"; code?: string; message?: string };
 
+type EditorIssueKind = "asset" | "timeout" | "bridge" | "webview" | "process";
+
+interface EditorIssue {
+  kind: EditorIssueKind;
+  code?: string;
+  message: string;
+}
+
 type EditorCommand =
   | {
       type: "init";
@@ -268,7 +276,7 @@ export function MobileKnowledgeEditor({
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
   const [editorHeight, setEditorHeight] = useState(MIN_EDITOR_HEIGHT);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [editorIssue, setEditorIssue] = useState<EditorIssue | null>(null);
   const [useMarkdownFallback, setUseMarkdownFallback] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<KnowledgeEditorDraft | null>(null);
   const [selection, setSelection] = useState<SelectionState>({
@@ -289,6 +297,7 @@ export function MobileKnowledgeEditor({
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
+  const errorMessage = editorIssue?.message ?? null;
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
     [surface, tier],
@@ -458,7 +467,10 @@ export function MobileKnowledgeEditor({
       } catch (error) {
         console.error("[MobileKnowledgeEditor] Failed to load editor asset:", error);
         if (!mounted) return;
-        setErrorMessage(t("notes.knowledgeEditorLoadFailed", "编辑器加载失败"));
+        setEditorIssue({
+          kind: "asset",
+          message: t("notes.knowledgeEditorLoadFailed", "编辑器加载失败"),
+        });
         setUseMarkdownFallback(true);
       }
     };
@@ -474,9 +486,17 @@ export function MobileKnowledgeEditor({
     const attemptKey = webViewInstanceKey;
     const timeout = setTimeout(() => {
       if (readyAttemptRef.current !== attemptKey) return;
-      setErrorMessage(
-        (current) =>
-          current ?? t("notes.knowledgeEditorTimeout", "编辑器启动超时，可以重试或使用备用编辑器"),
+      setEditorIssue((current) =>
+        current
+          ? current
+          : {
+              kind: "timeout",
+              code: "editor_ready_timeout",
+              message: t(
+                "notes.knowledgeEditorTimeout",
+                "编辑器启动超时，可以重试或使用备用编辑器",
+              ),
+            },
       );
     }, EDITOR_READY_TIMEOUT_MS);
 
@@ -511,7 +531,7 @@ export function MobileKnowledgeEditor({
   );
 
   const retryEditor = useCallback(() => {
-    setErrorMessage(null);
+    setEditorIssue(null);
     setUseMarkdownFallback(false);
     setIsBridgeReady(false);
     setIsEditorReady(false);
@@ -573,12 +593,12 @@ export function MobileKnowledgeEditor({
       switch (message.type) {
         case "loaded":
           setIsBridgeReady(true);
-          setErrorMessage(null);
+          setEditorIssue(null);
           sendInit();
           break;
         case "ready":
           setIsEditorReady(true);
-          setErrorMessage(null);
+          setEditorIssue(null);
           break;
         case "heightChanged":
           if (typeof message.height === "number" && Number.isFinite(message.height)) {
@@ -611,7 +631,13 @@ export function MobileKnowledgeEditor({
           break;
         case "error":
           console.error("[MobileKnowledgeEditor] WebView error:", message);
-          setErrorMessage(message.message || t("notes.knowledgeEditorError", "编辑器出错了"));
+          setEditorIssue({
+            kind: "bridge",
+            code: message.code,
+            message:
+              message.message ||
+              t("notes.knowledgeEditorBridgeError", "编辑器通信异常，可以重试或使用备用编辑器"),
+          });
           break;
       }
     },
@@ -1054,7 +1080,9 @@ export function MobileKnowledgeEditor({
             </View>
           </View>
         ) : null}
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {editorIssue ? (
+          <EditorIssueBanner issue={editorIssue} fallbackActive styles={styles} />
+        ) : null}
         <RichTextEditor
           tier={tier}
           surface={surface}
@@ -1161,12 +1189,20 @@ export function MobileKnowledgeEditor({
               onMessage={handleMessage}
               onError={(event) => {
                 console.error("[MobileKnowledgeEditor] WebView load error:", event.nativeEvent);
-                setErrorMessage(t("notes.knowledgeEditorLoadFailed", "编辑器加载失败"));
+                setEditorIssue({
+                  kind: "webview",
+                  code: event.nativeEvent.code ? String(event.nativeEvent.code) : undefined,
+                  message: t("notes.knowledgeEditorLoadFailed", "编辑器加载失败"),
+                });
                 setIsEditorFocused(false);
                 setUseMarkdownFallback(true);
               }}
               onContentProcessDidTerminate={() => {
-                setErrorMessage(t("notes.knowledgeEditorReloading", "编辑器正在恢复..."));
+                setEditorIssue({
+                  kind: "process",
+                  code: "content_process_terminated",
+                  message: t("notes.knowledgeEditorReloading", "编辑器正在恢复..."),
+                });
                 setIsBridgeReady(false);
                 setIsEditorReady(false);
                 setIsEditorFocused(false);
@@ -1179,6 +1215,14 @@ export function MobileKnowledgeEditor({
                 {errorMessage ? (
                   <>
                     <Text style={styles.readyOverlayText}>{errorMessage}</Text>
+                    {editorIssue?.code ? (
+                      <Text style={styles.readyOverlayCode}>
+                        {t("notes.knowledgeEditorErrorCode", {
+                          code: editorIssue.code,
+                          defaultValue: `Code: ${editorIssue.code}`,
+                        })}
+                      </Text>
+                    ) : null}
                     <View style={styles.readyOverlayActions}>
                       <TouchableOpacity
                         style={styles.readyGhostButton}
@@ -1207,7 +1251,9 @@ export function MobileKnowledgeEditor({
         )}
       </View>
 
-      {errorMessage && isEditorReady ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {editorIssue && isEditorReady ? (
+        <EditorIssueBanner issue={editorIssue} styles={styles} />
+      ) : null}
 
       <Modal
         visible={showBlockInsertMenu}
@@ -1723,6 +1769,45 @@ function ToolbarDivider({ styles }: { styles: ReturnType<typeof makeStyles> }) {
   return <View style={styles.toolbarDivider} />;
 }
 
+function EditorIssueBanner({
+  issue,
+  fallbackActive,
+  styles,
+}: {
+  issue: EditorIssue;
+  fallbackActive?: boolean;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={styles.issueBanner}>
+      <Text style={styles.issueTitle}>
+        {fallbackActive
+          ? t("notes.knowledgeEditorFallbackActive", "已切换到备用编辑器")
+          : t("notes.knowledgeEditorError", "编辑器出错了")}
+      </Text>
+      <Text style={styles.issueText}>{issue.message}</Text>
+      {issue.code ? (
+        <Text style={styles.issueCode}>
+          {t("notes.knowledgeEditorErrorCode", {
+            code: issue.code,
+            defaultValue: `Code: ${issue.code}`,
+          })}
+        </Text>
+      ) : null}
+      {fallbackActive ? (
+        <Text style={styles.issueHint}>
+          {t(
+            "notes.knowledgeEditorFallbackHint",
+            "备用编辑器会保留 Markdown 内容；恢复后可以重试所见所得编辑器。",
+          )}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function BlockSheetOption({
   icon,
   title,
@@ -1849,6 +1934,12 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       lineHeight: 18,
       textAlign: "center",
     },
+    readyOverlayCode: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      lineHeight: 15,
+      textAlign: "center",
+    },
     readyOverlayActions: {
       flexDirection: "row",
       alignItems: "center",
@@ -1887,6 +1978,35 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       lineHeight: 17,
       color: colors.destructive,
       backgroundColor: withOpacity(colors.destructive, 0.08),
+    },
+    issueBanner: {
+      gap: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: withOpacity(colors.destructive, 0.06),
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+    },
+    issueTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      lineHeight: 16,
+    },
+    issueText: {
+      color: colors.destructive,
+      fontSize: fontSize.xs,
+      lineHeight: 17,
+    },
+    issueCode: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      lineHeight: 15,
+    },
+    issueHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 17,
     },
     draftBanner: {
       flexDirection: "row",

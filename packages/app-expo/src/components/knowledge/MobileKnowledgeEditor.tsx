@@ -88,6 +88,14 @@ export interface MobileKnowledgeInternalLinkTarget {
   typeLabel?: string;
 }
 
+export interface MobileKnowledgeImageInsertAttrs {
+  src: string;
+  alt?: string;
+  title?: string;
+  attachmentId?: string;
+  fileName?: string;
+}
+
 interface MobileKnowledgeEditorProps {
   documentId?: string;
   value: MobileKnowledgeEditorValue;
@@ -99,6 +107,7 @@ interface MobileKnowledgeEditorProps {
   isSaved?: boolean;
   outlineTarget?: MobileKnowledgeEditorOutlineTarget | null;
   internalLinkTargets?: MobileKnowledgeInternalLinkTarget[];
+  onPickLocalImage?: () => Promise<MobileKnowledgeImageInsertAttrs | null>;
 }
 
 interface SelectionState {
@@ -228,6 +237,7 @@ export function MobileKnowledgeEditor({
   isSaved,
   outlineTarget,
   internalLinkTargets = [],
+  onPickLocalImage,
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -262,6 +272,7 @@ export function MobileKnowledgeEditor({
   const [internalLinkQuery, setInternalLinkQuery] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
+  const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -651,17 +662,40 @@ export function MobileKnowledgeEditor({
     setShowImageModal(true);
   }, [canUse]);
 
+  const insertImageAttrs = useCallback(
+    (attrs: MobileKnowledgeImageInsertAttrs) => {
+      const src = attrs.src.trim();
+      if (!src) return;
+      runCommand("insertImage", {
+        src,
+        alt: attrs.alt?.trim() ?? "",
+        title: attrs.title?.trim() ?? "",
+        attachmentId: attrs.attachmentId?.trim() ?? "",
+        fileName: attrs.fileName?.trim() ?? "",
+      });
+      setShowImageModal(false);
+      setImageUrl("");
+      setImageAlt("");
+    },
+    [runCommand],
+  );
+
   const applyImage = useCallback(() => {
     const src = imageUrl.trim();
     if (!src) return;
-    runCommand("insertImage", {
-      src,
-      alt: imageAlt.trim(),
-    });
-    setShowImageModal(false);
-    setImageUrl("");
-    setImageAlt("");
-  }, [imageAlt, imageUrl, runCommand]);
+    insertImageAttrs({ src, alt: imageAlt });
+  }, [imageAlt, imageUrl, insertImageAttrs]);
+
+  const pickLocalImage = useCallback(async () => {
+    if (!onPickLocalImage || isPickingLocalImage) return;
+    setIsPickingLocalImage(true);
+    try {
+      const attrs = await onPickLocalImage();
+      if (attrs) insertImageAttrs(attrs);
+    } finally {
+      setIsPickingLocalImage(false);
+    }
+  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage]);
 
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
@@ -1342,6 +1376,23 @@ export function MobileKnowledgeEditor({
                   {t("notes.knowledgeImageUrlPlaceholder", "图片 URL")}
                 </Text>
               </View>
+              {onPickLocalImage ? (
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={[styles.localImageButton, isPickingLocalImage && styles.disabledButton]}
+                  onPress={pickLocalImage}
+                  disabled={isPickingLocalImage}
+                >
+                  <View style={styles.localImageButtonIcon}>
+                    <ImagePlusIcon size={15} color={colors.primary} />
+                  </View>
+                  <Text style={styles.localImageButtonText} numberOfLines={1}>
+                    {isPickingLocalImage
+                      ? t("common.loading", "加载中")
+                      : t("notes.knowledgeInsertLocalImage", "选择本地图片")}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               <TextInput
                 value={imageUrl}
                 onChangeText={setImageUrl}
@@ -1372,10 +1423,13 @@ export function MobileKnowledgeEditor({
                   <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.linkPrimaryButton, !imageUrl.trim() && styles.disabledButton]}
+                  style={[
+                    styles.linkPrimaryButton,
+                    (!imageUrl.trim() || isPickingLocalImage) && styles.disabledButton,
+                  ]}
                   onPress={applyImage}
                   activeOpacity={0.82}
-                  disabled={!imageUrl.trim()}
+                  disabled={!imageUrl.trim() || isPickingLocalImage}
                 >
                   <Text style={styles.linkPrimaryText}>{t("common.confirm", "确定")}</Text>
                 </TouchableOpacity>
@@ -1659,6 +1713,32 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       paddingHorizontal: 12,
       color: colors.foreground,
       fontSize: fontSize.sm,
+    },
+    localImageButton: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.primary, 0.3),
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.primary, 0.07),
+      paddingHorizontal: 11,
+    },
+    localImageButtonIcon: {
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    localImageButtonText: {
+      minWidth: 0,
+      flex: 1,
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
     },
     internalLinkResultScroll: {
       flexGrow: 0,

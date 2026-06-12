@@ -3,6 +3,7 @@ import {
   MobileKnowledgeEditor,
   type MobileKnowledgeEditorOutlineTarget,
   type MobileKnowledgeEditorValue,
+  type MobileKnowledgeImageInsertAttrs,
   type MobileKnowledgeInternalLinkTarget,
 } from "@/components/knowledge/MobileKnowledgeEditor";
 import {
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/Icon";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
+import { pickAndPersistMobileKnowledgeImageAttachment } from "@/lib/knowledge/attachment-assets-mobile";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useAnnotationStore, useLibraryStore, useSettingsStore } from "@/stores";
@@ -1071,6 +1073,23 @@ export function NotesView({
     [knowledgeDocuments, knowledgeHome?.id, saveActiveKnowledgeDocumentNow, t],
   );
 
+  const handlePickKnowledgeImageAttachment = useCallback(
+    async (document: KnowledgeDocument): Promise<MobileKnowledgeImageInsertAttrs | null> => {
+      try {
+        const result = await pickAndPersistMobileKnowledgeImageAttachment(document.id);
+        return result?.attrs ?? null;
+      } catch (error) {
+        console.error("[Notes] Failed to add knowledge image attachment:", error);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeAttachmentAddFailed", "图片附件添加失败"),
+        );
+        return null;
+      }
+    },
+    [t],
+  );
+
   const handleCompressKnowledgeSummary = useCallback(async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1578,6 +1597,7 @@ export function NotesView({
             onDeleteDocument={handleDeleteKnowledgeDocument}
             onMoveDocument={handleMoveKnowledgeDocument}
             onCompressSummary={handleCompressKnowledgeSummary}
+            onPickImageAttachment={handlePickKnowledgeImageAttachment}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -1818,6 +1838,7 @@ function KnowledgeHomePanel({
   onDeleteDocument,
   onMoveDocument,
   onCompressSummary,
+  onPickImageAttachment,
   onOpenBook,
   t,
   styles,
@@ -1853,6 +1874,9 @@ function KnowledgeHomePanel({
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onCompressSummary: () => void;
+  onPickImageAttachment: (
+    document: KnowledgeDocument,
+  ) => Promise<MobileKnowledgeImageInsertAttrs | null>;
   onOpenBook: (cfi?: string) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
@@ -2178,6 +2202,7 @@ function KnowledgeHomePanel({
               documentId={document.id}
               value={value}
               onChange={onChange}
+              onPickLocalImage={() => onPickImageAttachment(document)}
               isSaved={isSaved}
               outlineTarget={outlineTarget}
               internalLinkTargets={internalLinkTargets}

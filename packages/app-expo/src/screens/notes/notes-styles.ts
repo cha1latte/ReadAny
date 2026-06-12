@@ -229,10 +229,10 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeRoot: { flex: 1, backgroundColor: colors.background },
     knowledgeScroll: { flex: 1 },
     knowledgeContent: {
-      paddingHorizontal: 16,
-      paddingTop: 6,
+      paddingHorizontal: 18,
+      paddingTop: 8,
       paddingBottom: 30,
-      gap: 10,
+      gap: 14,
     },
     knowledgeDocumentContent: {
       paddingHorizontal: 12,
@@ -246,7 +246,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
       backgroundColor: colors.background,
-      paddingHorizontal: 1,
+      paddingHorizontal: 0,
       paddingBottom: 10,
     },
     knowledgeVaultIcon: {
@@ -278,8 +278,8 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     knowledgeVaultPathScroll: {
-      marginTop: 7,
-      maxHeight: 24,
+      marginTop: 6,
+      maxHeight: 22,
     },
     knowledgeVaultPathTrail: {
       flexDirection: "row",
@@ -301,7 +301,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeVaultPathChip: {
       maxWidth: 180,
-      minHeight: 21,
+      minHeight: 18,
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
@@ -843,7 +843,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.sm,
       borderWidth: 0,
       padding: 0,
-      gap: 8,
+      gap: 10,
     },
     knowledgeExplorerHeader: {
       flexDirection: "row",
@@ -896,7 +896,10 @@ export const makeStyles = (colors: ThemeColors) =>
       gap: 1,
       borderTopWidth: 0.5,
       borderTopColor: withOpacity(colors.border, 0.72),
+      borderLeftWidth: 0.5,
+      borderLeftColor: withOpacity(colors.border, 0.58),
       paddingTop: 7,
+      paddingLeft: 2,
     },
     knowledgeTreeNode: {
       position: "relative",
@@ -1000,14 +1003,14 @@ export const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       paddingHorizontal: 0,
       paddingVertical: 0,
-      gap: 12,
+      gap: 14,
     },
     knowledgeFolderHeader: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingHorizontal: 2,
-      paddingBottom: 9,
+      paddingHorizontal: 0,
+      paddingBottom: 10,
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
     },
@@ -1141,7 +1144,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderBottomWidth: 0.5,
       borderColor: colors.border,
       backgroundColor: colors.background,
-      paddingHorizontal: 2,
+      paddingHorizontal: 0,
       paddingVertical: 8,
     },
     knowledgeFolderItemMain: {
@@ -1195,7 +1198,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeSourcesCard: {
       backgroundColor: colors.card,
-      borderRadius: radius.xl,
+      borderRadius: radius.md,
       borderWidth: 0.5,
       borderColor: colors.border,
       padding: 12,
@@ -1272,7 +1275,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeSummaryCard: {
       backgroundColor: colors.card,
-      borderRadius: radius.xl,
+      borderRadius: radius.md,
       borderWidth: 0.5,
       borderColor: colors.border,
       padding: 12,

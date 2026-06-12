@@ -2250,10 +2250,10 @@ function KnowledgeHomePanel({
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="h-full min-h-[720px] bg-background">
       <div
         className={cn(
-          "relative mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-y border-border/35 bg-background",
+          "relative grid h-full gap-0 overflow-hidden bg-background",
           isContextInspectorOpen && !isCompactWorkspace
             ? "grid-cols-[292px_minmax(0,1fr)_304px]"
             : "grid-cols-[292px_minmax(0,1fr)]",
@@ -2319,7 +2319,7 @@ function KnowledgeHomePanel({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-7">
-            <div className="mx-auto max-w-[840px] pb-5">
+            <div className="mx-auto max-w-[880px] pb-5">
               {isVaultRootOpen ? (
                 <KnowledgeVaultRootTitle
                   bookTitle={book.title}
@@ -2418,7 +2418,7 @@ function KnowledgeHomePanel({
                 chrome="canvas"
                 outlineTarget={outlineTarget}
                 internalLinkTargets={internalLinkTargets}
-                contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[840px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-2 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
+                contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[880px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-2 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}
           </div>
@@ -2837,6 +2837,7 @@ function KnowledgeFolderBrowserRow({
   const isFolder = document.type === "folder";
   const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
   const childCount = childCountByParentId.get(document.id) ?? 0;
+  const updatedLabel = formatKnowledgeDocumentUpdatedDate(document);
   const meta = isFolder
     ? t("notes.knowledgeFolderChildCount", { count: childCount })
     : document.excerpt;
@@ -2848,7 +2849,7 @@ function KnowledgeFolderBrowserRow({
     <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1 py-1.5 transition-colors last:border-b-0 hover:bg-muted/20">
       <button
         type="button"
-        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 pr-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
         <span
@@ -2868,6 +2869,11 @@ function KnowledgeFolderBrowserRow({
             {meta ? ` · ${meta}` : ""}
           </span>
         </span>
+        {updatedLabel ? (
+          <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+            {updatedLabel}
+          </span>
+        ) : null}
         {isFolder ? (
           <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
             {childCount}
@@ -3372,6 +3378,16 @@ function knowledgeDocumentTypeLabel(
   if (document.type === "highlight_note") return t("notes.knowledgeDocumentHighlight");
   if (document.type === "folder") return t("notes.knowledgeDocumentFolder");
   return t("notes.knowledgeDocumentNote");
+}
+
+function formatKnowledgeDocumentUpdatedDate(
+  document: Pick<KnowledgeDocument, "updatedAt">,
+): string {
+  if (!Number.isFinite(document.updatedAt)) return "";
+  return new Date(document.updatedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function knowledgeDocumentPath(

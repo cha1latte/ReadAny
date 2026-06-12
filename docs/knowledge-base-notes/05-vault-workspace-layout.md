@@ -183,6 +183,26 @@ model.
   vault and writing a document are separate modes with the same underlying
   path.
 
+### Runtime Layout Correction
+
+The runtime UI should reinforce the vault model through its physical structure:
+
+- Desktop uses the full knowledge workspace width for three zones. Avoid a
+  centered page shell around the whole feature; that makes the vault feel like a
+  settings subpage instead of a workspace.
+- Root and folder screens use file-browser rows with quiet metadata such as
+  document type, child count, excerpt, and updated date. They should not look
+  like a dashboard grid or repeated marketing cards.
+- Document screens keep the editable title and Tiptap body visually continuous.
+  Tags, path, sync state, and context stay around the document instead of
+  becoming a form above it.
+- Mobile uses two explicit modes: vault browsing and focused document editing.
+  The vault view should feel like a native file explorer with a path trail,
+  tree, and opened-folder rows. The document view should feel like one WYSIWYG
+  writing surface with temporary actions in sheets.
+- Path affordances should read as lightweight file paths. They may be tappable,
+  but they should not look like unrelated filter chips.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.

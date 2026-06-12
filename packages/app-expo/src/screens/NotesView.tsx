@@ -3281,6 +3281,16 @@ function knowledgeDocumentTypeLabel(document: KnowledgeDocument, t: TFunction): 
   return t("notes.knowledgeDocumentNote", "笔记");
 }
 
+function formatKnowledgeDocumentUpdatedDate(
+  document: Pick<KnowledgeDocument, "updatedAt">,
+): string {
+  if (!Number.isFinite(document.updatedAt)) return "";
+  return new Date(document.updatedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function knowledgeDocumentPathItems(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],
@@ -3816,9 +3826,14 @@ function KnowledgeFolderBrowserItem({
   const isFolder = item.type === "folder";
   const isHome = item.type === "book_home";
   const childCount = childCountByParentId.get(item.id) ?? 0;
-  const meta = isFolder
-    ? t("notes.knowledgeFolderChildCount", { count: childCount })
-    : item.excerpt;
+  const updatedLabel = formatKnowledgeDocumentUpdatedDate(item);
+  const meta = [
+    knowledgeDocumentTypeLabel(item, t),
+    updatedLabel,
+    isFolder ? t("notes.knowledgeFolderChildCount", { count: childCount }) : item.excerpt,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <View style={styles.knowledgeFolderItem}>
@@ -3841,8 +3856,7 @@ function KnowledgeFolderBrowserItem({
             {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
           </Text>
           <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
-            {knowledgeDocumentTypeLabel(item, t)}
-            {!!meta && ` · ${meta}`}
+            {meta}
           </Text>
         </View>
         {isFolder ? <Text style={styles.knowledgeFolderItemCount}>{childCount}</Text> : null}

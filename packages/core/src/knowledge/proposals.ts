@@ -90,6 +90,20 @@ export interface KnowledgeProposalApplyResult {
   alreadyApplied?: boolean;
 }
 
+export interface KnowledgeWriteProposalPreview {
+  action: KnowledgeProposalAction;
+  title: string;
+  documentType?: KnowledgeDocumentType;
+  linkType?: KnowledgeLinkTargetKind;
+  tags: string[];
+  contentPreview: string;
+  changedFields: string[];
+  currentPath?: string;
+  targetPath?: string;
+  visiblePath?: string;
+  hasPathChange: boolean;
+}
+
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "book_home",
   "folder",
@@ -382,6 +396,60 @@ export function getKnowledgeWriteProposal(value: unknown): KnowledgeWriteProposa
   return (
     normalizeCreateProposal(value) ?? normalizeUpdateProposal(value) ?? normalizeLinkProposal(value)
   );
+}
+
+export function createKnowledgeWriteProposalPreview(
+  proposal: KnowledgeWriteProposal,
+): KnowledgeWriteProposalPreview {
+  if (proposal.action === "create") {
+    const contentPreview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+    return {
+      action: proposal.action,
+      title: proposal.draft.title ?? "",
+      documentType: proposal.draft.type,
+      tags: proposal.draft.tags ?? [],
+      contentPreview,
+      changedFields: [],
+      targetPath: proposal.targetPath,
+      visiblePath: proposal.targetPath,
+      hasPathChange: false,
+    };
+  }
+
+  if (proposal.action === "update") {
+    const contentPreview =
+      proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+    const currentPath = proposal.current?.path;
+    const targetPath = proposal.targetPath;
+
+    return {
+      action: proposal.action,
+      title: proposal.patch.title ?? proposal.current?.title ?? proposal.documentId,
+      documentType: proposal.current?.type,
+      tags: proposal.patch.tags ?? proposal.current?.tags ?? [],
+      contentPreview,
+      changedFields: proposal.changedFields,
+      currentPath,
+      targetPath,
+      visiblePath: targetPath || currentPath,
+      hasPathChange: Boolean(currentPath && targetPath && currentPath !== targetPath),
+    };
+  }
+
+  return {
+    action: proposal.action,
+    title: proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`,
+    linkType: proposal.link.toKind,
+    tags: [],
+    contentPreview: [
+      `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
+      proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    changedFields: [proposal.link.relation],
+    hasPathChange: false,
+  };
 }
 
 export async function applyKnowledgeWriteProposal(

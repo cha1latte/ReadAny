@@ -9,6 +9,7 @@ import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
+  createKnowledgeWriteProposalPreview,
   getKnowledgeWriteProposal,
 } from "@readany/core/knowledge/proposals";
 import type {
@@ -646,50 +647,23 @@ function KnowledgeProposalCard({
   onApply: () => void;
 }) {
   const { t } = useTranslation();
-  let actionLabel = t("knowledgeProposal.link");
-  let title = "";
-  let typeLabel = t("knowledgeProposal.types.knowledgeLink");
-  let tags: string[] = [];
-  let preview = "";
-  let changedFields: string[] = [];
-  let currentPath = "";
-  let targetPath = "";
-
-  if (proposal.action === "create") {
-    actionLabel = t("knowledgeProposal.create");
-    title = proposal.draft.title ?? "";
-    typeLabel = t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.draft.type], {
-      defaultValue: proposal.draft.type,
-    });
-    tags = proposal.draft.tags ?? [];
-    preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
-    targetPath = proposal.targetPath ?? "";
-  } else if (proposal.action === "update") {
-    actionLabel = t("knowledgeProposal.update");
-    title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
-    typeLabel = proposal.current?.type
-      ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.current.type], {
-          defaultValue: proposal.current.type,
-        })
-      : t("knowledgeProposal.types.knowledgeDocument");
-    tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
-    preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
-    changedFields = proposal.changedFields;
-    currentPath = proposal.current?.path ?? "";
-    targetPath = proposal.targetPath ?? "";
-  } else {
-    title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
-    preview = [
-      `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
-      proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    changedFields = [proposal.link.relation];
-  }
-  const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
-  const showPathChange = Boolean(currentPath && targetPath && currentPath !== targetPath);
-  const visiblePath = targetPath || currentPath;
+  const preview = createKnowledgeWriteProposalPreview(proposal);
+  const actionLabel =
+    preview.action === "create"
+      ? t("knowledgeProposal.create")
+      : preview.action === "update"
+        ? t("knowledgeProposal.update")
+        : t("knowledgeProposal.link");
+  const typeLabel = preview.documentType
+    ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[preview.documentType], {
+        defaultValue: preview.documentType,
+      })
+    : t(
+        preview.action === "link"
+          ? "knowledgeProposal.types.knowledgeLink"
+          : "knowledgeProposal.types.knowledgeDocument",
+      );
+  const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
 
   return (
     <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
@@ -697,7 +671,7 @@ function KnowledgeProposalCard({
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs font-medium text-primary">{actionLabel}</div>
-            <div className="truncate text-sm font-semibold text-foreground">{title}</div>
+            <div className="truncate text-sm font-semibold text-foreground">{preview.title}</div>
           </div>
           <div className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
             {typeLabel}
@@ -710,16 +684,16 @@ function KnowledgeProposalCard({
           {t("knowledgeProposal.safeHint")}
         </p>
 
-        {tags.length > 0 && (
+        {preview.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {tags.slice(0, 6).map((tag) => (
+            {preview.tags.slice(0, 6).map((tag) => (
               <span key={tag} className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
                 {tag}
               </span>
             ))}
-            {tags.length > 6 && (
+            {preview.tags.length > 6 && (
               <span className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
-                +{tags.length - 6}
+                +{preview.tags.length - 6}
               </span>
             )}
           </div>
@@ -734,31 +708,33 @@ function KnowledgeProposalCard({
           </div>
         )}
 
-        {visiblePath && (
+        {preview.visiblePath && (
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               {t("knowledgeProposal.location")}
             </div>
-            {showPathChange ? (
+            {preview.hasPathChange ? (
               <div className="space-y-1 rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed">
-                <div className="break-words text-muted-foreground">{currentPath}</div>
-                <div className="text-primary">→ {targetPath}</div>
+                <div className="break-words text-muted-foreground">{preview.currentPath}</div>
+                <div className="text-primary">→ {preview.targetPath}</div>
               </div>
             ) : (
               <div className="break-words rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed text-foreground">
-                {visiblePath}
+                {preview.visiblePath}
               </div>
             )}
           </div>
         )}
 
-        {preview && (
+        {preview.contentPreview && (
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               {t("knowledgeProposal.contentPreview")}
             </div>
             <div className="max-h-28 overflow-auto rounded border border-border bg-muted/30 p-2 text-xs leading-relaxed text-foreground">
-              {preview.length > 520 ? `${preview.slice(0, 520)}...` : preview}
+              {preview.contentPreview.length > 520
+                ? `${preview.contentPreview.slice(0, 520)}...`
+                : preview.contentPreview}
             </div>
           </div>
         )}

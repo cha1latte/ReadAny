@@ -18,7 +18,11 @@ const idMocks = vi.hoisted(() => ({
 vi.mock("../utils/generate-id", () => idMocks);
 
 const { eventBus } = await import("../utils/event-bus");
-const { applyKnowledgeWriteProposal, getKnowledgeWriteProposal } = await import("./proposals");
+const {
+  applyKnowledgeWriteProposal,
+  createKnowledgeWriteProposalPreview,
+  getKnowledgeWriteProposal,
+} = await import("./proposals");
 
 describe("knowledge write proposals", () => {
   beforeEach(() => {
@@ -74,6 +78,16 @@ describe("knowledge write proposals", () => {
         sourceKind: "book",
         sourceId: "book-1",
       },
+    });
+    expect(proposal ? createKnowledgeWriteProposalPreview(proposal) : null).toMatchObject({
+      action: "create",
+      title: "Durable Summary",
+      documentType: "summary",
+      tags: ["reading", "summary"],
+      contentPreview: "A durable knowledge document.",
+      targetPath: "Knowledge base / Summaries / Durable Summary",
+      visiblePath: "Knowledge base / Summaries / Durable Summary",
+      hasPathChange: false,
     });
   });
 
@@ -135,6 +149,51 @@ describe("knowledge write proposals", () => {
         relation: "related",
         label: "Related idea",
       },
+    });
+    expect(proposal ? createKnowledgeWriteProposalPreview(proposal) : null).toMatchObject({
+      action: "link",
+      title: "Related idea",
+      linkType: "document",
+      contentPreview: "related -> document: doc-2",
+      changedFields: ["related"],
+      hasPathChange: false,
+    });
+  });
+
+  it("surfaces document move paths in proposal previews", () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        type: "standalone_note",
+        title: "Moved Note",
+        path: "Knowledge base / Inbox / Moved Note",
+        tags: ["draft"],
+      },
+      targetPath: "Knowledge base / Chapter Notes / Moved Note",
+      patch: {
+        parentId: "chapter-notes",
+      },
+      changedFields: ["parentId"],
+    });
+
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    expect(createKnowledgeWriteProposalPreview(proposal)).toMatchObject({
+      action: "update",
+      title: "Moved Note",
+      documentType: "standalone_note",
+      tags: ["draft"],
+      changedFields: ["parentId"],
+      currentPath: "Knowledge base / Inbox / Moved Note",
+      targetPath: "Knowledge base / Chapter Notes / Moved Note",
+      visiblePath: "Knowledge base / Chapter Notes / Moved Note",
+      hasPathChange: true,
     });
   });
 
@@ -219,6 +278,16 @@ describe("knowledge write proposals", () => {
       parentId: "folder-1",
       title: "Updated",
       tags: ["done"],
+    });
+    expect(createKnowledgeWriteProposalPreview(updateProposal)).toMatchObject({
+      action: "update",
+      title: "Updated",
+      documentType: undefined,
+      tags: ["done"],
+      changedFields: ["parentId", "title", "tags"],
+      targetPath: "Knowledge base / Folder / Updated",
+      visiblePath: "Knowledge base / Folder / Updated",
+      hasPathChange: false,
     });
   });
 

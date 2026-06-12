@@ -9,6 +9,7 @@ import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
+  createKnowledgeWriteProposalPreview,
   getKnowledgeWriteProposal,
 } from "@readany/core/knowledge/proposals";
 import type {
@@ -534,50 +535,24 @@ function KnowledgeProposalCard({
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
-  let actionLabel = t("knowledgeProposal.link", "建立知识关联");
-  let title = "";
-  let typeLabel = t("knowledgeProposal.types.knowledgeLink", "知识关联");
-  let tags: string[] = [];
-  let preview = "";
-  let changedFields: string[] = [];
-  let currentPath = "";
-  let targetPath = "";
-
-  if (proposal.action === "create") {
-    actionLabel = t("knowledgeProposal.create", "创建知识文档");
-    title = proposal.draft.title ?? "";
-    typeLabel = t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.draft.type], {
-      defaultValue: proposal.draft.type,
-    });
-    tags = proposal.draft.tags ?? [];
-    preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
-    targetPath = proposal.targetPath ?? "";
-  } else if (proposal.action === "update") {
-    actionLabel = t("knowledgeProposal.update", "更新知识文档");
-    title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
-    typeLabel = proposal.current?.type
-      ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[proposal.current.type], {
-          defaultValue: proposal.current.type,
-        })
-      : t("knowledgeProposal.types.knowledgeDocument", "知识文档");
-    tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
-    preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
-    changedFields = proposal.changedFields;
-    currentPath = proposal.current?.path ?? "";
-    targetPath = proposal.targetPath ?? "";
-  } else {
-    title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
-    preview = [
-      `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
-      proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    changedFields = [proposal.link.relation];
-  }
-  const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
-  const showPathChange = Boolean(currentPath && targetPath && currentPath !== targetPath);
-  const visiblePath = targetPath || currentPath;
+  const preview = createKnowledgeWriteProposalPreview(proposal);
+  const actionLabel =
+    preview.action === "create"
+      ? t("knowledgeProposal.create", "创建知识文档")
+      : preview.action === "update"
+        ? t("knowledgeProposal.update", "更新知识文档")
+        : t("knowledgeProposal.link", "建立知识关联");
+  const typeLabel = preview.documentType
+    ? t(KNOWLEDGE_DOCUMENT_TYPE_KEYS[preview.documentType], {
+        defaultValue: preview.documentType,
+      })
+    : t(
+        preview.action === "link"
+          ? "knowledgeProposal.types.knowledgeLink"
+          : "knowledgeProposal.types.knowledgeDocument",
+        preview.action === "link" ? "知识关联" : "知识文档",
+      );
+  const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
 
   return (
     <View style={s.proposalCard}>
@@ -585,7 +560,7 @@ function KnowledgeProposalCard({
         <View style={s.proposalTitleWrap}>
           <Text style={s.proposalActionText}>{actionLabel}</Text>
           <Text style={s.proposalTitleText} numberOfLines={2}>
-            {title}
+            {preview.title}
           </Text>
         </View>
         <View style={s.proposalTypeBadge}>
@@ -600,16 +575,16 @@ function KnowledgeProposalCard({
           {t("knowledgeProposal.safeHint", "AI 只生成了草稿，确认后才会写入你的知识库。")}
         </Text>
 
-        {tags.length > 0 ? (
+        {preview.tags.length > 0 ? (
           <View style={s.proposalTagRow}>
-            {tags.slice(0, 6).map((tag) => (
+            {preview.tags.slice(0, 6).map((tag) => (
               <View key={tag} style={s.proposalTag}>
                 <Text style={s.proposalTagText}>{tag}</Text>
               </View>
             ))}
-            {tags.length > 6 ? (
+            {preview.tags.length > 6 ? (
               <View style={s.proposalTag}>
-                <Text style={s.proposalTagText}>+{tags.length - 6}</Text>
+                <Text style={s.proposalTagText}>+{preview.tags.length - 6}</Text>
               </View>
             ) : null}
           </View>
@@ -622,33 +597,35 @@ function KnowledgeProposalCard({
           </View>
         ) : null}
 
-        {visiblePath ? (
+        {preview.visiblePath ? (
           <View style={s.proposalMetaBlock}>
             <Text style={s.proposalMetaLabel}>{t("knowledgeProposal.location", "位置")}</Text>
-            {showPathChange ? (
+            {preview.hasPathChange ? (
               <View style={s.proposalPathBox}>
                 <Text style={s.proposalPathMutedText} numberOfLines={2}>
-                  {currentPath}
+                  {preview.currentPath}
                 </Text>
                 <Text style={s.proposalPathText} numberOfLines={2}>
-                  → {targetPath}
+                  → {preview.targetPath}
                 </Text>
               </View>
             ) : (
               <Text style={s.proposalPathBoxText} numberOfLines={3}>
-                {visiblePath}
+                {preview.visiblePath}
               </Text>
             )}
           </View>
         ) : null}
 
-        {preview ? (
+        {preview.contentPreview ? (
           <View style={s.proposalPreviewBlock}>
             <Text style={s.proposalMetaLabel}>
               {t("knowledgeProposal.contentPreview", "内容预览")}
             </Text>
             <Text style={s.proposalPreviewText} numberOfLines={6}>
-              {preview.length > 520 ? `${preview.slice(0, 520)}...` : preview}
+              {preview.contentPreview.length > 520
+                ? `${preview.contentPreview.slice(0, 520)}...`
+                : preview.contentPreview}
             </Text>
           </View>
         ) : null}

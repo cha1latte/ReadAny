@@ -151,7 +151,7 @@ async function resolveCreateParentContext({
   type: KnowledgeDocumentType;
   bookId?: string;
   parentId?: string;
-}): Promise<{ bookId?: string; error?: string }> {
+}): Promise<{ bookId?: string; parent?: KnowledgeDocument; error?: string }> {
   if (!parentId) return { bookId };
   if (type === "book_home") return { bookId, error: parentValidationError("book_home_locked") };
 
@@ -163,7 +163,7 @@ async function resolveCreateParentContext({
     return { bookId, error: parentValidationError("book_mismatch") };
   }
 
-  return { bookId: bookId ?? parent.bookId };
+  return { bookId: bookId ?? parent.bookId, parent };
 }
 
 async function validateUpdateParentChange(
@@ -251,6 +251,28 @@ function createDocumentPath(
 
 function createDocumentMap(documents: KnowledgeDocument[]): Map<string, KnowledgeDocument> {
   return new Map(documents.map((document) => [document.id, document]));
+}
+
+async function createPathContext(bookId?: string): Promise<Map<string, KnowledgeDocument>> {
+  const documents = await getKnowledgeDocuments({ ...(bookId ? { bookId } : {}), limit: 5000 });
+  return createDocumentMap(documents);
+}
+
+function createDraftTargetPath({
+  title,
+  parentId,
+  documentsById,
+}: {
+  title: string;
+  parentId?: string;
+  documentsById: Map<string, KnowledgeDocument>;
+}): string {
+  const safeTitle = title.trim() || UNTITLED_DOCUMENT_TITLE;
+  if (!parentId) return [KNOWLEDGE_ROOT_TITLE, safeTitle].join(" / ");
+
+  const parent = documentsById.get(parentId);
+  if (!parent) return [KNOWLEDGE_ROOT_TITLE, ORPHANED_PARENT_TITLE, safeTitle].join(" / ");
+  return [createDocumentPath(parent, documentsById), safeTitle].join(" / ");
 }
 
 function documentSummary(
@@ -506,6 +528,12 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       const parentContext = await resolveCreateParentContext({ type, bookId, parentId });
       if (parentContext.error) return { success: false, error: parentContext.error };
       const contentJson = markdownToKnowledgeJson(contentMd);
+      const documentsById = parentId
+        ? await createPathContext(parentContext.bookId)
+        : createDocumentMap([]);
+      if (parentContext.parent) {
+        documentsById.set(parentContext.parent.id, parentContext.parent);
+      }
 
       return {
         success: true,
@@ -513,6 +541,7 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
         requiresConfirmation: true,
         confirmationKind: "knowledge_document_create",
         message: "Draft generated only. No knowledge document has been saved.",
+        targetPath: createDraftTargetPath({ title, parentId, documentsById }),
         draft: {
           id: generateId(),
           type,
@@ -628,6 +657,19 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
           documentId,
         };
       }
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(document.bookId ? { bookId: document.bookId } : {}),
+        limit: 5000,
+      });
+      const currentDocumentsById = createDocumentMap([...pathContextDocuments, document]);
+      const projectedDocument: KnowledgeDocument = {
+        ...document,
+        ...(patch.parentId !== undefined || Object.prototype.hasOwnProperty.call(patch, "parentId")
+          ? { parentId: patch.parentId }
+          : {}),
+        ...(patch.title ? { title: patch.title } : {}),
+      };
+      const targetDocumentsById = createDocumentMap([...pathContextDocuments, projectedDocument]);
 
       return {
         success: true,
@@ -636,7 +678,8 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         confirmationKind: "knowledge_document_update",
         message: "Patch generated only. The existing knowledge document has not been changed.",
         documentId,
-        current: documentSummary(document, "", false),
+        current: documentSummary(document, "", false, currentDocumentsById),
+        targetPath: createDocumentPath(projectedDocument, targetDocumentsById),
         patch,
         changedFields,
       };

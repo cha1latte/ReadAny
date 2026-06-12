@@ -275,9 +275,9 @@ describe("knowledge tools", () => {
   });
 
   it("creates confirmation-required drafts without saving knowledge documents", async () => {
-    dbMocks.getKnowledgeDocument.mockResolvedValue(
-      doc({ id: "folder-1", type: "folder", title: "Folder" }),
-    );
+    const folder = doc({ id: "folder-1", type: "folder", title: "Folder" });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(folder);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder]);
 
     const tool = createProposeKnowledgeDocumentCreateTool();
     const result = (await tool.execute({
@@ -291,6 +291,7 @@ describe("knowledge tools", () => {
     })) as {
       success: boolean;
       requiresConfirmation: boolean;
+      targetPath: string;
       draft: {
         title: string;
         type: string;
@@ -305,6 +306,7 @@ describe("knowledge tools", () => {
 
     expect(result.success).toBe(true);
     expect(result.requiresConfirmation).toBe(true);
+    expect(result.targetPath).toBe("Knowledge base / Folder / Reading Summary");
     expect(result.draft).toMatchObject({
       title: "Reading Summary",
       type: "summary",
@@ -316,7 +318,7 @@ describe("knowledge tools", () => {
       excerpt: "Summary Slow reading helps memory.",
     });
     expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("folder-1");
-    expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
   });
 
   it("rejects create drafts under missing or non-folder parents", async () => {
@@ -360,10 +362,15 @@ describe("knowledge tools", () => {
       title: "Folder Child",
       contentMd: "Body",
       parentId: "folder-1",
-    })) as { success: boolean; draft: { bookId?: string; parentId?: string } };
+    })) as {
+      success: boolean;
+      targetPath: string;
+      draft: { bookId?: string; parentId?: string };
+    };
 
     expect(result).toMatchObject({
       success: true,
+      targetPath: "Knowledge base / Deep Reading Home / Folder Child",
       draft: {
         bookId: "book-9",
         parentId: "folder-1",
@@ -390,6 +397,8 @@ describe("knowledge tools", () => {
       success: boolean;
       requiresConfirmation: boolean;
       documentId: string;
+      current: { path: string };
+      targetPath: string;
       patch: {
         parentId?: string;
         title?: string;
@@ -405,6 +414,8 @@ describe("knowledge tools", () => {
     expect(result.success).toBe(true);
     expect(result.requiresConfirmation).toBe(true);
     expect(result.documentId).toBe("doc-1");
+    expect(result.current.path).toBe("Knowledge base / Deep Reading Home");
+    expect(result.targetPath).toBe("Knowledge base / Target Folder / Deep Reading Notes");
     expect(result.patch).toMatchObject({
       parentId: "folder-1",
       title: "Deep Reading Notes",

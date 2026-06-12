@@ -115,6 +115,7 @@
     "savedBadge": "已应用",
     "safeHint": "AI 只生成了草稿，确认后才会写入你的知识库。",
     "changes": "变更",
+    "location": "位置",
     "contentPreview": "内容预览",
     "apply": "应用到知识库",
     "applying": "应用中...",

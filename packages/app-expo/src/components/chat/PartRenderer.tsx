@@ -373,6 +373,8 @@ function KnowledgeProposalCard({
   let tags: string[] = [];
   let preview = "";
   let changedFields: string[] = [];
+  let currentPath = "";
+  let targetPath = "";
 
   if (proposal.action === "create") {
     actionLabel = t("knowledgeProposal.create", "创建知识文档");
@@ -382,6 +384,7 @@ function KnowledgeProposalCard({
     });
     tags = proposal.draft.tags ?? [];
     preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+    targetPath = proposal.targetPath ?? "";
   } else if (proposal.action === "update") {
     actionLabel = t("knowledgeProposal.update", "更新知识文档");
     title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
@@ -393,6 +396,8 @@ function KnowledgeProposalCard({
     tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
     preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
     changedFields = proposal.changedFields;
+    currentPath = proposal.current?.path ?? "";
+    targetPath = proposal.targetPath ?? "";
   } else {
     title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
     preview = [
@@ -404,6 +409,8 @@ function KnowledgeProposalCard({
     changedFields = [proposal.link.relation];
   }
   const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
+  const showPathChange = Boolean(currentPath && targetPath && currentPath !== targetPath);
+  const visiblePath = targetPath || currentPath;
 
   return (
     <View style={s.proposalCard}>
@@ -445,6 +452,26 @@ function KnowledgeProposalCard({
           <View style={s.proposalMetaBlock}>
             <Text style={s.proposalMetaLabel}>{t("knowledgeProposal.changes", "变更")}</Text>
             <Text style={s.proposalMetaText}>{changedFieldLabels.join(", ")}</Text>
+          </View>
+        ) : null}
+
+        {visiblePath ? (
+          <View style={s.proposalMetaBlock}>
+            <Text style={s.proposalMetaLabel}>{t("knowledgeProposal.location", "位置")}</Text>
+            {showPathChange ? (
+              <View style={s.proposalPathBox}>
+                <Text style={s.proposalPathMutedText} numberOfLines={2}>
+                  {currentPath}
+                </Text>
+                <Text style={s.proposalPathText} numberOfLines={2}>
+                  → {targetPath}
+                </Text>
+              </View>
+            ) : (
+              <Text style={s.proposalPathBoxText} numberOfLines={3}>
+                {visiblePath}
+              </Text>
+            )}
           </View>
         ) : null}
 
@@ -732,6 +759,35 @@ const makeToolStyles = (colors: ThemeColors) =>
     proposalMetaText: {
       fontSize: fs.xs,
       color: colors.foreground,
+    },
+    proposalPathBox: {
+      gap: 3,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.35),
+      borderRadius: radius.sm,
+      padding: 8,
+    },
+    proposalPathBoxText: {
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.35),
+      borderRadius: radius.sm,
+      padding: 8,
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.foreground,
+    },
+    proposalPathMutedText: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.mutedForeground,
+    },
+    proposalPathText: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.primary,
+      fontWeight: fw.medium,
     },
     proposalPreviewBlock: {
       gap: 5,

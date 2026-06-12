@@ -115,6 +115,7 @@
     "savedBadge": "적용됨",
     "safeHint": "AI는 초안만 만들었어요. 확인 후 지식 베이스에 저장됩니다.",
     "changes": "변경 사항",
+    "location": "위치",
     "contentPreview": "미리보기",
     "apply": "지식 베이스에 적용",
     "applying": "적용 중...",

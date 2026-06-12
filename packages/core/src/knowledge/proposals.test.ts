@@ -50,6 +50,7 @@ describe("knowledge write proposals", () => {
       action: "create",
       requiresConfirmation: true,
       confirmationKind: "knowledge_document_create",
+      targetPath: "Knowledge base / Summaries / Durable Summary",
       draft: {
         id: "proposal-doc-1",
         type: "summary",
@@ -64,6 +65,7 @@ describe("knowledge write proposals", () => {
 
     expect(proposal).toMatchObject({
       action: "create",
+      targetPath: "Knowledge base / Summaries / Durable Summary",
       draft: {
         id: "proposal-doc-1",
         type: "summary",
@@ -198,6 +200,7 @@ describe("knowledge write proposals", () => {
         title: "Updated",
         tags: ["done"],
       },
+      targetPath: "Knowledge base / Folder / Updated",
       changedFields: ["parentId", "title", "tags"],
     });
     expect(updateProposal).not.toBeNull();

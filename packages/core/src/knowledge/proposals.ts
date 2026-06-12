@@ -32,6 +32,7 @@ export interface KnowledgeDocumentCreateProposal {
   requiresConfirmation: true;
   confirmationKind: "knowledge_document_create";
   message?: string;
+  targetPath?: string;
   draft: CreateKnowledgeDocumentInput;
 }
 
@@ -48,10 +49,12 @@ export interface KnowledgeDocumentUpdateProposal {
     parentId?: string;
     type?: KnowledgeDocumentType;
     title?: string;
+    path?: string;
     tags?: string[];
     excerpt?: string;
     updatedAt?: number;
   };
+  targetPath?: string;
   patch: Partial<
     Pick<KnowledgeDocument, "parentId" | "title" | "contentMd" | "contentJson" | "excerpt" | "tags">
   >;
@@ -260,6 +263,7 @@ function normalizeCreateProposal(
     requiresConfirmation: true,
     confirmationKind: "knowledge_document_create",
     message: stringOrUndefined(result.message),
+    targetPath: stringOrUndefined(result.targetPath),
     draft: {
       id: stringOrUndefined(draft.id),
       bookId: stringOrUndefined(draft.bookId),
@@ -315,6 +319,7 @@ function normalizeUpdateProposal(
         parentId: stringOrUndefined(result.current.parentId),
         type: asDocumentType(result.current.type) ?? undefined,
         title: stringOrUndefined(result.current.title),
+        path: stringOrUndefined(result.current.path),
         tags: asStringArray(result.current.tags),
         excerpt: stringOrUndefined(result.current.excerpt),
         updatedAt:
@@ -330,6 +335,7 @@ function normalizeUpdateProposal(
     message: stringOrUndefined(result.message),
     documentId,
     current,
+    targetPath: stringOrUndefined(result.targetPath),
     patch,
     changedFields: asStringArray(result.changedFields),
   };

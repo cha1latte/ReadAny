@@ -450,6 +450,8 @@ function KnowledgeProposalCard({
   let tags: string[] = [];
   let preview = "";
   let changedFields: string[] = [];
+  let currentPath = "";
+  let targetPath = "";
 
   if (proposal.action === "create") {
     actionLabel = t("knowledgeProposal.create");
@@ -459,6 +461,7 @@ function KnowledgeProposalCard({
     });
     tags = proposal.draft.tags ?? [];
     preview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+    targetPath = proposal.targetPath ?? "";
   } else if (proposal.action === "update") {
     actionLabel = t("knowledgeProposal.update");
     title = proposal.patch.title ?? proposal.current?.title ?? proposal.documentId;
@@ -470,6 +473,8 @@ function KnowledgeProposalCard({
     tags = proposal.patch.tags ?? proposal.current?.tags ?? [];
     preview = proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
     changedFields = proposal.changedFields;
+    currentPath = proposal.current?.path ?? "";
+    targetPath = proposal.targetPath ?? "";
   } else {
     title = proposal.link.label || `${proposal.link.relation}: ${proposal.link.toId}`;
     preview = [
@@ -481,6 +486,8 @@ function KnowledgeProposalCard({
     changedFields = [proposal.link.relation];
   }
   const changedFieldLabels = formatKnowledgeChangedFields(changedFields, t);
+  const showPathChange = Boolean(currentPath && targetPath && currentPath !== targetPath);
+  const visiblePath = targetPath || currentPath;
 
   return (
     <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
@@ -522,6 +529,24 @@ function KnowledgeProposalCard({
               {t("knowledgeProposal.changes")}
             </div>
             <div className="text-xs text-foreground">{changedFieldLabels.join(", ")}</div>
+          </div>
+        )}
+
+        {visiblePath && (
+          <div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              {t("knowledgeProposal.location")}
+            </div>
+            {showPathChange ? (
+              <div className="space-y-1 rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed">
+                <div className="break-words text-muted-foreground">{currentPath}</div>
+                <div className="text-primary">→ {targetPath}</div>
+              </div>
+            ) : (
+              <div className="break-words rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed text-foreground">
+                {visiblePath}
+              </div>
+            )}
           </div>
         )}
 

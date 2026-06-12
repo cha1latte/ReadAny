@@ -115,6 +115,7 @@
     "savedBadge": "Applied",
     "safeHint": "AI has only drafted this. It will write to your knowledge base after confirmation.",
     "changes": "Changes",
+    "location": "Location",
     "contentPreview": "Preview",
     "apply": "Apply to knowledge base",
     "applying": "Applying...",

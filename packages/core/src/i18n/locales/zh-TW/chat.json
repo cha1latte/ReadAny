@@ -115,6 +115,7 @@
     "savedBadge": "已套用",
     "safeHint": "AI 只產生了草稿，確認後才會寫入你的知識庫。",
     "changes": "變更",
+    "location": "位置",
     "contentPreview": "內容預覽",
     "apply": "套用到知識庫",
     "applying": "套用中...",

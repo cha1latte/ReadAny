@@ -3021,11 +3021,19 @@ function KnowledgeDocumentExplorer({
     return counts;
   }, [documents]);
   const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? null;
-  const activePath = activeDocument
-    ? knowledgeDocumentPath(activeDocument, documents, t)
-        .map((item) => item.title)
-        .join(" / ")
-    : t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" });
+  const activePathItems = useMemo(
+    () =>
+      activeDocument
+        ? knowledgeDocumentPath(activeDocument, documents, t)
+        : [
+            {
+              id: "__vault__",
+              title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+            },
+          ],
+    [activeDocument, documents, t],
+  );
+  const activePath = activePathItems.map((item) => item.title).join(" / ");
   const activePathIds = useMemo(
     () =>
       new Set(
@@ -3274,9 +3282,43 @@ function KnowledgeDocumentExplorer({
                 {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
               </p>
             </div>
-            <p className="mt-1 truncate text-[11px] text-muted-foreground" title={activePath}>
-              {activePath}
-            </p>
+            <div
+              className="mt-2 flex max-h-[3.15rem] flex-wrap gap-1 overflow-hidden"
+              title={activePath}
+              aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
+            >
+              {activePathItems.map((item, index) => {
+                const isCurrent = index === activePathItems.length - 1;
+                const targetDocument = documents.find((document) => document.id === item.id);
+                const isFolderLike = item.id === "__vault__" || item.type === "folder";
+
+                return (
+                  <button
+                    key={`${item.id}-${index}`}
+                    type="button"
+                    disabled={!targetDocument || isCurrent}
+                    onClick={() => {
+                      if (!targetDocument || isCurrent) return;
+                      onSelect(targetDocument);
+                    }}
+                    className={cn(
+                      "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 text-[10px] font-medium transition-colors",
+                      isCurrent
+                        ? "border-primary/25 bg-primary/10 text-primary"
+                        : "border-border/45 bg-background/75 text-muted-foreground hover:border-primary/25 hover:bg-primary/5 hover:text-foreground",
+                      (!targetDocument || isCurrent) && "cursor-default",
+                    )}
+                  >
+                    {isFolderLike ? (
+                      <Folder className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <FileText className="h-3 w-3 shrink-0" />
+                    )}
+                    <span className="truncate">{item.title}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -3370,6 +3412,11 @@ function KnowledgeFolderOverview({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
+  const folderPathItems = useMemo(
+    () => knowledgeDocumentPath(folder, documents, t),
+    [folder, documents, t],
+  );
+  const folderPathLabel = folderPathItems.map((item) => item.title).join(" / ");
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const document of documents) {
@@ -3425,14 +3472,43 @@ function KnowledgeFolderOverview({
   };
 
   return (
-    <div className="mx-auto min-h-[690px] max-w-[780px] px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-3">
+    <div className="mx-auto min-h-[690px] max-w-[820px] px-1 pb-10 pt-1">
+      <nav
+        className="mb-4 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
+        aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
+        title={folderPathLabel}
+      >
+        {folderPathItems.map((item, index) => {
+          const isCurrent = index === folderPathItems.length - 1;
+
+          return (
+            <span
+              key={`${item.id}-${index}`}
+              className={cn(
+                "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-2",
+                isCurrent
+                  ? "border-primary/25 bg-primary/10 text-primary"
+                  : "border-border/45 bg-muted/20",
+              )}
+            >
+              {item.type === "folder" || item.id === "__vault__" ? (
+                <Folder className="h-3 w-3 shrink-0" />
+              ) : (
+                <FileText className="h-3 w-3 shrink-0" />
+              )}
+              <span className="truncate">{item.title}</span>
+            </span>
+          );
+        })}
+      </nav>
+
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-4">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
             {t("notes.knowledgeFolderInside")} · {orderedChildren.length}{" "}
             {t("notes.knowledgeDocuments")}
           </p>
-          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+          <h3 className="mt-1 truncate text-2xl font-semibold leading-tight text-foreground">
             {folder.title || t("notes.knowledgeUntitledDocument")}
           </h3>
         </div>

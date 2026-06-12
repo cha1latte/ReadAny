@@ -3126,6 +3126,9 @@ function KnowledgeDocumentExplorer({
   const [isCreateSheetVisible, setIsCreateSheetVisible] = useState(false);
   const activeCreateParentId =
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
+  const activePathLabel = activeDocument
+    ? knowledgeDocumentPathText(activeDocument, documents, t)
+    : t("notes.knowledgeVaultRoot", "知识库");
   const normalizedQuery = query.trim().toLowerCase();
   const createParentDocument = useMemo(
     () => documents.find((document) => document.id === createParentId),
@@ -3227,6 +3230,9 @@ function KnowledgeDocumentExplorer({
             {t("notes.knowledgeVaultRoot", "知识库")} · {documents.length}{" "}
             {t("notes.knowledgeDocuments", "文档")} · {folderCount}{" "}
             {t("notes.knowledgeDocumentFolder", "文件夹")}
+          </Text>
+          <Text style={styles.knowledgeExplorerPath} numberOfLines={1}>
+            {activePathLabel}
           </Text>
         </View>
         <TouchableOpacity
@@ -3515,6 +3521,7 @@ function KnowledgeFolderOverview({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
+  const folderPath = knowledgeDocumentPathText(folder, documents, t);
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const document of documents) {
@@ -3569,6 +3576,9 @@ function KnowledgeFolderOverview({
             {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
+            {folderPath}
+          </Text>
+          <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>
             {items.length} {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>

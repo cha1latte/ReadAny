@@ -988,6 +988,13 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
       lineHeight: 16,
     },
+    knowledgeExplorerPath: {
+      marginTop: 5,
+      fontSize: 11,
+      color: colors.foreground,
+      lineHeight: 15,
+      fontWeight: fontWeight.medium,
+    },
     knowledgeExplorerCreateButton: {
       width: 34,
       height: 34,
@@ -1020,6 +1027,9 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.sm,
       backgroundColor: colors.background,
       gap: 1,
+      borderTopWidth: 0.5,
+      borderTopColor: colors.border,
+      paddingTop: 5,
     },
     knowledgeTreeNode: {
       position: "relative",
@@ -1121,8 +1131,9 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.sm,
       borderWidth: 0.5,
       borderColor: colors.border,
-      backgroundColor: colors.background,
-      padding: 10,
+      backgroundColor: colors.card,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
       gap: 10,
     },
     knowledgeFolderHeader: {
@@ -1158,6 +1169,13 @@ export const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       color: colors.mutedForeground,
       lineHeight: 16,
+    },
+    knowledgeFolderMeta: {
+      marginTop: 2,
+      fontSize: 11,
+      color: colors.mutedForeground,
+      lineHeight: 14,
+      fontWeight: fontWeight.medium,
     },
     knowledgeFolderIconAction: {
       width: 34,

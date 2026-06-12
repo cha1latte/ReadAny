@@ -2395,7 +2395,6 @@ function KnowledgeHomePanel({
                 items={activeDocumentChildren}
                 documents={documents}
                 isCreating={isCreatingDocument}
-                onSelectRoot={onOpenVaultRoot}
                 onSelect={onSelectDocument}
                 onCreate={onCreateDocument}
                 onDelete={onDeleteDocument}
@@ -2615,11 +2614,12 @@ function KnowledgeVaultRootOverview({
     <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
       <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+          <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
+            {t("notes.knowledgeFolderInside")}
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {items.length} {t("notes.knowledgeDocuments")}
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })} / {items.length}{" "}
+            {t("notes.knowledgeDocuments")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2646,7 +2646,7 @@ function KnowledgeVaultRootOverview({
       </div>
 
       {items.length === 0 ? (
-        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
+        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-muted/[0.18] px-6 py-10 text-center">
           <div className="max-w-sm">
             <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -2783,21 +2783,19 @@ function KnowledgeFolderBrowserRow({
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
 
   return (
-    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-1.5 transition-colors last:border-b-0 hover:bg-muted/20">
+    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1 py-1.5 transition-colors last:border-b-0 hover:bg-muted/20">
       <button
         type="button"
-        className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
         <span
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm",
-            isFolder ? "bg-primary/[0.08]" : "bg-muted/25",
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm",
+            isFolder ? "text-primary" : "text-muted-foreground",
           )}
         >
-          <Icon
-            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
-          />
+          <Icon className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
@@ -3941,7 +3939,6 @@ function KnowledgeFolderOverview({
   items,
   documents,
   isCreating,
-  onSelectRoot,
   onSelect,
   onCreate,
   onDelete,
@@ -3952,7 +3949,6 @@ function KnowledgeFolderOverview({
   items: KnowledgeDocument[];
   documents: KnowledgeDocument[];
   isCreating: boolean;
-  onSelectRoot: () => void;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
@@ -3965,7 +3961,6 @@ function KnowledgeFolderOverview({
     [folder, documents, t],
   );
   const folderPathLabel = folderPathItems.map((item) => item.title).join(" / ");
-  const folderTitle = folder.title.trim() || t("notes.knowledgeUntitledDocument");
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const document of documents) {
@@ -3979,58 +3974,13 @@ function KnowledgeFolderOverview({
 
   return (
     <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
-      <nav
-        className="mb-4 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] font-medium text-muted-foreground"
-        aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
-        title={folderPathLabel}
-      >
-        {folderPathItems.map((item, index) => {
-          const isCurrent = index === folderPathItems.length - 1;
-          const isRoot = item.id === "__vault__";
-          const targetDocument = documents.find((document) => document.id === item.id);
-          const canNavigate = !isCurrent && (isRoot || !!targetDocument);
-
-          return (
-            <span key={`${item.id}-${index}`} className="inline-flex min-w-0 items-center gap-1">
-              {index > 0 ? <span className="text-border">/</span> : null}
-              <button
-                type="button"
-                disabled={!canNavigate}
-                onClick={() => {
-                  if (!canNavigate) return;
-                  if (isRoot) {
-                    onSelectRoot();
-                    return;
-                  }
-                  if (targetDocument) onSelect(targetDocument);
-                }}
-                className={cn(
-                  "inline-flex h-5 max-w-[14rem] min-w-0 items-center gap-1 rounded-sm px-1 transition-colors",
-                  isCurrent
-                    ? "text-primary"
-                    : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
-                  !canNavigate && "cursor-default",
-                )}
-              >
-                {item.type === "folder" || item.id === "__vault__" ? (
-                  <Folder className="h-3 w-3 shrink-0" />
-                ) : (
-                  <FileText className="h-3 w-3 shrink-0" />
-                )}
-                <span className="truncate">{item.title}</span>
-              </button>
-            </span>
-          );
-        })}
-      </nav>
-
       <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-            {folderTitle}
+          <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
+            {t("notes.knowledgeFolderInside")}
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {orderedChildren.length} {t("notes.knowledgeDocuments")}
+          <p className="mt-1 truncate text-xs text-muted-foreground" title={folderPathLabel}>
+            {folderPathLabel} / {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -4057,7 +4007,7 @@ function KnowledgeFolderOverview({
       </div>
 
       {orderedChildren.length === 0 ? (
-        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
+        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-muted/[0.18] px-6 py-10 text-center">
           <div className="max-w-sm">
             <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">

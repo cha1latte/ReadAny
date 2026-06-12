@@ -3853,6 +3853,7 @@ function KnowledgeVaultRootOverview({
             {t("notes.knowledgeVaultRoot", "知识库")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
+            {t("notes.knowledgeVaultRoot", "知识库")} /{" "}
             {t("notes.knowledgeFolderInside", "目录内容")}
           </Text>
           <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>

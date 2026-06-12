@@ -1,4 +1,4 @@
-export type KnowledgeToolResultKind = "search" | "bookKnowledge" | "summary";
+export type KnowledgeToolResultKind = "search" | "bookKnowledge" | "summary" | "failure";
 
 export interface KnowledgeToolResultDocument {
   id?: string;
@@ -11,22 +11,28 @@ export interface KnowledgeToolResultDocument {
 
 export interface KnowledgeToolResultDisplay {
   kind: KnowledgeToolResultKind;
+  toolName?: string;
   total?: number;
   showing?: number;
   bookId?: string;
   status?: string;
   persisted?: boolean;
   reason?: string;
+  error?: string;
   sourceChars?: number;
   documentId?: string;
   summaryPreview?: string;
   documents: KnowledgeToolResultDocument[];
 }
 
-const KNOWLEDGE_RESULT_TOOLS = new Set([
+const KNOWLEDGE_TOOL_NAMES = new Set([
   "searchKnowledgeBase",
   "getBookKnowledge",
   "compressKnowledgeDocumentSummary",
+  "proposeKnowledgeDocumentCreate",
+  "proposeKnowledgeDocumentUpdate",
+  "proposeKnowledgeDocumentTagsUpdate",
+  "proposeKnowledgeLinkCreate",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,6 +49,39 @@ function asNumber(value: unknown): number | undefined {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function asResultRecord(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) return value;
+  if (typeof value !== "string") return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function asFailureDisplay(
+  toolName: string,
+  result: Record<string, unknown>,
+): KnowledgeToolResultDisplay | null {
+  const error = asString(result.error);
+  const message = asString(result.message);
+  const reason = asString(result.reason);
+  const success = asBoolean(result.success);
+  if (success !== false && !error) return null;
+
+  return {
+    kind: "failure",
+    toolName,
+    status: asString(result.status),
+    documentId: asString(result.documentId) || asString(result.fromDocumentId),
+    reason,
+    error: error || message || reason || "Tool execution failed",
+    documents: [],
+  };
 }
 
 function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
@@ -81,34 +120,45 @@ export function getKnowledgeToolResultDisplay(
   toolName: string,
   result: unknown,
 ): KnowledgeToolResultDisplay | null {
-  if (!KNOWLEDGE_RESULT_TOOLS.has(toolName) || !isRecord(result)) return null;
+  if (!KNOWLEDGE_TOOL_NAMES.has(toolName)) return null;
+
+  const resultRecord = asResultRecord(result);
+  if (!resultRecord) return null;
+
+  const failureDisplay = asFailureDisplay(toolName, resultRecord);
+  if (failureDisplay) return failureDisplay;
 
   if (toolName === "searchKnowledgeBase") {
     return {
       kind: "search",
-      total: asNumber(result.total),
-      showing: asNumber(result.showing),
-      documents: asDocumentList(result.documents),
+      toolName,
+      total: asNumber(resultRecord.total),
+      showing: asNumber(resultRecord.showing),
+      documents: asDocumentList(resultRecord.documents),
     };
   }
 
   if (toolName === "getBookKnowledge") {
     return {
       kind: "bookKnowledge",
-      total: asNumber(result.total),
-      bookId: asString(result.bookId),
-      documents: asDocumentList(result.documents),
+      toolName,
+      total: asNumber(resultRecord.total),
+      bookId: asString(resultRecord.bookId),
+      documents: asDocumentList(resultRecord.documents),
     };
   }
 
+  if (toolName !== "compressKnowledgeDocumentSummary") return null;
+
   return {
     kind: "summary",
-    status: asString(result.status),
-    persisted: asBoolean(result.persisted),
-    reason: asString(result.reason),
-    sourceChars: asNumber(result.sourceChars),
-    documentId: asString(result.documentId),
-    summaryPreview: compactMarkdownPreview(result.summaryMd),
+    toolName,
+    status: asString(resultRecord.status),
+    persisted: asBoolean(resultRecord.persisted),
+    reason: asString(resultRecord.reason),
+    sourceChars: asNumber(resultRecord.sourceChars),
+    documentId: asString(resultRecord.documentId),
+    summaryPreview: compactMarkdownPreview(resultRecord.summaryMd),
     documents: [],
   };
 }

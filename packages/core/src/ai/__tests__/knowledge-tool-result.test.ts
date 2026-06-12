@@ -20,6 +20,7 @@ describe("knowledge tool result display", () => {
 
     expect(display).toEqual({
       kind: "search",
+      toolName: "searchKnowledgeBase",
       total: 2,
       showing: 1,
       documents: [
@@ -67,6 +68,7 @@ describe("knowledge tool result display", () => {
 
     expect(display).toMatchObject({
       kind: "summary",
+      toolName: "compressKnowledgeDocumentSummary",
       status: "compressed",
       persisted: true,
       documentId: "doc-1",
@@ -75,6 +77,53 @@ describe("knowledge tool result display", () => {
       summaryPreview: "Summary A durable reading memory.",
       documents: [],
     });
+  });
+
+  it("turns knowledge tool failures into explicit failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("proposeKnowledgeDocumentUpdate", {
+      success: false,
+      error: "Knowledge document not found",
+      documentId: "missing-doc",
+    });
+
+    expect(display).toEqual({
+      kind: "failure",
+      toolName: "proposeKnowledgeDocumentUpdate",
+      documentId: "missing-doc",
+      error: "Knowledge document not found",
+      documents: [],
+    });
+  });
+
+  it("parses JSON string failures from knowledge tools", () => {
+    const display = getKnowledgeToolResultDisplay(
+      "compressKnowledgeDocumentSummary",
+      JSON.stringify({
+        success: false,
+        status: "failed",
+        reason: "model_error",
+        message: "Model request failed",
+      }),
+    );
+
+    expect(display).toEqual({
+      kind: "failure",
+      toolName: "compressKnowledgeDocumentSummary",
+      status: "failed",
+      reason: "model_error",
+      error: "Model request failed",
+      documents: [],
+    });
+  });
+
+  it("lets successful knowledge proposals use the proposal card renderer", () => {
+    expect(
+      getKnowledgeToolResultDisplay("proposeKnowledgeDocumentCreate", {
+        success: true,
+        action: "create",
+        requiresConfirmation: true,
+      }),
+    ).toBeNull();
   });
 
   it("ignores unrelated tools and malformed results", () => {

@@ -217,34 +217,65 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
+  const toolLabel =
+    display.toolName && TOOL_LABEL_KEYS[display.toolName]
+      ? t(TOOL_LABEL_KEYS[display.toolName])
+      : display.toolName;
   const title =
-    display.kind === "search"
-      ? t("knowledgeToolResult.searchTitle", "知识库检索结果")
-      : display.kind === "bookKnowledge"
-        ? t("knowledgeToolResult.bookKnowledgeTitle", "已读取本书知识")
-        : t("knowledgeToolResult.summaryTitle", "知识记忆已更新");
+    display.kind === "failure"
+      ? t("knowledgeToolResult.failureTitle", {
+          tool: toolLabel || t("knowledgeToolResult.tool", "知识库工具"),
+        })
+      : display.kind === "search"
+        ? t("knowledgeToolResult.searchTitle", "知识库检索结果")
+        : display.kind === "bookKnowledge"
+          ? t("knowledgeToolResult.bookKnowledgeTitle", "已读取本书知识")
+          : t("knowledgeToolResult.summaryTitle", "知识记忆已更新");
   const countText =
-    display.kind === "summary"
+    display.kind === "failure"
       ? [
           display.status ? t("knowledgeToolResult.status", { status: display.status }) : undefined,
-          display.persisted !== undefined
-            ? display.persisted
-              ? t("knowledgeToolResult.persisted", "已持久化")
-              : t("knowledgeToolResult.notPersisted", "未持久化")
+          display.documentId
+            ? t("knowledgeToolResult.documentId", { id: display.documentId })
             : undefined,
         ]
           .filter(Boolean)
           .join(" · ")
-      : t("knowledgeToolResult.count", {
-          total: display.total ?? display.documents.length,
-          showing: display.showing ?? display.documents.length,
-        });
+      : display.kind === "summary"
+        ? [
+            display.status
+              ? t("knowledgeToolResult.status", { status: display.status })
+              : undefined,
+            display.persisted !== undefined
+              ? display.persisted
+                ? t("knowledgeToolResult.persisted", "已持久化")
+                : t("knowledgeToolResult.notPersisted", "未持久化")
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : t("knowledgeToolResult.count", {
+            total: display.total ?? display.documents.length,
+            showing: display.showing ?? display.documents.length,
+          });
 
   return (
-    <View style={s.knowledgeResultCard}>
-      <View style={s.knowledgeResultHeader}>
+    <View style={[s.knowledgeResultCard, display.kind === "failure" && s.knowledgeResultFailure]}>
+      <View
+        style={[
+          s.knowledgeResultHeader,
+          display.kind === "failure" && s.knowledgeResultFailureHeader,
+        ]}
+      >
         <View style={s.knowledgeResultTitleBlock}>
-          <Text style={s.knowledgeResultTitle}>{title}</Text>
+          <Text
+            style={[
+              s.knowledgeResultTitle,
+              display.kind === "failure" && s.knowledgeResultFailureTitle,
+            ]}
+          >
+            {title}
+          </Text>
           {!!countText && (
             <Text style={s.knowledgeResultMeta} numberOfLines={1}>
               {countText}
@@ -261,7 +292,21 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
       </View>
 
       <View style={s.knowledgeResultBody}>
-        {display.kind === "summary" ? (
+        {display.kind === "failure" ? (
+          <View style={s.knowledgeResultFailureBody}>
+            <Text style={s.knowledgeResultFailureText}>
+              {display.error || t("knowledgeToolResult.failureUnknown", "工具调用失败")}
+            </Text>
+            {!!display.reason && (
+              <Text style={s.knowledgeResultFailureMeta} numberOfLines={2}>
+                {t("knowledgeToolResult.reason", { reason: display.reason })}
+              </Text>
+            )}
+            <Text style={s.knowledgeResultFailureHint}>
+              {t("knowledgeToolResult.failureSafeHint", "失败的工具不会写入知识库或修改文档。")}
+            </Text>
+          </View>
+        ) : display.kind === "summary" ? (
           <>
             {display.documentId ? (
               <Text style={s.knowledgeResultPath} numberOfLines={2}>
@@ -417,7 +462,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       </TouchableOpacity>
       {isOpen && (
         <View style={s.body}>
-          {hasError ? (
+          {hasError && knowledgeResult?.kind !== "failure" ? (
             <View style={s.errorBlock}>
               <Text style={s.errorTitle}>{t("streaming.toolFailedDetail", "工具调用失败")}</Text>
               <Text style={s.errorText}>
@@ -809,6 +854,9 @@ const makeToolStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
       borderRadius: radius.md,
     },
+    knowledgeResultFailure: {
+      borderColor: withOpacity(colors.destructive, 0.34),
+    },
     knowledgeResultHeader: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -820,6 +868,10 @@ const makeToolStyles = (colors: ThemeColors) =>
       paddingHorizontal: 10,
       paddingVertical: 9,
     },
+    knowledgeResultFailureHeader: {
+      borderBottomColor: withOpacity(colors.destructive, 0.22),
+      backgroundColor: withOpacity(colors.destructive, 0.06),
+    },
     knowledgeResultTitleBlock: {
       flex: 1,
       minWidth: 0,
@@ -830,6 +882,9 @@ const makeToolStyles = (colors: ThemeColors) =>
       lineHeight: 18,
       fontWeight: fw.semibold,
       color: colors.foreground,
+    },
+    knowledgeResultFailureTitle: {
+      color: colors.destructive,
     },
     knowledgeResultMeta: {
       fontSize: fs.xs,
@@ -851,6 +906,31 @@ const makeToolStyles = (colors: ThemeColors) =>
     knowledgeResultBody: {
       gap: 8,
       padding: 10,
+    },
+    knowledgeResultFailureBody: {
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.destructive, 0.24),
+      backgroundColor: withOpacity(colors.destructive, 0.08),
+      borderRadius: radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      gap: 6,
+    },
+    knowledgeResultFailureText: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      fontWeight: fw.semibold,
+      color: colors.destructive,
+    },
+    knowledgeResultFailureMeta: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: withOpacity(colors.destructive, 0.86),
+    },
+    knowledgeResultFailureHint: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: withOpacity(colors.destructive, 0.72),
     },
     knowledgeResultItem: {
       borderWidth: 0.5,

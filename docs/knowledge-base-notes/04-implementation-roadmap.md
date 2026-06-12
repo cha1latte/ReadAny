@@ -155,9 +155,9 @@ Verification:
 ## Phase 5: AI Knowledge Tools
 
 Status: partially implemented. Search/get/propose/create/update/tag/link
-tooling, confirmation proposals, compact summaries, proposal cards, and
-vault-aware result context exist. Broader retrieval UX and end-to-end validation
-still need work.
+tooling, confirmation proposals, compact summaries, proposal cards,
+vault-aware result context, and structured failure cards exist. Broader
+retrieval UX and end-to-end validation still need work.
 
 Goal:
 
@@ -174,7 +174,8 @@ Verification:
 
 - AI can answer from book text, annotations, and knowledge documents.
 - AI never silently overwrites user documents.
-- Tool failures display clear failure cards on desktop and mobile.
+- Tool failures display clear failure cards on desktop and mobile, including
+  the failing knowledge tool, error reason, and safe no-write hint.
 
 ## Phase 6: Custom Card Platform
 

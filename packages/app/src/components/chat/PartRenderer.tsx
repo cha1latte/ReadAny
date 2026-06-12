@@ -272,15 +272,24 @@ function formatKnowledgeChangedFields(
 
 function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
   const { t } = useTranslation();
+  const toolLabel =
+    display.toolName && TOOL_LABEL_KEYS[display.toolName]
+      ? t(TOOL_LABEL_KEYS[display.toolName])
+      : display.toolName;
   const title =
-    display.kind === "search"
-      ? t("knowledgeToolResult.searchTitle", { defaultValue: "Knowledge search results" })
-      : display.kind === "bookKnowledge"
-        ? t("knowledgeToolResult.bookKnowledgeTitle", { defaultValue: "Book knowledge read" })
-        : t("knowledgeToolResult.summaryTitle", { defaultValue: "Knowledge memory updated" });
+    display.kind === "failure"
+      ? t("knowledgeToolResult.failureTitle", {
+          tool: toolLabel || t("knowledgeToolResult.tool", { defaultValue: "Knowledge tool" }),
+          defaultValue: `${toolLabel || "Knowledge tool"} failed`,
+        })
+      : display.kind === "search"
+        ? t("knowledgeToolResult.searchTitle", { defaultValue: "Knowledge search results" })
+        : display.kind === "bookKnowledge"
+          ? t("knowledgeToolResult.bookKnowledgeTitle", { defaultValue: "Book knowledge read" })
+          : t("knowledgeToolResult.summaryTitle", { defaultValue: "Knowledge memory updated" });
 
   const countText =
-    display.kind === "summary"
+    display.kind === "failure"
       ? [
           display.status
             ? t("knowledgeToolResult.status", {
@@ -288,25 +297,61 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
                 defaultValue: `Status: ${display.status}`,
               })
             : null,
-          display.persisted !== undefined
-            ? display.persisted
-              ? t("knowledgeToolResult.persisted", { defaultValue: "Persisted" })
-              : t("knowledgeToolResult.notPersisted", { defaultValue: "Not persisted" })
+          display.documentId
+            ? t("knowledgeToolResult.documentId", {
+                id: display.documentId,
+                defaultValue: `Document: ${display.documentId}`,
+              })
             : null,
         ]
           .filter(Boolean)
           .join(" · ")
-      : t("knowledgeToolResult.count", {
-          total: display.total ?? display.documents.length,
-          showing: display.showing ?? display.documents.length,
-          defaultValue: `${display.documents.length} document(s)`,
-        });
+      : display.kind === "summary"
+        ? [
+            display.status
+              ? t("knowledgeToolResult.status", {
+                  status: display.status,
+                  defaultValue: `Status: ${display.status}`,
+                })
+              : null,
+            display.persisted !== undefined
+              ? display.persisted
+                ? t("knowledgeToolResult.persisted", { defaultValue: "Persisted" })
+                : t("knowledgeToolResult.notPersisted", { defaultValue: "Not persisted" })
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : t("knowledgeToolResult.count", {
+            total: display.total ?? display.documents.length,
+            showing: display.showing ?? display.documents.length,
+            defaultValue: `${display.documents.length} document(s)`,
+          });
 
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-background">
-      <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/25 px-3 py-2">
+    <div
+      className={cn(
+        "overflow-hidden rounded-md border bg-background",
+        display.kind === "failure" ? "border-destructive/30" : "border-border",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3 border-b px-3 py-2",
+          display.kind === "failure"
+            ? "border-destructive/20 bg-destructive/5"
+            : "border-border/60 bg-muted/25",
+        )}
+      >
         <div className="min-w-0">
-          <div className="text-xs font-medium text-primary">{title}</div>
+          <div
+            className={cn(
+              "text-xs font-medium",
+              display.kind === "failure" ? "text-destructive" : "text-primary",
+            )}
+          >
+            {title}
+          </div>
           {countText ? (
             <div className="mt-0.5 truncate text-xs text-muted-foreground">{countText}</div>
           ) : null}
@@ -322,7 +367,28 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
       </div>
 
       <div className="space-y-2 p-3">
-        {display.kind === "summary" ? (
+        {display.kind === "failure" ? (
+          <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
+            <div className="font-semibold">
+              {display.error ||
+                t("knowledgeToolResult.failureUnknown", { defaultValue: "Tool execution failed" })}
+            </div>
+            {display.reason ? (
+              <div className="mt-1 text-destructive/85">
+                {t("knowledgeToolResult.reason", {
+                  reason: display.reason,
+                  defaultValue: `Reason: ${display.reason}`,
+                })}
+              </div>
+            ) : null}
+            <div className="mt-2 text-destructive/75">
+              {t("knowledgeToolResult.failureSafeHint", {
+                defaultValue:
+                  "This failed tool call did not write to the knowledge base or change your documents.",
+              })}
+            </div>
+          </div>
+        ) : display.kind === "summary" ? (
           <>
             {display.documentId ? (
               <div className="break-all rounded border border-border bg-muted/25 p-2 text-xs text-muted-foreground">
@@ -504,7 +570,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 border-t border-border bg-muted/30 p-3">
-              {hasError && (
+              {hasError && knowledgeResult?.kind !== "failure" && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
                   <div className="mb-1 font-semibold">{t("streaming.toolFailedDetail")}</div>
                   <div className="break-words">{errorMessage || t("streaming.toolFailed")}</div>

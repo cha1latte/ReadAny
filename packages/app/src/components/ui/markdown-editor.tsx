@@ -5,6 +5,7 @@ import {
   hasKnowledgeEditorFeature,
 } from "@readany/core/knowledge";
 import { cn } from "@readany/core/utils";
+import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -66,6 +67,10 @@ export function MarkdownEditor({
         heading: { levels: [1, 2, 3] },
         dropcursor: false,
         gapcursor: false,
+      }),
+      Link.configure({
+        autolink: true,
+        openOnClick: false,
       }),
       Markdown.configure({
         markedOptions: {

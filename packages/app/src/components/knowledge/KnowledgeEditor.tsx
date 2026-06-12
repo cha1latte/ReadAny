@@ -20,6 +20,7 @@ import {
 } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { cn, generateId } from "@readany/core/utils";
+import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
@@ -406,6 +407,10 @@ export function KnowledgeEditor({
         heading: { levels: [1, 2, 3] },
         dropcursor: false,
         gapcursor: false,
+      }),
+      Link.configure({
+        autolink: true,
+        openOnClick: false,
       }),
       ReadAnyInternalLinkExtension,
       ReadAnySourceReferenceExtension,

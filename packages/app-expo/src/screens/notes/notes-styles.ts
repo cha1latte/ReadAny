@@ -229,10 +229,10 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeRoot: { flex: 1, backgroundColor: colors.background },
     knowledgeScroll: { flex: 1 },
     knowledgeContent: {
-      paddingHorizontal: 18,
-      paddingTop: 8,
+      paddingHorizontal: 16,
+      paddingTop: 6,
       paddingBottom: 30,
-      gap: 14,
+      gap: 12,
     },
     knowledgeDocumentContent: {
       paddingHorizontal: 12,
@@ -241,13 +241,13 @@ export const makeStyles = (colors: ThemeColors) =>
       gap: 10,
     },
     knowledgeVaultHeader: {
-      minHeight: 58,
+      minHeight: 54,
       zIndex: 2,
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
       backgroundColor: colors.background,
       paddingHorizontal: 0,
-      paddingBottom: 10,
+      paddingBottom: 8,
     },
     knowledgeVaultIcon: {
       width: 30,
@@ -278,7 +278,7 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     knowledgeVaultPathScroll: {
-      marginTop: 6,
+      marginTop: 5,
       maxHeight: 22,
     },
     knowledgeVaultPathTrail: {
@@ -843,7 +843,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.sm,
       borderWidth: 0,
       padding: 0,
-      gap: 10,
+      gap: 9,
     },
     knowledgeExplorerHeader: {
       flexDirection: "row",
@@ -898,12 +898,12 @@ export const makeStyles = (colors: ThemeColors) =>
       borderTopColor: withOpacity(colors.border, 0.72),
       borderLeftWidth: 0.5,
       borderLeftColor: withOpacity(colors.border, 0.58),
-      paddingTop: 7,
+      paddingTop: 5,
       paddingLeft: 2,
     },
     knowledgeTreeNode: {
       position: "relative",
-      minHeight: 40,
+      minHeight: 36,
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
@@ -911,7 +911,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderWidth: 0.5,
       borderColor: "transparent",
       paddingRight: 10,
-      paddingVertical: 5,
+      paddingVertical: 4,
     },
     knowledgeTreeConnector: {
       position: "absolute",
@@ -928,7 +928,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeTreeToggle: {
       width: 22,
-      height: 30,
+      height: 28,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: radius.sm,
@@ -936,10 +936,10 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeTreeToggleExpanded: {
       transform: [{ rotate: "90deg" }],
     },
-    knowledgeTreeToggleSpacer: { width: 22, height: 30 },
+    knowledgeTreeToggleSpacer: { width: 22, height: 28 },
     knowledgeTreeIcon: {
       width: 20,
-      height: 24,
+      height: 22,
       borderRadius: radius.sm,
       backgroundColor: "transparent",
       alignItems: "center",
@@ -950,10 +950,10 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeTreeTextBlock: { flex: 1, minWidth: 0 },
     knowledgeTreeTitle: {
-      fontSize: fontSize.sm,
+      fontSize: fontSize.xs,
       color: colors.foreground,
       fontWeight: fontWeight.semibold,
-      lineHeight: 18,
+      lineHeight: 17,
     },
     knowledgeTreeTitleActive: { color: colors.primary },
     knowledgeTreeMeta: {
@@ -1003,7 +1003,7 @@ export const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       paddingHorizontal: 0,
       paddingVertical: 0,
-      gap: 14,
+      gap: 12,
     },
     knowledgeFolderHeader: {
       flexDirection: "row",
@@ -1114,7 +1114,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
     },
     knowledgeFolderGroupStack: { gap: 14 },
-    knowledgeFolderGroup: { gap: 8 },
+    knowledgeFolderGroup: { gap: 6 },
     knowledgeFolderGroupHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -1135,7 +1135,7 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.medium,
     },
     knowledgeFolderItem: {
-      minHeight: 50,
+      minHeight: 46,
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
@@ -1145,7 +1145,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       backgroundColor: colors.background,
       paddingHorizontal: 0,
-      paddingVertical: 8,
+      paddingVertical: 7,
     },
     knowledgeFolderItemMain: {
       flex: 1,
@@ -1164,7 +1164,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeFolderItemIcon: {
       width: 22,
-      height: 30,
+      height: 28,
       borderRadius: radius.sm,
       backgroundColor: "transparent",
       alignItems: "center",

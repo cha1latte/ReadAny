@@ -17,6 +17,7 @@ async function buildKnowledgeEditor() {
 
   const entryContent = `
     import { Editor, Node, mergeAttributes } from "@tiptap/core";
+    import Link from "@tiptap/extension-link";
     import Placeholder from "@tiptap/extension-placeholder";
     import TaskItem from "@tiptap/extension-task-item";
     import TaskList from "@tiptap/extension-task-list";
@@ -481,6 +482,10 @@ async function buildKnowledgeEditor() {
             heading: { levels: [1, 2, 3] },
             dropcursor: false,
             gapcursor: false,
+          }),
+          Link.configure({
+            autolink: true,
+            openOnClick: false,
           }),
           TaskList,
           TaskItem.configure({

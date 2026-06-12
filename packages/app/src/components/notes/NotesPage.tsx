@@ -2189,13 +2189,26 @@ function KnowledgeHomePanel({
     );
   }, [documents]);
   const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
-  const activePathLabel = isVaultRootOpen
-    ? t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })
-    : document
-      ? knowledgeDocumentPath(document, documents, t, title)
-          .map((item) => item.title)
-          .join(" / ")
-      : t("notes.knowledgeDocuments");
+  const activePathItems = useMemo(
+    () =>
+      isVaultRootOpen
+        ? [
+            {
+              id: "__vault__",
+              title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+            },
+          ]
+        : document
+          ? knowledgeDocumentPath(document, documents, t, title)
+          : [
+              {
+                id: "__vault__",
+                title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+              },
+            ],
+    [document, documents, isVaultRootOpen, t, title],
+  );
+  const activePathLabel = activePathItems.map((item) => item.title).join(" / ");
   const documentOutline = useMemo(
     () =>
       document && !isVaultRootOpen && !isFolderDocument
@@ -2273,14 +2286,19 @@ function KnowledgeHomePanel({
         />
 
         <section className="flex min-w-0 flex-col overflow-hidden bg-background">
-          <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-background/95 px-4 backdrop-blur">
+          <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-background/95 px-4 py-2 backdrop-blur">
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="max-w-56 truncate font-medium text-foreground">{book.title}</span>
               <span className="h-1 w-1 rounded-full bg-border" />
-              <span className="max-w-[28rem] truncate" title={activePathLabel}>
-                {activePathLabel}
-              </span>
+              <KnowledgePathInline
+                path={activePathItems}
+                documents={documents}
+                onSelectRoot={onOpenVaultRoot}
+                onSelectDocument={onSelectDocument}
+                ariaLabel={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
+                title={activePathLabel}
+              />
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 text-xs text-muted-foreground">
@@ -2673,8 +2691,8 @@ function KnowledgeVaultRootOverview({
   const documentChildren = items.filter((document) => document.type !== "folder");
 
   return (
-    <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
-      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
+    <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
             {t("notes.knowledgeFolderInside")}
@@ -2738,14 +2756,14 @@ function KnowledgeVaultRootOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {folderChildren.length > 0 ? (
             <section>
               <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildFolders")}</span>
                 <span>{folderChildren.length}</span>
               </div>
-              <div className="overflow-hidden border-b border-border/35 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {folderChildren.map((document) => (
                   <KnowledgeFolderBrowserRow
                     key={document.id}
@@ -2767,7 +2785,7 @@ function KnowledgeVaultRootOverview({
                 <span>{t("notes.knowledgeFolderChildDocuments")}</span>
                 <span>{documentChildren.length}</span>
               </div>
-              <div className="overflow-hidden border-b border-border/35 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {documentChildren.map((document) => (
                   <KnowledgeFolderBrowserRow
                     key={document.id}
@@ -2846,7 +2864,7 @@ function KnowledgeFolderBrowserRow({
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
 
   return (
-    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1 py-1.5 transition-colors last:border-b-0 hover:bg-muted/20">
+    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1 py-1 transition-colors last:border-b-0 hover:bg-muted/20">
       <button
         type="button"
         className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 pr-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
@@ -3501,6 +3519,72 @@ function KnowledgeDocumentBreadcrumbs({
   );
 }
 
+function KnowledgePathInline({
+  path,
+  documents,
+  onSelectRoot,
+  onSelectDocument,
+  ariaLabel,
+  title,
+}: {
+  path: Array<{ id: string; title: string; type?: KnowledgeDocumentType }>;
+  documents: KnowledgeDocument[];
+  onSelectRoot: () => void;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  ariaLabel: string;
+  title?: string;
+}) {
+  const documentById = useMemo(
+    () => new Map(documents.map((item) => [item.id, item])),
+    [documents],
+  );
+
+  return (
+    <nav
+      className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap"
+      aria-label={ariaLabel}
+      title={title}
+    >
+      {path.map((item, index) => {
+        const targetDocument = documentById.get(item.id);
+        const isRoot = item.id === "__vault__";
+        const isLast = index === path.length - 1;
+        const isFolderLike = isRoot || item.type === "folder";
+        const Icon = isFolderLike ? Folder : FileText;
+        const canNavigate = !isLast && (isRoot || !!targetDocument);
+
+        return (
+          <span key={`${item.id}-${index}`} className="inline-flex min-w-0 items-center gap-1">
+            {index > 0 ? <span className="text-border/80">/</span> : null}
+            <button
+              type="button"
+              disabled={!canNavigate}
+              className={cn(
+                "inline-flex h-6 max-w-[12rem] min-w-0 items-center gap-1 rounded-sm px-1 text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45",
+                isLast
+                  ? "cursor-default text-primary"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                !canNavigate && !isLast && "cursor-default opacity-70",
+              )}
+              onClick={() => {
+                if (!canNavigate) return;
+                if (isRoot) {
+                  onSelectRoot();
+                  return;
+                }
+                if (targetDocument) onSelectDocument(targetDocument);
+              }}
+            >
+              <Icon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{item.title}</span>
+            </button>
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 function knowledgeDocumentSearchText(
   document: KnowledgeDocument,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -4051,8 +4135,8 @@ function KnowledgeFolderOverview({
   const noteChildren = orderedChildren.filter((document) => document.type !== "folder");
 
   return (
-    <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
-      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
+    <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
             {t("notes.knowledgeFolderInside")}
@@ -4115,14 +4199,14 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {folderChildren.length > 0 ? (
             <section>
               <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildFolders")}</span>
                 <span>{folderChildren.length}</span>
               </div>
-              <div className="overflow-hidden border-b border-border/35 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {folderChildren.map((document) => (
                   <KnowledgeFolderBrowserRow
                     key={document.id}
@@ -4144,7 +4228,7 @@ function KnowledgeFolderOverview({
                 <span>{t("notes.knowledgeFolderChildDocuments")}</span>
                 <span>{noteChildren.length}</span>
               </div>
-              <div className="overflow-hidden border-b border-border/35 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {noteChildren.map((document) => (
                   <KnowledgeFolderBrowserRow
                     key={document.id}

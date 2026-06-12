@@ -301,16 +301,16 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeVaultPathChip: {
       maxWidth: 150,
-      minHeight: 24,
+      minHeight: 22,
       borderRadius: radius.sm,
       borderWidth: 0,
       borderColor: "transparent",
       backgroundColor: "transparent",
       justifyContent: "center",
-      paddingHorizontal: 5,
+      paddingHorizontal: 3,
     },
     knowledgeVaultPathChipActive: {
-      backgroundColor: withOpacity(colors.primary, 0.07),
+      backgroundColor: "transparent",
     },
     knowledgeVaultPathChipText: {
       fontSize: 11,
@@ -1089,7 +1089,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeFolderItemList: {
       gap: 0,
-      borderTopWidth: 0.5,
+      borderTopWidth: 0,
       borderBottomWidth: 0.5,
       borderColor: colors.border,
     },
@@ -1099,7 +1099,10 @@ export const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.border,
       paddingHorizontal: 2,
+      paddingBottom: 6,
     },
     knowledgeFolderGroupTitle: {
       fontSize: fontSize.xs,

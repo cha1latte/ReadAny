@@ -255,6 +255,94 @@ function normalizePath(path: string): string {
     .replace(/\/+/g, "/");
 }
 
+function isJsonRecord(value: JSONValue | undefined): value is Record<string, JSONValue> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringJsonAttr(attrs: Record<string, JSONValue>, key: string): string | undefined {
+  const value = attrs[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function stripMarkdownExtension(path: string): string {
+  return normalizePath(path).replace(/\.md$/i, "");
+}
+
+function stripReadmeIndex(path: string): string {
+  return path.replace(/\/README$/i, "");
+}
+
+function stripRootDir(path: string, rootDir: string): string {
+  const normalizedRoot = normalizePath(rootDir);
+  if (!normalizedRoot) return path;
+  return path === normalizedRoot
+    ? ""
+    : path.startsWith(`${normalizedRoot}/`)
+      ? path.slice(normalizedRoot.length + 1)
+      : path;
+}
+
+function createManifestDocumentIdsByPath(manifest: KnowledgeExportManifest): Map<string, string> {
+  const idsByPath = new Map<string, string>();
+
+  for (const [documentId, document] of Object.entries(manifest.documents)) {
+    const normalized = stripMarkdownExtension(document.path);
+    const withoutRoot = stripRootDir(normalized, manifest.rootDir);
+    const aliases = new Set([
+      normalized,
+      stripReadmeIndex(normalized),
+      withoutRoot,
+      stripReadmeIndex(withoutRoot),
+    ]);
+
+    for (const alias of aliases) {
+      if (alias) idsByPath.set(alias, documentId);
+    }
+  }
+
+  return idsByPath;
+}
+
+function resolveManifestDocumentIdByPath(
+  targetPath: string,
+  documentIdsByPath: Map<string, string>,
+): string | undefined {
+  const normalized = stripMarkdownExtension(targetPath);
+  return documentIdsByPath.get(normalized) ?? documentIdsByPath.get(stripReadmeIndex(normalized));
+}
+
+function resolveInternalLinkTargetPaths(
+  contentJson: JSONValue,
+  documentIdsByPath: Map<string, string>,
+): JSONValue {
+  if (Array.isArray(contentJson)) {
+    return contentJson.map((item) => resolveInternalLinkTargetPaths(item, documentIdsByPath));
+  }
+  if (!isJsonRecord(contentJson)) return contentJson;
+
+  const next: Record<string, JSONValue> = {};
+  for (const [key, value] of Object.entries(contentJson)) {
+    next[key] = resolveInternalLinkTargetPaths(value, documentIdsByPath);
+  }
+
+  if (contentJson.type === "readanyInternalLink" && isJsonRecord(contentJson.attrs)) {
+    const targetPath = stringJsonAttr(contentJson.attrs, "targetPath");
+    const documentId = stringJsonAttr(contentJson.attrs, "documentId");
+    const resolvedDocumentId = targetPath
+      ? resolveManifestDocumentIdByPath(targetPath, documentIdsByPath)
+      : undefined;
+
+    if (resolvedDocumentId && resolvedDocumentId !== documentId) {
+      next.attrs = {
+        ...(next.attrs && isJsonRecord(next.attrs) ? next.attrs : {}),
+        documentId: resolvedDocumentId,
+      };
+    }
+  }
+
+  return next as JSONValue;
+}
+
 function splitPath(path: string): string[] {
   return path
     .replace(/\\/g, "/")
@@ -433,6 +521,7 @@ export function createKnowledgeVaultImportPlan(
   input: KnowledgeVaultImportPlanInput,
 ): KnowledgeVaultImportPlan {
   const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
+  const documentIdsByPath = createManifestDocumentIdsByPath(input.manifest);
   const currentHashesByPath = new Map(
     (input.currentFiles ?? [])
       .map((file) => [normalizePath(file.path), observedFileHash(file)] as const)
@@ -517,6 +606,10 @@ export function createKnowledgeVaultImportPlan(
       defaultType: manifestDocument.type,
       bookId: manifestDocument.bookId,
     });
+    draft.draft.contentJson = resolveInternalLinkTargetPaths(
+      draft.draft.contentJson ?? ({ type: "doc", content: [] } as unknown as JSONValue),
+      documentIdsByPath,
+    );
     const warnings = [...draft.warnings];
     if (!draft.draft.id) {
       warnings.push("frontmatter_id_missing_using_manifest");

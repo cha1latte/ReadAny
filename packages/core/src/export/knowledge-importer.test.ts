@@ -537,6 +537,90 @@ Home note.
     ]);
   });
 
+  it("resolves path-backed internal links to manifest document ids during vault import", () => {
+    const exporter = new KnowledgeExporter();
+    const source = knowledgeDocument({
+      id: "doc-1",
+      bookId: undefined,
+      sourceKind: undefined,
+      contentJson: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Home body." }],
+          },
+        ],
+      },
+      contentMd: "",
+    });
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      bookId: undefined,
+      parentId: undefined,
+      type: "folder",
+      title: "Ideas",
+      sourceKind: undefined,
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const target = knowledgeDocument({
+      id: "note-2",
+      bookId: undefined,
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question Log",
+      sourceKind: undefined,
+      contentJson: { type: "doc", content: [] },
+      contentMd: "Target body.",
+      tags: [],
+    });
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [source, folder, target],
+      },
+      { rootDir: "ReadAny", exportedAt: 1700000200000 },
+    );
+    const sourceFile = vault.files.find(
+      (file) => file.path === vault.manifest.documents["doc-1"].path,
+    );
+    if (!sourceFile) throw new Error("Expected exported source document");
+    const rootlessTargetPath = vault.manifest.documents["note-2"].path
+      .replace(/^ReadAny\//, "")
+      .replace(/\.md$/i, "");
+    const editedContent = sourceFile.content.replace(
+      "Home body.",
+      `Home body.\n\nSee [[${rootlessTargetPath}|Question Log]].`,
+    );
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: sourceFile.path, content: editedContent }],
+    });
+
+    expect(plan.modified).toHaveLength(1);
+    expect(plan.modified[0].draft?.draft.contentJson).toMatchObject({
+      type: "doc",
+      content: expect.arrayContaining([
+        {
+          type: "paragraph",
+          content: expect.arrayContaining([
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: "note-2",
+                targetPath: rootlessTargetPath,
+                label: "Question Log",
+                title: "Question Log",
+              },
+            },
+          ]),
+        },
+      ]),
+    });
+  });
+
   it("detects local and Obsidian edits as vault import conflicts", () => {
     const exporter = new KnowledgeExporter();
     const original = knowledgeDocument({ bookId: undefined, sourceKind: undefined });

@@ -2167,10 +2167,10 @@ function KnowledgeHomePanel({
   }
 
   return (
-    <div className="min-h-full bg-muted/[0.12]">
+    <div className="min-h-full bg-background">
       <div
         className={cn(
-          "mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-t border-border/35 bg-background",
+          "mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-y border-border/35 bg-background",
           isContextInspectorOpen
             ? "grid-cols-[292px_minmax(0,1fr)_304px]"
             : "grid-cols-[292px_minmax(0,1fr)]",
@@ -2188,74 +2188,78 @@ function KnowledgeHomePanel({
         />
 
         <section className="flex min-w-0 flex-col overflow-hidden bg-background">
-          <div className="border-b border-border/35 bg-background/95 px-8 py-4">
-            <div className="mx-auto flex max-w-[880px] items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <KnowledgeDocumentBreadcrumbs
-                  document={document}
-                  documents={documents}
-                  activeTitle={title}
-                  onSelectDocument={onSelectDocument}
-                  t={t}
-                  className="mb-2"
-                />
-                <input
-                  value={title}
-                  onChange={(event) => onTitleChange(event.target.value)}
-                  aria-label={t("notes.knowledgeDocumentTitle")}
-                  placeholder={t("notes.knowledgeUntitledDocument")}
-                  className="w-full min-w-0 bg-transparent text-[30px] font-semibold leading-tight text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:text-foreground"
-                />
-                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border/45 bg-muted/20 px-2 py-1">
-                    <BookOpen className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{book.title}</span>
-                  </span>
-                  <span className="h-1 w-1 rounded-full bg-border" />
-                  <span>{knowledgeDocumentTypeLabel(document, t)}</span>
-                </div>
-                {!isFolderDocument ? (
-                  <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
-                ) : null}
+          <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-background/90 px-4 backdrop-blur">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="max-w-56 truncate font-medium text-foreground">{book.title}</span>
+              <span className="h-1 w-1 rounded-full bg-border" />
+              <span className="truncate">{knowledgeDocumentTypeLabel(document, t)}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 text-xs text-muted-foreground">
+                <Save className="h-3.5 w-3.5" />
+                {isSaving
+                  ? t("notes.knowledgeSaving")
+                  : isSaved
+                    ? t("notes.knowledgeSaved")
+                    : t("notes.knowledgePending")}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/25 px-2.5 text-xs text-muted-foreground">
-                  <Save className="h-3.5 w-3.5" />
-                  {isSaving
-                    ? t("notes.knowledgeSaving")
-                    : isSaved
-                      ? t("notes.knowledgeSaved")
-                      : t("notes.knowledgePending")}
-                </div>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                    isContextInspectorOpen
-                      ? "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15"
-                      : "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                  onClick={() => setIsContextInspectorOpen((open) => !open)}
-                  aria-label={t("notes.knowledgeContext")}
-                  title={t("notes.knowledgeContext")}
-                >
-                  <Brain className="h-3.5 w-3.5" />
-                </button>
-                <KnowledgeExportMenu
-                  onExport={onExport}
-                  onImportMarkdown={onImportMarkdown}
-                  onExportVault={onExportVault}
-                  onImportVault={onImportVault}
-                  isMarkdownImporting={isMarkdownImporting}
-                  isVaultExporting={isVaultExporting}
-                  isVaultImporting={isVaultImporting}
-                  t={t}
-                />
-              </div>
+              <button
+                type="button"
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                  isContextInspectorOpen
+                    ? "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15"
+                    : "border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                onClick={() => setIsContextInspectorOpen((open) => !open)}
+                aria-label={t("notes.knowledgeContext")}
+                title={t("notes.knowledgeContext")}
+              >
+                <Brain className="h-3.5 w-3.5" />
+              </button>
+              <KnowledgeExportMenu
+                onExport={onExport}
+                onImportMarkdown={onImportMarkdown}
+                onExportVault={onExportVault}
+                onImportVault={onImportVault}
+                isMarkdownImporting={isMarkdownImporting}
+                isVaultExporting={isVaultExporting}
+                isVaultImporting={isVaultImporting}
+                t={t}
+              />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
+            <div className="mx-auto max-w-[840px] pb-5">
+              <KnowledgeDocumentBreadcrumbs
+                document={document}
+                documents={documents}
+                activeTitle={title}
+                onSelectDocument={onSelectDocument}
+                t={t}
+                className="mb-3"
+              />
+              <input
+                value={title}
+                onChange={(event) => onTitleChange(event.target.value)}
+                aria-label={t("notes.knowledgeDocumentTitle")}
+                placeholder={t("notes.knowledgeUntitledDocument")}
+                className="block w-full min-w-0 bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
+              />
+              <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-md bg-muted/30 px-2 py-1">
+                  {knowledgeDocumentTypeLabel(document, t)}
+                </span>
+                <span className="h-1 w-1 rounded-full bg-border" />
+                <span className="truncate">{book.title}</span>
+              </div>
+              {!isFolderDocument ? (
+                <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
+              ) : null}
+            </div>
+
             {vaultConflicts ? (
               <KnowledgeVaultConflictCard
                 notice={vaultConflicts}
@@ -2306,15 +2310,15 @@ function KnowledgeHomePanel({
                 chrome="canvas"
                 outlineTarget={outlineTarget}
                 internalLinkTargets={internalLinkTargets}
-                contentClassName="max-h-none min-h-[700px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[680px] [&_.ProseMirror]:max-w-[800px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-8 [&_.ProseMirror]:py-8 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
+                contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[840px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-2 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}
           </div>
         </section>
 
         {isContextInspectorOpen ? (
-          <aside className="min-h-0 min-w-0 space-y-2 overflow-y-auto border-l border-border/35 bg-muted/10 p-2">
-            <div className="flex items-center justify-between gap-2 rounded-md border border-border/45 bg-background/80 px-3 py-2.5">
+          <aside className="min-h-0 min-w-0 overflow-y-auto border-l border-border/35 bg-muted/[0.13]">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/35 bg-background/95 px-3 py-2.5 backdrop-blur">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-foreground">
                   {t("notes.knowledgeContext")}
@@ -2334,7 +2338,7 @@ function KnowledgeHomePanel({
               </button>
             </div>
 
-            <div className="rounded-lg border border-border/55 bg-background p-3 shadow-sm">
+            <div className="border-b border-border/35 bg-background/55 p-3">
               <div className="mb-2 flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold text-foreground">
@@ -2383,7 +2387,7 @@ function KnowledgeHomePanel({
               />
             ) : null}
 
-            <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+            <div className="border-b border-border/35 bg-background/55 p-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold text-foreground">
                   {t("notes.knowledgeRecentExcerpts")}
@@ -2459,15 +2463,11 @@ function KnowledgeTagEditor({
   };
 
   return (
-    <div className="mt-2 flex max-w-2xl flex-wrap items-center gap-1.5">
-      <div className="flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-card/70 px-2 text-[11px] font-medium text-muted-foreground">
-        <Tag className="h-3 w-3" />
-        {t("notes.knowledgeTags")}
-      </div>
+    <div className="mt-3 flex max-w-2xl flex-wrap items-center gap-1.5">
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group inline-flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-muted/35 px-2 text-xs text-foreground"
+          className="group inline-flex h-7 items-center gap-1.5 rounded-md border border-border/45 bg-muted/30 px-2 text-xs text-foreground/90"
         >
           <span className="max-w-28 truncate">{tag}</span>
           <button
@@ -2480,20 +2480,25 @@ function KnowledgeTagEditor({
           </button>
         </span>
       ))}
-      <input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => commitDraft()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === ",") {
-            event.preventDefault();
-            commitDraft();
+      <label className="inline-flex h-7 min-w-28 flex-1 items-center gap-1.5 rounded-md border border-dashed border-border/65 bg-transparent px-2 text-xs text-muted-foreground transition-colors focus-within:border-primary/45 focus-within:bg-background">
+        <Tag className="h-3 w-3 shrink-0" />
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => commitDraft()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              commitDraft();
+            }
+          }}
+          aria-label={t("notes.knowledgeTagInputLabel")}
+          placeholder={
+            tags.length > 0 ? t("notes.knowledgeTagPlaceholder") : t("notes.knowledgeTags")
           }
-        }}
-        aria-label={t("notes.knowledgeTagInputLabel")}
-        placeholder={t("notes.knowledgeTagPlaceholder")}
-        className="h-7 min-w-24 flex-1 rounded-md border border-dashed border-border/70 bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:bg-card"
-      />
+          className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+        />
+      </label>
     </div>
   );
 }
@@ -2544,7 +2549,7 @@ function KnowledgeDocumentOutlinePanel({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+    <div className="border-b border-border/35 bg-background/55 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <ListTree className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -2613,7 +2618,7 @@ function KnowledgeRelationsPanel({
   );
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+    <div className="border-b border-border/35 bg-background/55 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Link2 className="h-3.5 w-3.5 text-primary" />
@@ -2782,7 +2787,7 @@ function KnowledgeSummaryMemoryCard({
       : t("notes.knowledgeSummaryReady");
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+    <div className="border-b border-border/35 bg-background/55 p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Brain className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -3071,9 +3076,7 @@ function KnowledgeDocumentExplorer({
   useEffect(() => {
     setExpandedFolderIds((current) => {
       const next = new Set(current);
-      for (const document of documents) {
-        if (document.type === "folder") next.add(document.id);
-      }
+      if (activeDocument?.type === "folder") next.add(activeDocument.id);
 
       let parentId = activeDocument?.parentId;
       while (parentId) {
@@ -3083,7 +3086,7 @@ function KnowledgeDocumentExplorer({
 
       return next;
     });
-  }, [activeDocument?.parentId, documents]);
+  }, [activeDocument?.id, activeDocument?.parentId, activeDocument?.type, documents]);
 
   const toggleFolder = (id: string) => {
     setExpandedFolderIds((current) => {

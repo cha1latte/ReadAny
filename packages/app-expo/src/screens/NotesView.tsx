@@ -2095,6 +2095,36 @@ function KnowledgeHomePanel({
             colors={colors}
           />
 
+          {!isFolderDocument ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.knowledgeVaultFocusCard}
+              onPress={() => setWorkspaceMode("document")}
+              accessibilityLabel={t("notes.knowledgeOpenDocument", "打开")}
+            >
+              <View style={styles.knowledgeVaultFocusIcon}>
+                <ScrollTextIcon size={15} color={colors.primary} />
+              </View>
+              <View style={styles.knowledgeVaultFocusText}>
+                <Text style={styles.knowledgeVaultFocusEyebrow}>
+                  {t("notes.knowledgeSelectedDocument", "当前文档")}
+                </Text>
+                <Text style={styles.knowledgeVaultFocusTitle} numberOfLines={1}>
+                  {title || document.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                </Text>
+                <Text style={styles.knowledgeVaultFocusPath} numberOfLines={1}>
+                  {activePath}
+                </Text>
+              </View>
+              <View style={styles.knowledgeVaultFocusButton}>
+                <BookOpenIcon size={14} color={colors.primary} />
+                <Text style={styles.knowledgeVaultFocusButtonText}>
+                  {t("notes.knowledgeOpenDocument", "打开")}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
           {isFolderDocument ? (
             <KnowledgeFolderOverview
               folder={document}

@@ -382,6 +382,12 @@ export const makeStyles = (colors: ThemeColors) =>
       justifyContent: "center",
     },
     knowledgeVaultFocusText: { flex: 1, minWidth: 0 },
+    knowledgeVaultFocusEyebrow: {
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+    },
     knowledgeVaultFocusTitle: {
       marginTop: 1,
       fontSize: fontSize.md,

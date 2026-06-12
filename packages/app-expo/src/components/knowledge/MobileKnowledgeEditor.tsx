@@ -735,6 +735,7 @@ export function MobileKnowledgeEditor({
         label,
         title: label,
         ...(target?.id ? { documentId: target.id } : {}),
+        ...(target?.path ? { targetPath: target.path } : {}),
       });
       setShowInternalLinkModal(false);
       setInternalLinkQuery("");

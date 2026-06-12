@@ -550,6 +550,31 @@ describe("editor projection", () => {
     expect(markdown).toBe("Link [[doc-1|Durable note]] and [[Loose idea]].");
   });
 
+  it("exports path-backed internal links without treating paths as document ids", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Compare " },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                targetPath: "Books/The Book/Reading Trail/Question Log",
+                label: "Question Log",
+                title: "Question Log",
+              },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+
+    expect(markdown).toBe("Compare [[Books/The Book/Reading Trail/Question Log|Question Log]].");
+  });
+
   it("imports stable ReadAny internal links without losing document ids", () => {
     const stableDocumentId = "23a0aef7-4188-4f5c-a955-cad6c1d3bb3f";
     const json = markdownToBasicTiptap(`Reference [[${stableDocumentId}]] and [[Loose idea]].`);
@@ -573,6 +598,42 @@ describe("editor projection", () => {
             {
               type: "readanyInternalLink",
               attrs: { label: "Loose idea", title: "Loose idea" },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("imports Obsidian path links as target paths instead of document ids", () => {
+    const json = markdownToBasicTiptap(
+      "Follow [[Books/The Book/Reading Trail/Question Log|Question Log]] and [[Ideas/Loose.md]].",
+    );
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Follow " },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                targetPath: "Books/The Book/Reading Trail/Question Log",
+                label: "Question Log",
+                title: "Question Log",
+              },
+            },
+            { type: "text", text: " and " },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                targetPath: "Ideas/Loose.md",
+                label: "Loose",
+                title: "Loose",
+              },
             },
             { type: "text", text: "." },
           ],

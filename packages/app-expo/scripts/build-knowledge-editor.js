@@ -298,6 +298,7 @@ async function buildKnowledgeEditor() {
       addAttributes() {
         return {
           documentId: { default: null },
+          targetPath: { default: null },
           label: { default: null },
           title: { default: null },
         };
@@ -308,11 +309,17 @@ async function buildKnowledgeEditor() {
       },
 
       renderHTML({ HTMLAttributes }) {
-        const label = HTMLAttributes.label || HTMLAttributes.title || HTMLAttributes.documentId || "";
+        const label =
+          HTMLAttributes.label ||
+          HTMLAttributes.title ||
+          HTMLAttributes.documentId ||
+          HTMLAttributes.targetPath ||
+          "";
         return [
           "span",
           mergeAttributes(HTMLAttributes, {
-            "data-readany-internal-link": HTMLAttributes.documentId || label,
+            "data-readany-internal-link":
+              HTMLAttributes.documentId || HTMLAttributes.targetPath || label,
             class: "readany-internal-link",
           }),
           label,
@@ -326,8 +333,9 @@ async function buildKnowledgeEditor() {
           span.contentEditable = "false";
           const update = (nextNode) => {
             const attrs = nextNode.attrs || {};
-            const label = attrs.label || attrs.title || attrs.documentId || "Linked note";
-            span.dataset.readanyInternalLink = attrs.documentId || label;
+            const label =
+              attrs.label || attrs.title || attrs.documentId || attrs.targetPath || "Linked note";
+            span.dataset.readanyInternalLink = attrs.documentId || attrs.targetPath || label;
             span.textContent = label;
           };
           update(node);
@@ -630,6 +638,10 @@ async function buildKnowledgeEditor() {
                   documentId:
                     typeof linkAttrs.documentId === "string" && linkAttrs.documentId.trim()
                       ? linkAttrs.documentId.trim()
+                      : null,
+                  targetPath:
+                    typeof linkAttrs.targetPath === "string" && linkAttrs.targetPath.trim()
+                      ? linkAttrs.targetPath.trim()
                       : null,
                 },
               })

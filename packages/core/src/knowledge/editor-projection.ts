@@ -85,6 +85,8 @@ function applyMark(markdown: string, mark: TiptapMark): string {
 
 function renderInternalLink(node: TiptapNode): string {
   const documentId = typeof node.attrs?.documentId === "string" ? node.attrs.documentId.trim() : "";
+  const targetPath = typeof node.attrs?.targetPath === "string" ? node.attrs.targetPath.trim() : "";
+  const target = targetPath || documentId;
   const label =
     typeof node.attrs?.label === "string"
       ? node.attrs.label.trim()
@@ -92,8 +94,8 @@ function renderInternalLink(node: TiptapNode): string {
         ? node.attrs.title.trim()
         : "";
 
-  if (documentId && label && label !== documentId) return `[[${documentId}|${label}]]`;
-  if (documentId) return `[[${documentId}]]`;
+  if (target && label && label !== target) return `[[${target}|${label}]]`;
+  if (target) return `[[${target}]]`;
   if (label) return `[[${label}]]`;
   return "";
 }
@@ -303,14 +305,18 @@ function looksLikeStableKnowledgeDocumentId(value: string): boolean {
 
 function readAnyInternalLinkNode(value: string): TiptapNode {
   const [target, alias] = value.split("|", 2).map((part) => part.trim());
-  const label = alias || target;
-  const documentId = alias || looksLikeStableKnowledgeDocumentId(target) ? target : undefined;
+  const isPathTarget = target.includes("/") || /\.md$/i.test(target);
+  const label =
+    alias || (isPathTarget ? target.split("/").pop()?.replace(/\.md$/i, "") : target) || target;
+  const documentId =
+    !isPathTarget && (alias || looksLikeStableKnowledgeDocumentId(target)) ? target : undefined;
   return {
     type: "readanyInternalLink",
     attrs: {
       label,
       title: label,
       ...(documentId ? { documentId } : {}),
+      ...(isPathTarget ? { targetPath: target } : {}),
     },
   };
 }

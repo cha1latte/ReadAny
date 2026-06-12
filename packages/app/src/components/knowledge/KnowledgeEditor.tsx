@@ -185,6 +185,7 @@ const ReadAnyInternalLinkExtension = Node.create({
   addAttributes() {
     return {
       documentId: { default: null },
+      targetPath: { default: null },
       label: { default: null },
       title: { default: null },
     };
@@ -195,11 +196,17 @@ const ReadAnyInternalLinkExtension = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    const label = HTMLAttributes.label || HTMLAttributes.title || HTMLAttributes.documentId || "";
+    const label =
+      HTMLAttributes.label ||
+      HTMLAttributes.title ||
+      HTMLAttributes.documentId ||
+      HTMLAttributes.targetPath ||
+      "";
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
-        "data-readany-internal-link": HTMLAttributes.documentId || label,
+        "data-readany-internal-link":
+          HTMLAttributes.documentId || HTMLAttributes.targetPath || label,
         class: "readany-internal-link",
       }),
       label,
@@ -593,6 +600,7 @@ export function KnowledgeEditor({
             label,
             title: label,
             ...(target?.id ? { documentId: target.id } : {}),
+            ...(target?.path ? { targetPath: target.path } : {}),
           },
         })
         .run();
@@ -1656,8 +1664,10 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
 
 function ReadAnyInternalLinkView({ node, selected }: NodeViewProps) {
   const label =
-    String(node.attrs.label || node.attrs.title || node.attrs.documentId || "").trim() ||
-    "Linked note";
+    String(
+      node.attrs.label || node.attrs.title || node.attrs.documentId || node.attrs.targetPath || "",
+    ).trim() || "Linked note";
+  const target = node.attrs.documentId || node.attrs.targetPath || label;
 
   return (
     <NodeViewWrapper
@@ -1669,7 +1679,7 @@ function ReadAnyInternalLinkView({ node, selected }: NodeViewProps) {
           : "border-primary/20 bg-primary/10 text-primary",
       )}
       contentEditable={false}
-      data-readany-internal-link={node.attrs.documentId || label}
+      data-readany-internal-link={target}
       title={label}
     >
       <Network className="h-3 w-3 shrink-0" />

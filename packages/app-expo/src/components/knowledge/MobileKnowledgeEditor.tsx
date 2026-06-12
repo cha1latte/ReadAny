@@ -102,6 +102,7 @@ interface MobileKnowledgeEditorProps {
   onChange: (value: MobileKnowledgeEditorValue) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  layout?: "embedded" | "document";
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
   isSaved?: boolean;
@@ -232,6 +233,7 @@ export function MobileKnowledgeEditor({
   onChange,
   placeholder,
   autoFocus = false,
+  layout = "embedded",
   tier = "knowledge_doc",
   surface,
   isSaved,
@@ -243,6 +245,7 @@ export function MobileKnowledgeEditor({
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
+  const isDocumentLayout = layout === "document";
   const webViewRef = useRef<WebView>(null);
   const latestValueRef = useRef(value);
   const localFingerprintRef = useRef(fingerprintJson(value.contentJson));
@@ -991,7 +994,7 @@ export function MobileKnowledgeEditor({
 
   if (useMarkdownFallback) {
     return (
-      <View style={styles.fallbackWrap}>
+      <View style={[styles.fallbackWrap, isDocumentLayout && styles.fallbackWrapDocument]}>
         {pendingDraft ? (
           <View style={styles.draftBanner}>
             <View style={styles.draftBannerTextBlock}>
@@ -1038,7 +1041,7 @@ export function MobileKnowledgeEditor({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDocumentLayout && styles.documentContainer]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1086,7 +1089,12 @@ export function MobileKnowledgeEditor({
         </View>
       ) : null}
 
-      <View style={[styles.webViewFrame, { height: editorHeight }]}>
+      <View
+        style={[
+          styles.webViewFrame,
+          isDocumentLayout ? styles.webViewFrameDocument : { height: editorHeight },
+        ]}
+      >
         {!htmlUri ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="small" color={colors.primary} />
@@ -1538,9 +1546,18 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       borderRadius: radius.lg,
       backgroundColor: colors.background,
     },
+    documentContainer: {
+      flex: 1,
+      minHeight: 0,
+      borderRadius: 0,
+    },
     fallbackWrap: {
       minHeight: 360,
       gap: 8,
+    },
+    fallbackWrapDocument: {
+      flex: 1,
+      minHeight: 0,
     },
     toolbar: {
       minHeight: 45,
@@ -1577,6 +1594,10 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     webViewFrame: {
       minHeight: MIN_EDITOR_HEIGHT,
       backgroundColor: colors.background,
+    },
+    webViewFrameDocument: {
+      flex: 1,
+      minHeight: 0,
     },
     webView: {
       flex: 1,

@@ -22,6 +22,12 @@ export interface KnowledgeDocumentTree {
   orphaned: KnowledgeDocument[];
 }
 
+export interface KnowledgeDocumentPathItem {
+  id: string;
+  title: string;
+  type: KnowledgeDocument["type"];
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -434,6 +440,28 @@ export function flattenKnowledgeDocumentTree(
   nodes: KnowledgeDocumentTreeNode[],
 ): KnowledgeDocumentTreeNode[] {
   return nodes.flatMap((node) => [node, ...flattenKnowledgeDocumentTree(node.children)]);
+}
+
+export function resolveKnowledgeDocumentPath(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+): KnowledgeDocumentPathItem[] {
+  const documentsById = new Map(documents.map((item) => [item.id, item]));
+  const path: KnowledgeDocumentPathItem[] = [];
+  const seen = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.unshift({
+      id: current.id,
+      title: current.title,
+      type: current.type,
+    });
+    current = current.parentId ? documentsById.get(current.parentId) : undefined;
+  }
+
+  return path;
 }
 
 export type KnowledgeDocumentParentValidationReason =

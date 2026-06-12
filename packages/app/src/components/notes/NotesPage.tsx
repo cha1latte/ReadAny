@@ -68,6 +68,7 @@ import {
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
   resolveKnowledgeAttachmentImageSources,
+  resolveKnowledgeDocumentPath,
   syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
@@ -2687,8 +2688,11 @@ function KnowledgeVaultRootOverview({
     }
     return counts;
   }, [documents]);
-  const folderChildren = items.filter((document) => document.type === "folder");
-  const documentChildren = items.filter((document) => document.type !== "folder");
+  const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
+  const orderedChildren = useMemo(
+    () => orderKnowledgeDocuments(items, homeDocumentId),
+    [homeDocumentId, items],
+  );
 
   return (
     <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
@@ -2756,51 +2760,19 @@ function KnowledgeVaultRootOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {folderChildren.length > 0 ? (
-            <section>
-              <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                <span>{t("notes.knowledgeFolderChildFolders")}</span>
-                <span>{folderChildren.length}</span>
-              </div>
-              <div className="overflow-hidden border-y border-border/35 bg-background">
-                {folderChildren.map((document) => (
-                  <KnowledgeFolderBrowserRow
-                    key={document.id}
-                    document={document}
-                    documents={documents}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onMove={onMove}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-          {documentChildren.length > 0 ? (
-            <section>
-              <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                <span>{t("notes.knowledgeFolderChildDocuments")}</span>
-                <span>{documentChildren.length}</span>
-              </div>
-              <div className="overflow-hidden border-y border-border/35 bg-background">
-                {documentChildren.map((document) => (
-                  <KnowledgeFolderBrowserRow
-                    key={document.id}
-                    document={document}
-                    documents={documents}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onMove={onMove}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
+        <div className="overflow-hidden border-y border-border/35 bg-background">
+          {orderedChildren.map((document) => (
+            <KnowledgeFolderBrowserRow
+              key={document.id}
+              document={document}
+              documents={documents}
+              childCountByParentId={childCountByParentId}
+              onSelect={onSelect}
+              onDelete={onDelete}
+              onMove={onMove}
+              t={t}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -3414,16 +3386,7 @@ function knowledgeDocumentPath(
   t: (key: string, options?: Record<string, unknown>) => string,
   activeTitle?: string,
 ): { id: string; title: string; type?: KnowledgeDocumentType }[] {
-  const byId = new Map(documents.map((item) => [item.id, item]));
-  const path: KnowledgeDocument[] = [];
-  const seen = new Set<string>();
-  let current: KnowledgeDocument | undefined = document;
-
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    path.unshift(current);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
+  const path = resolveKnowledgeDocumentPath(document, documents);
 
   return [
     {
@@ -4131,8 +4094,6 @@ function KnowledgeFolderOverview({
     }
     return counts;
   }, [documents]);
-  const folderChildren = orderedChildren.filter((document) => document.type === "folder");
-  const noteChildren = orderedChildren.filter((document) => document.type !== "folder");
 
   return (
     <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
@@ -4200,50 +4161,22 @@ function KnowledgeFolderOverview({
         </div>
       ) : (
         <div className="space-y-4">
-          {folderChildren.length > 0 ? (
-            <section>
-              <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                <span>{t("notes.knowledgeFolderChildFolders")}</span>
-                <span>{folderChildren.length}</span>
-              </div>
-              <div className="overflow-hidden border-y border-border/35 bg-background">
-                {folderChildren.map((document) => (
-                  <KnowledgeFolderBrowserRow
-                    key={document.id}
-                    document={document}
-                    documents={documents}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onMove={onMove}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-          {noteChildren.length > 0 ? (
-            <section>
-              <div className="mb-1.5 flex items-center justify-between border-b border-border/25 px-0.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                <span>{t("notes.knowledgeFolderChildDocuments")}</span>
-                <span>{noteChildren.length}</span>
-              </div>
-              <div className="overflow-hidden border-y border-border/35 bg-background">
-                {noteChildren.map((document) => (
-                  <KnowledgeFolderBrowserRow
-                    key={document.id}
-                    document={document}
-                    documents={documents}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onMove={onMove}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <section>
+            <div className="overflow-hidden border-y border-border/35 bg-background">
+              {orderedChildren.map((document) => (
+                <KnowledgeFolderBrowserRow
+                  key={document.id}
+                  document={document}
+                  documents={documents}
+                  childCountByParentId={childCountByParentId}
+                  onSelect={onSelect}
+                  onDelete={onDelete}
+                  onMove={onMove}
+                  t={t}
+                />
+              ))}
+            </div>
+          </section>
         </div>
       )}
     </div>

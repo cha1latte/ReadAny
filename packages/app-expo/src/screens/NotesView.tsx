@@ -77,6 +77,7 @@ import {
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
   resolveKnowledgeAttachmentImageSources,
+  resolveKnowledgeDocumentPath,
   syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
@@ -3297,16 +3298,7 @@ function knowledgeDocumentPathItems(
   t: TFunction,
   activeTitle?: string,
 ): Array<{ id: string; title: string; type?: KnowledgeDocumentType }> {
-  const byId = new Map(documents.map((item) => [item.id, item]));
-  const path: KnowledgeDocument[] = [];
-  const seen = new Set<string>();
-  let current: KnowledgeDocument | undefined = document;
-
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    path.unshift(current);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
+  const path = resolveKnowledgeDocumentPath(document, documents);
 
   return [
     { id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") },
@@ -3904,8 +3896,11 @@ function KnowledgeVaultRootOverview({
     }
     return counts;
   }, [documents]);
-  const folderChildren = items.filter((item) => item.type === "folder");
-  const noteChildren = items.filter((item) => item.type !== "folder");
+  const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+  const orderedItems = useMemo(
+    () => orderKnowledgeDocuments(items, homeDocumentId),
+    [homeDocumentId, items],
+  );
 
   return (
     <View style={styles.knowledgeFolderOverview}>
@@ -3978,55 +3973,19 @@ function KnowledgeVaultRootOverview({
           </View>
         </View>
       ) : (
-        <View style={styles.knowledgeFolderGroupStack}>
-          {folderChildren.length > 0 ? (
-            <View style={styles.knowledgeFolderGroup}>
-              <View style={styles.knowledgeFolderGroupHeader}>
-                <Text style={styles.knowledgeFolderGroupTitle}>
-                  {t("notes.knowledgeFolderChildFolders", "文件夹")}
-                </Text>
-                <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
-              </View>
-              <View style={styles.knowledgeFolderItemList}>
-                {folderChildren.map((item) => (
-                  <KnowledgeFolderBrowserItem
-                    key={item.id}
-                    item={item}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onOpenActions={onOpenActions}
-                    t={t}
-                    styles={styles}
-                    colors={colors}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
-          {noteChildren.length > 0 ? (
-            <View style={styles.knowledgeFolderGroup}>
-              <View style={styles.knowledgeFolderGroupHeader}>
-                <Text style={styles.knowledgeFolderGroupTitle}>
-                  {t("notes.knowledgeFolderChildDocuments", "文档")}
-                </Text>
-                <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
-              </View>
-              <View style={styles.knowledgeFolderItemList}>
-                {noteChildren.map((item) => (
-                  <KnowledgeFolderBrowserItem
-                    key={item.id}
-                    item={item}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onOpenActions={onOpenActions}
-                    t={t}
-                    styles={styles}
-                    colors={colors}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
+        <View style={styles.knowledgeFolderItemList}>
+          {orderedItems.map((item) => (
+            <KnowledgeFolderBrowserItem
+              key={item.id}
+              item={item}
+              childCountByParentId={childCountByParentId}
+              onSelect={onSelect}
+              onOpenActions={onOpenActions}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+          ))}
         </View>
       )}
     </View>
@@ -4065,8 +4024,7 @@ function KnowledgeFolderOverview({
     }
     return counts;
   }, [documents]);
-  const folderChildren = items.filter((item) => item.type === "folder");
-  const noteChildren = items.filter((item) => item.type !== "folder");
+  const orderedItems = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
 
   return (
     <View style={styles.knowledgeFolderOverview}>
@@ -4138,55 +4096,19 @@ function KnowledgeFolderOverview({
           </View>
         </View>
       ) : (
-        <View style={styles.knowledgeFolderGroupStack}>
-          {folderChildren.length > 0 ? (
-            <View style={styles.knowledgeFolderGroup}>
-              <View style={styles.knowledgeFolderGroupHeader}>
-                <Text style={styles.knowledgeFolderGroupTitle}>
-                  {t("notes.knowledgeFolderChildFolders", "文件夹")}
-                </Text>
-                <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
-              </View>
-              <View style={styles.knowledgeFolderItemList}>
-                {folderChildren.map((item) => (
-                  <KnowledgeFolderBrowserItem
-                    key={item.id}
-                    item={item}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onOpenActions={onOpenActions}
-                    t={t}
-                    styles={styles}
-                    colors={colors}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
-          {noteChildren.length > 0 ? (
-            <View style={styles.knowledgeFolderGroup}>
-              <View style={styles.knowledgeFolderGroupHeader}>
-                <Text style={styles.knowledgeFolderGroupTitle}>
-                  {t("notes.knowledgeFolderChildDocuments", "文档")}
-                </Text>
-                <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
-              </View>
-              <View style={styles.knowledgeFolderItemList}>
-                {noteChildren.map((item) => (
-                  <KnowledgeFolderBrowserItem
-                    key={item.id}
-                    item={item}
-                    childCountByParentId={childCountByParentId}
-                    onSelect={onSelect}
-                    onOpenActions={onOpenActions}
-                    t={t}
-                    styles={styles}
-                    colors={colors}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
+        <View style={styles.knowledgeFolderItemList}>
+          {orderedItems.map((item) => (
+            <KnowledgeFolderBrowserItem
+              key={item.id}
+              item={item}
+              childCountByParentId={childCountByParentId}
+              onSelect={onSelect}
+              onOpenActions={onOpenActions}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+          ))}
         </View>
       )}
     </View>

@@ -16,6 +16,7 @@ import {
   isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
   orderKnowledgeDocuments,
+  resolveKnowledgeDocumentPath,
   validateKnowledgeDocumentParent,
 } from "./document-utils";
 
@@ -92,6 +93,36 @@ describe("knowledge document utilities", () => {
 
     expect(tree.roots.map((node) => node.document.id).sort()).toEqual(["left", "right"]);
     expect(tree.roots.flatMap((node) => node.children)).toEqual([]);
+  });
+
+  it("resolves a stable vault path from parent ids", () => {
+    const firstFolder = document({ id: "ideas-a", type: "folder", title: "Ideas" });
+    const secondFolder = document({ id: "ideas-b", type: "folder", title: "Ideas" });
+    const nested = document({
+      id: "nested",
+      title: "Quote map",
+      parentId: "ideas-b",
+      updatedAt: 20,
+    });
+
+    expect(resolveKnowledgeDocumentPath(nested, [nested, firstFolder, secondFolder])).toEqual([
+      { id: "ideas-b", title: "Ideas", type: "folder" },
+      { id: "nested", title: "Quote map", type: "standalone_note" },
+    ]);
+  });
+
+  it("stops vault path resolution at missing or cyclic parents", () => {
+    const orphan = document({ id: "orphan", title: "Orphan", parentId: "missing" });
+    const left = document({ id: "left", title: "Left", parentId: "right" });
+    const right = document({ id: "right", title: "Right", parentId: "left" });
+
+    expect(resolveKnowledgeDocumentPath(orphan, [orphan])).toEqual([
+      { id: "orphan", title: "Orphan", type: "standalone_note" },
+    ]);
+    expect(resolveKnowledgeDocumentPath(left, [left, right])).toEqual([
+      { id: "right", title: "Right", type: "standalone_note" },
+      { id: "left", title: "Left", type: "standalone_note" },
+    ]);
   });
 
   it("validates document parent moves", () => {

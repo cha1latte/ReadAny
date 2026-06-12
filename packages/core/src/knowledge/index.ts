@@ -76,10 +76,12 @@ export {
   knowledgeDocumentFingerprint,
   knowledgeValueFingerprint,
   orderKnowledgeDocuments,
+  resolveKnowledgeDocumentPath,
 } from "./document-utils";
 export type {
   HighlightNoteProjection,
   KnowledgeDocumentOutlineItem,
+  KnowledgeDocumentPathItem,
   KnowledgeDocumentTree,
   KnowledgeDocumentTreeNode,
   KnowledgeDocumentSnapshot,

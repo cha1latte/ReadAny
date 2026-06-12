@@ -1109,9 +1109,10 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeFolderItemList: {
       gap: 0,
-      borderTopWidth: 0,
+      borderTopWidth: 0.5,
       borderBottomWidth: 0.5,
       borderColor: colors.border,
+      backgroundColor: colors.background,
     },
     knowledgeFolderGroupStack: { gap: 14 },
     knowledgeFolderGroup: { gap: 6 },

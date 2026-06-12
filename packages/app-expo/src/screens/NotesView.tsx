@@ -2076,41 +2076,6 @@ function KnowledgeHomePanel({
             </View>
           </View>
 
-          {!isFolderDocument ? (
-            <TouchableOpacity
-              activeOpacity={0.78}
-              style={styles.knowledgeVaultFocusCard}
-              onPress={() => setWorkspaceMode("document")}
-              accessibilityRole="button"
-              accessibilityLabel={t("notes.knowledgeDocumentEdit", "编辑文档")}
-            >
-              <View style={styles.knowledgeVaultFocusIcon}>
-                <ScrollTextIcon size={16} color={colors.primary} />
-              </View>
-              <View style={styles.knowledgeVaultFocusText}>
-                <Text style={styles.knowledgeVaultFocusTitle} numberOfLines={1}>
-                  {title || document.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
-                </Text>
-                <Text style={styles.knowledgeVaultFocusPath} numberOfLines={1}>
-                  {knowledgeDocumentTypeLabel(document, t)} · {activePath}
-                </Text>
-              </View>
-              <ChevronRightIcon size={16} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          ) : null}
-
-          <KnowledgeDocumentExplorer
-            documents={documents}
-            activeDocument={document}
-            activeDocumentId={activeDocumentId}
-            isCreating={isCreatingDocument}
-            onSelect={handleSelectKnowledgeDocument}
-            onCreate={onCreateDocument}
-            t={t}
-            styles={styles}
-            colors={colors}
-          />
-
           {isFolderDocument ? (
             <KnowledgeFolderOverview
               folder={document}
@@ -2124,6 +2089,18 @@ function KnowledgeHomePanel({
               colors={colors}
             />
           ) : null}
+
+          <KnowledgeDocumentExplorer
+            documents={documents}
+            activeDocument={document}
+            activeDocumentId={activeDocumentId}
+            isCreating={isCreatingDocument}
+            onSelect={handleSelectKnowledgeDocument}
+            onCreate={onCreateDocument}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
         </ScrollView>
       ) : (
         <View style={[styles.knowledgeDocumentScreen, styles.knowledgeDocumentFullScreen]}>

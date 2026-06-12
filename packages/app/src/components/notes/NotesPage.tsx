@@ -2164,10 +2164,10 @@ function KnowledgeHomePanel({
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="min-h-full bg-muted/[0.12]">
       <div
         className={cn(
-          "mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-t border-border/35",
+          "mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-t border-border/35 bg-background",
           isContextInspectorOpen
             ? "grid-cols-[292px_minmax(0,1fr)_304px]"
             : "grid-cols-[292px_minmax(0,1fr)]",
@@ -2185,7 +2185,7 @@ function KnowledgeHomePanel({
         />
 
         <section className="flex min-w-0 flex-col overflow-hidden bg-background">
-          <div className="border-b border-border/35 bg-background/95 px-8 py-5">
+          <div className="border-b border-border/35 bg-background/95 px-8 py-4">
             <div className="mx-auto flex max-w-[880px] items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <KnowledgeDocumentBreadcrumbs
@@ -2204,7 +2204,10 @@ function KnowledgeHomePanel({
                   className="w-full min-w-0 bg-transparent text-[30px] font-semibold leading-tight text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:text-foreground"
                 />
                 <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="truncate">{book.title}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border/45 bg-muted/20 px-2 py-1">
+                    <BookOpen className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{book.title}</span>
+                  </span>
                   <span className="h-1 w-1 rounded-full bg-border" />
                   <span>{knowledgeDocumentTypeLabel(document, t)}</span>
                 </div>
@@ -2249,7 +2252,7 @@ function KnowledgeHomePanel({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,var(--muted)_0,transparent_22rem)] px-8 py-6">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-6">
             {vaultConflicts ? (
               <KnowledgeVaultConflictCard
                 notice={vaultConflicts}
@@ -2299,7 +2302,7 @@ function KnowledgeHomePanel({
                 chrome="canvas"
                 outlineTarget={outlineTarget}
                 internalLinkTargets={internalLinkTargets}
-                contentClassName="max-h-none min-h-[700px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[680px] [&_.ProseMirror]:max-w-[800px] [&_.ProseMirror]:rounded-md [&_.ProseMirror]:border [&_.ProseMirror]:border-border/35 [&_.ProseMirror]:bg-background [&_.ProseMirror]:px-12 [&_.ProseMirror]:py-10 [&_.ProseMirror]:shadow-[0_18px_60px_rgba(15,23,42,0.06)] dark:[&_.ProseMirror]:shadow-none [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
+                contentClassName="max-h-none min-h-[700px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[680px] [&_.ProseMirror]:max-w-[800px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-8 [&_.ProseMirror]:py-8 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}
           </div>
@@ -2938,20 +2941,22 @@ function KnowledgeDocumentBreadcrumbs({
             {isClickable ? (
               <button
                 type="button"
-                className="max-w-40 truncate rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                className="inline-flex max-w-40 items-center gap-1 truncate rounded-md border border-transparent px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-border/50 hover:bg-muted/45 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
                 onClick={() => onSelectDocument(targetDocument)}
                 title={item.title}
               >
+                {item.type === "folder" ? <Folder className="h-3 w-3 shrink-0" /> : null}
                 {item.title}
               </button>
             ) : (
               <span
                 className={cn(
-                  "max-w-40 truncate",
+                  "inline-flex max-w-40 items-center gap-1 truncate rounded-md px-1.5 py-0.5",
                   isLast ? "text-foreground/80" : "text-muted-foreground",
                 )}
                 title={item.title}
               >
+                {item.type === "folder" ? <Folder className="h-3 w-3 shrink-0" /> : null}
                 {item.title}
               </span>
             )}
@@ -3113,16 +3118,16 @@ function KnowledgeDocumentExplorer({
           className={cn(
             "group relative flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
             isActive
-              ? "border-primary/25 bg-primary/10 text-primary"
+              ? "border-primary/25 bg-background text-primary shadow-[inset_2px_0_0_var(--primary)]"
               : isInActivePath
-                ? "border-border/45 bg-muted/35 text-foreground"
-                : "text-foreground hover:border-border/55 hover:bg-muted/45",
+                ? "border-border/45 bg-background/85 text-foreground shadow-[inset_2px_0_0_hsl(var(--border))]"
+                : "text-foreground hover:border-border/55 hover:bg-background/75",
           )}
           style={{ paddingLeft: `${8 + Math.min(node.depth, 7) * 14}px` }}
         >
           {node.depth > 0 ? (
             <span
-              className="pointer-events-none absolute bottom-1 top-1 w-px bg-border/45"
+              className="pointer-events-none absolute bottom-1 top-1 w-px bg-border/55"
               style={{ left: `${11 + Math.min(node.depth - 1, 6) * 14}px` }}
             />
           ) : null}
@@ -3255,8 +3260,8 @@ function KnowledgeDocumentExplorer({
   };
 
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border/35 bg-muted/10">
-      <div className="border-b border-border/35 bg-background/80 px-3 pb-3 pt-3">
+    <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border/35 bg-muted/[0.16]">
+      <div className="border-b border-border/35 bg-background/90 px-3 pb-3 pt-3">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
@@ -3313,7 +3318,7 @@ function KnowledgeDocumentExplorer({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-b border-border/25 bg-background/45 px-3 py-1.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between border-b border-border/25 bg-background/65 px-3 py-1.5 text-[11px] text-muted-foreground">
         <span>
           {documents.length} {t("notes.knowledgeDocuments")}
         </span>

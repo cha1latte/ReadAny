@@ -230,9 +230,9 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeScroll: { flex: 1 },
     knowledgeContent: {
       paddingHorizontal: 16,
-      paddingTop: 12,
+      paddingTop: 10,
       paddingBottom: 28,
-      gap: 10,
+      gap: 12,
     },
     knowledgeDocumentContent: {
       paddingHorizontal: 12,
@@ -956,10 +956,9 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeExplorerCard: {
       backgroundColor: colors.background,
       borderRadius: radius.sm,
-      borderWidth: 0.5,
-      borderColor: colors.border,
-      padding: 10,
-      gap: 9,
+      borderWidth: 0,
+      padding: 0,
+      gap: 10,
     },
     knowledgeExplorerHeader: {
       flexDirection: "row",
@@ -992,7 +991,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.md,
       borderWidth: 0.5,
       borderColor: colors.border,
-      backgroundColor: colors.card,
+      backgroundColor: colors.background,
       paddingHorizontal: 10,
     },
     knowledgeDocumentSearchInput: {
@@ -1002,7 +1001,11 @@ export const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       color: colors.foreground,
     },
-    knowledgeTreeList: { gap: 1 },
+    knowledgeTreeList: {
+      borderRadius: radius.sm,
+      backgroundColor: colors.background,
+      gap: 1,
+    },
     knowledgeTreeNode: {
       position: "relative",
       minHeight: 38,
@@ -1024,7 +1027,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeTreeNodeActive: {
       borderColor: withOpacity(colors.primary, 0.28),
-      backgroundColor: withOpacity(colors.primary, 0.09),
+      backgroundColor: withOpacity(colors.primary, 0.08),
     },
     knowledgeTreeToggle: {
       width: 22,
@@ -1041,7 +1044,7 @@ export const makeStyles = (colors: ThemeColors) =>
       width: 24,
       height: 24,
       borderRadius: radius.sm,
-      backgroundColor: colors.card,
+      backgroundColor: colors.muted,
       alignItems: "center",
       justifyContent: "center",
     },

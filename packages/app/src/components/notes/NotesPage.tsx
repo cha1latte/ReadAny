@@ -2337,12 +2337,11 @@ function KnowledgeHomePanel({
                     t={t}
                     className="mb-3"
                   />
-                  <input
+                  <KnowledgeDocumentTitleEditor
                     value={title}
-                    onChange={(event) => onTitleChange(event.target.value)}
-                    aria-label={t("notes.knowledgeDocumentTitle")}
+                    onChange={onTitleChange}
+                    label={t("notes.knowledgeDocumentTitle")}
                     placeholder={t("notes.knowledgeUntitledDocument")}
-                    className="block w-full min-w-0 bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
                   />
                   <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                     <span>{knowledgeDocumentTypeLabel(document, t)}</span>
@@ -2550,6 +2549,62 @@ function KnowledgeHomePanel({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function KnowledgeDocumentTitleEditor({
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  placeholder: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const resize = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    resize();
+  });
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value.replace(/\s*\n+\s*/g, " "));
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      onPaste={(event) => {
+        const text = event.clipboardData.getData("text/plain");
+        if (!text.includes("\n")) return;
+        event.preventDefault();
+        const normalizedText = text.replace(/\s*\n+\s*/g, " ");
+        const target = event.currentTarget;
+        const start = target.selectionStart ?? target.value.length;
+        const end = target.selectionEnd ?? start;
+        onChange(`${value.slice(0, start)}${normalizedText}${value.slice(end)}`);
+      }}
+      rows={1}
+      aria-label={label}
+      placeholder={placeholder}
+      spellCheck={false}
+      className="block max-h-32 min-h-[3.3rem] w-full min-w-0 resize-none overflow-hidden bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
+    />
   );
 }
 

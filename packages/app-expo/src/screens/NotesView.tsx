@@ -2204,6 +2204,9 @@ function KnowledgeHomePanel({
                 placeholder={t("notes.knowledgeUntitledDocument", "未命名文档")}
                 placeholderTextColor={colors.mutedForeground}
                 style={styles.knowledgeCanvasTitleInput}
+                multiline
+                scrollEnabled={false}
+                blurOnSubmit
                 returnKeyType="done"
               />
               <KnowledgePathTrail

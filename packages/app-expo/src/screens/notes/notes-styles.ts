@@ -357,7 +357,7 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeDocumentCanvasHeader: {
       minHeight: 66,
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 10,
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
@@ -379,6 +379,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeCanvasTitleInput: {
       minHeight: 34,
+      maxHeight: 58,
       padding: 0,
       fontSize: fontSize.xl,
       lineHeight: 27,
@@ -402,7 +403,7 @@ export const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      paddingTop: 1,
+      paddingTop: 2,
     },
     knowledgeCanvasStatus: {
       width: 32,

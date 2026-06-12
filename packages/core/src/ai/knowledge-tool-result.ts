@@ -25,6 +25,10 @@ export interface KnowledgeToolResultDisplay {
   documents: KnowledgeToolResultDocument[];
 }
 
+export interface KnowledgeToolResultDisplayOptions {
+  error?: unknown;
+}
+
 const KNOWLEDGE_TOOL_NAMES = new Set([
   "searchKnowledgeBase",
   "getBookKnowledge",
@@ -45,6 +49,11 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function asErrorString(value: unknown): string | undefined {
+  if (value instanceof Error) return asString(value.message);
+  return asString(value);
 }
 
 function asBoolean(value: unknown): boolean | undefined {
@@ -84,6 +93,22 @@ function asFailureDisplay(
   };
 }
 
+function createFailureDisplay(
+  toolName: string,
+  error: string,
+  result?: Record<string, unknown>,
+): KnowledgeToolResultDisplay {
+  return {
+    kind: "failure",
+    toolName,
+    status: result ? asString(result.status) : undefined,
+    documentId: result ? asString(result.documentId) || asString(result.fromDocumentId) : undefined,
+    reason: result ? asString(result.reason) : undefined,
+    error,
+    documents: [],
+  };
+}
+
 function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
   if (!isRecord(value)) return null;
 
@@ -119,14 +144,17 @@ function compactMarkdownPreview(value: unknown): string | undefined {
 export function getKnowledgeToolResultDisplay(
   toolName: string,
   result: unknown,
+  options: KnowledgeToolResultDisplayOptions = {},
 ): KnowledgeToolResultDisplay | null {
   if (!KNOWLEDGE_TOOL_NAMES.has(toolName)) return null;
 
+  const directError = asErrorString(options.error);
   const resultRecord = asResultRecord(result);
-  if (!resultRecord) return null;
+  if (!resultRecord) return directError ? createFailureDisplay(toolName, directError) : null;
 
   const failureDisplay = asFailureDisplay(toolName, resultRecord);
   if (failureDisplay) return failureDisplay;
+  if (directError) return createFailureDisplay(toolName, directError, resultRecord);
 
   if (toolName === "searchKnowledgeBase") {
     return {

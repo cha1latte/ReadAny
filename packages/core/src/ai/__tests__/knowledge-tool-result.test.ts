@@ -116,6 +116,32 @@ describe("knowledge tool result display", () => {
     });
   });
 
+  it("turns direct tool-call errors into knowledge failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("searchKnowledgeBase", undefined, {
+      error: "Tool searchKnowledgeBase is not available",
+    });
+
+    expect(display).toEqual({
+      kind: "failure",
+      toolName: "searchKnowledgeBase",
+      error: "Tool searchKnowledgeBase is not available",
+      documents: [],
+    });
+  });
+
+  it("keeps direct knowledge errors visible even when the raw result is malformed", () => {
+    const display = getKnowledgeToolResultDisplay("getBookKnowledge", "not-json", {
+      error: new Error("Bridge message failed"),
+    });
+
+    expect(display).toEqual({
+      kind: "failure",
+      toolName: "getBookKnowledge",
+      error: "Bridge message failed",
+      documents: [],
+    });
+  });
+
   it("lets successful knowledge proposals use the proposal card renderer", () => {
     expect(
       getKnowledgeToolResultDisplay("proposeKnowledgeDocumentCreate", {
@@ -128,6 +154,9 @@ describe("knowledge tool result display", () => {
 
   it("ignores unrelated tools and malformed results", () => {
     expect(getKnowledgeToolResultDisplay("fallbackSearch", { hits: [] })).toBeNull();
+    expect(
+      getKnowledgeToolResultDisplay("fallbackSearch", undefined, { error: "No tool" }),
+    ).toBeNull();
     expect(getKnowledgeToolResultDisplay("searchKnowledgeBase", "not-json")).toBeNull();
   });
 });

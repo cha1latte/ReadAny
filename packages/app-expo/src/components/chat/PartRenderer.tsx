@@ -376,9 +376,10 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const toolResultError = useMemo(() => getToolResultError(part.result), [part.result]);
   const hasError = part.status === "error" || Boolean(part.error) || Boolean(toolResultError);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
+  const errorMessage = part.error || toolResultError || "";
   const knowledgeResult = useMemo(
-    () => getKnowledgeToolResultDisplay(part.name, part.result),
-    [part.name, part.result],
+    () => getKnowledgeToolResultDisplay(part.name, part.result, { error: errorMessage }),
+    [errorMessage, part.name, part.result],
   );
 
   const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal) || Boolean(knowledgeResult));
@@ -427,8 +428,6 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
   const label = TOOL_LABEL_KEYS[part.name] ? t(TOOL_LABEL_KEYS[part.name]) : part.name;
   const queryText = part.args.query ? String(part.args.query) : "";
-  const errorMessage = part.error || toolResultError || "";
-
   return (
     <View style={[s.container, hasError && s.errorContainer]}>
       <TouchableOpacity style={s.header} onPress={() => setIsOpen(!isOpen)} activeOpacity={0.7}>

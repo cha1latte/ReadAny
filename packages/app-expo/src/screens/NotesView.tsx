@@ -54,7 +54,10 @@ import {
   AnnotationExporter,
   type ExportFormat,
   type KnowledgeExportFormat,
+  type KnowledgeImportWriteProposal,
+  createKnowledgeImportWriteProposal,
   knowledgeExporter,
+  parseKnowledgeMarkdownDocument,
 } from "@readany/core/export";
 import {
   type KnowledgeDocumentOutlineItem,
@@ -74,6 +77,7 @@ import {
   resolveKnowledgeAttachmentImageSources,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
+import { applyKnowledgeWriteProposal } from "@readany/core/knowledge/proposals";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
 import { getPlatformService } from "@readany/core/services";
 import type {
@@ -124,6 +128,16 @@ type CreatableKnowledgeDocumentType = Extract<
   "folder" | "standalone_note" | "review" | "summary"
 >;
 
+interface KnowledgeMarkdownImportReviewItem {
+  path: string;
+  proposal: KnowledgeImportWriteProposal;
+  warnings: string[];
+}
+
+interface KnowledgeMarkdownImportReview {
+  items: KnowledgeMarkdownImportReviewItem[];
+}
+
 function createEmptyKnowledgeValue(): MobileKnowledgeEditorValue {
   return {
     contentJson: { type: "doc", content: [] },
@@ -136,6 +150,15 @@ function normalizeKnowledgeTags(tags: readonly string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b),
   );
+}
+
+function mobileFileName(path: string): string {
+  const fileName = path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || path;
+  try {
+    return decodeURIComponent(fileName);
+  } catch {
+    return fileName;
+  }
 }
 
 function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
@@ -302,6 +325,10 @@ export function NotesView({
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
+  const [isKnowledgeMarkdownImporting, setIsKnowledgeMarkdownImporting] = useState(false);
+  const [isKnowledgeMarkdownImportApplying, setIsKnowledgeMarkdownImportApplying] = useState(false);
+  const [knowledgeMarkdownImportReview, setKnowledgeMarkdownImportReview] =
+    useState<KnowledgeMarkdownImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
@@ -1221,6 +1248,114 @@ export function NotesView({
     [selectedBook, knowledgeHome, knowledgeTitle, knowledgeTags, knowledgeValue, books, t],
   );
 
+  const handleKnowledgeMarkdownImport = useCallback(async () => {
+    setShowExportMenu(false);
+    if (
+      !selectedKnowledgeBookId ||
+      isKnowledgeMarkdownImporting ||
+      isKnowledgeMarkdownImportApplying
+    ) {
+      return;
+    }
+
+    setIsKnowledgeMarkdownImporting(true);
+    setKnowledgeMarkdownImportReview(null);
+
+    try {
+      const platform = getPlatformService();
+      const selected = await platform.pickFile({
+        multiple: true,
+        filters: [
+          {
+            name: "Markdown",
+            extensions: ["md", "markdown"],
+          },
+        ],
+      });
+      if (!selected) return;
+
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length === 0) return;
+
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      const items: KnowledgeMarkdownImportReviewItem[] = [];
+      for (const path of paths) {
+        const content = await platform.readTextFile(path);
+        const imported = parseKnowledgeMarkdownDocument({
+          path,
+          content,
+          bookId: selectedKnowledgeBookId,
+        });
+        items.push({
+          path,
+          proposal: createKnowledgeImportWriteProposal(imported, {
+            message: t("notes.knowledgeMarkdownImportProposalMessage", {
+              file: mobileFileName(path),
+            }),
+          }),
+          warnings: imported.warnings,
+        });
+      }
+
+      setKnowledgeMarkdownImportReview({ items });
+    } catch (error) {
+      console.error("[Notes] Knowledge Markdown import failed:", error);
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeMarkdownImportFailed", "Markdown 文件导入失败"),
+      );
+    } finally {
+      setIsKnowledgeMarkdownImporting(false);
+    }
+  }, [
+    isKnowledgeMarkdownImportApplying,
+    isKnowledgeMarkdownImporting,
+    saveActiveKnowledgeDocumentNow,
+    selectedKnowledgeBookId,
+    t,
+  ]);
+
+  const handleApplyKnowledgeMarkdownImport = useCallback(async () => {
+    if (!knowledgeMarkdownImportReview || isKnowledgeMarkdownImportApplying) return;
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    setIsKnowledgeMarkdownImportApplying(true);
+    try {
+      const importedDocumentIds: string[] = [];
+      for (const item of knowledgeMarkdownImportReview.items) {
+        const result = await applyKnowledgeWriteProposal(item.proposal);
+        if (result.documentId) importedDocumentIds.push(result.documentId);
+      }
+      await refreshSelectedKnowledgeDocuments(importedDocumentIds[0] ?? knowledgeHome?.id);
+      setKnowledgeMarkdownImportReview(null);
+      Alert.alert(
+        t("common.success", "成功"),
+        t("notes.knowledgeMarkdownImportAppliedDetail", {
+          count: knowledgeMarkdownImportReview.items.length,
+        }),
+      );
+    } catch (error) {
+      console.error("[Notes] Failed to apply knowledge Markdown import:", error);
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeMarkdownImportApplyFailed", "应用 Markdown 导入失败"),
+      );
+    } finally {
+      setIsKnowledgeMarkdownImportApplying(false);
+    }
+  }, [
+    isKnowledgeMarkdownImportApplying,
+    knowledgeHome?.id,
+    knowledgeMarkdownImportReview,
+    refreshSelectedKnowledgeDocuments,
+    saveActiveKnowledgeDocumentNow,
+    t,
+  ]);
+
   const totalHighlights = stats?.totalHighlights ?? 0;
   const totalNotes = stats?.highlightsWithNotes ?? 0;
   const totalBooks = stats?.totalBooks ?? 0;
@@ -1471,8 +1606,9 @@ export function NotesView({
         >
           <Pressable style={s.exportOverlay} onPress={() => setShowExportMenu(false)} />
           <View style={s.exportDropdown}>
-            {detailTab === "knowledge"
-              ? (["obsidian", "markdown"] as const).map((fmt) => (
+            {detailTab === "knowledge" ? (
+              <>
+                {(["obsidian", "markdown"] as const).map((fmt) => (
                   <TouchableOpacity
                     key={fmt}
                     style={s.exportItem}
@@ -1484,26 +1620,51 @@ export function NotesView({
                         : t("notes.exportMarkdown", "Markdown")}
                     </Text>
                   </TouchableOpacity>
-                ))
-              : (["markdown", "json", "obsidian", "notion"] as const).map((fmt) => (
-                  <TouchableOpacity
-                    key={fmt}
-                    style={s.exportItem}
-                    onPress={() => handleExport(fmt)}
-                  >
-                    <Text style={s.exportItemText}>
-                      {fmt === "markdown"
-                        ? t("notes.exportMarkdown", "Markdown")
-                        : fmt === "json"
-                          ? t("notes.exportJSON", "JSON")
-                          : fmt === "obsidian"
-                            ? t("notes.exportObsidian", "Obsidian")
-                            : t("notes.exportNotion", "Notion")}
-                    </Text>
-                  </TouchableOpacity>
                 ))}
+                <View style={s.exportDivider} />
+                <TouchableOpacity
+                  style={[
+                    s.exportItem,
+                    (isKnowledgeMarkdownImporting || isKnowledgeMarkdownImportApplying) &&
+                      s.exportItemDisabled,
+                  ]}
+                  onPress={handleKnowledgeMarkdownImport}
+                  disabled={isKnowledgeMarkdownImporting || isKnowledgeMarkdownImportApplying}
+                >
+                  <Text style={s.exportItemText}>
+                    {isKnowledgeMarkdownImporting
+                      ? t("notes.knowledgeMarkdownImporting", "读取中...")
+                      : t("notes.knowledgeImportMarkdown", "导入 Markdown 文件")}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              (["markdown", "json", "obsidian", "notion"] as const).map((fmt) => (
+                <TouchableOpacity key={fmt} style={s.exportItem} onPress={() => handleExport(fmt)}>
+                  <Text style={s.exportItemText}>
+                    {fmt === "markdown"
+                      ? t("notes.exportMarkdown", "Markdown")
+                      : fmt === "json"
+                        ? t("notes.exportJSON", "JSON")
+                        : fmt === "obsidian"
+                          ? t("notes.exportObsidian", "Obsidian")
+                          : t("notes.exportNotion", "Notion")}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </Modal>
+
+        <KnowledgeMarkdownImportReviewSheet
+          review={knowledgeMarkdownImportReview}
+          isApplying={isKnowledgeMarkdownImportApplying}
+          onApply={handleApplyKnowledgeMarkdownImport}
+          onDismiss={() => setKnowledgeMarkdownImportReview(null)}
+          t={t}
+          styles={s}
+          colors={colors}
+        />
       </SafeAreaView>
     );
   }
@@ -2585,6 +2746,176 @@ function KnowledgeSummaryMemoryCard({
         </Text>
       )}
     </View>
+  );
+}
+
+function KnowledgeMarkdownImportReviewSheet({
+  review,
+  isApplying,
+  onApply,
+  onDismiss,
+  t,
+  styles,
+  colors,
+}: {
+  review: KnowledgeMarkdownImportReview | null;
+  isApplying: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const visibleItems = review?.items.slice(0, 6) ?? [];
+  const hiddenCount = Math.max(0, (review?.items.length ?? 0) - visibleItems.length);
+
+  return (
+    <Modal visible={!!review} transparent animationType="fade" onRequestClose={onDismiss}>
+      <Pressable style={styles.knowledgeMoveSheetBackdrop} onPress={onDismiss} />
+      <View style={styles.knowledgeImportSheet}>
+        <View style={styles.knowledgeContextSheetHandle} />
+        <View style={styles.knowledgeImportSheetHeader}>
+          <View style={styles.knowledgeImportSheetTitleWrap}>
+            <View style={styles.knowledgeImportSheetIcon}>
+              <ScrollTextIcon size={16} color={colors.primary} />
+            </View>
+            <View style={styles.knowledgeImportSheetTitleBlock}>
+              <Text style={styles.knowledgeImportSheetTitle}>
+                {t("notes.knowledgeMarkdownImportTitle", "导入 Markdown 为知识文档")}
+              </Text>
+              <Text style={styles.knowledgeImportSheetSubtitle}>
+                {t("notes.knowledgeMarkdownImportDescription", {
+                  count: review?.items.length ?? 0,
+                })}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.76}
+            style={styles.knowledgeMoveSheetClose}
+            onPress={onDismiss}
+            accessibilityLabel={t("common.close", "关闭")}
+          >
+            <XIcon size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.knowledgeImportSheetScroll}
+          contentContainerStyle={styles.knowledgeImportSheetContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {visibleItems.map((item) => {
+            const proposal = item.proposal;
+            const title =
+              proposal.action === "create"
+                ? proposal.draft.title
+                : (proposal.patch.title ?? proposal.current?.title ?? proposal.documentId);
+            const tags =
+              proposal.action === "create"
+                ? (proposal.draft.tags ?? [])
+                : (proposal.patch.tags ?? proposal.current?.tags ?? []);
+            const preview =
+              proposal.action === "create"
+                ? proposal.draft.excerpt || proposal.draft.contentMd
+                : proposal.patch.excerpt ||
+                  proposal.patch.contentMd ||
+                  proposal.current?.excerpt ||
+                  "";
+
+            return (
+              <View key={item.path} style={styles.knowledgeImportItem}>
+                <View style={styles.knowledgeImportItemHeader}>
+                  <View style={styles.knowledgeImportItemTitleBlock}>
+                    <Text style={styles.knowledgeImportItemTitle} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    <Text style={styles.knowledgeImportItemPath} numberOfLines={1}>
+                      {mobileFileName(item.path)}
+                    </Text>
+                  </View>
+                  <Text style={styles.knowledgeImportItemBadge}>
+                    {proposal.action === "create"
+                      ? t("notes.knowledgeMarkdownImportWillCreate", "将创建")
+                      : t("notes.knowledgeVaultImportWillUpdate", "将更新")}
+                  </Text>
+                </View>
+
+                {preview ? (
+                  <Text style={styles.knowledgeImportItemPreview} numberOfLines={2}>
+                    {preview}
+                  </Text>
+                ) : null}
+
+                {tags.length > 0 || item.warnings.length > 0 ? (
+                  <View style={styles.knowledgeImportMetaRow}>
+                    {tags.slice(0, 4).map((tag) => (
+                      <Text key={tag} style={styles.knowledgeImportTag} numberOfLines={1}>
+                        {tag}
+                      </Text>
+                    ))}
+                    {tags.length > 4 ? (
+                      <Text style={styles.knowledgeImportTag}>+{tags.length - 4}</Text>
+                    ) : null}
+                    {item.warnings.length > 0 ? (
+                      <Text style={styles.knowledgeImportWarning}>
+                        {t("notes.knowledgeMarkdownImportWarningCount", {
+                          count: item.warnings.length,
+                        })}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+
+          {hiddenCount > 0 ? (
+            <Text style={styles.knowledgeImportHiddenText}>
+              {t("notes.knowledgeMarkdownImportMoreFiles", { count: hiddenCount })}
+            </Text>
+          ) : null}
+        </ScrollView>
+
+        <View style={styles.knowledgeImportFooter}>
+          <Text style={styles.knowledgeImportSafeHint}>
+            {t(
+              "notes.knowledgeMarkdownImportSafeHint",
+              "导入会创建知识文档，不会修改原始 Markdown 文件。",
+            )}
+          </Text>
+          <View style={styles.knowledgeImportFooterActions}>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={styles.knowledgeImportSecondaryButton}
+              onPress={onDismiss}
+              accessibilityRole="button"
+            >
+              <Text style={styles.knowledgeImportSecondaryButtonText}>
+                {t("common.cancel", "取消")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={[
+                styles.knowledgeImportPrimaryButton,
+                isApplying && styles.knowledgeImportButtonDisabled,
+              ]}
+              onPress={onApply}
+              disabled={isApplying || !review || review.items.length === 0}
+              accessibilityRole="button"
+            >
+              {isApplying ? <LoaderIcon size={14} color={colors.primaryForeground} /> : null}
+              <Text style={styles.knowledgeImportPrimaryButtonText}>
+                {isApplying
+                  ? t("notes.knowledgeMarkdownImportApplying", "导入中...")
+                  : t("notes.knowledgeMarkdownImportApply", "导入文档")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 

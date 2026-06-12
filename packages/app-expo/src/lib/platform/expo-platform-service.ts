@@ -759,6 +759,7 @@ export class ExpoPlatformService implements IPlatformService {
     let BufferMod: any;
     try {
       TcpSocket = (await import("react-native-tcp-socket")).default;
+      // biome-ignore lint/style/useNodejsImportProtocol: React Native needs the buffer polyfill package, not the Node builtin.
       BufferMod = (await import("buffer")).Buffer;
     } catch (e) {
       throw new Error(`Native TCP Socket unavailable: ${e instanceof Error ? e.message : e}`);
@@ -850,6 +851,8 @@ function extensionToMime(ext: string): string {
     fb2: "application/x-fictionbook+xml",
     fbz: "application/x-zip-compressed-fb2",
     txt: "text/plain",
+    md: "text/markdown",
+    markdown: "text/markdown",
     umd: "application/octet-stream",
     zip: "application/zip",
   };

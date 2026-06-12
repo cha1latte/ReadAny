@@ -116,11 +116,11 @@ Verification:
 
 ## Phase 4: Export and Obsidian v1
 
-Status: implemented as a desktop v1 on the current branch; mobile file-share
-import and deeper conflict resolution remain future work. Document export, vault
-package generation, manifests, attachment path planning, conflict detection,
-ReadAny card fallbacks, Markdown file import, and linked-folder
-import/reconcile exist.
+Status: implemented as a desktop v1 on the current branch; mobile Markdown file
+picker import is now available, while mobile inbound share-extension import and
+deeper conflict resolution remain future work. Document export, vault package
+generation, manifests, attachment path planning, conflict detection, ReadAny
+card fallbacks, Markdown file import, and linked-folder import/reconcile exist.
 
 Goal:
 
@@ -135,6 +135,7 @@ Work:
 - Add Obsidian callout rendering for ReadAny cards.
 - Add desktop linked-folder export with manifest and conflict detection.
 - Add desktop Markdown file import as confirmation-required create proposals.
+- Add mobile Markdown file import as confirmation-required create proposals.
 - Add desktop linked-folder import/reconcile as confirmation-required update
   proposals.
 - Preserve document hierarchy when exporting to an Obsidian-style vault and when

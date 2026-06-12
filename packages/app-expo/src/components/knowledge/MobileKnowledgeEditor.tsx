@@ -101,6 +101,7 @@ export interface MobileKnowledgeInternalLinkTarget {
   id: string;
   title: string;
   path?: string;
+  targetPath?: string;
   typeLabel?: string;
 }
 
@@ -735,7 +736,7 @@ export function MobileKnowledgeEditor({
         label,
         title: label,
         ...(target?.id ? { documentId: target.id } : {}),
-        ...(target?.path ? { targetPath: target.path } : {}),
+        ...(target?.targetPath ? { targetPath: target.targetPath } : {}),
       });
       setShowInternalLinkModal(false);
       setInternalLinkQuery("");

@@ -1972,14 +1972,17 @@ function KnowledgeHomePanel({
       documents
         .filter((item) => item.id !== document?.id)
         .map((item) => {
-          const path = knowledgeDocumentPathItems(item, documents, t)
-            .slice(1, -1)
+          const pathItems = knowledgeDocumentPathItems(item, documents, t).slice(1);
+          const path = pathItems
+            .slice(0, -1)
             .map((part) => part.title)
             .join(" / ");
+          const targetPath = pathItems.map((part) => part.title).join("/");
           return {
             id: item.id,
             title: item.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
             path,
+            targetPath,
             typeLabel: knowledgeDocumentTypeLabel(item, t),
           };
         }),

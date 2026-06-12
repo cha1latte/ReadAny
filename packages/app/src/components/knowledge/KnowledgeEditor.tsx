@@ -98,6 +98,7 @@ export interface KnowledgeInternalLinkTarget {
   id: string;
   title: string;
   path?: string;
+  targetPath?: string;
   typeLabel?: string;
 }
 
@@ -600,7 +601,7 @@ export function KnowledgeEditor({
             label,
             title: label,
             ...(target?.id ? { documentId: target.id } : {}),
-            ...(target?.path ? { targetPath: target.path } : {}),
+            ...(target?.targetPath ? { targetPath: target.targetPath } : {}),
           },
         })
         .run();

@@ -1693,6 +1693,17 @@ function KnowledgeHomePanel({
     () => (document ? knowledgeDocumentPathText(document, documents, t, title) : ""),
     [document, documents, t, title],
   );
+  const activePathParts = useMemo(() => {
+    const parts = activePath
+      ? activePath.split(" / ").filter(Boolean)
+      : [t("notes.knowledgeVaultRoot", "知识库")];
+    let pathKey = "";
+    return parts.map((part) => {
+      pathKey = `${pathKey}/${part}`;
+      return { id: pathKey, title: part };
+    });
+  }, [activePath, t]);
+  const activePathLastId = activePathParts.at(-1)?.id;
   const documentOutline = useMemo(
     () =>
       document && !isFolderDocument
@@ -1783,9 +1794,6 @@ function KnowledgeHomePanel({
       {workspaceMode === "vault" ? (
         <>
           <View style={styles.knowledgeVaultHeader}>
-            <View style={styles.knowledgeVaultIcon}>
-              <FolderIcon size={15} color={colors.primary} />
-            </View>
             <View style={styles.knowledgeVaultText}>
               <Text style={styles.knowledgeVaultEyebrow}>
                 {t("notes.knowledgeEyebrow", "知识库")}
@@ -1793,17 +1801,35 @@ function KnowledgeHomePanel({
               <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
                 {book.title}
               </Text>
-              <Text style={styles.knowledgeVaultPath} numberOfLines={1}>
-                {activePath || t("notes.knowledgeVaultRoot", "知识库")}
-              </Text>
-            </View>
-            <View style={styles.knowledgeVaultStats}>
-              <Text style={styles.knowledgeVaultStatText}>
-                {documents.length} {t("notes.knowledgeDocuments", "文档")}
-              </Text>
-              <Text style={styles.knowledgeVaultStatText}>
-                {book.highlights.length} {t("notes.highlightsCount", "条高亮")}
-              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.knowledgeVaultPathScroll}
+                contentContainerStyle={styles.knowledgeVaultPathTrail}
+              >
+                {activePathParts.map((part) => {
+                  const isLastPathPart = part.id === activePathLastId;
+                  return (
+                    <View
+                      key={part.id}
+                      style={[
+                        styles.knowledgeVaultPathChip,
+                        isLastPathPart && styles.knowledgeVaultPathChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.knowledgeVaultPathChipText,
+                          isLastPathPart && styles.knowledgeVaultPathChipTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {part.title}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
           </View>
 
@@ -1830,33 +1856,7 @@ function KnowledgeHomePanel({
               styles={styles}
               colors={colors}
             />
-          ) : (
-            <View style={styles.knowledgeVaultFocusCard}>
-              <View style={styles.knowledgeVaultFocusText}>
-                <Text style={styles.knowledgeDocumentEyebrow}>
-                  {t("notes.knowledgeSelectedDocument", "当前文档")}
-                </Text>
-                <Text style={styles.knowledgeVaultFocusTitle} numberOfLines={1}>
-                  {title || t("notes.knowledgeUntitledDocument", "未命名文档")}
-                </Text>
-                <Text style={styles.knowledgeVaultFocusPath} numberOfLines={1}>
-                  {activePath}
-                </Text>
-              </View>
-              <TouchableOpacity
-                activeOpacity={0.78}
-                style={styles.knowledgeVaultFocusButton}
-                onPress={() => setWorkspaceMode("document")}
-                accessibilityRole="button"
-                accessibilityLabel={t("notes.knowledgeOpenDocument", "打开文档")}
-              >
-                <Text style={styles.knowledgeVaultFocusButtonText}>
-                  {t("notes.knowledgeOpenDocument", "打开")}
-                </Text>
-                <ChevronRightIcon size={13} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
+          ) : null}
         </>
       ) : (
         <View style={styles.knowledgeDocumentScreen}>
@@ -2986,42 +2986,32 @@ function KnowledgeFolderOverview({
 }) {
   return (
     <View style={styles.knowledgeFolderOverview}>
-      <View style={styles.knowledgeFolderLead}>
-        <View style={styles.knowledgeFolderLeadIcon}>
-          <FolderIcon size={19} color={colors.primary} />
-        </View>
+      <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
             {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
           </Text>
-          <Text style={styles.knowledgeFolderDescription}>
-            {t("notes.knowledgeFolderDescription", "用文件夹把这本书的知识整理成一个小型知识库。")}
+          <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
+            {items.length} {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>
-      </View>
-
-      <View style={styles.knowledgeFolderActionRow}>
         <TouchableOpacity
           activeOpacity={0.78}
-          style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+          style={[styles.knowledgeFolderIconAction, isCreating && { opacity: 0.55 }]}
           onPress={() => onCreate("folder", folder.id)}
           disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
         >
           <FolderPlusIcon size={15} color={colors.primary} />
-          <Text style={styles.knowledgeFolderActionText}>
-            {t("notes.knowledgeNewFolder", "新建文件夹")}
-          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.78}
-          style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+          style={[styles.knowledgeFolderIconAction, isCreating && { opacity: 0.55 }]}
           onPress={() => onCreate("standalone_note", folder.id)}
           disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
         >
           <PlusIcon size={15} color={colors.primary} />
-          <Text style={styles.knowledgeFolderActionText}>
-            {t("notes.knowledgeNewNote", "新建笔记")}
-          </Text>
         </TouchableOpacity>
       </View>
 

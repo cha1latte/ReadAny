@@ -2886,6 +2886,22 @@ function KnowledgeDocumentExplorer({
     return counts;
   }, [documents]);
   const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? null;
+  const activePath = activeDocument
+    ? knowledgeDocumentPath(activeDocument, documents, t)
+        .map((item) => item.title)
+        .join(" / ")
+    : t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" });
+  const activePathIds = useMemo(
+    () =>
+      new Set(
+        activeDocument
+          ? knowledgeDocumentPath(activeDocument, documents, t)
+              .map((item) => item.id)
+              .filter((id) => id !== "__vault__")
+          : [],
+      ),
+    [activeDocument, documents, t],
+  );
   const activeCreateParentId =
     activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
@@ -2940,6 +2956,7 @@ function KnowledgeDocumentExplorer({
     const isFolder = document.type === "folder";
     const isExpanded = expandedFolderIds.has(document.id);
     const isActive = document.id === activeDocumentId;
+    const isInActivePath = !isActive && activePathIds.has(document.id);
     const isOrphaned = orphanedDocumentIds.has(document.id);
     const title = document.title.trim() || t("notes.knowledgeUntitledDocument");
     const childCount = childCountByParentId.get(document.id) ?? 0;
@@ -2971,7 +2988,9 @@ function KnowledgeDocumentExplorer({
             "group relative flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
             isActive
               ? "border-primary/25 bg-primary/10 text-primary"
-              : "text-foreground hover:border-border/55 hover:bg-muted/45",
+              : isInActivePath
+                ? "border-border/45 bg-muted/35 text-foreground"
+                : "text-foreground hover:border-border/55 hover:bg-muted/45",
           )}
           style={{ paddingLeft: `${8 + Math.min(node.depth, 7) * 14}px` }}
         >
@@ -3111,7 +3130,7 @@ function KnowledgeDocumentExplorer({
 
   return (
     <aside className="min-w-0 overflow-hidden rounded-lg border border-border/45 bg-background shadow-sm">
-      <div className="border-b border-border/40 bg-background p-3">
+      <div className="border-b border-border/40 bg-background px-3 pb-3 pt-3">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
@@ -3120,9 +3139,8 @@ function KnowledgeDocumentExplorer({
                 {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
               </p>
             </div>
-            <p className="mt-1 truncate text-[11px] text-muted-foreground">
-              {documents.length} {t("notes.knowledgeDocuments")} · {folderCount}{" "}
-              {t("notes.knowledgeDocumentFolder")} · {t("notes.knowledgeExplorerHint")}
+            <p className="mt-1 truncate text-[11px] text-muted-foreground" title={activePath}>
+              {activePath}
             </p>
           </div>
           <DropdownMenu>
@@ -3169,7 +3187,16 @@ function KnowledgeDocumentExplorer({
         </div>
       </div>
 
-      <div className="max-h-[calc(100vh-12.1rem)] space-y-0.5 overflow-y-auto p-2">
+      <div className="flex items-center justify-between border-b border-border/25 px-3 py-1.5 text-[11px] text-muted-foreground">
+        <span>
+          {documents.length} {t("notes.knowledgeDocuments")}
+        </span>
+        <span>
+          {folderCount} {t("notes.knowledgeDocumentFolder")}
+        </span>
+      </div>
+
+      <div className="max-h-[calc(100vh-13.9rem)] space-y-0.5 overflow-y-auto p-2">
         {normalizedQuery ? (
           visibleSearchNodes.length === 0 ? (
             <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
@@ -3208,25 +3235,15 @@ function KnowledgeFolderOverview({
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
 
   return (
-    <div className="mx-auto min-h-[690px] max-w-[880px] px-1 pb-10 pt-1">
-      <div className="mb-5 flex items-start justify-between gap-4 border-b border-border/35 pb-4">
+    <div className="mx-auto min-h-[690px] max-w-[780px] px-1 pb-10 pt-1">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-3">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <FolderOpen className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[22px] font-semibold leading-tight text-foreground">
-                {folder.title || t("notes.knowledgeUntitledDocument")}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {orderedChildren.length} {t("notes.knowledgeDocuments")}
-              </p>
-            </div>
-          </div>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-            {t("notes.knowledgeFolderDescription")}
+          <p className="text-xs font-medium text-muted-foreground">
+            {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
+          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+            {t("notes.knowledgeDocumentFolder")}
+          </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -3252,7 +3269,7 @@ function KnowledgeFolderOverview({
       </div>
 
       {orderedChildren.length === 0 ? (
-        <div className="flex min-h-72 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
+        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
           <div className="max-w-sm">
             <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -3261,7 +3278,7 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="rounded-md border border-border/40 bg-background">
+        <div className="overflow-hidden rounded-md border border-border/40 bg-background">
           {orderedChildren.map((document) => {
             const isFolder = document.type === "folder";
             const Icon = isFolder ? Folder : FileText;

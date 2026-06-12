@@ -179,8 +179,9 @@ Verification:
 ## Phase 6: Custom Card Platform
 
 Status: partially implemented. Built-in card registry, card templates, desktop
-node views, mobile WebView card rendering, and Markdown fallbacks exist. Richer
-card editing and migrations remain future work.
+node views, mobile WebView card rendering, Markdown fallbacks, and shared card
+attribute upgrades exist. Richer card editing and complex schema migrations
+remain future work.
 
 Goal:
 

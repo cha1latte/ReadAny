@@ -46,6 +46,7 @@ import {
   knowledgeEditorDraftFingerprint,
   loadKnowledgeEditorDraft,
   markdownToBasicTiptap,
+  normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
   saveKnowledgeEditorDraft,
 } from "@readany/core/knowledge";
@@ -75,6 +76,17 @@ export interface MobileKnowledgeEditorValue {
   contentJson: JSONValue;
   contentMd: string;
   plainText: string;
+}
+
+function normalizeMobileKnowledgeEditorValue(
+  value: MobileKnowledgeEditorValue,
+): MobileKnowledgeEditorValue {
+  const contentJson = normalizeTiptapDocument(value.contentJson) as unknown as JSONValue;
+  return {
+    ...value,
+    contentJson,
+    contentMd: renderKnowledgeJsonToMarkdown(contentJson),
+  };
 }
 
 export interface MobileKnowledgeEditorOutlineTarget {
@@ -264,10 +276,26 @@ export function MobileKnowledgeEditor({
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
   const isDocumentLayout = layout === "document";
+  const normalizedContentJson = useMemo(
+    () => normalizeTiptapDocument(value.contentJson) as unknown as JSONValue,
+    [value.contentJson],
+  );
+  const normalizedContentMd = useMemo(
+    () => renderKnowledgeJsonToMarkdown(normalizedContentJson),
+    [normalizedContentJson],
+  );
+  const normalizedValue = useMemo(
+    () => ({
+      contentJson: normalizedContentJson,
+      contentMd: normalizedContentMd,
+      plainText: value.plainText,
+    }),
+    [normalizedContentJson, normalizedContentMd, value.plainText],
+  );
   const webViewRef = useRef<WebView>(null);
-  const latestValueRef = useRef(value);
-  const localFingerprintRef = useRef(fingerprintJson(value.contentJson));
-  const baseFingerprintRef = useRef(fingerprintJson(value.contentJson));
+  const latestValueRef = useRef(normalizedValue);
+  const localFingerprintRef = useRef(fingerprintJson(normalizedValue.contentJson));
+  const baseFingerprintRef = useRef(fingerprintJson(normalizedValue.contentJson));
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWrittenDraftFingerprintRef = useRef<string | null>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
@@ -378,7 +406,10 @@ export function MobileKnowledgeEditor({
     [colors],
   );
 
-  const valueFingerprint = useMemo(() => fingerprintJson(value.contentJson), [value.contentJson]);
+  const valueFingerprint = useMemo(
+    () => fingerprintJson(normalizedValue.contentJson),
+    [normalizedValue.contentJson],
+  );
   const draftKey = useMemo(
     () => (documentId ? createKnowledgeEditorDraftKey(documentId, "mobile") : null),
     [documentId],
@@ -391,8 +422,8 @@ export function MobileKnowledgeEditor({
   const readyAttemptRef = useRef(webViewInstanceKey);
 
   useEffect(() => {
-    latestValueRef.current = value;
-  }, [value]);
+    latestValueRef.current = normalizedValue;
+  }, [normalizedValue]);
 
   useEffect(() => {
     let mounted = true;
@@ -573,8 +604,8 @@ export function MobileKnowledgeEditor({
     if (!isBridgeReady || !isEditorReady) return;
     if (valueFingerprint === localFingerprintRef.current) return;
     localFingerprintRef.current = valueFingerprint;
-    injectCommand({ type: "setContent", contentJson: value.contentJson });
-  }, [injectCommand, isBridgeReady, isEditorReady, value.contentJson, valueFingerprint]);
+    injectCommand({ type: "setContent", contentJson: normalizedValue.contentJson });
+  }, [injectCommand, isBridgeReady, isEditorReady, normalizedValue.contentJson, valueFingerprint]);
 
   useEffect(() => {
     if (!outlineTarget || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;
@@ -653,13 +684,14 @@ export function MobileKnowledgeEditor({
 
   const restorePendingDraft = useCallback(() => {
     if (!pendingDraft) return;
-    const nextValue = pendingDraft.value;
+    const nextValue = normalizeMobileKnowledgeEditorValue(pendingDraft.value);
     setPendingDraft(null);
-    lastWrittenDraftFingerprintRef.current = pendingDraft.contentFingerprint;
+    const nextFingerprint = fingerprintJson(nextValue.contentJson);
+    lastWrittenDraftFingerprintRef.current = nextFingerprint;
     onChange(nextValue);
 
     if (isBridgeReady && isEditorReady) {
-      localFingerprintRef.current = pendingDraft.contentFingerprint;
+      localFingerprintRef.current = nextFingerprint;
       injectCommand({ type: "setContent", contentJson: nextValue.contentJson });
     }
   }, [injectCommand, isBridgeReady, isEditorReady, onChange, pendingDraft]);

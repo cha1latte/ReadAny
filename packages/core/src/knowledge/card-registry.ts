@@ -21,6 +21,7 @@ export interface ReadAnyCardDefinition {
   cardType: string;
   version: number;
   insertLabel: string;
+  upgradeAttrs?: (attrs: ReadAnyCardAttrs) => ReadAnyCardAttrs;
   markdownFallback: (attrs: ReadAnyCardAttrs, context: ReadAnyCardMarkdownContext) => string;
 }
 
@@ -54,6 +55,14 @@ function numberAttr(value: unknown): number | undefined {
   return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : undefined;
 }
 
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = stringAttr(value);
+    if (text) return text;
+  }
+  return undefined;
+}
+
 function templateSchema(template: KnowledgeCardTemplate): ReadAnyCardTemplateSchema {
   return isRecord(template.schemaJson) ? (template.schemaJson as ReadAnyCardTemplateSchema) : {};
 }
@@ -80,7 +89,7 @@ function bodyFromAttrs(attrs: ReadAnyCardAttrs, context: ReadAnyCardMarkdownCont
   return attrs.markdown || attrs.text || context.body;
 }
 
-export function normalizeReadAnyCardAttrs(
+function normalizeReadAnyCardAttrsBase(
   input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
 ): ReadAnyCardAttrs {
   const raw = isRecord(input) ? input : {};
@@ -91,14 +100,32 @@ export function normalizeReadAnyCardAttrs(
 
   const id = stringField(raw, "id");
   const title = stringField(raw, "title");
-  const text = stringField(raw, "text");
-  const sourceTitle = stringField(raw, "sourceTitle") ?? stringField(raw, "source-title");
-  const sourceId = stringField(raw, "sourceId") ?? stringField(raw, "source");
-  const cfi = stringField(raw, "cfi");
+  const text = firstString(raw.text, raw.body, raw.content, raw.quote, raw.summary);
+  const data = isRecord(raw.data) ? raw.data : {};
+  const sourceTitle = firstString(
+    raw.sourceTitle,
+    raw["source-title"],
+    raw.sourceLabel,
+    raw.chapterTitle,
+    raw.chapter,
+    data.sourceTitle,
+    data.chapterTitle,
+  );
+  const sourceId = firstString(
+    raw.sourceId,
+    raw.source,
+    raw.highlightId,
+    raw.documentId,
+    data.sourceId,
+    data.highlightId,
+    data.documentId,
+  );
+  const cfi = firstString(raw.cfi, raw.rangeCfi, data.cfi, data.rangeCfi);
 
   if (id) attrs.id = id;
   if (title) attrs.title = title;
   if (typeof raw.markdown === "string") attrs.markdown = raw.markdown;
+  else if (text) attrs.markdown = text;
   if (text) attrs.text = text;
   if (sourceTitle) attrs.sourceTitle = sourceTitle;
   if (sourceId) attrs.sourceId = sourceId;
@@ -108,11 +135,89 @@ export function normalizeReadAnyCardAttrs(
   return attrs;
 }
 
+function withCurrentVersion(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const definition = getReadAnyCardDefinition(attrs.cardType || "custom");
+  if (!definition) return attrs;
+  const version = attrs.version ?? definition.version;
+  if (version >= definition.version) return attrs;
+  return { ...attrs, version: definition.version };
+}
+
+function dataRecord(attrs: ReadAnyCardAttrs): Record<string, unknown> {
+  return isRecord(attrs.data) ? attrs.data : {};
+}
+
+function ensureMarkdown(attrs: ReadAnyCardAttrs, markdown: string | undefined): ReadAnyCardAttrs {
+  if (!markdown || attrs.markdown || attrs.text) return attrs;
+  return { ...attrs, markdown, text: markdown };
+}
+
+function upgradeBookQuoteAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  return ensureMarkdown(
+    {
+      ...attrs,
+      sourceTitle: attrs.sourceTitle ?? firstString(data.sourceTitle, data.chapterTitle),
+      sourceId: attrs.sourceId ?? firstString(data.sourceId, data.highlightId),
+      cfi: attrs.cfi ?? firstString(data.cfi, data.rangeCfi),
+    },
+    firstString(data.quote, data.text, data.markdown),
+  );
+}
+
+function upgradeAiSummaryAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  return ensureMarkdown(attrs, firstString(data.summary, data.text, data.markdown));
+}
+
+function upgradeQaAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  const question = firstString(data.question, data.q);
+  const answer = firstString(data.answer, data.a);
+  if (!question && !answer) return attrs;
+  return ensureMarkdown(attrs, [`Q: ${question ?? ""}`, `A: ${answer ?? ""}`].join("\n"));
+}
+
+function upgradeDiagramAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  return ensureMarkdown(attrs, firstString(data.markdown, data.diagram, data.text));
+}
+
+function upgradeRelatedNotesAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  if (attrs.markdown || attrs.text || !Array.isArray(data.notes)) return attrs;
+  const lines = data.notes
+    .map((note) => {
+      if (typeof note === "string") return note.trim();
+      if (!isRecord(note)) return "";
+      return firstString(note.title, note.label, note.id) ?? "";
+    })
+    .filter(Boolean)
+    .map((note) => `- [[${note}]]`);
+  return ensureMarkdown(attrs, lines.join("\n"));
+}
+
+export function upgradeReadAnyCardAttrs(
+  input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
+): ReadAnyCardAttrs {
+  const attrs = normalizeReadAnyCardAttrsBase(input);
+  const definition = getReadAnyCardDefinition(attrs.cardType || "custom");
+  const upgraded = definition?.upgradeAttrs ? definition.upgradeAttrs(attrs) : attrs;
+  return withCurrentVersion(normalizeReadAnyCardAttrsBase(upgraded));
+}
+
+export function normalizeReadAnyCardAttrs(
+  input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
+): ReadAnyCardAttrs {
+  return upgradeReadAnyCardAttrs(input);
+}
+
 export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
   {
     cardType: "bookQuote",
     version: 1,
     insertLabel: "Quote",
+    upgradeAttrs: upgradeBookQuoteAttrs,
     markdownFallback: (attrs, context) =>
       callout(
         "quote",
@@ -139,6 +244,7 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     cardType: "aiSummary",
     version: 1,
     insertLabel: "AI summary",
+    upgradeAttrs: upgradeAiSummaryAttrs,
     markdownFallback: (attrs, context) =>
       callout("summary", cardTitle(attrs, "AI summary"), bodyFromAttrs(attrs, context)),
   },
@@ -146,6 +252,7 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     cardType: "qa",
     version: 1,
     insertLabel: "Q&A",
+    upgradeAttrs: upgradeQaAttrs,
     markdownFallback: (attrs, context) =>
       callout("question", cardTitle(attrs, "Question"), bodyFromAttrs(attrs, context)),
   },
@@ -160,6 +267,7 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     cardType: "mindmap",
     version: 1,
     insertLabel: "Mindmap",
+    upgradeAttrs: upgradeDiagramAttrs,
     markdownFallback: (attrs, context) => {
       const body = bodyFromAttrs(attrs, context);
       return [`> [!abstract] ${cardTitle(attrs, "Mindmap")}`, "", "```markmap", body, "```"]
@@ -171,6 +279,7 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     cardType: "mermaid",
     version: 1,
     insertLabel: "Mermaid",
+    upgradeAttrs: upgradeDiagramAttrs,
     markdownFallback: (attrs, context) => {
       const body = bodyFromAttrs(attrs, context);
       return [`> [!abstract] ${cardTitle(attrs, "Diagram")}`, "", "```mermaid", body, "```"]
@@ -182,6 +291,7 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     cardType: "relatedNotes",
     version: 1,
     insertLabel: "Related notes",
+    upgradeAttrs: upgradeRelatedNotesAttrs,
     markdownFallback: (attrs, context) =>
       callout("link", cardTitle(attrs, "Related notes"), bodyFromAttrs(attrs, context)),
   },

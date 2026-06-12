@@ -5,6 +5,7 @@ import {
   type ReadAnyCardAttrs,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
+  upgradeReadAnyCardAttrs,
 } from "./card-registry";
 export type { ReadAnyCardAttrs } from "./card-registry";
 
@@ -37,8 +38,22 @@ export function isTiptapNode(value: JSONValue | unknown): value is TiptapNode {
 }
 
 export function normalizeTiptapDocument(content: JSONValue | null | undefined): TiptapNode {
-  if (isTiptapNode(content)) return content;
-  return EMPTY_TIPTAP_DOCUMENT as unknown as TiptapNode;
+  if (!isTiptapNode(content)) return EMPTY_TIPTAP_DOCUMENT as unknown as TiptapNode;
+  return normalizeTiptapNode(content);
+}
+
+function normalizeTiptapNode(node: TiptapNode): TiptapNode {
+  const attrs =
+    node.type === "readanyCard"
+      ? (upgradeReadAnyCardAttrs(node.attrs ?? {}) as Record<string, unknown>)
+      : node.attrs;
+  const content = node.content?.map(normalizeTiptapNode);
+
+  return {
+    ...node,
+    ...(attrs ? { attrs } : {}),
+    ...(content ? { content } : {}),
+  };
 }
 
 function escapeMarkdownText(text: string): string {
@@ -472,10 +487,10 @@ export function markdownToBasicTiptap(markdown: string): TiptapNode {
       const body = readAnyCard[2].trim();
       return {
         type: "readanyCard",
-        attrs: {
+        attrs: upgradeReadAnyCardAttrs({
           ...attrs,
           markdown: body,
-        },
+        }) as Record<string, unknown>,
       };
     }
 

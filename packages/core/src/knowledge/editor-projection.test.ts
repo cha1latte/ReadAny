@@ -165,6 +165,73 @@ describe("editor projection", () => {
     expect(markdown).toBe("> [!note] Reading timeline\n> A -> B");
   });
 
+  it("upgrades card attrs while normalizing Tiptap documents", () => {
+    expect(
+      normalizeTiptapDocument({
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              type: "bookQuote",
+              data: {
+                quote: "A precise quote.",
+                chapterTitle: "Chapter 3",
+                highlightId: "hl-3",
+              },
+            },
+          },
+        ],
+      }),
+    ).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "bookQuote",
+            version: 1,
+            markdown: "A precise quote.",
+            text: "A precise quote.",
+            sourceTitle: "Chapter 3",
+            sourceId: "hl-3",
+            data: {
+              quote: "A precise quote.",
+              chapterTitle: "Chapter 3",
+              highlightId: "hl-3",
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("exports upgraded card metadata for round-tripping", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              type: "bookQuote",
+              data: {
+                quote: "A precise quote.",
+                chapterTitle: "Chapter 3",
+                highlightId: "hl-3",
+              },
+            },
+          },
+        ],
+      },
+      { includeReadAnyCardMetadata: true },
+    );
+
+    expect(markdown).toBe(
+      ':::readany-card type="bookQuote" version="1" source="hl-3" source-title="Chapter 3" data="%7B%22quote%22%3A%22A%20precise%20quote.%22%2C%22chapterTitle%22%3A%22Chapter%203%22%2C%22highlightId%22%3A%22hl-3%22%7D"\nA precise quote.\n:::',
+    );
+  });
+
   it("can preserve ReadAny card metadata for round-tripping", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {

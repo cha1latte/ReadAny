@@ -96,6 +96,7 @@ export {
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
+  upgradeReadAnyCardAttrs,
 } from "./card-registry";
 export type {
   ReadAnyCardAttrs,

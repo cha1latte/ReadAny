@@ -310,6 +310,10 @@ export function KnowledgeEditor({
   const isInternalUpdate = useRef(false);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
   const internalLinkInputRef = useRef<HTMLInputElement | null>(null);
+  const normalizedContentJson = useMemo(
+    () => normalizeTiptapDocument(value.contentJson),
+    [value.contentJson],
+  );
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
     [surface, tier],
@@ -423,7 +427,7 @@ export function KnowledgeEditor({
 
   const editor = useEditor({
     extensions,
-    content: normalizeTiptapDocument(value.contentJson),
+    content: normalizedContentJson,
     editorProps: {
       attributes: {
         class: cn(
@@ -464,10 +468,10 @@ export function KnowledgeEditor({
     }
 
     const currentJson = editor.getJSON() as unknown as JSONValue;
-    if (!contentJsonEquals(currentJson, value.contentJson)) {
-      editor.commands.setContent(normalizeTiptapDocument(value.contentJson));
+    if (!contentJsonEquals(currentJson, normalizedContentJson as unknown as JSONValue)) {
+      editor.commands.setContent(normalizedContentJson);
     }
-  }, [editor, value.contentJson]);
+  }, [editor, normalizedContentJson]);
 
   useEffect(() => {
     if (editor && autoFocus) {

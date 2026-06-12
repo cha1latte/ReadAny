@@ -7,6 +7,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
+  upgradeReadAnyCardAttrs,
 } from "./card-registry";
 
 describe("ReadAny card registry", () => {
@@ -62,6 +63,49 @@ describe("ReadAny card registry", () => {
     expect(normalizeReadAnyCardAttrs({ cardType: "callout", version: 0 })).toEqual({
       cardType: "callout",
       version: 1,
+    });
+  });
+
+  it("upgrades legacy built-in card payloads before rendering or editing", () => {
+    expect(
+      upgradeReadAnyCardAttrs({
+        cardType: "bookQuote",
+        data: {
+          quote: "Reading is thinking.",
+          chapterTitle: "Chapter 1",
+          highlightId: "hl-1",
+          rangeCfi: "epubcfi(/6/2)",
+        },
+      }),
+    ).toEqual({
+      cardType: "bookQuote",
+      version: 1,
+      markdown: "Reading is thinking.",
+      text: "Reading is thinking.",
+      sourceTitle: "Chapter 1",
+      sourceId: "hl-1",
+      cfi: "epubcfi(/6/2)",
+      data: {
+        quote: "Reading is thinking.",
+        chapterTitle: "Chapter 1",
+        highlightId: "hl-1",
+        rangeCfi: "epubcfi(/6/2)",
+      },
+    });
+
+    expect(
+      normalizeReadAnyCardAttrs({
+        cardType: "qa",
+        data: {
+          question: "What changed?",
+          answer: "The card can migrate itself.",
+        },
+      }),
+    ).toMatchObject({
+      cardType: "qa",
+      version: 1,
+      markdown: "Q: What changed?\nA: The card can migrate itself.",
+      text: "Q: What changed?\nA: The card can migrate itself.",
     });
   });
 

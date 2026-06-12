@@ -3,6 +3,7 @@ import type { KnowledgeDocument } from "../types";
 import { KnowledgeExporter } from "./knowledge-exporter";
 import {
   createKnowledgeImportWriteProposal,
+  createKnowledgeMarkdownImportPlan,
   createKnowledgeVaultImportPlan,
   createKnowledgeVaultImportWriteProposals,
   parseKnowledgeMarkdownDocument,
@@ -226,6 +227,142 @@ Why does this matter?
       parentId: "folder-current",
       type: "imported_markdown",
       title: "Slow Reading",
+    });
+  });
+
+  it("creates folder proposals for ordinary Markdown path hierarchy", () => {
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      defaultParentId: "folder-current",
+      files: [
+        {
+          path: "/Users/me/Vault/Ideas/Slow Reading.md",
+          relativePath: "Ideas/Slow Reading.md",
+          content: "# Slow Reading\n\nRead slowly.",
+        },
+        {
+          path: "/Users/me/Vault/Ideas/Themes/Attention.md",
+          relativePath: "Ideas/Themes/Attention.md",
+          content: "# Attention\n\nNotice what repeats.",
+        },
+      ],
+    });
+
+    expect(plan.items).toHaveLength(4);
+    expect(plan.folderItems.map((item) => item.relativePath)).toEqual(["Ideas", "Ideas/Themes"]);
+    expect(plan.documentItems.map((item) => item.relativePath)).toEqual([
+      "Ideas/Slow Reading.md",
+      "Ideas/Themes/Attention.md",
+    ]);
+
+    const [ideasFolder, themesFolder] = plan.folderItems;
+    if (ideasFolder.proposal.action !== "create" || themesFolder.proposal.action !== "create") {
+      throw new Error("Expected folder create proposals");
+    }
+    const [slowReadingDocument, attentionDocument] = plan.documentItems;
+    if (
+      slowReadingDocument.proposal.action !== "create" ||
+      attentionDocument.proposal.action !== "create"
+    ) {
+      throw new Error("Expected document create proposals");
+    }
+
+    expect(ideasFolder.proposal).toMatchObject({
+      action: "create",
+      targetPath: "Ideas",
+      draft: {
+        type: "folder",
+        title: "Ideas",
+        parentId: "folder-current",
+        bookId: "book-1",
+      },
+    });
+    expect(themesFolder.proposal).toMatchObject({
+      action: "create",
+      targetPath: "Ideas/Themes",
+      draft: {
+        type: "folder",
+        title: "Themes",
+        parentId: ideasFolder.proposal.draft.id,
+        bookId: "book-1",
+      },
+    });
+    expect(slowReadingDocument.proposal).toMatchObject({
+      action: "create",
+      targetPath: "Ideas/Slow Reading.md",
+      draft: {
+        title: "Slow Reading",
+        parentId: ideasFolder.proposal.draft.id,
+        bookId: "book-1",
+      },
+    });
+    expect(attentionDocument.proposal).toMatchObject({
+      action: "create",
+      targetPath: "Ideas/Themes/Attention.md",
+      draft: {
+        title: "Attention",
+        parentId: themesFolder.proposal.draft.id,
+        bookId: "book-1",
+      },
+    });
+  });
+
+  it("derives relative import paths from the shared file directory", () => {
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      files: [
+        {
+          path: "/Users/me/Vault/Ideas/Slow Reading.md",
+          content: "# Slow Reading\n\nRead slowly.",
+        },
+        {
+          path: "/Users/me/Vault/Characters/Main.md",
+          content: "# Main\n\nTrack relationships.",
+        },
+      ],
+    });
+
+    expect(plan.folderItems.map((item) => item.relativePath)).toEqual(["Ideas", "Characters"]);
+    expect(plan.documentItems.map((item) => item.relativePath)).toEqual([
+      "Ideas/Slow Reading.md",
+      "Characters/Main.md",
+    ]);
+  });
+
+  it("does not override ReadAny frontmatter parents with path-derived folders", () => {
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      defaultParentId: "folder-current",
+      files: [
+        {
+          path: "Ideas/Question.md",
+          content: `---
+type: "readany-knowledge"
+id: "note-1"
+documentType: "standalone_note"
+title: "Question"
+bookId: "book-1"
+parentId: "folder-from-frontmatter"
+tags: []
+---
+# Question
+
+Why does this matter?
+`,
+        },
+      ],
+    });
+
+    expect(plan.folderItems).toEqual([]);
+    if (plan.documentItems[0].proposal.action !== "create") {
+      throw new Error("Expected document create proposal");
+    }
+    expect(plan.documentItems[0].proposal).toMatchObject({
+      action: "create",
+      draft: {
+        id: "note-1",
+        parentId: "folder-from-frontmatter",
+      },
     });
   });
 

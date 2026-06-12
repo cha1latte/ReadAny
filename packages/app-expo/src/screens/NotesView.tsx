@@ -58,9 +58,8 @@ import {
   type ExportFormat,
   type KnowledgeExportFormat,
   type KnowledgeImportWriteProposal,
-  createKnowledgeImportWriteProposal,
+  createKnowledgeMarkdownImportPlan,
   knowledgeExporter,
-  parseKnowledgeMarkdownDocument,
 } from "@readany/core/export";
 import {
   type KnowledgeDocumentOutlineItem,
@@ -1360,30 +1359,32 @@ export function NotesView({
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
 
-      const items: KnowledgeMarkdownImportReviewItem[] = [];
       const defaultParentId = isKnowledgeVaultRootOpen
         ? undefined
         : knowledgeHome?.type === "folder"
           ? knowledgeHome.id
           : knowledgeHome?.parentId;
-      for (const path of paths) {
-        const content = await platform.readTextFile(path);
-        const imported = parseKnowledgeMarkdownDocument({
-          path,
-          content,
-          bookId: selectedKnowledgeBookId,
-          defaultParentId,
-        });
-        items.push({
-          path,
-          proposal: createKnowledgeImportWriteProposal(imported, {
-            message: t("notes.knowledgeMarkdownImportProposalMessage", {
-              file: mobileFileName(path),
-            }),
+      const plan = createKnowledgeMarkdownImportPlan({
+        bookId: selectedKnowledgeBookId,
+        defaultParentId,
+        files: await Promise.all(
+          paths.map(async (path) => ({
+            path,
+            content: await platform.readTextFile(path),
+          })),
+        ),
+      });
+      const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
+        path: item.path,
+        proposal: {
+          ...item.proposal,
+          message: t("notes.knowledgeMarkdownImportProposalMessage", {
+            file: mobileFileName(item.relativePath || item.path),
           }),
-          warnings: imported.warnings,
-        });
-      }
+        },
+        warnings: item.warnings,
+      }));
+      if (items.length === 0) return;
 
       setKnowledgeMarkdownImportReview({ items });
     } catch (error) {
@@ -1416,11 +1417,17 @@ export function NotesView({
     setIsKnowledgeMarkdownImportApplying(true);
     try {
       const importedDocumentIds: string[] = [];
+      const preferredDocumentIds: string[] = [];
       for (const item of knowledgeMarkdownImportReview.items) {
         const result = await applyKnowledgeWriteProposal(item.proposal);
         if (result.documentId) importedDocumentIds.push(result.documentId);
+        if (item.proposal.action === "create" && item.proposal.draft.type !== "folder") {
+          if (result.documentId) preferredDocumentIds.push(result.documentId);
+        }
       }
-      await refreshSelectedKnowledgeDocuments(importedDocumentIds[0] ?? knowledgeHome?.id);
+      await refreshSelectedKnowledgeDocuments(
+        preferredDocumentIds[0] ?? importedDocumentIds[0] ?? knowledgeHome?.id,
+      );
       setKnowledgeMarkdownImportReview(null);
       Alert.alert(
         t("common.success", "成功"),

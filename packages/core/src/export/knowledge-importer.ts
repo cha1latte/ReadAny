@@ -13,10 +13,21 @@ import {
 
 export interface KnowledgeMarkdownImportInput {
   path?: string;
+  relativePath?: string;
   content: string;
   defaultType?: KnowledgeDocumentType;
   defaultParentId?: string;
   bookId?: string;
+}
+
+export type KnowledgeMarkdownImportPlanFile = KnowledgeMarkdownImportInput;
+
+export interface KnowledgeMarkdownImportPlanInput {
+  files: KnowledgeMarkdownImportPlanFile[];
+  defaultType?: KnowledgeDocumentType;
+  defaultParentId?: string;
+  bookId?: string;
+  preservePathHierarchy?: boolean;
 }
 
 export interface KnowledgeImportFrontmatter {
@@ -43,6 +54,19 @@ export interface KnowledgeImportDocumentDraft {
   contentMd: string;
   draft: CreateKnowledgeDocumentInput;
   warnings: string[];
+}
+
+export interface KnowledgeMarkdownImportPlanItem {
+  path: string;
+  relativePath: string;
+  proposal: KnowledgeImportWriteProposal;
+  warnings: string[];
+}
+
+export interface KnowledgeMarkdownImportPlan {
+  items: KnowledgeMarkdownImportPlanItem[];
+  folderItems: KnowledgeMarkdownImportPlanItem[];
+  documentItems: KnowledgeMarkdownImportPlanItem[];
 }
 
 export type KnowledgeVaultImportEntryStatus =
@@ -231,6 +255,74 @@ function normalizePath(path: string): string {
     .replace(/\/+/g, "/");
 }
 
+function splitPath(path: string): string[] {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/^file:\/+/, "")
+    .replace(/\/+/g, "/")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function fileNameFromPath(path?: string): string | undefined {
+  if (!path) return undefined;
+  const parts = splitPath(path);
+  return parts[parts.length - 1];
+}
+
+function directoryParts(path: string): string[] {
+  const parts = splitPath(path);
+  return parts.slice(0, -1);
+}
+
+function commonDirectoryParts(paths: string[]): string[] {
+  const directories = paths.map(directoryParts).filter((parts) => parts.length > 0);
+  if (directories.length === 0) return [];
+
+  const shortest = Math.min(...directories.map((parts) => parts.length));
+  const common: string[] = [];
+  for (let index = 0; index < shortest; index += 1) {
+    const candidate = directories[0][index];
+    if (directories.every((parts) => parts[index] === candidate)) {
+      common.push(candidate);
+    } else {
+      break;
+    }
+  }
+  return common;
+}
+
+function relativePathFromCommonDirectory(path: string, commonParts: string[]): string {
+  const parts = splitPath(path);
+  const hasCommonPrefix =
+    commonParts.length > 0 && commonParts.every((part, index) => parts[index] === part);
+  const relativeParts = hasCommonPrefix ? parts.slice(commonParts.length) : parts.slice(-1);
+  return relativeParts.join("/") || fileNameFromPath(path) || path;
+}
+
+function sanitizeImportPathSegment(segment: string): string {
+  return segment
+    .trim()
+    .replace(/[\\/]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function folderIdForImportPath({
+  bookId,
+  baseParentId,
+  relativeDirPath,
+}: {
+  bookId?: string;
+  baseParentId?: string;
+  relativeDirPath: string;
+}): string {
+  const hash = createKnowledgeExportHash(
+    ["knowledge-import-folder-v1", bookId ?? "", baseParentId ?? "", relativeDirPath].join("\n"),
+  ).replace(/[^a-zA-Z0-9]+/g, "-");
+  return `import-folder-${hash}`;
+}
+
 function firstHeadingTitle(markdown: string): string | undefined {
   const match = markdown.match(/^#\s+(.+)$/m);
   return match?.[1]?.trim();
@@ -292,7 +384,7 @@ export function parseKnowledgeMarkdownDocument(
   const title =
     metadata.title ??
     firstHeadingTitle(frontmatter.body) ??
-    fileTitle(input.path) ??
+    fileTitle(input.relativePath ?? input.path) ??
     "Imported Knowledge";
   const documentType = metadata.documentType ?? input.defaultType ?? "imported_markdown";
   const contentMd = removeLeadingDocumentTitle(
@@ -534,6 +626,138 @@ export function createKnowledgeImportWriteProposal(
     return createKnowledgeImportUpdateProposal(imported, options);
   }
   return createKnowledgeImportCreateProposal(imported, options.message);
+}
+
+function createKnowledgeImportFolderProposal({
+  id,
+  title,
+  parentId,
+  bookId,
+  targetPath,
+}: {
+  id: string;
+  title: string;
+  parentId?: string;
+  bookId?: string;
+  targetPath: string;
+}): KnowledgeDocumentCreateProposal {
+  return {
+    success: true,
+    action: "create",
+    requiresConfirmation: true,
+    confirmationKind: "knowledge_document_create",
+    message: "Imported folder draft generated. No document has been saved.",
+    targetPath,
+    draft: {
+      id,
+      parentId,
+      bookId,
+      type: "folder",
+      title,
+      contentJson: { type: "doc", content: [] } as unknown as JSONValue,
+      contentMd: "",
+      contentSchemaVersion: 1,
+      tags: [],
+      sourceKind: "obsidian",
+      sourceId: targetPath,
+    },
+  };
+}
+
+function importRelativePathForFile(
+  file: KnowledgeMarkdownImportPlanFile,
+  commonParts: string[],
+): string {
+  if (file.relativePath?.trim()) return normalizePath(file.relativePath);
+  if (file.path?.trim())
+    return normalizePath(relativePathFromCommonDirectory(file.path, commonParts));
+  return fileNameFromPath(file.path) ?? "Imported Knowledge.md";
+}
+
+function shouldPreserveImportHierarchy(imported: KnowledgeImportDocumentDraft): boolean {
+  if (imported.isReadAnyExport) return false;
+  if (imported.draft.type === "book_home") return false;
+  if (imported.frontmatter.parentId) return false;
+  return true;
+}
+
+export function createKnowledgeMarkdownImportPlan(
+  input: KnowledgeMarkdownImportPlanInput,
+): KnowledgeMarkdownImportPlan {
+  const preservePathHierarchy = input.preservePathHierarchy ?? true;
+  const commonParts = commonDirectoryParts(
+    input.files
+      .map((file) => file.relativePath ?? file.path ?? "")
+      .filter((path) => path.trim().length > 0),
+  );
+  const folderItemsById = new Map<string, KnowledgeMarkdownImportPlanItem>();
+  const documentItems: KnowledgeMarkdownImportPlanItem[] = [];
+
+  for (const file of input.files) {
+    const relativePath = importRelativePathForFile(file, commonParts);
+    const bookId = file.bookId ?? input.bookId;
+    const baseParentId = file.defaultParentId ?? input.defaultParentId;
+    const imported = parseKnowledgeMarkdownDocument({
+      ...file,
+      relativePath,
+      bookId,
+      defaultType: file.defaultType ?? input.defaultType,
+      defaultParentId: baseParentId,
+    });
+
+    if (preservePathHierarchy && shouldPreserveImportHierarchy(imported)) {
+      const segments = splitPath(relativePath).map(sanitizeImportPathSegment).filter(Boolean);
+      const directorySegments = segments.slice(0, -1);
+      let parentId = baseParentId;
+      const pathSegments: string[] = [];
+
+      for (const segment of directorySegments) {
+        pathSegments.push(segment);
+        const relativeDirPath = pathSegments.join("/");
+        const folderId = folderIdForImportPath({ bookId, baseParentId, relativeDirPath });
+        if (!folderItemsById.has(folderId)) {
+          const proposal = createKnowledgeImportFolderProposal({
+            id: folderId,
+            title: segment,
+            parentId,
+            bookId,
+            targetPath: relativeDirPath,
+          });
+          folderItemsById.set(folderId, {
+            path: relativeDirPath,
+            relativePath: relativeDirPath,
+            proposal,
+            warnings: ["created_folder_from_import_path"],
+          });
+        }
+        parentId = folderId;
+      }
+
+      if (directorySegments.length > 0) {
+        imported.draft.parentId = parentId;
+      }
+    }
+
+    const proposal = createKnowledgeImportWriteProposal(imported, {
+      message: "Imported knowledge draft generated. No document has been saved.",
+    });
+    if (proposal.action === "create" || proposal.action === "update") {
+      proposal.targetPath = relativePath;
+    }
+    documentItems.push({
+      path: file.path ?? relativePath,
+      relativePath,
+      proposal,
+      warnings: imported.warnings,
+    });
+  }
+
+  const folderItems = Array.from(folderItemsById.values());
+  return {
+    items: [...folderItems, ...documentItems],
+    folderItems,
+    documentItems,
+  };
 }
 
 export function createKnowledgeVaultImportWriteProposals(

@@ -136,6 +136,8 @@ Work:
 - Add desktop linked-folder export with manifest and conflict detection.
 - Add desktop Markdown file import as confirmation-required create proposals.
 - Add mobile Markdown file import as confirmation-required create proposals.
+- Preserve ordinary Markdown file path hierarchy by generating confirmation
+  proposals for missing folder documents before child documents.
 - Add desktop linked-folder import/reconcile as confirmation-required update
   proposals.
 - Preserve document hierarchy when exporting to an Obsidian-style vault and when

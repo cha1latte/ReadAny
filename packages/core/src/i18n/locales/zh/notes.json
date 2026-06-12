@@ -52,6 +52,7 @@
     "knowledgeMarkdownImportApplyFailed": "应用 Markdown 导入失败",
     "knowledgeMarkdownImportTitle": "导入 Markdown 为知识文档",
     "knowledgeMarkdownImportDescription": "将 {{count}} 个 Markdown 文件导入当前书籍的知识库，确认后才会保存。",
+    "knowledgeImportDestination": "导入到 {{path}}",
     "knowledgeMarkdownImportWillCreate": "将创建",
     "knowledgeMarkdownImportWarningCount": "{{count}} 个提醒",
     "knowledgeMarkdownImportMoreFiles": "还有 {{count}} 个文件未显示",

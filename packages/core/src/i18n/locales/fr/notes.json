@@ -52,6 +52,7 @@
     "knowledgeMarkdownImportApplyFailed": "Échec de l'application de l'import Markdown",
     "knowledgeMarkdownImportTitle": "Importer Markdown comme documents",
     "knowledgeMarkdownImportDescription": "Importe {{count}} fichiers Markdown dans la base de connaissances de ce livre. Ils ne sont enregistrés qu'après confirmation.",
+    "knowledgeImportDestination": "Importer dans {{path}}",
     "knowledgeMarkdownImportWillCreate": "Sera créé",
     "knowledgeMarkdownImportWarningCount": "{{count}} avertissements",
     "knowledgeMarkdownImportMoreFiles": "{{count}} autres fichiers masqués",

@@ -712,6 +712,21 @@ export const makeStyles = (colors: ThemeColors) =>
       lineHeight: 15,
       color: colors.mutedForeground,
     },
+    knowledgeImportDestination: {
+      marginTop: 5,
+      minHeight: 18,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    knowledgeImportDestinationText: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+    },
     knowledgeImportItemBadge: {
       overflow: "hidden",
       borderRadius: radius.sm,

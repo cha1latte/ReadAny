@@ -2267,6 +2267,7 @@ function KnowledgeHomePanel({
             {markdownImportReview ? (
               <KnowledgeMarkdownImportReviewCard
                 review={markdownImportReview}
+                documents={documents}
                 isApplying={isMarkdownImportApplying}
                 onApply={onApplyMarkdownImport}
                 onDismiss={onDismissMarkdownImport}
@@ -3583,12 +3584,14 @@ function KnowledgeVaultConflictCard({
 
 function KnowledgeMarkdownImportReviewCard({
   review,
+  documents,
   isApplying,
   onApply,
   onDismiss,
   t,
 }: {
   review: KnowledgeMarkdownImportReview;
+  documents: KnowledgeDocument[];
   isApplying: boolean;
   onApply: () => void;
   onDismiss: () => void;
@@ -3596,6 +3599,23 @@ function KnowledgeMarkdownImportReviewCard({
 }) {
   const visibleItems = review.items.slice(0, 5);
   const hiddenCount = Math.max(0, review.items.length - visibleItems.length);
+  const documentById = useMemo(
+    () => new Map(documents.map((document) => [document.id, document])),
+    [documents],
+  );
+  const importDestinationLabel = useCallback(
+    (proposal: KnowledgeImportWriteProposal): string | null => {
+      if (proposal.action !== "create") return null;
+      const parentId = proposal.draft.parentId;
+      if (!parentId) return t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" });
+      const parent = documentById.get(parentId);
+      if (!parent) return parentId;
+      return knowledgeDocumentPath(parent, documents, t)
+        .map((item) => item.title)
+        .join(" / ");
+    },
+    [documentById, documents, t],
+  );
 
   return (
     <div className="mb-3 overflow-hidden rounded-lg border border-border/70 bg-card text-sm shadow-sm">
@@ -3643,6 +3663,7 @@ function KnowledgeMarkdownImportReviewCard({
                 proposal.patch.contentMd ||
                 proposal.current?.excerpt ||
                 "";
+          const destinationLabel = importDestinationLabel(proposal);
 
           return (
             <div
@@ -3655,6 +3676,14 @@ function KnowledgeMarkdownImportReviewCard({
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
                     {desktopFileName(item.path)}
                   </p>
+                  {destinationLabel ? (
+                    <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Folder className="h-3 w-3 shrink-0 text-primary/70" />
+                      <span className="truncate">
+                        {t("notes.knowledgeImportDestination", { path: destinationLabel })}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
                 <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">
                   {proposal.action === "create"

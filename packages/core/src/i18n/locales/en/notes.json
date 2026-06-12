@@ -52,6 +52,7 @@
     "knowledgeMarkdownImportApplyFailed": "Failed to apply Markdown import",
     "knowledgeMarkdownImportTitle": "Import Markdown as knowledge documents",
     "knowledgeMarkdownImportDescription": "Import {{count}} Markdown files into this book's knowledge base. They are saved only after confirmation.",
+    "knowledgeImportDestination": "Import to {{path}}",
     "knowledgeMarkdownImportWillCreate": "Will create",
     "knowledgeMarkdownImportWarningCount": "{{count}} warnings",
     "knowledgeMarkdownImportMoreFiles": "{{count}} more files hidden",

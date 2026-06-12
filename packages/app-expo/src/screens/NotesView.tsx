@@ -1721,6 +1721,7 @@ export function NotesView({
 
         <KnowledgeMarkdownImportReviewSheet
           review={knowledgeMarkdownImportReview}
+          documents={knowledgeDocuments}
           isApplying={isKnowledgeMarkdownImportApplying}
           onApply={handleApplyKnowledgeMarkdownImport}
           onDismiss={() => setKnowledgeMarkdownImportReview(null)}
@@ -2814,6 +2815,7 @@ function KnowledgeSummaryMemoryCard({
 
 function KnowledgeMarkdownImportReviewSheet({
   review,
+  documents,
   isApplying,
   onApply,
   onDismiss,
@@ -2822,6 +2824,7 @@ function KnowledgeMarkdownImportReviewSheet({
   colors,
 }: {
   review: KnowledgeMarkdownImportReview | null;
+  documents: KnowledgeDocument[];
   isApplying: boolean;
   onApply: () => void;
   onDismiss: () => void;
@@ -2831,6 +2834,23 @@ function KnowledgeMarkdownImportReviewSheet({
 }) {
   const visibleItems = review?.items.slice(0, 6) ?? [];
   const hiddenCount = Math.max(0, (review?.items.length ?? 0) - visibleItems.length);
+  const documentById = useMemo(
+    () => new Map(documents.map((document) => [document.id, document])),
+    [documents],
+  );
+  const importDestinationLabel = useCallback(
+    (proposal: KnowledgeImportWriteProposal): string | null => {
+      if (proposal.action !== "create") return null;
+      const parentId = proposal.draft.parentId;
+      if (!parentId) return t("notes.knowledgeVaultRoot", "知识库");
+      const parent = documentById.get(parentId);
+      if (!parent) return parentId;
+      return knowledgeDocumentPathItems(parent, documents, t)
+        .map((item) => item.title)
+        .join(" / ");
+    },
+    [documentById, documents, t],
+  );
 
   return (
     <Modal visible={!!review} transparent animationType="fade" onRequestClose={onDismiss}>
@@ -2885,6 +2905,7 @@ function KnowledgeMarkdownImportReviewSheet({
                   proposal.patch.contentMd ||
                   proposal.current?.excerpt ||
                   "";
+            const destinationLabel = importDestinationLabel(proposal);
 
             return (
               <View key={item.path} style={styles.knowledgeImportItem}>
@@ -2896,6 +2917,16 @@ function KnowledgeMarkdownImportReviewSheet({
                     <Text style={styles.knowledgeImportItemPath} numberOfLines={1}>
                       {mobileFileName(item.path)}
                     </Text>
+                    {!!destinationLabel && (
+                      <View style={styles.knowledgeImportDestination}>
+                        <FolderIcon size={12} color={colors.primary} />
+                        <Text style={styles.knowledgeImportDestinationText} numberOfLines={1}>
+                          {t("notes.knowledgeImportDestination", {
+                            path: destinationLabel,
+                          })}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.knowledgeImportItemBadge}>
                     {proposal.action === "create"

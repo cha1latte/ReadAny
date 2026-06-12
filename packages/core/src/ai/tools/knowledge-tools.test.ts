@@ -65,6 +65,7 @@ function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
 describe("knowledge tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
     knowledgeMemoryMocks.maybeCompressAndPersistKnowledgeSummary.mockResolvedValue({
       status: "compressed",
       persisted: true,
@@ -87,25 +88,35 @@ describe("knowledge tools", () => {
   });
 
   it("searches knowledge documents by title, tags, excerpt, and content", async () => {
-    dbMocks.searchKnowledgeDocuments.mockResolvedValue([
-      doc({ id: "doc-1", title: "Deep Reading Home", updatedAt: 3000 }),
-      doc({
-        id: "doc-2",
-        title: "Cooking",
-        contentMd: "Nothing about reading here.",
-        excerpt: "Kitchen notes.",
-        tags: ["food"],
-        updatedAt: 1000,
-      }),
-      doc({
-        id: "doc-3",
-        title: "Memory",
-        contentMd: "Spaced repetition.",
-        excerpt: "Memory note.",
-        tags: ["memory"],
-        updatedAt: 2000,
-      }),
-    ]);
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Chapter Notes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+      updatedAt: 4000,
+    });
+    const home = doc({ id: "doc-1", title: "Deep Reading Home", updatedAt: 3000 });
+    const cooking = doc({
+      id: "doc-2",
+      title: "Cooking",
+      contentMd: "Nothing about reading here.",
+      excerpt: "Kitchen notes.",
+      tags: ["food"],
+      updatedAt: 1000,
+    });
+    const memory = doc({
+      id: "doc-3",
+      title: "Memory",
+      parentId: "folder-1",
+      contentMd: "Spaced repetition.",
+      excerpt: "Memory note.",
+      tags: ["memory"],
+      updatedAt: 2000,
+    });
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([home, cooking, memory]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, home, cooking, memory]);
 
     const tool = createSearchKnowledgeBaseTool();
     const result = (await tool.execute({
@@ -113,7 +124,11 @@ describe("knowledge tools", () => {
       query: "memory",
       bookId: "book-1",
       limit: 2,
-    })) as { total: number; showing: number; documents: Array<{ id: string; snippet: string }> };
+    })) as {
+      total: number;
+      showing: number;
+      documents: Array<{ id: string; path: string; snippet: string }>;
+    };
 
     expect(dbMocks.searchKnowledgeDocuments).toHaveBeenCalledWith({
       query: "memory",
@@ -121,14 +136,26 @@ describe("knowledge tools", () => {
       type: undefined,
       limit: 200,
     });
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(result.total).toBe(2);
     expect(result.showing).toBe(2);
     expect(result.documents.map((item) => item.id)).toEqual(["doc-3", "doc-1"]);
+    expect(result.documents[0].path).toBe("Knowledge base / Chapter Notes / Memory");
     expect(result.documents[0].snippet).toContain("Memory note");
   });
 
   it("scores and returns compact summaries in knowledge search results", async () => {
     dbMocks.searchKnowledgeDocuments.mockResolvedValue([
+      doc({
+        id: "doc-summary",
+        title: "Untitled",
+        excerpt: undefined,
+        contentMd: "Long body without the key term.",
+        summaryMd: "Vector memory: durable insight about context windows.",
+        tags: [],
+      }),
+    ]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
       doc({
         id: "doc-summary",
         title: "Untitled",
@@ -145,39 +172,66 @@ describe("knowledge tools", () => {
       query: "vector",
     })) as {
       total: number;
-      documents: Array<{ id: string; parentId?: string; summary?: string; snippet: string }>;
+      documents: Array<{
+        id: string;
+        parentId?: string;
+        path: string;
+        summary?: string;
+        snippet: string;
+      }>;
     };
 
     expect(result.total).toBe(1);
     expect(result.documents[0]).toMatchObject({
       id: "doc-summary",
       parentId: undefined,
+      path: "Knowledge base / Untitled",
       summary: "Vector memory: durable insight about context windows.",
       snippet: "Vector memory: durable insight about context windows.",
     });
   });
 
   it("returns current book knowledge and can include full content", async () => {
-    dbMocks.getKnowledgeDocuments.mockResolvedValue([doc()]);
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Journal",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const nestedNote = doc({
+      id: "doc-1",
+      type: "standalone_note",
+      parentId: "folder-1",
+    });
+    dbMocks.getKnowledgeDocuments
+      .mockResolvedValueOnce([nestedNote])
+      .mockResolvedValueOnce([folder, nestedNote]);
 
     const tool = createGetBookKnowledgeTool("book-1");
     const result = (await tool.execute({
       reasoning: "Need the user's book notes",
       includeContent: true,
-      type: "book_home",
+      type: "standalone_note",
     })) as {
       bookId: string;
-      documents: Array<{ id: string; content?: string; snippet: string }>;
+      documents: Array<{ id: string; path: string; content?: string; snippet: string }>;
     };
 
-    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenNthCalledWith(1, {
       bookId: "book-1",
-      type: "book_home",
+      type: "standalone_note",
       limit: 8,
+    });
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenNthCalledWith(2, {
+      bookId: "book-1",
+      limit: 5000,
     });
     expect(result.bookId).toBe("book-1");
     expect(result.documents[0]).toMatchObject({
       id: "doc-1",
+      path: "Knowledge base / Reading Journal / Deep Reading Home",
       content: "Reading slowly helps memory and reflection.",
       snippet: "Reading slowly helps memory.",
     });

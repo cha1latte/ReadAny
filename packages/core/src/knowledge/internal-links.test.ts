@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { KnowledgeLink } from "../types";
+import type { JSONValue, KnowledgeLink } from "../types";
 
 const dbMocks = vi.hoisted(() => ({
   deleteKnowledgeLink: vi.fn(),
@@ -35,7 +35,7 @@ describe("knowledge internal links", () => {
   });
 
   it("extracts unique valid internal document links from Tiptap JSON", () => {
-    const contentJson = {
+    const contentJson: JSONValue = {
       type: "doc",
       content: [
         {

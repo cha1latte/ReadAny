@@ -43,6 +43,9 @@ const LINK_RELATIONS = new Set<KnowledgeLinkRelation>([
   "contains",
   "generated_from",
 ]);
+const KNOWLEDGE_ROOT_TITLE = "Knowledge base";
+const UNTITLED_DOCUMENT_TITLE = "Untitled document";
+const ORPHANED_PARENT_TITLE = "Orphaned";
 
 function asPositiveLimit(value: unknown, fallback: number): number {
   const limit = Number(value);
@@ -217,11 +220,50 @@ function scoreDocument(document: KnowledgeDocument, query: string): number {
   return score;
 }
 
-function documentSummary(document: KnowledgeDocument, query = "", includeContent = false) {
+function createDocumentPath(
+  document: KnowledgeDocument,
+  documentsById: Map<string, KnowledgeDocument>,
+): string {
+  const path: string[] = [];
+  const visited = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+
+  while (current) {
+    if (visited.has(current.id)) {
+      path.unshift(ORPHANED_PARENT_TITLE);
+      break;
+    }
+    visited.add(current.id);
+
+    path.unshift(current.title.trim() || UNTITLED_DOCUMENT_TITLE);
+    if (!current.parentId) break;
+
+    const parent = documentsById.get(current.parentId);
+    if (!parent) {
+      path.unshift(ORPHANED_PARENT_TITLE);
+      break;
+    }
+    current = parent;
+  }
+
+  return [KNOWLEDGE_ROOT_TITLE, ...path].join(" / ");
+}
+
+function createDocumentMap(documents: KnowledgeDocument[]): Map<string, KnowledgeDocument> {
+  return new Map(documents.map((document) => [document.id, document]));
+}
+
+function documentSummary(
+  document: KnowledgeDocument,
+  query = "",
+  includeContent = false,
+  documentsById = createDocumentMap([document]),
+) {
   return {
     id: document.id,
     bookId: document.bookId,
     parentId: document.parentId,
+    path: createDocumentPath(document, documentsById),
     type: document.type,
     title: document.title,
     tags: document.tags,
@@ -273,6 +315,11 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
         type,
         limit: SEARCH_SCAN_LIMIT,
       });
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(bookId ? { bookId } : {}),
+        limit: 5000,
+      });
+      const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
 
       const scored = documents
         .map((document) => ({ document, score: scoreDocument(document, query) }))
@@ -284,7 +331,7 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
         showing: Math.min(scored.length, limit),
         documents: scored
           .slice(0, limit)
-          .map((item) => documentSummary(item.document, query, false)),
+          .map((item) => documentSummary(item.document, query, false, documentsById)),
       };
     },
   };
@@ -320,11 +367,15 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
       const includeContent = args.includeContent === true;
       const limit = asPositiveLimit(args.limit, DEFAULT_RESULT_LIMIT);
       const documents = await getKnowledgeDocuments({ bookId, type, limit });
+      const pathContextDocuments = await getKnowledgeDocuments({ bookId, limit: 5000 });
+      const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
 
       return {
         bookId,
         total: documents.length,
-        documents: documents.map((document) => documentSummary(document, "", includeContent)),
+        documents: documents.map((document) =>
+          documentSummary(document, "", includeContent, documentsById),
+        ),
       };
     },
   };

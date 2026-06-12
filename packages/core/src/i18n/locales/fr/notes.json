@@ -234,6 +234,8 @@
     "knowledgeAttachmentAdded": "{{name}} ajouté",
     "knowledgeAttachmentAddFailed": "Impossible d'ajouter l'image jointe",
     "knowledgeInsertCard": "Insérer une carte",
+    "knowledgeCardPickerTitle": "Insérer une carte de savoir",
+    "knowledgeCardPickerHint": "Choisissez une structure à insérer. Les cartes se synchronisent avec le document et s'exportent proprement.",
     "knowledgeCardEmpty": "Carte vide, prête à être modifiée plus tard.",
     "knowledgeCardSource": "Source",
     "knowledgeCardTitleLabel": "Titre de la carte",
@@ -249,6 +251,17 @@
       "mindmap": "Carte mentale",
       "mermaid": "Diagramme",
       "relatedNotes": "Notes liées"
+    },
+    "knowledgeCardDescriptions": {
+      "bookQuote": "Conserver un extrait avec son contexte source et un commentaire ultérieur.",
+      "callout": "Capturer un rappel, une idée, une question ou une pensée rapide.",
+      "bookMetadata": "Insérer un résumé exportable des informations du livre.",
+      "aiSummary": "Placer un résumé IA pouvant ensuite devenir du contenu normal.",
+      "qa": "Regrouper questions, réponses et pistes de suivi.",
+      "review": "Construire une critique, une note ou une conclusion de lecture.",
+      "mindmap": "Transformer un texte hiérarchique en carte mentale.",
+      "mermaid": "Insérer un organigramme, une carte de relations ou un diagramme de séquence.",
+      "relatedNotes": "Relier des notes associées dans ce livre ou dans d'autres livres."
     }
   }
 }

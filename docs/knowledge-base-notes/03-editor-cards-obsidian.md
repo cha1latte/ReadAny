@@ -419,6 +419,7 @@ Keep:
 - Timeline card.
 - Mermaid and mindmap cards.
 - Source quote cards with citations.
+- AI/tool failure card with readable error context.
 
 Rules:
 
@@ -563,6 +564,7 @@ Initial built-in cards:
 - Quote card linked to a CFI/highlight.
 - Book metadata card.
 - AI summary card.
+- AI/tool failure card.
 - Question/answer card.
 - Review card.
 - Mindmap or Mermaid card wrapper.

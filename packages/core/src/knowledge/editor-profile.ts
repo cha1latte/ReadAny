@@ -178,6 +178,7 @@ const CARD_FEATURES: Record<string, KnowledgeEditorFeature> = {
   callout: "calloutCard",
   bookMetadata: "metadataCard",
   aiSummary: "aiCard",
+  aiToolFailure: "aiCard",
   qa: "aiCard",
   review: "reviewCard",
   mindmap: "diagramCard",

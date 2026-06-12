@@ -133,6 +133,16 @@ describe("editor projection", () => {
             markdown: "graph TD\n  A --> B",
           },
         },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "aiToolFailure",
+            data: {
+              toolName: "searchKnowledgeBase",
+              error: "Index unavailable",
+            },
+          },
+        },
       ],
     });
 
@@ -140,6 +150,7 @@ describe("editor projection", () => {
       [
         "> [!summary] AI Summary\n> A compact summary.",
         "> [!abstract] Flow\n```mermaid\ngraph TD\n  A --> B\n```",
+        "> [!failure] searchKnowledgeBase\n> Tool: searchKnowledgeBase\n> Error: Index unavailable",
       ].join("\n\n"),
     );
   });

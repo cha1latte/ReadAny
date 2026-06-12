@@ -180,9 +180,9 @@ Verification:
 ## Phase 6: Custom Card Platform
 
 Status: partially implemented. Built-in card registry, card templates, desktop
-node views, mobile WebView card rendering, Markdown fallbacks, and shared card
-attribute upgrades exist. Richer card editing and complex schema migrations
-remain future work.
+node views, mobile WebView card rendering, Markdown fallbacks, shared card
+attribute upgrades, and a document-preserved AI/tool failure card exist. Richer
+card editing and complex schema migrations remain future work.
 
 Goal:
 
@@ -200,6 +200,7 @@ Verification:
 
 - Cards edit on desktop and mobile.
 - Cards export to readable Markdown.
+- AI/tool failures remain visible and exportable as failure cards.
 - Unsupported card versions degrade safely.
 - Card attrs migrate across schema versions.
 

@@ -170,6 +170,31 @@ function upgradeAiSummaryAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
   return ensureMarkdown(attrs, firstString(data.summary, data.text, data.markdown));
 }
 
+function upgradeAiToolFailureAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
+  const data = dataRecord(attrs);
+  const toolName = firstString(data.toolName, data.tool, data.name);
+  const status = firstString(data.status);
+  const error = firstString(data.error, data.message);
+  const reason = firstString(data.reason);
+  const documentId = firstString(data.documentId, data.fromDocumentId);
+  const lines = [
+    toolName ? `Tool: ${toolName}` : undefined,
+    status ? `Status: ${status}` : undefined,
+    error ? `Error: ${error}` : undefined,
+    reason ? `Reason: ${reason}` : undefined,
+    documentId ? `Document: ${documentId}` : undefined,
+  ].filter(Boolean);
+
+  return ensureMarkdown(
+    {
+      ...attrs,
+      title: attrs.title ?? toolName ?? "AI/tool failure",
+      sourceId: attrs.sourceId ?? documentId,
+    },
+    firstString(data.markdown, data.text) ?? lines.join("\n"),
+  );
+}
+
 function upgradeQaAttrs(attrs: ReadAnyCardAttrs): ReadAnyCardAttrs {
   const data = dataRecord(attrs);
   const question = firstString(data.question, data.q);
@@ -247,6 +272,14 @@ export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
     upgradeAttrs: upgradeAiSummaryAttrs,
     markdownFallback: (attrs, context) =>
       callout("summary", cardTitle(attrs, "AI summary"), bodyFromAttrs(attrs, context)),
+  },
+  {
+    cardType: "aiToolFailure",
+    version: 1,
+    insertLabel: "AI/tool failure",
+    upgradeAttrs: upgradeAiToolFailureAttrs,
+    markdownFallback: (attrs, context) =>
+      callout("failure", cardTitle(attrs, "AI/tool failure"), bodyFromAttrs(attrs, context)),
   },
   {
     cardType: "qa",
@@ -337,6 +370,15 @@ export function createDefaultReadAnyCardAttrs(
       version,
       title,
       markdown: "Q:\nA:",
+    };
+  }
+
+  if (cardType === "aiToolFailure") {
+    return {
+      cardType,
+      version,
+      title,
+      markdown: "Tool:\nError:\nReason:",
     };
   }
 

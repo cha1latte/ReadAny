@@ -30,6 +30,12 @@ describe("ReadAny card registry", () => {
       title: getReadAnyCardDefinition("mindmap")?.insertLabel,
       markdown: "# Topic\n## Branch",
     });
+
+    expect(createDefaultReadAnyCardAttrs("aiToolFailure")).toMatchObject({
+      cardType: "aiToolFailure",
+      title: getReadAnyCardDefinition("aiToolFailure")?.insertLabel,
+      markdown: "Tool:\nError:\nReason:",
+    });
   });
 
   it("keeps unknown cards readable through a generic callout fallback", () => {
@@ -107,6 +113,47 @@ describe("ReadAny card registry", () => {
       markdown: "Q: What changed?\nA: The card can migrate itself.",
       text: "Q: What changed?\nA: The card can migrate itself.",
     });
+  });
+
+  it("keeps AI/tool failure cards visible and exportable", () => {
+    const attrs = normalizeReadAnyCardAttrs({
+      cardType: "aiToolFailure",
+      data: {
+        toolName: "searchKnowledgeBase",
+        status: "failed",
+        error: "Knowledge index unavailable",
+        reason: "missing_index",
+        documentId: "doc-1",
+      },
+    });
+
+    expect(attrs).toEqual({
+      cardType: "aiToolFailure",
+      version: 1,
+      title: "searchKnowledgeBase",
+      markdown:
+        "Tool: searchKnowledgeBase\nStatus: failed\nError: Knowledge index unavailable\nReason: missing_index\nDocument: doc-1",
+      text: "Tool: searchKnowledgeBase\nStatus: failed\nError: Knowledge index unavailable\nReason: missing_index\nDocument: doc-1",
+      sourceId: "doc-1",
+      data: {
+        toolName: "searchKnowledgeBase",
+        status: "failed",
+        error: "Knowledge index unavailable",
+        reason: "missing_index",
+        documentId: "doc-1",
+      },
+    });
+
+    expect(renderReadAnyCardMarkdownFallback(attrs, { body: "" })).toBe(
+      [
+        "> [!failure] searchKnowledgeBase",
+        "> Tool: searchKnowledgeBase",
+        "> Status: failed",
+        "> Error: Knowledge index unavailable",
+        "> Reason: missing_index",
+        "> Document: doc-1",
+      ].join("\n"),
+    );
   });
 
   it("creates insertable attrs from synced card templates", () => {

@@ -466,6 +466,7 @@ export function NotesPage() {
   const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string | null>(
     null,
   );
+  const [isKnowledgeVaultRootOpen, setIsKnowledgeVaultRootOpen] = useState(false);
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
   const [knowledgeValue, setKnowledgeValue] =
@@ -587,6 +588,7 @@ export function NotesPage() {
     setDetailTab("knowledge");
     setSearchQuery("");
     setEditingId(null);
+    setIsKnowledgeVaultRootOpen(false);
   }, [bookNotebooks, selectedBookId]);
 
   // Split into notes (has note text) and highlights-only
@@ -634,6 +636,7 @@ export function NotesPage() {
         setKnowledgeHome(null);
         setKnowledgeDocuments([]);
         setSelectedKnowledgeDocumentId(null);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeTitle("");
         setKnowledgeTags([]);
         const emptyValue = createEmptyKnowledgeValue();
@@ -669,6 +672,7 @@ export function NotesPage() {
         const nextValue = await createResolvedKnowledgeValueFromDocument(activeDocument);
         setKnowledgeDocuments(nextDocuments);
         setSelectedKnowledgeDocumentId(activeDocument.id);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeHome(activeDocument);
         setKnowledgeTitle(activeDocument.title);
         setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
@@ -892,13 +896,18 @@ export function NotesPage() {
   };
 
   const openKnowledgeDocument = async (document: KnowledgeDocument) => {
-    if (document.id === knowledgeHome?.id) return;
+    if (document.id === knowledgeHome?.id) {
+      setSelectedKnowledgeDocumentId(document.id);
+      setIsKnowledgeVaultRootOpen(false);
+      return;
+    }
     const saved = await saveActiveKnowledgeDocumentNow();
     if (!saved) return;
 
     knowledgeSaveVersionRef.current += 1;
     const nextValue = await createResolvedKnowledgeValueFromDocument(document);
     setSelectedKnowledgeDocumentId(document.id);
+    setIsKnowledgeVaultRootOpen(false);
     setKnowledgeHome(document);
     setKnowledgeTitle(document.title);
     setKnowledgeTags(normalizeKnowledgeTags(document.tags));
@@ -907,6 +916,14 @@ export function NotesPage() {
       knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
     );
     setIsKnowledgeSaving(false);
+  };
+
+  const openKnowledgeVaultRoot = async () => {
+    if (isKnowledgeVaultRootOpen) return;
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+    setSelectedKnowledgeDocumentId(null);
+    setIsKnowledgeVaultRootOpen(true);
   };
 
   const refreshSelectedKnowledgeDocuments = useCallback(
@@ -940,6 +957,7 @@ export function NotesPage() {
 
       if (!nextActiveDocument) {
         setSelectedKnowledgeDocumentId(null);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeHome(null);
         setKnowledgeTitle("");
         setKnowledgeTags([]);
@@ -952,6 +970,7 @@ export function NotesPage() {
 
       const nextValue = await createResolvedKnowledgeValueFromDocument(nextActiveDocument);
       setSelectedKnowledgeDocumentId(nextActiveDocument.id);
+      setIsKnowledgeVaultRootOpen(false);
       setKnowledgeHome(nextActiveDocument);
       setKnowledgeTitle(nextActiveDocument.title);
       setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
@@ -1032,6 +1051,7 @@ export function NotesPage() {
         ),
       );
       setSelectedKnowledgeDocumentId(document.id);
+      setIsKnowledgeVaultRootOpen(false);
       setKnowledgeHome(document);
       setKnowledgeTitle(document.title);
       setKnowledgeTags([]);
@@ -1084,6 +1104,7 @@ export function NotesPage() {
         if (nextDocument) {
           const nextValue = await createResolvedKnowledgeValueFromDocument(nextDocument);
           setSelectedKnowledgeDocumentId(nextDocument.id);
+          setIsKnowledgeVaultRootOpen(false);
           setKnowledgeHome(nextDocument);
           setKnowledgeTitle(nextDocument.title);
           setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
@@ -1093,6 +1114,7 @@ export function NotesPage() {
           );
         } else {
           setSelectedKnowledgeDocumentId(null);
+          setIsKnowledgeVaultRootOpen(false);
           setKnowledgeHome(null);
           setKnowledgeTitle("");
           setKnowledgeTags([]);
@@ -1469,8 +1491,11 @@ export function NotesPage() {
 
       const { readTextFile } = await import("@tauri-apps/plugin-fs");
       const items: KnowledgeMarkdownImportReviewItem[] = [];
-      const defaultParentId =
-        knowledgeHome?.type === "folder" ? knowledgeHome.id : knowledgeHome?.parentId;
+      const defaultParentId = isKnowledgeVaultRootOpen
+        ? undefined
+        : knowledgeHome?.type === "folder"
+          ? knowledgeHome.id
+          : knowledgeHome?.parentId;
       for (const path of paths) {
         const content = await readTextFile(path);
         const imported = parseKnowledgeMarkdownDocument({
@@ -1927,7 +1952,10 @@ export function NotesPage() {
                 book={selectedBook}
                 document={knowledgeHome}
                 documents={knowledgeDocuments}
-                activeDocumentId={selectedKnowledgeDocumentId}
+                isVaultRootOpen={isKnowledgeVaultRootOpen}
+                activeDocumentId={
+                  isKnowledgeVaultRootOpen ? "__vault__" : selectedKnowledgeDocumentId
+                }
                 title={knowledgeTitle}
                 tags={knowledgeTags}
                 value={knowledgeValue}
@@ -1942,6 +1970,7 @@ export function NotesPage() {
                 onTitleChange={setKnowledgeTitle}
                 onTagsChange={setKnowledgeTags}
                 onChange={setKnowledgeValue}
+                onOpenVaultRoot={openKnowledgeVaultRoot}
                 onSelectDocument={openKnowledgeDocument}
                 onCreateDocument={handleCreateKnowledgeDocument}
                 onDeleteDocument={handleDeleteKnowledgeDocument}
@@ -2046,6 +2075,7 @@ interface KnowledgeHomePanelProps {
   };
   document: KnowledgeDocument | null;
   documents: KnowledgeDocument[];
+  isVaultRootOpen: boolean;
   activeDocumentId: string | null;
   title: string;
   tags: string[];
@@ -2061,6 +2091,7 @@ interface KnowledgeHomePanelProps {
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: KnowledgeEditorValue) => void;
+  onOpenVaultRoot: () => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
@@ -2092,6 +2123,7 @@ function KnowledgeHomePanel({
   book,
   document,
   documents,
+  isVaultRootOpen,
   activeDocumentId,
   title,
   tags,
@@ -2107,6 +2139,7 @@ function KnowledgeHomePanel({
   onTitleChange,
   onTagsChange,
   onChange,
+  onOpenVaultRoot,
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
@@ -2141,13 +2174,25 @@ function KnowledgeHomePanel({
     () => (document ? documents.filter((item) => item.parentId === document.id) : []),
     [document, documents],
   );
-  const isFolderDocument = document?.type === "folder";
+  const rootDocuments = useMemo(() => {
+    const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+    return orderKnowledgeDocuments(
+      documents.filter((item) => !item.parentId),
+      homeDocumentId,
+    );
+  }, [documents]);
+  const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
+  const activeLocationLabel = isVaultRootOpen
+    ? t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })
+    : document
+      ? knowledgeDocumentTypeLabel(document, t)
+      : t("notes.knowledgeDocuments");
   const documentOutline = useMemo(
     () =>
-      document && !isFolderDocument
+      document && !isVaultRootOpen && !isFolderDocument
         ? extractKnowledgeDocumentOutline(value.contentJson, value.contentMd)
         : [],
-    [document, isFolderDocument, value.contentJson, value.contentMd],
+    [document, isFolderDocument, isVaultRootOpen, value.contentJson, value.contentMd],
   );
   const internalLinkTargets = useMemo<KnowledgeInternalLinkTarget[]>(
     () =>
@@ -2208,7 +2253,9 @@ function KnowledgeHomePanel({
         <KnowledgeDocumentExplorer
           documents={documents}
           activeDocumentId={activeDocumentId}
+          isRootActive={isVaultRootOpen}
           isCreating={isCreatingDocument}
+          onSelectRoot={onOpenVaultRoot}
           onSelect={onSelectDocument}
           onCreate={onCreateDocument}
           onDelete={onDeleteDocument}
@@ -2222,7 +2269,7 @@ function KnowledgeHomePanel({
               <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="max-w-56 truncate font-medium text-foreground">{book.title}</span>
               <span className="h-1 w-1 rounded-full bg-border" />
-              <span className="truncate">{knowledgeDocumentTypeLabel(document, t)}</span>
+              <span className="truncate">{activeLocationLabel}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 text-xs text-muted-foreground">
@@ -2262,31 +2309,42 @@ function KnowledgeHomePanel({
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-7">
             <div className="mx-auto max-w-[840px] pb-5">
-              <KnowledgeDocumentBreadcrumbs
-                document={document}
-                documents={documents}
-                activeTitle={title}
-                onSelectDocument={onSelectDocument}
-                t={t}
-                className="mb-3"
-              />
-              <input
-                value={title}
-                onChange={(event) => onTitleChange(event.target.value)}
-                aria-label={t("notes.knowledgeDocumentTitle")}
-                placeholder={t("notes.knowledgeUntitledDocument")}
-                className="block w-full min-w-0 bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
-              />
-              <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="rounded-md bg-muted/30 px-2 py-1">
-                  {knowledgeDocumentTypeLabel(document, t)}
-                </span>
-                <span className="h-1 w-1 rounded-full bg-border" />
-                <span className="truncate">{book.title}</span>
-              </div>
-              {!isFolderDocument ? (
-                <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
-              ) : null}
+              {isVaultRootOpen ? (
+                <KnowledgeVaultRootTitle
+                  bookTitle={book.title}
+                  documentCount={documents.length}
+                  t={t}
+                />
+              ) : (
+                <>
+                  <KnowledgeDocumentBreadcrumbs
+                    document={document}
+                    documents={documents}
+                    activeTitle={title}
+                    onSelectRoot={onOpenVaultRoot}
+                    onSelectDocument={onSelectDocument}
+                    t={t}
+                    className="mb-3"
+                  />
+                  <input
+                    value={title}
+                    onChange={(event) => onTitleChange(event.target.value)}
+                    aria-label={t("notes.knowledgeDocumentTitle")}
+                    placeholder={t("notes.knowledgeUntitledDocument")}
+                    className="block w-full min-w-0 bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
+                  />
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-md bg-muted/30 px-2 py-1">
+                      {knowledgeDocumentTypeLabel(document, t)}
+                    </span>
+                    <span className="h-1 w-1 rounded-full bg-border" />
+                    <span className="truncate">{book.title}</span>
+                  </div>
+                  {!isFolderDocument ? (
+                    <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
+                  ) : null}
+                </>
+              )}
             </div>
 
             {vaultConflicts ? (
@@ -2318,7 +2376,16 @@ function KnowledgeHomePanel({
               />
             ) : null}
 
-            {isFolderDocument ? (
+            {isVaultRootOpen ? (
+              <KnowledgeVaultRootOverview
+                items={rootDocuments}
+                documents={documents}
+                isCreating={isCreatingDocument}
+                onSelect={onSelectDocument}
+                onCreate={onCreateDocument}
+                t={t}
+              />
+            ) : isFolderDocument ? (
               <KnowledgeFolderOverview
                 folder={document}
                 items={activeDocumentChildren}
@@ -2394,7 +2461,7 @@ function KnowledgeHomePanel({
               </div>
             </div>
 
-            {!isFolderDocument ? (
+            {!isVaultRootOpen && !isFolderDocument ? (
               <KnowledgeDocumentOutlinePanel
                 outline={documentOutline}
                 onSelectItem={handleSelectOutlineItem}
@@ -2402,18 +2469,20 @@ function KnowledgeHomePanel({
               />
             ) : null}
 
-            <KnowledgeRelationsPanel
-              links={links}
-              backlinks={backlinks}
-              documents={documents}
-              highlights={book.highlights}
-              isLoading={isRelationsLoading}
-              onSelectDocument={onSelectDocument}
-              onOpenBook={onOpenBook}
-              t={t}
-            />
+            {!isVaultRootOpen ? (
+              <KnowledgeRelationsPanel
+                links={links}
+                backlinks={backlinks}
+                documents={documents}
+                highlights={book.highlights}
+                isLoading={isRelationsLoading}
+                onSelectDocument={onSelectDocument}
+                onOpenBook={onOpenBook}
+                t={t}
+              />
+            ) : null}
 
-            {!isFolderDocument ? (
+            {!isVaultRootOpen && !isFolderDocument ? (
               <KnowledgeSummaryMemoryCard
                 document={document}
                 isCompressing={isSummaryCompressing}
@@ -2465,6 +2534,203 @@ function KnowledgeHomePanel({
           </aside>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function KnowledgeVaultRootTitle({
+  bookTitle,
+  documentCount,
+  t,
+}: {
+  bookTitle: string;
+  documentCount: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <>
+      <nav
+        className="mb-3 flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-medium text-muted-foreground"
+        aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
+      >
+        <span className="inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-foreground/80">
+          <FolderOpen className="h-3 w-3 shrink-0" />
+          {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+        </span>
+      </nav>
+      <h2 className="block w-full min-w-0 text-[38px] font-semibold leading-[1.08] text-foreground">
+        {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+      </h2>
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="rounded-md bg-muted/30 px-2 py-1">
+          {documentCount} {t("notes.knowledgeDocuments")}
+        </span>
+        <span className="h-1 w-1 rounded-full bg-border" />
+        <span className="truncate">{bookTitle}</span>
+      </div>
+    </>
+  );
+}
+
+function KnowledgeVaultRootOverview({
+  items,
+  documents,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+}: {
+  items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const folderChildren = items.filter((document) => document.type === "folder");
+  const documentChildren = items.filter((document) => document.type !== "folder");
+  const renderChildRow = (document: KnowledgeDocument) => {
+    const isFolder = document.type === "folder";
+    const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
+    const childCount = childCountByParentId.get(document.id) ?? 0;
+    const meta = isFolder
+      ? t("notes.knowledgeFolderChildCount", { count: childCount })
+      : document.excerpt;
+
+    return (
+      <button
+        key={document.id}
+        type="button"
+        className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
+        onClick={() => onSelect(document)}
+      >
+        <span
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
+            isFolder
+              ? "border-primary/15 bg-primary/[0.07] text-primary"
+              : "border-border/45 bg-muted/25 text-muted-foreground",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
+            {document.title || t("notes.knowledgeUntitledDocument")}
+          </span>
+          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+            {knowledgeDocumentTypeLabel(document, t)}
+            {meta ? ` · ${meta}` : ""}
+          </span>
+        </span>
+        {isFolder ? (
+          <span className="shrink-0 rounded-md bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {childCount}
+          </span>
+        ) : null}
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  };
+
+  return (
+    <div className="mx-auto min-h-[690px] max-w-[820px] px-1 pb-10 pt-1">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-4">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">
+            {t("notes.knowledgeFolderInside")} · {items.length} {t("notes.knowledgeDocuments")}
+          </p>
+          <h3 className="mt-1 truncate text-2xl font-semibold leading-tight text-foreground">
+            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+          </h3>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isCreating}
+            onClick={() => onCreate("folder")}
+          >
+            <Folder className="mr-2 h-3.5 w-3.5" />
+            {t("notes.knowledgeNewFolder")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isCreating}
+            onClick={() => onCreate("standalone_note")}
+          >
+            <FileText className="mr-2 h-3.5 w-3.5" />
+            {t("notes.knowledgeNewNote")}
+          </Button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="flex min-h-64 items-center justify-center rounded-md border border-dashed border-border/55 bg-background px-6 py-10 text-center">
+          <div className="max-w-sm">
+            <p className="text-sm font-medium text-foreground">{t("notes.knowledgeFolderEmpty")}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {t("notes.knowledgeFolderEmptyHint")}
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isCreating}
+                onClick={() => onCreate("folder")}
+              >
+                <Folder className="mr-2 h-3.5 w-3.5" />
+                {t("notes.knowledgeNewFolder")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isCreating}
+                onClick={() => onCreate("standalone_note")}
+              >
+                <FileText className="mr-2 h-3.5 w-3.5" />
+                {t("notes.knowledgeNewNote")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {folderChildren.length > 0 ? (
+            <section>
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>{t("notes.knowledgeFolderChildFolders")}</span>
+                <span>{folderChildren.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+                {folderChildren.map(renderChildRow)}
+              </div>
+            </section>
+          ) : null}
+          {documentChildren.length > 0 ? (
+            <section>
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>{t("notes.knowledgeFolderChildDocuments")}</span>
+                <span>{documentChildren.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+                {documentChildren.map(renderChildRow)}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -2949,6 +3215,7 @@ function KnowledgeDocumentBreadcrumbs({
   document,
   documents,
   activeTitle,
+  onSelectRoot,
   onSelectDocument,
   t,
   className,
@@ -2956,6 +3223,7 @@ function KnowledgeDocumentBreadcrumbs({
   document: KnowledgeDocument;
   documents: KnowledgeDocument[];
   activeTitle?: string;
+  onSelectRoot?: () => void;
   onSelectDocument?: (document: KnowledgeDocument) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   className?: string;
@@ -2977,7 +3245,9 @@ function KnowledgeDocumentBreadcrumbs({
       {path.map((item, index) => {
         const targetDocument = documentById.get(item.id);
         const isLast = index === path.length - 1;
-        const isClickable = !!targetDocument && !isLast && !!onSelectDocument;
+        const isRoot = item.id === "__vault__";
+        const isClickable =
+          !isLast && ((isRoot && !!onSelectRoot) || (!!targetDocument && !!onSelectDocument));
 
         return (
           <span key={item.id} className="inline-flex min-w-0 items-center gap-1">
@@ -2986,10 +3256,16 @@ function KnowledgeDocumentBreadcrumbs({
               <button
                 type="button"
                 className="inline-flex max-w-40 items-center gap-1 truncate rounded-md border border-transparent px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-border/50 hover:bg-muted/45 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
-                onClick={() => onSelectDocument(targetDocument)}
+                onClick={() => {
+                  if (isRoot) {
+                    onSelectRoot?.();
+                    return;
+                  }
+                  if (targetDocument) onSelectDocument?.(targetDocument);
+                }}
                 title={item.title}
               >
-                {item.type === "folder" ? <Folder className="h-3 w-3 shrink-0" /> : null}
+                {isRoot || item.type === "folder" ? <Folder className="h-3 w-3 shrink-0" /> : null}
                 {item.title}
               </button>
             ) : (
@@ -3000,7 +3276,9 @@ function KnowledgeDocumentBreadcrumbs({
                 )}
                 title={item.title}
               >
-                {item.type === "folder" ? <Folder className="h-3 w-3 shrink-0" /> : null}
+                {item.id === "__vault__" || item.type === "folder" ? (
+                  <Folder className="h-3 w-3 shrink-0" />
+                ) : null}
                 {item.title}
               </span>
             )}
@@ -3029,7 +3307,9 @@ function knowledgeDocumentSearchText(
 function KnowledgeDocumentExplorer({
   documents,
   activeDocumentId,
+  isRootActive,
   isCreating,
+  onSelectRoot,
   onSelect,
   onCreate,
   onDelete,
@@ -3038,7 +3318,9 @@ function KnowledgeDocumentExplorer({
 }: {
   documents: KnowledgeDocument[];
   activeDocumentId: string | null;
+  isRootActive: boolean;
   isCreating: boolean;
+  onSelectRoot: () => void;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
@@ -3063,15 +3345,22 @@ function KnowledgeDocumentExplorer({
   const activeDocument = documents.find((document) => document.id === activeDocumentId) ?? null;
   const activePathItems = useMemo(
     () =>
-      activeDocument
-        ? knowledgeDocumentPath(activeDocument, documents, t)
-        : [
+      isRootActive
+        ? [
             {
               id: "__vault__",
               title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
             },
-          ],
-    [activeDocument, documents, t],
+          ]
+        : activeDocument
+          ? knowledgeDocumentPath(activeDocument, documents, t)
+          : [
+              {
+                id: "__vault__",
+                title: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+              },
+            ],
+    [activeDocument, documents, isRootActive, t],
   );
   const activePath = activePathItems.map((item) => item.title).join(" / ");
   const activePathIds = useMemo(
@@ -3085,8 +3374,11 @@ function KnowledgeDocumentExplorer({
       ),
     [activeDocument, documents, t],
   );
-  const activeCreateParentId =
-    activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
+  const activeCreateParentId = isRootActive
+    ? undefined
+    : activeDocument?.type === "folder"
+      ? activeDocument.id
+      : activeDocument?.parentId;
   const normalizedQuery = query.trim().toLowerCase();
   const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
   const orphanedDocumentIds = useMemo(
@@ -3332,15 +3624,21 @@ function KnowledgeDocumentExplorer({
               {activePathItems.map((item, index) => {
                 const isCurrent = index === activePathItems.length - 1;
                 const targetDocument = documents.find((document) => document.id === item.id);
-                const isFolderLike = item.id === "__vault__" || item.type === "folder";
+                const isRoot = item.id === "__vault__";
+                const isFolderLike = isRoot || item.type === "folder";
 
                 return (
                   <button
                     key={`${item.id}-${index}`}
                     type="button"
-                    disabled={!targetDocument || isCurrent}
+                    disabled={(!targetDocument && !isRoot) || isCurrent}
                     onClick={() => {
-                      if (!targetDocument || isCurrent) return;
+                      if (isCurrent) return;
+                      if (isRoot) {
+                        onSelectRoot();
+                        return;
+                      }
+                      if (!targetDocument) return;
                       onSelect(targetDocument);
                     }}
                     className={cn(
@@ -3422,6 +3720,46 @@ function KnowledgeDocumentExplorer({
           defaultValue: "Knowledge base",
         })} ${t("notes.knowledgeDocuments")}`}
       >
+        {!normalizedQuery ? (
+          <div
+            role="treeitem"
+            aria-level={1}
+            aria-selected={isRootActive}
+            className={cn(
+              "group relative mb-1 rounded-md border border-transparent transition-colors",
+              isRootActive
+                ? "border-primary/25 bg-background text-primary shadow-[inset_2px_0_0_var(--primary)]"
+                : "text-foreground hover:border-border/55 hover:bg-background/75",
+            )}
+          >
+            <button
+              type="button"
+              className="flex min-h-8 w-full items-center gap-2 px-2 py-1.5 text-left"
+              onClick={onSelectRoot}
+            >
+              <FolderOpen
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0",
+                  isRootActive ? "text-primary" : "text-foreground/75",
+                )}
+              />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "block truncate text-xs font-medium",
+                    isRootActive ? "text-primary" : "text-foreground",
+                  )}
+                >
+                  {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+                </span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {t("notes.knowledgeFolderInside")}
+                </span>
+              </span>
+              <span className="shrink-0 text-[10px] text-muted-foreground">{documents.length}</span>
+            </button>
+          </div>
+        ) : null}
         {normalizedQuery ? (
           visibleSearchNodes.length === 0 ? (
             <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">

@@ -313,6 +313,7 @@ export function NotesView({
   const [selectedKnowledgeDocumentId, setSelectedKnowledgeDocumentId] = useState<string | null>(
     null,
   );
+  const [isKnowledgeVaultRootOpen, setIsKnowledgeVaultRootOpen] = useState(false);
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
   const [knowledgeValue, setKnowledgeValue] = useState<MobileKnowledgeEditorValue>(() =>
@@ -353,6 +354,7 @@ export function NotesView({
         setSelectedBookId(null);
         setEditingId(null);
         setSearchQuery("");
+        setIsKnowledgeVaultRootOpen(false);
       };
     }, [loadAllHighlightsWithBooks, loadStats]),
   );
@@ -449,6 +451,7 @@ export function NotesView({
     setDetailTab("knowledge");
     setSearchQuery("");
     setEditingId(null);
+    setIsKnowledgeVaultRootOpen(false);
   }, [bookNotebooks, selectedBookId]);
 
   const { notesList, highlightsList } = useMemo(() => {
@@ -507,6 +510,7 @@ export function NotesView({
         setKnowledgeHome(null);
         setKnowledgeDocuments([]);
         setSelectedKnowledgeDocumentId(null);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeTitle("");
         setKnowledgeTags([]);
         setKnowledgeValue(emptyValue);
@@ -541,6 +545,7 @@ export function NotesView({
         const nextValue = await createResolvedKnowledgeValue(activeDocument);
         setKnowledgeDocuments(nextDocuments);
         setSelectedKnowledgeDocumentId(activeDocument.id);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeHome(activeDocument);
         setKnowledgeTitle(activeDocument.title);
         setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
@@ -775,13 +780,18 @@ export function NotesView({
 
   const openKnowledgeDocument = useCallback(
     async (document: KnowledgeDocument) => {
-      if (document.id === knowledgeHome?.id) return;
+      if (document.id === knowledgeHome?.id) {
+        setSelectedKnowledgeDocumentId(document.id);
+        setIsKnowledgeVaultRootOpen(false);
+        return;
+      }
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
 
       knowledgeSaveVersionRef.current += 1;
       const nextValue = await createResolvedKnowledgeValue(document);
       setSelectedKnowledgeDocumentId(document.id);
+      setIsKnowledgeVaultRootOpen(false);
       setKnowledgeHome(document);
       setKnowledgeTitle(document.title);
       setKnowledgeTags(normalizeKnowledgeTags(document.tags));
@@ -793,6 +803,14 @@ export function NotesView({
     },
     [knowledgeHome?.id, saveActiveKnowledgeDocumentNow],
   );
+
+  const openKnowledgeVaultRoot = useCallback(async () => {
+    if (isKnowledgeVaultRootOpen) return;
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+    setSelectedKnowledgeDocumentId(null);
+    setIsKnowledgeVaultRootOpen(true);
+  }, [isKnowledgeVaultRootOpen, saveActiveKnowledgeDocumentNow]);
 
   const refreshSelectedKnowledgeDocuments = useCallback(
     async (preferredDocumentId?: string | null) => {
@@ -826,6 +844,7 @@ export function NotesView({
       if (!nextActiveDocument) {
         const emptyValue = createEmptyKnowledgeValue();
         setSelectedKnowledgeDocumentId(null);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeHome(null);
         setKnowledgeTitle("");
         setKnowledgeTags([]);
@@ -837,6 +856,7 @@ export function NotesView({
 
       const nextValue = await createResolvedKnowledgeValue(nextActiveDocument);
       setSelectedKnowledgeDocumentId(nextActiveDocument.id);
+      setIsKnowledgeVaultRootOpen(false);
       setKnowledgeHome(nextActiveDocument);
       setKnowledgeTitle(nextActiveDocument.title);
       setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
@@ -914,6 +934,7 @@ export function NotesView({
           ),
         );
         setSelectedKnowledgeDocumentId(document.id);
+        setIsKnowledgeVaultRootOpen(false);
         setKnowledgeHome(document);
         setKnowledgeTitle(document.title);
         setKnowledgeTags([]);
@@ -989,6 +1010,7 @@ export function NotesView({
                     if (nextDocument) {
                       const nextValue = await createResolvedKnowledgeValue(nextDocument);
                       setSelectedKnowledgeDocumentId(nextDocument.id);
+                      setIsKnowledgeVaultRootOpen(false);
                       setKnowledgeHome(nextDocument);
                       setKnowledgeTitle(nextDocument.title);
                       setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
@@ -1003,6 +1025,7 @@ export function NotesView({
                     } else {
                       const emptyValue = createEmptyKnowledgeValue();
                       setSelectedKnowledgeDocumentId(null);
+                      setIsKnowledgeVaultRootOpen(false);
                       setKnowledgeHome(null);
                       setKnowledgeTitle("");
                       setKnowledgeTags([]);
@@ -1337,8 +1360,11 @@ export function NotesView({
       if (!saved) return;
 
       const items: KnowledgeMarkdownImportReviewItem[] = [];
-      const defaultParentId =
-        knowledgeHome?.type === "folder" ? knowledgeHome.id : knowledgeHome?.parentId;
+      const defaultParentId = isKnowledgeVaultRootOpen
+        ? undefined
+        : knowledgeHome?.type === "folder"
+          ? knowledgeHome.id
+          : knowledgeHome?.parentId;
       for (const path of paths) {
         const content = await platform.readTextFile(path);
         const imported = parseKnowledgeMarkdownDocument({
@@ -1371,6 +1397,7 @@ export function NotesView({
   }, [
     isKnowledgeMarkdownImportApplying,
     isKnowledgeMarkdownImporting,
+    isKnowledgeVaultRootOpen,
     knowledgeHome?.id,
     knowledgeHome?.parentId,
     knowledgeHome?.type,
@@ -1583,7 +1610,8 @@ export function NotesView({
             book={selectedBook}
             document={knowledgeHome}
             documents={knowledgeDocuments}
-            activeDocumentId={selectedKnowledgeDocumentId}
+            isVaultRootOpen={isKnowledgeVaultRootOpen}
+            activeDocumentId={isKnowledgeVaultRootOpen ? "__vault__" : selectedKnowledgeDocumentId}
             title={knowledgeTitle}
             tags={knowledgeTags}
             value={knowledgeValue}
@@ -1598,6 +1626,7 @@ export function NotesView({
             onTitleChange={setKnowledgeTitle}
             onTagsChange={setKnowledgeTags}
             onChange={setKnowledgeValue}
+            onOpenVaultRoot={openKnowledgeVaultRoot}
             onSelectDocument={openKnowledgeDocument}
             onCreateDocument={handleCreateKnowledgeDocument}
             onDeleteDocument={handleDeleteKnowledgeDocument}
@@ -1825,6 +1854,7 @@ function KnowledgeHomePanel({
   book,
   document,
   documents,
+  isVaultRootOpen,
   activeDocumentId,
   title,
   tags,
@@ -1840,6 +1870,7 @@ function KnowledgeHomePanel({
   onTitleChange,
   onTagsChange,
   onChange,
+  onOpenVaultRoot,
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
@@ -1861,6 +1892,7 @@ function KnowledgeHomePanel({
   };
   document: KnowledgeDocument | null;
   documents: KnowledgeDocument[];
+  isVaultRootOpen: boolean;
   activeDocumentId: string | null;
   title: string;
   tags: string[];
@@ -1876,6 +1908,7 @@ function KnowledgeHomePanel({
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
+  onOpenVaultRoot: () => void;
   onSelectDocument: (document: KnowledgeDocument) => void;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
@@ -1893,14 +1926,21 @@ function KnowledgeHomePanel({
     () => sortAnnotationsByPosition(book.highlights).slice(0, 3),
     [book.highlights],
   );
-  const isFolderDocument = document?.type === "folder";
+  const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
+  const rootDocuments = useMemo(() => {
+    const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+    return orderKnowledgeDocuments(
+      documents.filter((item) => !item.parentId),
+      homeDocumentId,
+    );
+  }, [documents]);
   const folderChildren = useMemo(() => {
-    if (!document || document.type !== "folder") return [];
+    if (!document || isVaultRootOpen || document.type !== "folder") return [];
     return orderKnowledgeDocuments(
       documents.filter((item) => item.parentId === document.id),
       undefined,
     );
-  }, [document, documents]);
+  }, [document, documents, isVaultRootOpen]);
   const [isMovePickerVisible, setIsMovePickerVisible] = useState(false);
   const moveTargets = useMemo(() => {
     if (!document || document.type === "book_home") return [];
@@ -1920,10 +1960,12 @@ function KnowledgeHomePanel({
   }, [document, documents, t]);
   const activePathItems = useMemo(
     () =>
-      document
-        ? knowledgeDocumentPathItems(document, documents, t, title)
-        : [{ id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") }],
-    [document, documents, t, title],
+      isVaultRootOpen
+        ? [{ id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") }]
+        : document
+          ? knowledgeDocumentPathItems(document, documents, t, title)
+          : [{ id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") }],
+    [document, documents, isVaultRootOpen, t, title],
   );
   const activePath = useMemo(
     () => activePathItems.map((item) => item.title).join(" / "),
@@ -1932,10 +1974,10 @@ function KnowledgeHomePanel({
   const activePathLastId = activePathItems.at(-1)?.id;
   const documentOutline = useMemo(
     () =>
-      document && !isFolderDocument
+      document && !isVaultRootOpen && !isFolderDocument
         ? extractKnowledgeDocumentOutline(value.contentJson, value.contentMd)
         : [],
-    [document, isFolderDocument, value.contentJson, value.contentMd],
+    [document, isFolderDocument, isVaultRootOpen, value.contentJson, value.contentMd],
   );
   const internalLinkTargets = useMemo<MobileKnowledgeInternalLinkTarget[]>(
     () =>
@@ -2052,20 +2094,28 @@ function KnowledgeHomePanel({
               >
                 {activePathItems.map((part) => {
                   const isLastPathPart = part.id === activePathLastId;
+                  const isRootPathPart = part.id === "__vault__";
                   const targetDocument = documents.find((item) => item.id === part.id);
                   return (
                     <TouchableOpacity
                       key={part.id}
-                      activeOpacity={targetDocument && !isLastPathPart ? 0.76 : 1}
+                      activeOpacity={
+                        (targetDocument || isRootPathPart) && !isLastPathPart ? 0.76 : 1
+                      }
                       style={[
                         styles.knowledgeVaultPathChip,
                         isLastPathPart && styles.knowledgeVaultPathChipActive,
                       ]}
                       onPress={() => {
-                        if (!targetDocument || isLastPathPart) return;
+                        if (isLastPathPart) return;
+                        if (isRootPathPart) {
+                          void onOpenVaultRoot();
+                          return;
+                        }
+                        if (!targetDocument) return;
                         handleSelectKnowledgeDocument(targetDocument);
                       }}
-                      disabled={!targetDocument || isLastPathPart}
+                      disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
                     >
                       <Text
                         style={[
@@ -2085,9 +2135,11 @@ function KnowledgeHomePanel({
 
           <KnowledgeDocumentExplorer
             documents={documents}
-            activeDocument={document}
+            activeDocument={isVaultRootOpen ? null : document}
             activeDocumentId={activeDocumentId}
+            isRootActive={isVaultRootOpen}
             isCreating={isCreatingDocument}
+            onSelectRoot={onOpenVaultRoot}
             onSelect={handleSelectKnowledgeDocument}
             onCreate={onCreateDocument}
             t={t}
@@ -2095,7 +2147,7 @@ function KnowledgeHomePanel({
             colors={colors}
           />
 
-          {!isFolderDocument ? (
+          {!isVaultRootOpen && !isFolderDocument ? (
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.knowledgeVaultFocusCard}
@@ -2125,7 +2177,18 @@ function KnowledgeHomePanel({
             </TouchableOpacity>
           ) : null}
 
-          {isFolderDocument ? (
+          {isVaultRootOpen ? (
+            <KnowledgeVaultRootOverview
+              items={rootDocuments}
+              documents={documents}
+              isCreating={isCreatingDocument}
+              onSelect={handleSelectKnowledgeDocument}
+              onCreate={onCreateDocument}
+              t={t}
+              styles={styles}
+              colors={colors}
+            />
+          ) : isFolderDocument ? (
             <KnowledgeFolderOverview
               folder={document}
               items={folderChildren}
@@ -3110,7 +3173,9 @@ function KnowledgeDocumentExplorer({
   documents,
   activeDocument,
   activeDocumentId,
+  isRootActive,
   isCreating,
+  onSelectRoot,
   onSelect,
   onCreate,
   t,
@@ -3120,7 +3185,9 @@ function KnowledgeDocumentExplorer({
   documents: KnowledgeDocument[];
   activeDocument: KnowledgeDocument | null;
   activeDocumentId: string | null;
+  isRootActive: boolean;
   isCreating: boolean;
+  onSelectRoot: () => void;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   t: TFunction;
@@ -3156,10 +3223,15 @@ function KnowledgeDocumentExplorer({
   const [createParentId, setCreateParentId] = useState<string | undefined>();
   const [isCreateSheetVisible, setIsCreateSheetVisible] = useState(false);
   const activeCreateParentId =
-    activeDocument?.type === "folder" ? activeDocument.id : activeDocument?.parentId;
-  const activePathLabel = activeDocument
-    ? knowledgeDocumentPathText(activeDocument, documents, t)
-    : t("notes.knowledgeVaultRoot", "知识库");
+    !isRootActive && activeDocument?.type === "folder"
+      ? activeDocument.id
+      : !isRootActive
+        ? activeDocument?.parentId
+        : undefined;
+  const activePathLabel =
+    !isRootActive && activeDocument
+      ? knowledgeDocumentPathText(activeDocument, documents, t)
+      : t("notes.knowledgeVaultRoot", "知识库");
   const normalizedQuery = query.trim().toLowerCase();
   const createParentDocument = useMemo(
     () => documents.find((document) => document.id === createParentId),
@@ -3290,6 +3362,38 @@ function KnowledgeDocumentExplorer({
       </View>
 
       <View style={styles.knowledgeTreeList}>
+        {!normalizedQuery ? (
+          <TouchableOpacity
+            activeOpacity={0.78}
+            style={[styles.knowledgeTreeNode, isRootActive && styles.knowledgeTreeNodeActive]}
+            onPress={onSelectRoot}
+            accessibilityRole="button"
+            accessibilityLabel={t("notes.knowledgeVaultRoot", "知识库")}
+          >
+            <View style={styles.knowledgeTreeToggleSpacer} />
+            <View
+              style={[styles.knowledgeTreeIcon, isRootActive && styles.knowledgeTreeIconActive]}
+            >
+              <FolderIcon size={15} color={isRootActive ? colors.primary : colors.foreground} />
+            </View>
+            <View style={styles.knowledgeTreeTextBlock}>
+              <Text
+                numberOfLines={1}
+                style={[styles.knowledgeTreeTitle, isRootActive && styles.knowledgeTreeTitleActive]}
+              >
+                {t("notes.knowledgeVaultRoot", "知识库")}
+              </Text>
+              <Text numberOfLines={1} style={styles.knowledgeTreeMeta}>
+                {t("notes.knowledgeFolderInside", "目录内容")}
+              </Text>
+            </View>
+            <Text
+              style={[styles.knowledgeTreeCount, isRootActive && styles.knowledgeTreeCountActive]}
+            >
+              {documents.length}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         {normalizedQuery ? (
           visibleSearchNodes.length === 0 ? (
             <View style={styles.knowledgeDocumentEmptyResult}>
@@ -3527,6 +3631,173 @@ function KnowledgeDocumentTreeRow({
             />
           ))
         : null}
+    </View>
+  );
+}
+
+function KnowledgeVaultRootOverview({
+  items,
+  documents,
+  isCreating,
+  onSelect,
+  onCreate,
+  t,
+  styles,
+  colors,
+}: {
+  items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const folderChildren = items.filter((item) => item.type === "folder");
+  const noteChildren = items.filter((item) => item.type !== "folder");
+  const renderItem = (item: KnowledgeDocument) => {
+    const isFolder = item.type === "folder";
+    const isHome = item.type === "book_home";
+    const childCount = childCountByParentId.get(item.id) ?? 0;
+    const meta = isFolder
+      ? t("notes.knowledgeFolderChildCount", { count: childCount })
+      : item.excerpt;
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        activeOpacity={0.78}
+        style={styles.knowledgeFolderItem}
+        onPress={() => onSelect(item)}
+      >
+        <View style={[styles.knowledgeFolderItemIcon, isFolder && styles.knowledgeFolderIcon]}>
+          {isFolder ? (
+            <FolderIcon size={15} color={colors.primary} />
+          ) : isHome ? (
+            <BookOpenIcon size={15} color={colors.mutedForeground} />
+          ) : (
+            <ScrollTextIcon size={15} color={colors.mutedForeground} />
+          )}
+        </View>
+        <View style={styles.knowledgeFolderItemText}>
+          <Text style={styles.knowledgeFolderItemTitle} numberOfLines={1}>
+            {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+          </Text>
+          <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
+            {knowledgeDocumentTypeLabel(item, t)}
+            {!!meta && ` · ${meta}`}
+          </Text>
+        </View>
+        {isFolder ? <Text style={styles.knowledgeFolderItemCount}>{childCount}</Text> : null}
+        <ChevronRightIcon size={14} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.knowledgeFolderOverview}>
+      <View style={styles.knowledgeFolderHeader}>
+        <View style={styles.knowledgeFolderLeadText}>
+          <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
+            {t("notes.knowledgeVaultRoot", "知识库")}
+          </Text>
+          <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
+            {t("notes.knowledgeFolderInside", "目录内容")}
+          </Text>
+          <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>
+            {items.length} {t("notes.knowledgeDocuments", "文档")}
+          </Text>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[styles.knowledgeFolderIconAction, isCreating && { opacity: 0.55 }]}
+          onPress={() => onCreate("folder")}
+          disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
+        >
+          <FolderPlusIcon size={15} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={[styles.knowledgeFolderIconAction, isCreating && { opacity: 0.55 }]}
+          onPress={() => onCreate("standalone_note")}
+          disabled={isCreating}
+          accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
+        >
+          <PlusIcon size={15} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {items.length === 0 ? (
+        <View style={styles.knowledgeFolderEmpty}>
+          <Text style={styles.knowledgeFolderEmptyTitle}>
+            {t("notes.knowledgeFolderEmpty", "这个文件夹还是空的")}
+          </Text>
+          <Text style={styles.knowledgeFolderEmptyHint}>
+            {t("notes.knowledgeFolderEmptyHint", "在这里新建笔记或文件夹，慢慢搭出自己的目录。")}
+          </Text>
+          <View style={styles.knowledgeFolderActionRow}>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+              onPress={() => onCreate("folder")}
+              disabled={isCreating}
+              accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
+            >
+              <FolderPlusIcon size={14} color={colors.primary} />
+              <Text style={styles.knowledgeFolderActionText} numberOfLines={1}>
+                {t("notes.knowledgeNewFolder", "新建文件夹")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+              onPress={() => onCreate("standalone_note")}
+              disabled={isCreating}
+              accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
+            >
+              <PlusIcon size={14} color={colors.primary} />
+              <Text style={styles.knowledgeFolderActionText} numberOfLines={1}>
+                {t("notes.knowledgeNewNote", "新建笔记")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.knowledgeFolderGroupStack}>
+          {folderChildren.length > 0 ? (
+            <View style={styles.knowledgeFolderGroup}>
+              <View style={styles.knowledgeFolderGroupHeader}>
+                <Text style={styles.knowledgeFolderGroupTitle}>
+                  {t("notes.knowledgeFolderChildFolders", "文件夹")}
+                </Text>
+                <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
+              </View>
+              <View style={styles.knowledgeFolderItemList}>{folderChildren.map(renderItem)}</View>
+            </View>
+          ) : null}
+          {noteChildren.length > 0 ? (
+            <View style={styles.knowledgeFolderGroup}>
+              <View style={styles.knowledgeFolderGroupHeader}>
+                <Text style={styles.knowledgeFolderGroupTitle}>
+                  {t("notes.knowledgeFolderChildDocuments", "文档")}
+                </Text>
+                <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
+              </View>
+              <View style={styles.knowledgeFolderItemList}>{noteChildren.map(renderItem)}</View>
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }

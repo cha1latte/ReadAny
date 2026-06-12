@@ -11,6 +11,7 @@ import {
   searchKnowledgeDocuments,
 } from "../../db/database";
 import {
+  formatKnowledgeDocumentPath,
   orderKnowledgeDocuments,
   validateKnowledgeDocumentParent,
 } from "../../knowledge/document-utils";
@@ -249,29 +250,12 @@ function createDocumentPath(
   document: KnowledgeDocument,
   documentsById: Map<string, KnowledgeDocument>,
 ): string {
-  const path: string[] = [];
-  const visited = new Set<string>();
-  let current: KnowledgeDocument | undefined = document;
-
-  while (current) {
-    if (visited.has(current.id)) {
-      path.unshift(ORPHANED_PARENT_TITLE);
-      break;
-    }
-    visited.add(current.id);
-
-    path.unshift(current.title.trim() || UNTITLED_DOCUMENT_TITLE);
-    if (!current.parentId) break;
-
-    const parent = documentsById.get(current.parentId);
-    if (!parent) {
-      path.unshift(ORPHANED_PARENT_TITLE);
-      break;
-    }
-    current = parent;
-  }
-
-  return [KNOWLEDGE_ROOT_TITLE, ...path].join(" / ");
+  return formatKnowledgeDocumentPath(document, Array.from(documentsById.values()), {
+    rootTitle: KNOWLEDGE_ROOT_TITLE,
+    untitledTitle: UNTITLED_DOCUMENT_TITLE,
+    orphanedParentTitle: ORPHANED_PARENT_TITLE,
+    includeOrphanedParent: true,
+  });
 }
 
 function createDocumentMap(documents: KnowledgeDocument[]): Map<string, KnowledgeDocument> {

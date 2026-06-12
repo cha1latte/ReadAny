@@ -28,6 +28,14 @@ export interface KnowledgeDocumentPathItem {
   type: KnowledgeDocument["type"];
 }
 
+export interface KnowledgeDocumentPathLabelOptions {
+  rootTitle?: string;
+  untitledTitle?: string;
+  orphanedParentTitle?: string;
+  includeOrphanedParent?: boolean;
+  separator?: string;
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -462,6 +470,45 @@ export function resolveKnowledgeDocumentPath(
   }
 
   return path;
+}
+
+export function formatKnowledgeDocumentPath(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  options: KnowledgeDocumentPathLabelOptions = {},
+): string {
+  const rootTitle = options.rootTitle ?? "Knowledge base";
+  const untitledTitle = options.untitledTitle ?? "Untitled document";
+  const orphanedParentTitle = options.orphanedParentTitle ?? "Orphaned";
+  const separator = options.separator ?? " / ";
+  const documentsById = new Map(documents.map((item) => [item.id, item]));
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+  let interrupted = false;
+
+  while (current) {
+    if (seen.has(current.id)) {
+      interrupted = true;
+      break;
+    }
+    seen.add(current.id);
+    segments.unshift(current.title.trim() || untitledTitle);
+
+    if (!current.parentId) break;
+    const parent = documentsById.get(current.parentId);
+    if (!parent) {
+      interrupted = true;
+      break;
+    }
+    current = parent;
+  }
+
+  if (interrupted && options.includeOrphanedParent) {
+    segments.unshift(orphanedParentTitle);
+  }
+
+  return [rootTitle, ...segments].filter(Boolean).join(separator);
 }
 
 export type KnowledgeDocumentParentValidationReason =

@@ -200,6 +200,33 @@ describe("knowledge tools", () => {
     });
   });
 
+  it("marks orphaned knowledge paths in search results", async () => {
+    const orphan = doc({
+      id: "doc-orphan",
+      title: "Loose Idea",
+      parentId: "missing-folder",
+      contentMd: "A loose idea that survived sync.",
+      excerpt: "Loose idea.",
+      tags: [],
+    });
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([orphan]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([orphan]);
+
+    const tool = createSearchKnowledgeBaseTool();
+    const result = (await tool.execute({
+      reasoning: "Find loose knowledge",
+      query: "loose",
+      bookId: "book-1",
+    })) as {
+      documents: Array<{ id: string; path: string }>;
+    };
+
+    expect(result.documents[0]).toMatchObject({
+      id: "doc-orphan",
+      path: "Knowledge base / Orphaned / Loose Idea",
+    });
+  });
+
   it("returns current book knowledge and can include full content", async () => {
     const folder = doc({
       id: "folder-1",

@@ -12,6 +12,7 @@ import {
   extractHighlightNoteContentForLegacyField,
   extractKnowledgeDocumentOutline,
   extractLegacyNoteContentForLegacyField,
+  formatKnowledgeDocumentPath,
   isGeneratedHighlightNoteDocument,
   isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
@@ -123,6 +124,27 @@ describe("knowledge document utilities", () => {
       { id: "right", title: "Right", type: "standalone_note" },
       { id: "left", title: "Left", type: "standalone_note" },
     ]);
+  });
+
+  it("formats a human-readable vault path with orphan context", () => {
+    const folder = document({ id: "folder", type: "folder", title: "Ideas" });
+    const nested = document({ id: "nested", title: "", parentId: "folder" });
+    const orphan = document({ id: "orphan", title: "Loose", parentId: "missing" });
+
+    expect(formatKnowledgeDocumentPath(nested, [folder, nested])).toBe(
+      "Knowledge base / Ideas / Untitled document",
+    );
+    expect(
+      formatKnowledgeDocumentPath(orphan, [orphan], {
+        includeOrphanedParent: true,
+      }),
+    ).toBe("Knowledge base / Orphaned / Loose");
+    expect(
+      formatKnowledgeDocumentPath(nested, [folder, nested], {
+        rootTitle: "知识库",
+        untitledTitle: "未命名文档",
+      }),
+    ).toBe("知识库 / Ideas / 未命名文档");
   });
 
   it("validates document parent moves", () => {

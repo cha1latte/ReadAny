@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "목차",
     "knowledgeWorkspaceDocument": "문서",
     "knowledgeContext": "컨텍스트",
+    "knowledgeDocumentOutline": "문서 개요",
+    "knowledgeDocumentOutlineEmpty": "제목을 추가하면 여기에 문서 목차가 만들어집니다",
     "knowledgeSelectedDocument": "현재 문서",
     "knowledgeOpenDocument": "열기",
     "knowledgeDocumentPath": "문서 경로",

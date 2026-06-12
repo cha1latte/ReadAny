@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "Árbol",
     "knowledgeWorkspaceDocument": "Documento",
     "knowledgeContext": "Contexto",
+    "knowledgeDocumentOutline": "Esquema del documento",
+    "knowledgeDocumentOutlineEmpty": "Añade encabezados para crear aquí el esquema del documento.",
     "knowledgeSelectedDocument": "Documento actual",
     "knowledgeOpenDocument": "Abrir",
     "knowledgeDocumentPath": "Ruta del documento",

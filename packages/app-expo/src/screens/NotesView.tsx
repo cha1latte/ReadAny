@@ -13,6 +13,7 @@ import {
   FolderInputIcon,
   FolderPlusIcon,
   HighlighterIcon,
+  ListIcon,
   LoaderIcon,
   NotebookPenIcon,
   PlusIcon,
@@ -55,11 +56,13 @@ import {
   knowledgeExporter,
 } from "@readany/core/export";
 import {
+  type KnowledgeDocumentOutlineItem,
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
+  extractKnowledgeDocumentOutline,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
@@ -1689,6 +1692,13 @@ function KnowledgeHomePanel({
     () => (document ? knowledgeDocumentPathText(document, documents, t, title) : ""),
     [document, documents, t, title],
   );
+  const documentOutline = useMemo(
+    () =>
+      document && !isFolderDocument
+        ? extractKnowledgeDocumentOutline(value.contentJson, value.contentMd)
+        : [],
+    [document, isFolderDocument, value.contentJson, value.contentMd],
+  );
   const [workspaceMode, setWorkspaceMode] = useState<MobileKnowledgeWorkspaceMode>("vault");
   const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
 
@@ -2023,6 +2033,15 @@ function KnowledgeHomePanel({
           >
             <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} styles={styles} />
 
+            {!isFolderDocument ? (
+              <KnowledgeDocumentOutlineCard
+                outline={documentOutline}
+                t={t}
+                styles={styles}
+                colors={colors}
+              />
+            ) : null}
+
             <KnowledgeRelationsCard
               links={links}
               backlinks={backlinks}
@@ -2155,6 +2174,58 @@ function KnowledgeTagEditor({
           returnKeyType="done"
         />
       </View>
+    </View>
+  );
+}
+
+function KnowledgeDocumentOutlineCard({
+  outline,
+  t,
+  styles,
+  colors,
+}: {
+  outline: KnowledgeDocumentOutlineItem[];
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={styles.knowledgeSourcesCard}>
+      <View style={styles.knowledgeSourcesHeader}>
+        <View style={styles.knowledgeOutlineTitleWrap}>
+          <ListIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeSectionTitle}>
+            {t("notes.knowledgeDocumentOutline", "文档大纲")}
+          </Text>
+        </View>
+        {outline.length > 0 ? (
+          <Text style={styles.knowledgeRelationLoading}>{outline.length}</Text>
+        ) : null}
+      </View>
+
+      {outline.length === 0 ? (
+        <Text style={styles.knowledgeEmptySources}>
+          {t("notes.knowledgeDocumentOutlineEmpty", "添加标题后，这里会形成文档目录")}
+        </Text>
+      ) : (
+        <View style={styles.knowledgeOutlineList}>
+          {outline.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.knowledgeOutlineRow,
+                { paddingLeft: 10 + Math.min(item.level - 1, 4) * 12 },
+              ]}
+            >
+              <View style={styles.knowledgeOutlineDot} />
+              <Text style={styles.knowledgeOutlineLevel}>H{item.level}</Text>
+              <Text style={styles.knowledgeOutlineText} numberOfLines={1}>
+                {item.title}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

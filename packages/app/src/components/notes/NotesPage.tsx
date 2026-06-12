@@ -53,11 +53,13 @@ import {
   parseKnowledgeMarkdownDocument,
 } from "@readany/core/export";
 import {
+  type KnowledgeDocumentOutlineItem,
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
+  extractKnowledgeDocumentOutline,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   knowledgeDocumentFingerprint,
@@ -101,6 +103,7 @@ import {
   FolderUp,
   Highlighter,
   Link2,
+  ListTree,
   NotebookPen,
   Plus,
   Save,
@@ -2076,6 +2079,14 @@ function KnowledgeHomePanel({
     () => (document ? documents.filter((item) => item.parentId === document.id) : []),
     [document, documents],
   );
+  const isFolderDocument = document?.type === "folder";
+  const documentOutline = useMemo(
+    () =>
+      document && !isFolderDocument
+        ? extractKnowledgeDocumentOutline(value.contentJson, value.contentMd)
+        : [],
+    [document, isFolderDocument, value.contentJson, value.contentMd],
+  );
   const [isContextInspectorOpen, setIsContextInspectorOpen] = useState(true);
 
   if (isLoading || !document) {
@@ -2088,8 +2099,6 @@ function KnowledgeHomePanel({
       </div>
     );
   }
-
-  const isFolderDocument = document.type === "folder";
 
   return (
     <div className="min-h-full bg-muted/15 p-3">
@@ -2273,6 +2282,10 @@ function KnowledgeHomePanel({
               </div>
             </div>
 
+            {!isFolderDocument ? (
+              <KnowledgeDocumentOutlinePanel outline={documentOutline} t={t} />
+            ) : null}
+
             <KnowledgeRelationsPanel
               links={links}
               backlinks={backlinks}
@@ -2441,6 +2454,52 @@ function knowledgeLinkTargetLabel(
     detail: link.toId,
     cfi: link.cfi,
   };
+}
+
+function KnowledgeDocumentOutlinePanel({
+  outline,
+  t,
+}: {
+  outline: KnowledgeDocumentOutlineItem[];
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <ListTree className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <p className="truncate text-xs font-semibold text-foreground">
+            {t("notes.knowledgeDocumentOutline")}
+          </p>
+        </div>
+        {outline.length > 0 ? (
+          <span className="text-[11px] text-muted-foreground">{outline.length}</span>
+        ) : null}
+      </div>
+
+      {outline.length === 0 ? (
+        <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          {t("notes.knowledgeDocumentOutlineEmpty")}
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {outline.map((item) => (
+            <div
+              key={item.id}
+              className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/90"
+              style={{ paddingLeft: `${8 + Math.min(item.level - 1, 4) * 12}px` }}
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/45" />
+              <span className="w-5 shrink-0 text-[10px] font-medium text-muted-foreground">
+                H{item.level}
+              </span>
+              <span className="truncate">{item.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function KnowledgeRelationsPanel({

@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "Arborescence",
     "knowledgeWorkspaceDocument": "Document",
     "knowledgeContext": "Contexte",
+    "knowledgeDocumentOutline": "Plan du document",
+    "knowledgeDocumentOutlineEmpty": "Ajoutez des titres pour créer le plan du document ici.",
     "knowledgeSelectedDocument": "Document actuel",
     "knowledgeOpenDocument": "Ouvrir",
     "knowledgeDocumentPath": "Chemin du document",

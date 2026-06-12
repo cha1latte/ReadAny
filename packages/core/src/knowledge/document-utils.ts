@@ -1,5 +1,9 @@
 import type { Highlight, JSONValue, KnowledgeDocument, Note } from "../types";
-import { markdownToBasicTiptap } from "./editor-projection";
+import {
+  type TiptapNode,
+  markdownToBasicTiptap,
+  normalizeTiptapDocument,
+} from "./editor-projection";
 
 export interface KnowledgeDocumentSnapshot {
   contentJson: unknown;
@@ -16,6 +20,12 @@ export interface KnowledgeDocumentTree {
   roots: KnowledgeDocumentTreeNode[];
   nodesById: Map<string, KnowledgeDocumentTreeNode>;
   orphaned: KnowledgeDocument[];
+}
+
+export interface KnowledgeDocumentOutlineItem {
+  id: string;
+  level: number;
+  title: string;
 }
 
 export interface HighlightNoteProjection {
@@ -37,6 +47,97 @@ function truncateText(value: string, maxLength: number): string {
   const compacted = compactText(value);
   if (compacted.length <= maxLength) return compacted;
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function normalizeHeadingLevel(value: unknown): number {
+  const numericLevel = Number(value ?? 1);
+  if (!Number.isFinite(numericLevel)) return 1;
+  return Math.min(Math.max(Math.round(numericLevel), 1), 6);
+}
+
+function extractTiptapText(node: TiptapNode): string {
+  if (node.type === "text") return node.text ?? "";
+  if (node.type === "hardBreak") return " ";
+
+  const childrenText = (node.content ?? []).map(extractTiptapText).join("");
+  if (childrenText) return childrenText;
+
+  if (typeof node.attrs?.label === "string") return node.attrs.label;
+  if (typeof node.attrs?.title === "string") return node.attrs.title;
+  return "";
+}
+
+function createOutlineItemId(index: number, title: string): string {
+  const slug = compactText(title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 42);
+  return `heading-${index + 1}${slug ? `-${slug}` : ""}`;
+}
+
+function stripMarkdownHeadingText(value: string): string {
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/[*_~`]/g, "")
+    .replace(/<[^>]+>/g, "");
+}
+
+function extractOutlineFromMarkdown(markdown: string): KnowledgeDocumentOutlineItem[] {
+  const outline: KnowledgeDocumentOutlineItem[] = [];
+  let isCodeFence = false;
+
+  for (const line of markdown.replace(/\r\n/g, "\n").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      isCodeFence = !isCodeFence;
+      continue;
+    }
+    if (isCodeFence) continue;
+
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!heading) continue;
+
+    const title = compactText(stripMarkdownHeadingText(heading[2]));
+    if (!title) continue;
+
+    outline.push({
+      id: createOutlineItemId(outline.length, title),
+      level: heading[1].length,
+      title,
+    });
+  }
+
+  return outline;
+}
+
+export function extractKnowledgeDocumentOutline(
+  contentJson: JSONValue | null | undefined,
+  contentMd = "",
+): KnowledgeDocumentOutlineItem[] {
+  const outline: KnowledgeDocumentOutlineItem[] = [];
+  const visitNode = (node: TiptapNode) => {
+    if (node.type === "heading") {
+      const title = compactText((node.content ?? []).map(extractTiptapText).join(""));
+      if (title) {
+        outline.push({
+          id: createOutlineItemId(outline.length, title),
+          level: normalizeHeadingLevel(node.attrs?.level),
+          title,
+        });
+      }
+      return;
+    }
+
+    for (const child of node.content ?? []) {
+      visitNode(child);
+    }
+  };
+
+  visitNode(normalizeTiptapDocument(contentJson));
+  return outline.length > 0 ? outline : extractOutlineFromMarkdown(contentMd);
 }
 
 function blockquoteMarkdown(value: string): string {

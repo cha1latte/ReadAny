@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "Vault",
     "knowledgeWorkspaceDocument": "Document",
     "knowledgeContext": "Context",
+    "knowledgeDocumentOutline": "Document outline",
+    "knowledgeDocumentOutlineEmpty": "Add headings to build a document outline here.",
     "knowledgeSelectedDocument": "Current document",
     "knowledgeOpenDocument": "Open",
     "knowledgeDocumentPath": "Document path",

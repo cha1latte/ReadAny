@@ -10,6 +10,7 @@ import {
   createLegacyNoteProjection,
   createLegacyNoteTitle,
   extractHighlightNoteContentForLegacyField,
+  extractKnowledgeDocumentOutline,
   extractLegacyNoteContentForLegacyField,
   isGeneratedHighlightNoteDocument,
   isGeneratedLegacyNoteDocument,
@@ -127,6 +128,74 @@ describe("knowledge document utilities", () => {
       ok: false,
       reason: "book_home_locked",
     });
+  });
+
+  it("extracts a heading outline from Tiptap JSON", () => {
+    const outline = extractKnowledgeDocumentOutline({
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 1 },
+          content: [{ type: "text", text: "第一章  起点" }],
+        },
+        { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+        {
+          type: "blockquote",
+          content: [
+            {
+              type: "heading",
+              attrs: { level: 3 },
+              content: [
+                { type: "text", text: "关键问题" },
+                { type: "hardBreak" },
+                { type: "text", text: "继续" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(outline).toEqual([
+      { id: "heading-1", level: 1, title: "第一章 起点" },
+      { id: "heading-2", level: 3, title: "关键问题 继续" },
+    ]);
+  });
+
+  it("falls back to markdown headings when Tiptap JSON has no outline", () => {
+    const outline = extractKnowledgeDocumentOutline(
+      { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Body" }] }] },
+      `# Main **Idea**
+
+\`\`\`md
+## Hidden
+\`\`\`
+
+### [[doc-id|Linked section]]
+`,
+    );
+
+    expect(outline).toEqual([
+      { id: "heading-1-main-idea", level: 1, title: "Main Idea" },
+      { id: "heading-2-linked-section", level: 3, title: "Linked section" },
+    ]);
+  });
+
+  it("ignores empty headings and clamps invalid heading levels", () => {
+    const outline = extractKnowledgeDocumentOutline({
+      type: "doc",
+      content: [
+        { type: "heading", attrs: { level: 0 }, content: [{ type: "text", text: "Low" }] },
+        { type: "heading", attrs: { level: 99 }, content: [{ type: "text", text: "High" }] },
+        { type: "heading", attrs: { level: 2 }, content: [] },
+      ],
+    });
+
+    expect(outline).toEqual([
+      { id: "heading-1-low", level: 1, title: "Low" },
+      { id: "heading-2-high", level: 6, title: "High" },
+    ]);
   });
 
   it("uses normalized titles in document fingerprints", () => {

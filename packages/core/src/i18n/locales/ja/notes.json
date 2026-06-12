@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "目次",
     "knowledgeWorkspaceDocument": "ドキュメント",
     "knowledgeContext": "コンテキスト",
+    "knowledgeDocumentOutline": "ドキュメント概要",
+    "knowledgeDocumentOutlineEmpty": "見出しを追加すると、ここに目次が表示されます",
     "knowledgeSelectedDocument": "現在のドキュメント",
     "knowledgeOpenDocument": "開く",
     "knowledgeDocumentPath": "ドキュメントのパス",

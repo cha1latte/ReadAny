@@ -161,6 +161,8 @@
     "knowledgeWorkspaceVault": "目錄",
     "knowledgeWorkspaceDocument": "文件",
     "knowledgeContext": "上下文",
+    "knowledgeDocumentOutline": "文件大綱",
+    "knowledgeDocumentOutlineEmpty": "加入標題後，這裡會形成文件目錄",
     "knowledgeSelectedDocument": "目前文件",
     "knowledgeOpenDocument": "打開",
     "knowledgeDocumentPath": "文件路徑",

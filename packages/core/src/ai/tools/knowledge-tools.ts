@@ -515,12 +515,21 @@ export function createCompressKnowledgeDocumentSummaryTool(aiConfig: AIConfig): 
         aiConfig,
         compressionOptions,
       );
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(document.bookId ? { bookId: document.bookId } : {}),
+        limit: 5000,
+      });
+      const documentsById = createDocumentMap([...pathContextDocuments, document]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
+      const summary = documentSummary(document, "", false, documentsById, childrenByParentId);
 
       return {
         success: result.status !== "failed",
         status: result.status,
         persisted: result.persisted,
         documentId,
+        path: summary.path,
+        document: summary,
         reason: result.plan.reason,
         sourceChars: result.plan.sourceChars,
         summaryMd: result.summaryMd ?? result.state?.summaryMd ?? document.summaryMd,

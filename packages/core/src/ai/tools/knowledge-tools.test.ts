@@ -313,8 +313,22 @@ describe("knowledge tools", () => {
   });
 
   it("compresses and persists derived knowledge summaries without changing content", async () => {
-    const source = doc({ id: "doc-long", contentMd: "Long durable note.".repeat(300) });
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Long Notes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const source = doc({
+      id: "doc-long",
+      title: "Compression Target",
+      parentId: "folder-1",
+      contentMd: "Long durable note.".repeat(300),
+    });
     dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, source]);
 
     const tool = createCompressKnowledgeDocumentSummaryTool(aiConfig());
     const result = (await tool.execute({
@@ -327,12 +341,15 @@ describe("knowledge tools", () => {
       status: string;
       persisted: boolean;
       documentId: string;
+      path: string;
+      document: { id: string; path: string; parentTitle?: string };
       reason: string;
       sourceChars: number;
       summaryMd: string;
     };
 
     expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-long");
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(knowledgeMemoryMocks.maybeCompressAndPersistKnowledgeSummary).toHaveBeenCalledWith(
       source,
       expect.objectContaining({ activeModel: "mock-model" }),
@@ -343,6 +360,12 @@ describe("knowledge tools", () => {
       status: "compressed",
       persisted: true,
       documentId: "doc-long",
+      path: "Knowledge base / Long Notes / Compression Target",
+      document: {
+        id: "doc-long",
+        parentTitle: "Long Notes",
+        path: "Knowledge base / Long Notes / Compression Target",
+      },
       reason: "missing_summary",
       sourceChars: 4000,
       summaryMd: "## Durable memory\n- Read slowly.",

@@ -68,6 +68,21 @@ function applyMark(markdown: string, mark: TiptapMark): string {
   }
 }
 
+function renderInternalLink(node: TiptapNode): string {
+  const documentId = typeof node.attrs?.documentId === "string" ? node.attrs.documentId.trim() : "";
+  const label =
+    typeof node.attrs?.label === "string"
+      ? node.attrs.label.trim()
+      : typeof node.attrs?.title === "string"
+        ? node.attrs.title.trim()
+        : "";
+
+  if (documentId && label && label !== documentId) return `[[${documentId}|${label}]]`;
+  if (documentId) return `[[${documentId}]]`;
+  if (label) return `[[${label}]]`;
+  return "";
+}
+
 function renderInline(node: TiptapNode): string {
   if (node.type === "text") {
     return (node.marks ?? []).reduce(
@@ -78,9 +93,7 @@ function renderInline(node: TiptapNode): string {
 
   if (node.type === "hardBreak") return "  \n";
   if (node.type === "readanyInternalLink") {
-    const label = String(node.attrs?.label ?? node.attrs?.title ?? node.attrs?.documentId ?? "");
-    const id = String(node.attrs?.documentId ?? "");
-    return id ? `[[${label || id}]]` : label;
+    return renderInternalLink(node);
   }
   if (node.type === "readanySourceReference") {
     const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");

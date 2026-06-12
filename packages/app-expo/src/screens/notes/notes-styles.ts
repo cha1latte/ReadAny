@@ -226,6 +226,7 @@ export const makeStyles = (colors: ThemeColors) =>
     detailEmptyText: { fontSize: fontSize.sm, color: colors.mutedForeground },
     detailList: { flex: 1, paddingHorizontal: 16 },
     knowledgeLoading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+    knowledgeRoot: { flex: 1, backgroundColor: colors.background },
     knowledgeScroll: { flex: 1 },
     knowledgeContent: {
       paddingHorizontal: 16,
@@ -488,6 +489,12 @@ export const makeStyles = (colors: ThemeColors) =>
       gap: 12,
       paddingTop: 2,
     },
+    knowledgeDocumentFullScreen: {
+      flex: 1,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
     knowledgeDocumentCanvasHeader: {
       minHeight: 58,
       flexDirection: "row",
@@ -560,6 +567,7 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.medium,
     },
     knowledgeDocumentCanvas: {
+      flex: 1,
       minHeight: 540,
       borderRadius: radius.sm,
       borderWidth: 0,

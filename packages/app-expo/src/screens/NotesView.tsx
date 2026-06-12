@@ -25,7 +25,6 @@ import {
   Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
-import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
@@ -1941,16 +1940,15 @@ function KnowledgeHomePanel({
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.knowledgeScroll}
-      contentContainerStyle={[
-        styles.knowledgeContent,
-        workspaceMode === "document" && styles.knowledgeDocumentContent,
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.knowledgeRoot}>
       {workspaceMode === "vault" ? (
-        <>
+        <ScrollView
+          style={styles.knowledgeScroll}
+          contentContainerStyle={styles.knowledgeContent}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.knowledgeVaultHeader}>
             <View style={styles.knowledgeVaultText}>
               <Text style={styles.knowledgeVaultEyebrow}>
@@ -2046,9 +2044,9 @@ function KnowledgeHomePanel({
               colors={colors}
             />
           ) : null}
-        </>
+        </ScrollView>
       ) : (
-        <View style={styles.knowledgeDocumentScreen}>
+        <View style={[styles.knowledgeDocumentScreen, styles.knowledgeDocumentFullScreen]}>
           <View style={styles.knowledgeDocumentCanvasHeader}>
             <TouchableOpacity
               activeOpacity={0.76}
@@ -2310,7 +2308,7 @@ function KnowledgeHomePanel({
           </ScrollView>
         </View>
       </Modal>
-    </KeyboardAwareScrollView>
+    </View>
   );
 }
 

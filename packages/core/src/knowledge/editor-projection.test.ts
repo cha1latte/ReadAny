@@ -439,6 +439,32 @@ describe("editor projection", () => {
     });
   });
 
+  it("exports Obsidian-style internal links without losing aliases", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Link " },
+            {
+              type: "readanyInternalLink",
+              attrs: { documentId: "doc-1", label: "Durable note", title: "Durable note" },
+            },
+            { type: "text", text: " and " },
+            {
+              type: "readanyInternalLink",
+              attrs: { label: "Loose idea", title: "Loose idea" },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+
+    expect(markdown).toBe("Link [[doc-1|Durable note]] and [[Loose idea]].");
+  });
+
   it("imports Markdown image and fenced code blocks without losing blank lines", () => {
     const json = markdownToBasicTiptap(
       ["![Cover](assets/cover.png)", "```ts\nconst a = 1;\n\nconst b = 2;\n```"].join("\n\n"),

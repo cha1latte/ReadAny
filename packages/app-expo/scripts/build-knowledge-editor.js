@@ -138,6 +138,12 @@ async function buildKnowledgeEditor() {
       scheduleHeight();
     };
 
+    const fitTextArea = (element) => {
+      if (!element) return;
+      element.style.height = "auto";
+      element.style.height = Math.max(72, element.scrollHeight) + "px";
+    };
+
     const ReadAnyCard = Node.create({
       name: "readanyCard",
       group: "block",
@@ -211,8 +217,10 @@ async function buildKnowledgeEditor() {
           preview.value = text;
           preview.placeholder = cardBodyPlaceholder;
           preview.rows = Math.max(3, Math.min(8, String(text).split("\\n").length + 1));
+          requestAnimationFrame(() => fitTextArea(preview));
           preview.addEventListener("input", () => {
             preview.rows = Math.max(3, Math.min(8, preview.value.split("\\n").length + 1));
+            fitTextArea(preview);
             updateCardAttrs(currentNode, getPos, {
               markdown: preview.value,
               text: preview.value,
@@ -242,6 +250,7 @@ async function buildKnowledgeEditor() {
               const nextText = nextAttrs.markdown || nextAttrs.text || "";
               if (preview.value !== nextText) preview.value = nextText;
               preview.rows = Math.max(3, Math.min(8, String(nextText).split("\\n").length + 1));
+              fitTextArea(preview);
               return true;
             },
           };

@@ -1162,6 +1162,18 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
   const title = attrs.title || "";
   const body = attrs.markdown || attrs.text || "";
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const resizeBody = useCallback((element = bodyRef.current) => {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(72, element.scrollHeight)}px`;
+  }, []);
+
+  useEffect(() => {
+    bodyRef.current?.style.setProperty("--readany-card-lines", String(body.split("\n").length));
+    resizeBody();
+  }, [body, resizeBody]);
+
   const updateTitle = (nextTitle: string) => {
     updateAttributes({ title: nextTitle });
   };
@@ -1172,19 +1184,29 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper
       className={cn(
-        "not-prose my-4 rounded-lg border bg-card shadow-sm transition-all duration-200",
+        "not-prose my-5 rounded-md border border-l-2 bg-background/80 shadow-sm transition-all duration-200",
         selected
-          ? "border-primary/45 ring-2 ring-primary/10"
-          : "border-border/65 hover:border-border",
+          ? "border-primary/45 border-l-primary ring-2 ring-primary/10"
+          : "border-border/55 border-l-primary/40 hover:border-border hover:border-l-primary/70",
       )}
       data-readany-card-type={cardType}
       contentEditable={false}
     >
-      <div className="flex items-start gap-3 p-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <div className="flex items-start gap-3 px-3.5 py-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex min-w-0 items-center gap-2">
+            <span className="shrink-0 rounded-sm bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {cardType}
+            </span>
+            {attrs.sourceTitle ? (
+              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                {t("notes.knowledgeCardSource", { defaultValue: "Source" })}: {attrs.sourceTitle}
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             <input
               value={title}
@@ -1196,15 +1218,16 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
                 defaultValue: "Card title",
               })}
               placeholder={fallbackTitle}
-              className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/70 focus:text-primary"
+              className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold leading-6 text-foreground outline-none placeholder:text-muted-foreground/70 focus:text-primary"
             />
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {cardType}
-            </span>
           </div>
           <textarea
+            ref={bodyRef}
             value={body}
-            onChange={(event) => updateBody(event.target.value)}
+            onChange={(event) => {
+              updateBody(event.target.value);
+              resizeBody(event.currentTarget);
+            }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
@@ -1214,14 +1237,9 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
             placeholder={t("notes.knowledgeCardBodyPlaceholder", {
               defaultValue: "Write directly inside this card...",
             })}
-            rows={Math.max(3, Math.min(10, body.split("\n").length + 1))}
-            className="mt-2 w-full resize-y rounded-md border border-transparent bg-muted/25 px-2.5 py-2 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary/25 focus:bg-background"
+            rows={3}
+            className="mt-1.5 block min-h-[72px] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-2.5 py-2 text-[13px] leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/20 focus:bg-muted/20"
           />
-          {attrs.sourceTitle && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              {t("notes.knowledgeCardSource", { defaultValue: "Source" })}: {attrs.sourceTitle}
-            </p>
-          )}
         </div>
       </div>
     </NodeViewWrapper>

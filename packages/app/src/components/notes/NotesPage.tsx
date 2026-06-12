@@ -2609,18 +2609,18 @@ function KnowledgeVaultRootOverview({
       <button
         key={document.id}
         type="button"
-        className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
+        className="group flex w-full items-center gap-3 border-b border-border/30 px-2.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
         <span
           className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border",
             isFolder
-              ? "border-primary/15 bg-primary/[0.07] text-primary"
-              : "border-border/45 bg-muted/25 text-muted-foreground",
+              ? "border-primary/15 bg-primary/[0.06] text-primary"
+              : "border-border/35 bg-muted/20 text-muted-foreground",
           )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
@@ -2636,21 +2636,21 @@ function KnowledgeVaultRootOverview({
             {childCount}
           </span>
         ) : null}
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
       </button>
     );
   };
 
   return (
-    <div className="mx-auto min-h-[690px] max-w-[820px] px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-4">
+    <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            {t("notes.knowledgeFolderInside")} · {items.length} {t("notes.knowledgeDocuments")}
-          </p>
-          <h3 className="mt-1 truncate text-2xl font-semibold leading-tight text-foreground">
-            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+            {t("notes.knowledgeFolderInside")}
           </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {items.length} {t("notes.knowledgeDocuments")}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -2706,25 +2706,25 @@ function KnowledgeVaultRootOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {folderChildren.length > 0 ? (
             <section>
-              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildFolders")}</span>
                 <span>{folderChildren.length}</span>
               </div>
-              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {folderChildren.map(renderChildRow)}
               </div>
             </section>
           ) : null}
           {documentChildren.length > 0 ? (
             <section>
-              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildDocuments")}</span>
                 <span>{documentChildren.length}</span>
               </div>
-              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {documentChildren.map(renderChildRow)}
               </div>
             </section>
@@ -3825,18 +3825,18 @@ function KnowledgeFolderOverview({
       <button
         key={document.id}
         type="button"
-        className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
+        className="group flex w-full items-center gap-3 border-b border-border/30 px-2.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
         <span
           className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border",
             isFolder
-              ? "border-primary/15 bg-primary/[0.07] text-primary"
-              : "border-border/45 bg-muted/25 text-muted-foreground",
+              ? "border-primary/15 bg-primary/[0.06] text-primary"
+              : "border-border/35 bg-muted/20 text-muted-foreground",
           )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
@@ -3852,13 +3852,13 @@ function KnowledgeFolderOverview({
             {childCount}
           </span>
         ) : null}
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
       </button>
     );
   };
 
   return (
-    <div className="mx-auto min-h-[690px] max-w-[820px] px-1 pb-10 pt-1">
+    <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
       <nav
         className="mb-4 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
         aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
@@ -3888,15 +3888,14 @@ function KnowledgeFolderOverview({
         })}
       </nav>
 
-      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/35 pb-4">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            {t("notes.knowledgeFolderInside")} · {orderedChildren.length}{" "}
-            {t("notes.knowledgeDocuments")}
-          </p>
-          <h3 className="mt-1 truncate text-2xl font-semibold leading-tight text-foreground">
-            {folder.title || t("notes.knowledgeUntitledDocument")}
+          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+            {t("notes.knowledgeFolderInside")}
           </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {orderedChildren.length} {t("notes.knowledgeDocuments")}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -3952,25 +3951,25 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {folderChildren.length > 0 ? (
             <section>
-              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildFolders")}</span>
                 <span>{folderChildren.length}</span>
               </div>
-              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {folderChildren.map(renderChildRow)}
               </div>
             </section>
           ) : null}
           {noteChildren.length > 0 ? (
             <section>
-              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between px-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>{t("notes.knowledgeFolderChildDocuments")}</span>
                 <span>{noteChildren.length}</span>
               </div>
-              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+              <div className="overflow-hidden border-y border-border/35 bg-background">
                 {noteChildren.map(renderChildRow)}
               </div>
             </section>

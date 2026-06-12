@@ -3708,10 +3708,10 @@ function KnowledgeVaultRootOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {t("notes.knowledgeVaultRoot", "知识库")}
+            {t("notes.knowledgeFolderInside", "目录内容")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
-            {t("notes.knowledgeFolderInside", "目录内容")}
+            {t("notes.knowledgeVaultRoot", "知识库")}
           </Text>
           <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>
             {items.length} {t("notes.knowledgeDocuments", "文档")}
@@ -3875,7 +3875,7 @@ function KnowledgeFolderOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+            {t("notes.knowledgeFolderInside", "目录内容")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
             {folderPath}

@@ -746,6 +746,84 @@ describe("simple sync convergence", () => {
     });
   });
 
+  it("syncs knowledge vault folder moves without flattening child documents", async () => {
+    const backend = new MemoryBackend();
+    const deviceA = new FakeSyncDb();
+    const deviceB = new FakeSyncDb();
+
+    deviceA.insert("books", bookRow());
+    deviceA.insert("knowledge_documents", knowledgeDocumentRow({ id: "home", title: "Home" }));
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "folder-a",
+        parent_id: null,
+        type: "folder",
+        title: "Chapter Notes",
+        source_kind: null,
+        source_id: null,
+      }),
+    );
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "folder-b",
+        parent_id: null,
+        type: "folder",
+        title: "Research",
+        source_kind: null,
+        source_id: null,
+      }),
+    );
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "note-child",
+        parent_id: "folder-a",
+        type: "standalone_note",
+        title: "Question Log",
+        source_kind: null,
+        source_id: null,
+      }),
+    );
+
+    now = 1100;
+    await syncDevice("device-a", deviceA, backend);
+
+    now = 1200;
+    await syncDevice("device-b", deviceB, backend);
+    expect(deviceB.get("knowledge_documents", "note-child")).toMatchObject({
+      parent_id: "folder-a",
+    });
+
+    now = 1300;
+    deviceB.patch("knowledge_documents", "folder-a", {
+      parent_id: "folder-b",
+      updated_at: now,
+    });
+
+    now = 1400;
+    await syncDevice("device-b", deviceB, backend);
+
+    now = 1500;
+    const result = await syncDevice("device-a", deviceA, backend);
+
+    expect(result.success).toBe(true);
+    expect(deviceA.get("knowledge_documents", "folder-a")).toMatchObject({
+      parent_id: "folder-b",
+    });
+    expect(deviceA.get("knowledge_documents", "folder-b")).toMatchObject({
+      parent_id: null,
+    });
+    expect(deviceA.get("knowledge_documents", "note-child")).toMatchObject({
+      parent_id: "folder-a",
+      title: "Question Log",
+    });
+    expect(deviceA.exportRecords().knowledge_documents).toEqual(
+      deviceB.exportRecords().knowledge_documents,
+    );
+  });
+
   it("keeps a newer local record when an older remote tombstone arrives", async () => {
     const target = new FakeSyncDb();
     target.insert("books", bookRow({ updated_at: 2500 }));

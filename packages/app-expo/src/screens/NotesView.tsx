@@ -94,9 +94,9 @@ import type {
 import { eventBus } from "@readany/core/utils/event-bus";
 import type { TFunction } from "i18next";
 /**
- * NotesScreen — matching Tauri mobile NotesPage exactly.
- * Features: stats header, book notebooks list with covers, detail view with
- * highlights/notes tabs, chapter grouping, color dots, edit/delete, export, search.
+ * NotesView — mobile notes plus book-centered knowledge vault.
+ * Knowledge documents keep an Obsidian-like folder hierarchy and open into a
+ * focused WYSIWYG editor surface.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -3195,10 +3195,12 @@ function KnowledgeDocumentExplorer({
       : !isRootActive
         ? activeDocument?.parentId
         : undefined;
-  const activePathLabel =
-    !isRootActive && activeDocument
-      ? knowledgeDocumentPathText(activeDocument, documents, t)
-      : t("notes.knowledgeVaultRoot", "知识库");
+  const createDestinationDocument = activeCreateParentId
+    ? documents.find((document) => document.id === activeCreateParentId)
+    : null;
+  const createDestinationPath = createDestinationDocument
+    ? knowledgeDocumentPathText(createDestinationDocument, documents, t)
+    : t("notes.knowledgeVaultRoot", "知识库");
   const normalizedQuery = query.trim().toLowerCase();
   const createParentDocument = useMemo(
     () => documents.find((document) => document.id === createParentId),
@@ -3299,7 +3301,7 @@ function KnowledgeDocumentExplorer({
             {t("notes.knowledgeWorkspaceVault", "目录")}
           </Text>
           <Text style={styles.knowledgeExplorerHint} numberOfLines={1}>
-            {t("notes.knowledgeCreateIn", "创建于")} · {activePathLabel}
+            {t("notes.knowledgeCreateIn", "创建于")} · {createDestinationPath}
           </Text>
         </View>
         <TouchableOpacity

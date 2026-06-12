@@ -117,9 +117,9 @@ import {
   X,
 } from "lucide-react";
 /**
- * NotesPage — Notebook-style knowledge management center
- * Layout: Left panel (book notebooks grid) + Right panel (selected book's notes & highlights)
- * Notes and highlights are displayed separately.
+ * NotesPage — book-centered knowledge vault workspace.
+ * Legacy notes and highlights stay available, while knowledge documents use a
+ * folder tree plus WYSIWYG writing canvas.
  */
 import {
   type ImgHTMLAttributes,
@@ -2395,6 +2395,7 @@ function KnowledgeHomePanel({
                 items={activeDocumentChildren}
                 documents={documents}
                 isCreating={isCreatingDocument}
+                onSelectRoot={onOpenVaultRoot}
                 onSelect={onSelectDocument}
                 onCreate={onCreateDocument}
                 t={t}
@@ -3383,6 +3384,14 @@ function KnowledgeDocumentExplorer({
     : activeDocument?.type === "folder"
       ? activeDocument.id
       : activeDocument?.parentId;
+  const createDestinationDocument = activeCreateParentId
+    ? documents.find((document) => document.id === activeCreateParentId)
+    : null;
+  const createDestinationPath = createDestinationDocument
+    ? knowledgeDocumentPath(createDestinationDocument, documents, t)
+        .map((item) => item.title)
+        .join(" / ")
+    : t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" });
   const normalizedQuery = query.trim().toLowerCase();
   const flatNodes = useMemo(() => flattenKnowledgeDocumentTree(tree.roots), [tree]);
   const orphanedDocumentIds = useMemo(
@@ -3663,6 +3672,13 @@ function KnowledgeDocumentExplorer({
                 );
               })}
             </div>
+            <p
+              className="mt-1.5 truncate text-[10px] font-medium text-muted-foreground"
+              title={createDestinationPath}
+            >
+              {t("notes.knowledgeCreateIn", { defaultValue: "Create in" })} ·{" "}
+              {createDestinationPath}
+            </p>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -3789,6 +3805,7 @@ function KnowledgeFolderOverview({
   items,
   documents,
   isCreating,
+  onSelectRoot,
   onSelect,
   onCreate,
   t,
@@ -3797,6 +3814,7 @@ function KnowledgeFolderOverview({
   items: KnowledgeDocument[];
   documents: KnowledgeDocument[];
   isCreating: boolean;
+  onSelectRoot: () => void;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -3871,15 +3889,29 @@ function KnowledgeFolderOverview({
       >
         {folderPathItems.map((item, index) => {
           const isCurrent = index === folderPathItems.length - 1;
+          const isRoot = item.id === "__vault__";
+          const targetDocument = documents.find((document) => document.id === item.id);
+          const canNavigate = !isCurrent && (isRoot || !!targetDocument);
 
           return (
-            <span
+            <button
               key={`${item.id}-${index}`}
+              type="button"
+              disabled={!canNavigate}
+              onClick={() => {
+                if (!canNavigate) return;
+                if (isRoot) {
+                  onSelectRoot();
+                  return;
+                }
+                if (targetDocument) onSelect(targetDocument);
+              }}
               className={cn(
-                "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-2",
+                "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-2 transition-colors",
                 isCurrent
                   ? "border-primary/25 bg-primary/10 text-primary"
-                  : "border-border/45 bg-muted/20",
+                  : "border-border/45 bg-muted/20 hover:border-primary/25 hover:bg-primary/5 hover:text-foreground",
+                !canNavigate && "cursor-default",
               )}
             >
               {item.type === "folder" || item.id === "__vault__" ? (
@@ -3888,7 +3920,7 @@ function KnowledgeFolderOverview({
                 <FileText className="h-3 w-3 shrink-0" />
               )}
               <span className="truncate">{item.title}</span>
-            </span>
+            </button>
           );
         })}
       </nav>

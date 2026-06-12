@@ -157,6 +157,9 @@ Interaction rules:
   text, and export/import destination previews.
 - Create actions always inherit the current folder context. If a document is
   active, create beside that document under its parent folder.
+- Create affordances must name the real destination folder. If a document is
+  active, the UI should show the parent folder as the target, not imply that
+  documents can contain children.
 - Move actions show the real folder tree and reject cycles before writing.
 - Tags, groups, search results, and recent documents are secondary views. They
   can help discovery, but they must route back to a real folder/document path.
@@ -350,6 +353,8 @@ Visual direction:
 - Use rows and grouped sections, not a dashboard.
 - Create/move actions use bottom sheets.
 - The current path should be visible and horizontally scrollable when long.
+- The create sheet should display the actual target folder path before the user
+  chooses a document type.
 - Folder rows open into the folder; document rows open into the editor.
 
 ### Screen 2: Document Editor

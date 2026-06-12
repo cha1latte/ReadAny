@@ -102,14 +102,40 @@
     "fallbackChapterContext": "Leyendo contenido del capítulo",
     "searchKnowledgeBase": "Buscando en la base de conocimiento",
     "getBookKnowledge": "Leyendo conocimiento del libro",
+    "compressKnowledgeDocumentSummary": "Actualizando memoria de conocimiento",
     "proposeKnowledgeDocumentCreate": "Redactando documento de conocimiento",
     "proposeKnowledgeDocumentUpdate": "Redactando actualización del documento",
-    "proposeKnowledgeDocumentTagsUpdate": "Redactando actualización de etiquetas"
+    "proposeKnowledgeDocumentTagsUpdate": "Redactando actualización de etiquetas",
+    "proposeKnowledgeLinkCreate": "Redactando enlace de conocimiento"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "Resultados de la base de conocimiento",
+    "bookKnowledgeTitle": "Conocimiento del libro leído",
+    "summaryTitle": "Memoria de conocimiento actualizada",
+    "count": "Mostrando {{showing}} / {{total}} documentos",
+    "status": "Estado: {{status}}",
+    "persisted": "Persistido",
+    "notPersisted": "No persistido",
+    "sourceChars": "{{count}} caracteres",
+    "documentId": "Documento: {{id}}",
+    "reason": "Motivo: {{reason}}",
+    "empty": "No hay documentos de conocimiento coincidentes",
+    "more": "{{count}} más",
+    "types": {
+      "book_home": "Inicio del libro",
+      "folder": "Carpeta",
+      "standalone_note": "Nota independiente",
+      "highlight_note": "Nota de subrayado",
+      "review": "Reseña",
+      "summary": "Resumen",
+      "imported_markdown": "Documento importado"
+    }
   },
   "knowledgeProposal": {
     "title": "Propuesta de escritura de conocimiento",
     "create": "Crear documento de conocimiento",
     "update": "Actualizar documento de conocimiento",
+    "link": "Crear enlace de conocimiento",
     "pendingBadge": "Necesita confirmación",
     "savedBadge": "Aplicado",
     "safeHint": "La IA solo creó un borrador. Se escribirá en tu base de conocimiento tras confirmarlo.",
@@ -135,7 +161,8 @@
       "highlightNote": "Nota de subrayado",
       "review": "Reseña",
       "summary": "Resumen",
-      "importedMarkdown": "Documento importado"
+      "importedMarkdown": "Documento importado",
+      "knowledgeLink": "Enlace de conocimiento"
     }
   },
   "mindmap": {

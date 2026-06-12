@@ -102,10 +102,34 @@
     "fallbackChapterContext": "章の内容を読み取り中",
     "searchKnowledgeBase": "ナレッジベースを検索中",
     "getBookKnowledge": "この本のナレッジを読み取り中",
+    "compressKnowledgeDocumentSummary": "ナレッジメモリを更新中",
     "proposeKnowledgeDocumentCreate": "ナレッジ文書を下書き中",
     "proposeKnowledgeDocumentUpdate": "文書更新を下書き中",
     "proposeKnowledgeDocumentTagsUpdate": "タグ更新を下書き中",
     "proposeKnowledgeLinkCreate": "ナレッジリンクを下書き中"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "ナレッジ検索結果",
+    "bookKnowledgeTitle": "この本のナレッジを読み取りました",
+    "summaryTitle": "ナレッジメモリを更新しました",
+    "count": "{{showing}} / {{total}} 件の文書を表示",
+    "status": "状態：{{status}}",
+    "persisted": "保存済み",
+    "notPersisted": "未保存",
+    "sourceChars": "{{count}} 文字",
+    "documentId": "文書：{{id}}",
+    "reason": "理由：{{reason}}",
+    "empty": "一致するナレッジ文書はありません",
+    "more": "ほか {{count}} 件",
+    "types": {
+      "book_home": "本のホーム",
+      "folder": "フォルダー",
+      "standalone_note": "独立ノート",
+      "highlight_note": "ハイライトノート",
+      "review": "レビュー",
+      "summary": "要約",
+      "imported_markdown": "インポート文書"
+    }
   },
   "knowledgeProposal": {
     "title": "ナレッジ書き込み提案",

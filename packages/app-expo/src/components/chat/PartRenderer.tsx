@@ -4,7 +4,8 @@ import { BrainIcon, CheckIcon, ChevronDownIcon, OctagonXIcon, XIcon } from "@/co
 import { useThrottledValue } from "@/hooks";
 import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
-import { getToolResultError } from "@readany/core/ai";
+import { getKnowledgeToolResultDisplay, getToolResultError } from "@readany/core/ai";
+import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
@@ -173,6 +174,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
   proposeKnowledgeDocumentTagsUpdate: "toolLabels.proposeKnowledgeDocumentTagsUpdate",
   proposeKnowledgeLinkCreate: "toolLabels.proposeKnowledgeLinkCreate",
+  compressKnowledgeDocumentSummary: "toolLabels.compressKnowledgeDocumentSummary",
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
@@ -211,21 +213,138 @@ function formatKnowledgeChangedFields(
   ];
 }
 
+function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
+  const { t } = useTranslation();
+  const colors = useColors();
+  const s = makeToolStyles(colors);
+  const title =
+    display.kind === "search"
+      ? t("knowledgeToolResult.searchTitle", "知识库检索结果")
+      : display.kind === "bookKnowledge"
+        ? t("knowledgeToolResult.bookKnowledgeTitle", "已读取本书知识")
+        : t("knowledgeToolResult.summaryTitle", "知识记忆已更新");
+  const countText =
+    display.kind === "summary"
+      ? [
+          display.status ? t("knowledgeToolResult.status", { status: display.status }) : undefined,
+          display.persisted !== undefined
+            ? display.persisted
+              ? t("knowledgeToolResult.persisted", "已持久化")
+              : t("knowledgeToolResult.notPersisted", "未持久化")
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : t("knowledgeToolResult.count", {
+          total: display.total ?? display.documents.length,
+          showing: display.showing ?? display.documents.length,
+        });
+
+  return (
+    <View style={s.knowledgeResultCard}>
+      <View style={s.knowledgeResultHeader}>
+        <View style={s.knowledgeResultTitleBlock}>
+          <Text style={s.knowledgeResultTitle}>{title}</Text>
+          {!!countText && (
+            <Text style={s.knowledgeResultMeta} numberOfLines={1}>
+              {countText}
+            </Text>
+          )}
+        </View>
+        {display.kind === "summary" && display.sourceChars ? (
+          <View style={s.knowledgeResultBadge}>
+            <Text style={s.knowledgeResultBadgeText}>
+              {t("knowledgeToolResult.sourceChars", { count: display.sourceChars })}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={s.knowledgeResultBody}>
+        {display.kind === "summary" ? (
+          <>
+            {display.documentId ? (
+              <Text style={s.knowledgeResultPath} numberOfLines={2}>
+                {t("knowledgeToolResult.documentId", { id: display.documentId })}
+              </Text>
+            ) : null}
+            {display.reason ? (
+              <Text style={s.knowledgeResultMeta} numberOfLines={2}>
+                {t("knowledgeToolResult.reason", { reason: display.reason })}
+              </Text>
+            ) : null}
+            {display.summaryPreview ? (
+              <Text style={s.knowledgeResultSnippet} numberOfLines={6}>
+                {display.summaryPreview}
+              </Text>
+            ) : null}
+          </>
+        ) : display.documents.length === 0 ? (
+          <Text style={s.knowledgeResultEmpty}>
+            {t("knowledgeToolResult.empty", "没有匹配的知识文档")}
+          </Text>
+        ) : (
+          display.documents.slice(0, 5).map((document) => (
+            <View
+              key={document.id ?? `${document.title}-${document.path}`}
+              style={s.knowledgeResultItem}
+            >
+              <View style={s.knowledgeResultItemHeader}>
+                <Text style={s.knowledgeResultItemTitle} numberOfLines={1}>
+                  {document.title}
+                </Text>
+                {!!document.type && (
+                  <View style={s.knowledgeResultTypeBadge}>
+                    <Text style={s.knowledgeResultTypeText} numberOfLines={1}>
+                      {t(`knowledgeToolResult.types.${document.type}`, {
+                        defaultValue: document.type,
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {!!document.path && (
+                <Text style={s.knowledgeResultPath} numberOfLines={1}>
+                  {document.path}
+                </Text>
+              )}
+              {!!document.snippet && (
+                <Text style={s.knowledgeResultSnippet} numberOfLines={3}>
+                  {document.snippet}
+                </Text>
+              )}
+            </View>
+          ))
+        )}
+        {display.documents.length > 5 ? (
+          <Text style={s.knowledgeResultMore}>
+            {t("knowledgeToolResult.more", { count: display.documents.length - 5 })}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const toolResultError = useMemo(() => getToolResultError(part.result), [part.result]);
   const hasError = part.status === "error" || Boolean(part.error) || Boolean(toolResultError);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
+  const knowledgeResult = useMemo(
+    () => getKnowledgeToolResultDisplay(part.name, part.result),
+    [part.name, part.result],
+  );
 
-  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
+  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal) || Boolean(knowledgeResult));
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
 
   useEffect(() => {
-    if (hasError || proposal) setIsOpen(true);
+    if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
-  }, [hasError, proposal]);
+  }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
     if (!proposal || proposalApplyState !== "idle") return;
@@ -337,6 +456,8 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                   applyState={proposalApplyState}
                   onApply={handleApplyProposal}
                 />
+              ) : knowledgeResult ? (
+                <KnowledgeToolResultCard display={knowledgeResult} />
               ) : (
                 <View style={s.codeBlockScroll}>
                   <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
@@ -681,6 +802,118 @@ const makeToolStyles = (colors: ThemeColors) =>
       lineHeight: 16,
     },
     codeKey: { color: colors.mutedForeground },
+    knowledgeResultCard: {
+      overflow: "hidden",
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+    },
+    knowledgeResultHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.38),
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+    },
+    knowledgeResultTitleBlock: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    knowledgeResultTitle: {
+      fontSize: fs.sm,
+      lineHeight: 18,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    knowledgeResultMeta: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultBadge: {
+      maxWidth: 120,
+      borderRadius: radius.sm,
+      backgroundColor: colors.muted,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+    },
+    knowledgeResultBadgeText: {
+      fontSize: fs.xs,
+      color: colors.mutedForeground,
+      fontWeight: fw.medium,
+    },
+    knowledgeResultBody: {
+      gap: 8,
+      padding: 10,
+    },
+    knowledgeResultItem: {
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.28),
+      borderRadius: radius.sm,
+      paddingHorizontal: 9,
+      paddingVertical: 8,
+    },
+    knowledgeResultItemHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    knowledgeResultItemTitle: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: fs.sm,
+      lineHeight: 18,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    knowledgeResultTypeBadge: {
+      maxWidth: 96,
+      borderRadius: radius.sm,
+      backgroundColor: colors.card,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+    },
+    knowledgeResultTypeText: {
+      fontSize: fs.xs,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultPath: {
+      marginTop: 4,
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultSnippet: {
+      marginTop: 7,
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.foreground,
+    },
+    knowledgeResultEmpty: {
+      borderWidth: 0.5,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.muted, 0.28),
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.mutedForeground,
+      textAlign: "center",
+    },
+    knowledgeResultMore: {
+      fontSize: fs.xs,
+      color: colors.mutedForeground,
+    },
     proposalCard: {
       overflow: "hidden",
       borderWidth: 0.5,

@@ -102,14 +102,40 @@
     "fallbackChapterContext": "Lecture du contenu du chapitre",
     "searchKnowledgeBase": "Recherche dans la base de connaissances",
     "getBookKnowledge": "Lecture des connaissances du livre",
+    "compressKnowledgeDocumentSummary": "Mise à jour de la mémoire de connaissance",
     "proposeKnowledgeDocumentCreate": "Brouillon de document de connaissance",
     "proposeKnowledgeDocumentUpdate": "Brouillon de mise à jour du document",
-    "proposeKnowledgeDocumentTagsUpdate": "Brouillon de mise à jour des tags"
+    "proposeKnowledgeDocumentTagsUpdate": "Brouillon de mise à jour des tags",
+    "proposeKnowledgeLinkCreate": "Brouillon de lien de connaissance"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "Résultats de la base de connaissances",
+    "bookKnowledgeTitle": "Connaissances du livre lues",
+    "summaryTitle": "Mémoire de connaissance mise à jour",
+    "count": "{{showing}} / {{total}} documents affichés",
+    "status": "Statut : {{status}}",
+    "persisted": "Persisté",
+    "notPersisted": "Non persisté",
+    "sourceChars": "{{count}} caractères",
+    "documentId": "Document : {{id}}",
+    "reason": "Raison : {{reason}}",
+    "empty": "Aucun document de connaissance correspondant",
+    "more": "{{count}} de plus",
+    "types": {
+      "book_home": "Accueil du livre",
+      "folder": "Dossier",
+      "standalone_note": "Note autonome",
+      "highlight_note": "Note de surlignage",
+      "review": "Critique",
+      "summary": "Résumé",
+      "imported_markdown": "Document importé"
+    }
   },
   "knowledgeProposal": {
     "title": "Proposition d'écriture de connaissance",
     "create": "Créer un document de connaissance",
     "update": "Mettre à jour le document de connaissance",
+    "link": "Créer un lien de connaissance",
     "pendingBadge": "Confirmation requise",
     "savedBadge": "Appliqué",
     "safeHint": "L'IA a seulement créé un brouillon. Il sera écrit dans votre base après confirmation.",
@@ -135,7 +161,8 @@
       "highlightNote": "Note de surlignage",
       "review": "Critique",
       "summary": "Résumé",
-      "importedMarkdown": "Document importé"
+      "importedMarkdown": "Document importé",
+      "knowledgeLink": "Lien de connaissance"
     }
   },
   "mindmap": {

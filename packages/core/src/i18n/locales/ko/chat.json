@@ -102,10 +102,34 @@
     "fallbackChapterContext": "챕터 내용 읽는 중",
     "searchKnowledgeBase": "지식 베이스 검색 중",
     "getBookKnowledge": "이 책의 지식 읽는 중",
+    "compressKnowledgeDocumentSummary": "지식 메모리 업데이트 중",
     "proposeKnowledgeDocumentCreate": "지식 문서 초안 작성 중",
     "proposeKnowledgeDocumentUpdate": "문서 업데이트 초안 작성 중",
     "proposeKnowledgeDocumentTagsUpdate": "태그 업데이트 초안 작성 중",
     "proposeKnowledgeLinkCreate": "지식 링크 초안 작성 중"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "지식 베이스 검색 결과",
+    "bookKnowledgeTitle": "이 책의 지식을 읽었어요",
+    "summaryTitle": "지식 메모리를 업데이트했어요",
+    "count": "{{showing}} / {{total}}개 문서 표시",
+    "status": "상태: {{status}}",
+    "persisted": "저장됨",
+    "notPersisted": "저장되지 않음",
+    "sourceChars": "{{count}}자",
+    "documentId": "문서: {{id}}",
+    "reason": "이유: {{reason}}",
+    "empty": "일치하는 지식 문서가 없어요",
+    "more": "{{count}}개 더 있음",
+    "types": {
+      "book_home": "책 홈",
+      "folder": "폴더",
+      "standalone_note": "독립 노트",
+      "highlight_note": "하이라이트 노트",
+      "review": "리뷰",
+      "summary": "요약",
+      "imported_markdown": "가져온 문서"
+    }
   },
   "knowledgeProposal": {
     "title": "지식 베이스 쓰기 제안",

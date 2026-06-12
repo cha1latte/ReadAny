@@ -102,10 +102,34 @@
     "fallbackChapterContext": "Reading chapter content",
     "searchKnowledgeBase": "Searching knowledge base",
     "getBookKnowledge": "Reading book knowledge",
+    "compressKnowledgeDocumentSummary": "Updating knowledge memory",
     "proposeKnowledgeDocumentCreate": "Drafting knowledge document",
     "proposeKnowledgeDocumentUpdate": "Drafting document update",
     "proposeKnowledgeDocumentTagsUpdate": "Drafting tag update",
     "proposeKnowledgeLinkCreate": "Drafting knowledge link"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "Knowledge search results",
+    "bookKnowledgeTitle": "Book knowledge read",
+    "summaryTitle": "Knowledge memory updated",
+    "count": "Showing {{showing}} / {{total}} documents",
+    "status": "Status: {{status}}",
+    "persisted": "Persisted",
+    "notPersisted": "Not persisted",
+    "sourceChars": "{{count}} chars",
+    "documentId": "Document: {{id}}",
+    "reason": "Reason: {{reason}}",
+    "empty": "No matching knowledge documents",
+    "more": "{{count}} more",
+    "types": {
+      "book_home": "Book home",
+      "folder": "Folder",
+      "standalone_note": "Standalone note",
+      "highlight_note": "Highlight note",
+      "review": "Review",
+      "summary": "Summary",
+      "imported_markdown": "Imported document"
+    }
   },
   "knowledgeProposal": {
     "title": "Knowledge write proposal",

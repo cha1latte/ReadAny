@@ -4,7 +4,8 @@
  */
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getToolResultError } from "@readany/core/ai";
+import { getKnowledgeToolResultDisplay, getToolResultError } from "@readany/core/ai";
+import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
@@ -230,6 +231,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
   proposeKnowledgeDocumentTagsUpdate: "toolLabels.proposeKnowledgeDocumentTagsUpdate",
   proposeKnowledgeLinkCreate: "toolLabels.proposeKnowledgeLinkCreate",
+  compressKnowledgeDocumentSummary: "toolLabels.compressKnowledgeDocumentSummary",
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
@@ -268,13 +270,144 @@ function formatKnowledgeChangedFields(
   ];
 }
 
+function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
+  const { t } = useTranslation();
+  const title =
+    display.kind === "search"
+      ? t("knowledgeToolResult.searchTitle", { defaultValue: "Knowledge search results" })
+      : display.kind === "bookKnowledge"
+        ? t("knowledgeToolResult.bookKnowledgeTitle", { defaultValue: "Book knowledge read" })
+        : t("knowledgeToolResult.summaryTitle", { defaultValue: "Knowledge memory updated" });
+
+  const countText =
+    display.kind === "summary"
+      ? [
+          display.status
+            ? t("knowledgeToolResult.status", {
+                status: display.status,
+                defaultValue: `Status: ${display.status}`,
+              })
+            : null,
+          display.persisted !== undefined
+            ? display.persisted
+              ? t("knowledgeToolResult.persisted", { defaultValue: "Persisted" })
+              : t("knowledgeToolResult.notPersisted", { defaultValue: "Not persisted" })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : t("knowledgeToolResult.count", {
+          total: display.total ?? display.documents.length,
+          showing: display.showing ?? display.documents.length,
+          defaultValue: `${display.documents.length} document(s)`,
+        });
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-background">
+      <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/25 px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-primary">{title}</div>
+          {countText ? (
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">{countText}</div>
+          ) : null}
+        </div>
+        {display.kind === "summary" && display.sourceChars ? (
+          <div className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+            {t("knowledgeToolResult.sourceChars", {
+              count: display.sourceChars,
+              defaultValue: `${display.sourceChars} chars`,
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2 p-3">
+        {display.kind === "summary" ? (
+          <>
+            {display.documentId ? (
+              <div className="break-all rounded border border-border bg-muted/25 p-2 text-xs text-muted-foreground">
+                {t("knowledgeToolResult.documentId", {
+                  id: display.documentId,
+                  defaultValue: `Document: ${display.documentId}`,
+                })}
+              </div>
+            ) : null}
+            {display.reason ? (
+              <p className="text-xs text-muted-foreground">
+                {t("knowledgeToolResult.reason", {
+                  reason: display.reason,
+                  defaultValue: `Reason: ${display.reason}`,
+                })}
+              </p>
+            ) : null}
+            {display.summaryPreview ? (
+              <div className="max-h-28 overflow-auto rounded border border-border bg-muted/30 p-2 text-xs leading-relaxed text-foreground">
+                {display.summaryPreview}
+              </div>
+            ) : null}
+          </>
+        ) : display.documents.length === 0 ? (
+          <p className="rounded border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+            {t("knowledgeToolResult.empty", { defaultValue: "No matching knowledge documents." })}
+          </p>
+        ) : (
+          display.documents.slice(0, 5).map((document) => (
+            <div
+              key={document.id ?? `${document.title}-${document.path}`}
+              className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">
+                    {document.title}
+                  </div>
+                  {document.path ? (
+                    <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {document.path}
+                    </div>
+                  ) : null}
+                </div>
+                {document.type ? (
+                  <span className="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                    {t(`knowledgeToolResult.types.${document.type}`, {
+                      defaultValue: document.type,
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              {document.snippet ? (
+                <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                  {document.snippet}
+                </p>
+              ) : null}
+            </div>
+          ))
+        )}
+
+        {display.documents.length > 5 ? (
+          <div className="text-xs text-muted-foreground">
+            {t("knowledgeToolResult.more", {
+              count: display.documents.length - 5,
+              defaultValue: `+${display.documents.length - 5} more`,
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const { t } = useTranslation();
   const toolResultError = useMemo(() => getToolResultError(part.result), [part.result]);
   const hasError = part.status === "error" || Boolean(part.error) || Boolean(toolResultError);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
+  const knowledgeResult = useMemo(
+    () => getKnowledgeToolResultDisplay(part.name, part.result),
+    [part.name, part.result],
+  );
 
-  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
+  const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal) || Boolean(knowledgeResult));
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
 
   const getStatusIcon = () => {
@@ -300,9 +433,9 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const errorMessage = part.error || toolResultError || "";
 
   useEffect(() => {
-    if (hasError || proposal) setIsOpen(true);
+    if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
-  }, [hasError, proposal]);
+  }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
     if (!proposal || proposalApplyState !== "idle") return;
@@ -416,6 +549,8 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                       applyState={proposalApplyState}
                       onApply={handleApplyProposal}
                     />
+                  ) : knowledgeResult ? (
+                    <KnowledgeToolResultCard display={knowledgeResult} />
                   ) : (
                     <div className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-xs">
                       <pre className="whitespace-pre-wrap text-foreground">

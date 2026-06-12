@@ -102,10 +102,34 @@
     "fallbackChapterContext": "讀取章節內容",
     "searchKnowledgeBase": "搜尋知識庫",
     "getBookKnowledge": "讀取本書知識",
+    "compressKnowledgeDocumentSummary": "更新知識記憶",
     "proposeKnowledgeDocumentCreate": "草擬知識文件",
     "proposeKnowledgeDocumentUpdate": "草擬文件更新",
     "proposeKnowledgeDocumentTagsUpdate": "草擬標籤更新",
     "proposeKnowledgeLinkCreate": "草擬知識關聯"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "知識庫搜尋結果",
+    "bookKnowledgeTitle": "已讀取本書知識",
+    "summaryTitle": "知識記憶已更新",
+    "count": "顯示 {{showing}} / {{total}} 個文件",
+    "status": "狀態：{{status}}",
+    "persisted": "已持久化",
+    "notPersisted": "未持久化",
+    "sourceChars": "{{count}} 字",
+    "documentId": "文件：{{id}}",
+    "reason": "原因：{{reason}}",
+    "empty": "沒有符合的知識文件",
+    "more": "還有 {{count}} 個",
+    "types": {
+      "book_home": "書籍主頁",
+      "folder": "資料夾",
+      "standalone_note": "獨立筆記",
+      "highlight_note": "標註筆記",
+      "review": "書評",
+      "summary": "摘要",
+      "imported_markdown": "匯入文件"
+    }
   },
   "knowledgeProposal": {
     "title": "知識庫寫入提案",

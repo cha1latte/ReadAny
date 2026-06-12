@@ -102,10 +102,34 @@
     "fallbackChapterContext": "读取章节内容",
     "searchKnowledgeBase": "搜索知识库",
     "getBookKnowledge": "读取本书知识",
+    "compressKnowledgeDocumentSummary": "更新知识记忆",
     "proposeKnowledgeDocumentCreate": "草拟知识文档",
     "proposeKnowledgeDocumentUpdate": "草拟文档更新",
     "proposeKnowledgeDocumentTagsUpdate": "草拟标签更新",
     "proposeKnowledgeLinkCreate": "草拟知识关联"
+  },
+  "knowledgeToolResult": {
+    "searchTitle": "知识库检索结果",
+    "bookKnowledgeTitle": "已读取本书知识",
+    "summaryTitle": "知识记忆已更新",
+    "count": "显示 {{showing}} / {{total}} 个文档",
+    "status": "状态：{{status}}",
+    "persisted": "已持久化",
+    "notPersisted": "未持久化",
+    "sourceChars": "{{count}} 字",
+    "documentId": "文档：{{id}}",
+    "reason": "原因：{{reason}}",
+    "empty": "没有匹配的知识文档",
+    "more": "还有 {{count}} 个",
+    "types": {
+      "book_home": "书籍主页",
+      "folder": "文件夹",
+      "standalone_note": "独立笔记",
+      "highlight_note": "高亮笔记",
+      "review": "书评",
+      "summary": "摘要",
+      "imported_markdown": "导入文档"
+    }
   },
   "knowledgeProposal": {
     "title": "知识库写入提案",

@@ -59,6 +59,41 @@ describe("knowledge internal links", () => {
     ).toEqual(["doc-2"]);
   });
 
+  it("keeps path-only Obsidian links out of document-id backlink sync", () => {
+    const contentJson: JSONValue = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                targetPath: "Books/The Book/Ideas/Question Log",
+                label: "Question Log",
+              },
+            },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: "doc-2",
+                targetPath: "Books/The Book/Ideas/Resolved",
+                label: "Resolved",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      extractKnowledgeInternalDocumentLinkIds(contentJson, {
+        sourceDocumentId: "doc-1",
+        validDocumentIds: ["doc-2"],
+      }),
+    ).toEqual(["doc-2"]);
+  });
+
   it("syncs editor internal links without deleting manual knowledge links", async () => {
     const staleAutoId = createAutoKnowledgeInternalLinkId("doc-1", "doc-3");
     dbMocks.getKnowledgeLinks.mockResolvedValue([

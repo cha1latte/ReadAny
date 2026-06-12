@@ -56,6 +56,7 @@ import {
   Strikethrough,
   TextQuote,
   Undo2,
+  Unlink,
 } from "lucide-react";
 import {
   Fragment,
@@ -297,10 +298,15 @@ export function KnowledgeEditor({
   const [imageSrc, setImageSrc] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
+  const [floatingToolbarPosition, setFloatingToolbarPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const imageSrcInputId = useId();
   const imageAltInputId = useId();
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const isInternalUpdate = useRef(false);
+  const editorShellRef = useRef<HTMLDivElement | null>(null);
   const internalLinkInputRef = useRef<HTMLInputElement | null>(null);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -485,6 +491,57 @@ export function KnowledgeEditor({
     );
   }, [editor, outlineTarget]);
 
+  const hasFloatingInlineTools =
+    canUse("bold") ||
+    canUse("italic") ||
+    canUse("strike") ||
+    canUse("inlineCode") ||
+    canUse("link");
+
+  const updateFloatingToolbarPosition = useCallback(() => {
+    if (!editor || !hasFloatingInlineTools || editor.state.selection.empty) {
+      setFloatingToolbarPosition(null);
+      return;
+    }
+
+    const shell = editorShellRef.current;
+    if (!shell) {
+      setFloatingToolbarPosition(null);
+      return;
+    }
+
+    try {
+      const { from, to } = editor.state.selection;
+      const start = editor.view.coordsAtPos(from);
+      const end = editor.view.coordsAtPos(to);
+      const shellRect = shell.getBoundingClientRect();
+      const selectionLeft = Math.min(start.left, end.left);
+      const selectionRight = Math.max(start.right, end.right, start.left, end.left);
+      const rawLeft = (selectionLeft + selectionRight) / 2 - shellRect.left;
+      const rawTop = Math.min(start.top, end.top) - shellRect.top - 8;
+      const left = Math.min(Math.max(rawLeft, 42), Math.max(shellRect.width - 42, 42));
+      const top = Math.max(rawTop, 44);
+
+      setFloatingToolbarPosition({ left, top });
+    } catch {
+      setFloatingToolbarPosition(null);
+    }
+  }, [editor, hasFloatingInlineTools]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    editor.on("selectionUpdate", updateFloatingToolbarPosition);
+    editor.on("transaction", updateFloatingToolbarPosition);
+    window.addEventListener("resize", updateFloatingToolbarPosition);
+
+    return () => {
+      editor.off("selectionUpdate", updateFloatingToolbarPosition);
+      editor.off("transaction", updateFloatingToolbarPosition);
+      window.removeEventListener("resize", updateFloatingToolbarPosition);
+    };
+  }, [editor, updateFloatingToolbarPosition]);
+
   const setLink = useCallback(() => {
     if (!editor || !canUse("link")) return;
     const previousUrl = editor.getAttributes("link").href;
@@ -496,6 +553,10 @@ export function KnowledgeEditor({
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [canUse, editor, t]);
+  const unsetLink = useCallback(() => {
+    if (!editor || !canUse("link")) return;
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+  }, [canUse, editor]);
 
   const insertInternalLink = useCallback(
     (target?: KnowledgeInternalLinkTarget) => {
@@ -979,7 +1040,9 @@ export function KnowledgeEditor({
 
   return (
     <div
+      ref={editorShellRef}
       className={cn(
+        "relative",
         isCanvasChrome
           ? "group bg-transparent"
           : [
@@ -1005,6 +1068,74 @@ export function KnowledgeEditor({
           </Fragment>
         ))}
       </div>
+
+      {floatingToolbarPosition ? (
+        <div
+          className="absolute z-30 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-md border border-border/70 bg-popover px-1.5 py-1 shadow-lg shadow-background/20"
+          style={{
+            left: floatingToolbarPosition.left,
+            top: floatingToolbarPosition.top,
+          }}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {canUse("bold") ? (
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              isActive={editor.isActive("bold")}
+              title={t("editor.bold")}
+            >
+              <Bold className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          ) : null}
+          {canUse("italic") ? (
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              isActive={editor.isActive("italic")}
+              title={t("editor.italic")}
+            >
+              <Italic className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          ) : null}
+          {canUse("strike") ? (
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              isActive={editor.isActive("strike")}
+              title={t("editor.strikethrough")}
+            >
+              <Strikethrough className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          ) : null}
+          {canUse("inlineCode") ? (
+            <ToolbarButton
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              isActive={editor.isActive("code")}
+              title={t("editor.inlineCode")}
+            >
+              <Code className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          ) : null}
+          {canUse("link") ? (
+            <>
+              <ToolbarDivider />
+              <ToolbarButton
+                onClick={setLink}
+                isActive={editor.isActive("link")}
+                title={t("editor.link")}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+              </ToolbarButton>
+              {editor.isActive("link") ? (
+                <ToolbarButton
+                  onClick={unsetLink}
+                  title={t("editor.unlink", { defaultValue: "Remove link" })}
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                </ToolbarButton>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       <EditorContent
         editor={editor}
@@ -1161,6 +1292,7 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={title}
       className={cn(
         "inline-flex items-center justify-center rounded p-1 transition-all duration-150",
         "focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50",

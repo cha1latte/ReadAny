@@ -48,7 +48,9 @@ Verification:
 ## Phase 2: Desktop Knowledge MVP
 
 Status: implemented as an active MVP on the current branch; polish and
-compatibility work continues.
+compatibility work continues. The next desktop milestone is layout correction:
+make hierarchy and the WYSIWYG document surface obvious before adding more
+secondary features.
 
 Goal:
 
@@ -70,6 +72,9 @@ Work:
     memory.
   - Reduce card nesting around the editor so the document, not the chrome, is
     the visual focus.
+  - Make folder nodes open folder browsers, not blank document editors.
+  - Keep breadcrumbs, tree ancestry, export paths, and move destinations
+    visually consistent.
 - Show linked highlights and notes as source cards.
 - Allow standalone book notes.
 - Add basic tags and backlinks display.
@@ -89,7 +94,9 @@ Verification:
 ## Phase 3: Mobile WebView Tiptap Editor
 
 Status: implemented for knowledge documents on the current branch. Legacy quick
-annotation surfaces still use lightweight native editors by design.
+annotation surfaces still use lightweight native editors by design. The next
+mobile milestone is interaction correction: split vault browsing and document
+editing into clear modes instead of one stacked screen.
 
 Goal:
 
@@ -105,6 +112,10 @@ Work:
 - Rework the knowledge mobile layout into a native vault-browser screen and a
   focused document-editor screen instead of one long stacked dashboard.
 - Use bottom sheets for create, move, insert-card, image, and context actions.
+- Preserve path awareness in mobile: current folder path, create destination,
+  move destination, and document header should all describe the same place.
+- Keep long-form writing inside the WebView document editor; use sheets only
+  for short configuration and context.
 
 Verification:
 
@@ -185,7 +196,9 @@ Status: partially implemented. Built-in card registry, card templates, desktop
 node views, mobile WebView card rendering, Markdown fallbacks, shared card
 attribute upgrades, visible unknown/future-version card fallback metadata, and
 a document-preserved AI/tool failure card exist. Richer card editing and
-complex schema migrations remain future work.
+complex schema migrations remain future work. Do not expand card creation UI
+until the vault layout and WYSIWYG document surface pass the workspace quality
+bar.
 
 Goal:
 
@@ -226,6 +239,16 @@ Verification:
 8. `feat/kb-workspace-polish`
    - Obsidian-style vault navigation, WYSIWYG-first desktop/mobile layout,
      folder browsing screens, and context-panel polish.
+
+Current branch priority before PR:
+
+1. Finish the desktop vault shell so the tree, folder browser, document canvas,
+   and context panel match the workspace contract.
+2. Finish the mobile vault browser/editor split with keyboard-safe WYSIWYG
+   editing.
+3. Verify hierarchy through create, move, sync, export, import, search, and AI
+   tool results.
+4. Only then continue custom card template authoring and richer card editing.
 
 ## Test Plan by Layer
 

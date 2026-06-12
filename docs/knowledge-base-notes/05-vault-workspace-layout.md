@@ -54,6 +54,91 @@ This means hierarchy, editor fidelity, and layout are inseparable acceptance
 criteria. If any of them regresses, the feature has drifted back into the old
 notes system.
 
+### Workspace Mental Model
+
+The workspace should be designed as a file-based vault, not as a notes database
+with a nicer skin.
+
+The user-facing model is:
+
+```text
+Knowledge Vault
+├── Book Space
+│   ├── Book Home.md
+│   ├── Chapter Notes/
+│   │   ├── Chapter 01.md
+│   │   └── Chapter 02.md
+│   ├── Ideas/
+│   └── Reviews/
+└── Global Space, later
+```
+
+Important implications:
+
+- A path is a first-class product object. The tree path, breadcrumb, import
+  preview, export path, sync reconciliation, and AI tool result must describe
+  the same location.
+- A folder is not a tag and not a group. It owns children in the tree.
+- A document is not a card. It opens into a writing canvas.
+- The active node can be root, folder, or document, and each state has a
+  different UI: root/folder shows browsing rows; document shows WYSIWYG editing.
+- Book-scoped knowledge is the v1 default. A global vault can arrive later, but
+  it must use the same folder/document primitives instead of becoming another
+  flat list.
+- "Recently edited", tags, search, backlinks, and AI-generated collections are
+  discovery views. They must always resolve back to a real folder/document path.
+
+This is the Obsidian-like part of the feature. It is not about copying
+Obsidian's visuals; it is about preserving the user's spatial memory.
+
+### WYSIWYG Reading And Writing Standard
+
+The editor should feel like a clean document, not like a Markdown textarea with
+formatting buttons.
+
+Rules:
+
+- The title and body should feel continuous. The title can be a large editable
+  heading at the top of the document canvas, not a form field floating above it.
+- Markdown shortcuts are allowed, but they must immediately become rich blocks.
+- Source references, AI output, callouts, reviews, diagrams, and custom cards
+  should render as Tiptap node views inside the document. They should not open
+  as unrelated forms unless a configuration sheet is needed.
+- Display state and edit state should not be two separate modes for normal
+  writing. Click, type, autosave.
+- Metadata belongs around the document: path, tags, source links, backlinks,
+  sync state, and AI context. It should not interrupt the document body.
+- Raw Markdown is an export/import/debug affordance, not the default authoring
+  experience.
+
+The visual quality bar is closer to a native writing app plus an Obsidian-style
+vault tree than to a CRUD management page.
+
+### Layout Redesign Target
+
+The layout should be optimized around one question per zone:
+
+| Zone | Question | Primary UI |
+| --- | --- | --- |
+| Left / browser | Where am I? | Vault tree, folder rows, search, create/move. |
+| Center / canvas | What am I writing? | Breadcrumb, title, WYSIWYG body, folder browser. |
+| Right / inspector | What is connected? | Sources, backlinks, outline, AI memory, export state. |
+
+The center canvas must remain visually dominant. The left tree can be dense, and
+the right inspector can be useful, but neither should make the document feel
+like a small card embedded in a dashboard.
+
+When reviewing any implementation, reject it if:
+
+- The first screen looks like a dashboard, metrics panel, or card grid.
+- The folder hierarchy is only implied through filters, chips, or grouped
+  headings.
+- The editor looks like a settings form with title/body/metadata fields stacked
+  together.
+- Folder views show empty editor chrome instead of child folders/documents.
+- Mobile compresses vault browsing, editing, tags, sources, backlinks, and AI
+  context into one long scroll.
+
 ### Layout Correction After Review
 
 The product should be reviewed as a vault workspace before it is reviewed as a
@@ -418,15 +503,59 @@ A folder is a browsing surface, not a document editor pretending to be empty.
 Folder view should show:
 
 - Folder title and path.
-- Child folders first, then documents.
+- Child folders first, then documents, using rows that preserve the same
+  indentation and icons as the vault tree.
 - Small metadata per child: type, updated time or excerpt.
 - Empty state with two direct actions: new folder, new note.
+- Create destination preview, for example `Create in Chapter Notes / Themes`.
+- Path-aware actions: rename, move, export this folder, and create inside.
 
 It should not show:
 
 - A giant decorative icon block.
 - Blank editor space.
 - Heavy cards that make the folder feel like a dashboard.
+- A fake "current document" panel when no document is selected.
+
+### Document View
+
+A document is the writing surface.
+
+Document view should show:
+
+- File-path breadcrumb above the title.
+- A large editable title that reads as the first line of the document.
+- Quiet status text for autosave/sync and document type.
+- The Tiptap body as the main surface.
+- Inline source/card blocks where they belong in the body.
+- Optional context panel on desktop or context sheet on mobile.
+
+It should not show:
+
+- Title, author, tags, body, and source as one long form.
+- A second "preview" mode that users must enter before the document feels
+  polished.
+- Nested cards around the editor.
+- Persistent metadata panels that push the writing area below the fold.
+
+### Mobile Interaction Shape
+
+Mobile should feel like two native modes sharing the same vault model:
+
+- Vault browser mode: browse folders, search, create, move, and open documents.
+- Document editor mode: write in a focused WYSIWYG editor with keyboard-aware
+  toolbar and compact path/title header.
+
+Mobile sheets are for temporary actions:
+
+- Create folder/document.
+- Move to folder.
+- Insert block/card/image.
+- Edit card options.
+- View sources/backlinks/AI context.
+
+Sheets should not replace the main editor. Long-form editing must happen in the
+document editor, not inside a tiny bottom-sheet textarea.
 
 ## Layout Quality Bar
 

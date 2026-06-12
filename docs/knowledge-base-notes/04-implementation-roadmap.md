@@ -195,10 +195,8 @@ Verification:
 Status: partially implemented. Built-in card registry, card templates, desktop
 node views, mobile WebView card rendering, Markdown fallbacks, shared card
 attribute upgrades, visible unknown/future-version card fallback metadata, and
-a document-preserved AI/tool failure card exist. Richer card editing and
-complex schema migrations remain future work. Do not expand card creation UI
-until the vault layout and WYSIWYG document surface pass the workspace quality
-bar.
+user-created custom card templates from the desktop/mobile insert menus exist.
+Richer card editing and complex schema migrations remain future work.
 
 Goal:
 

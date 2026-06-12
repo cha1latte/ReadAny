@@ -27,13 +27,14 @@ import {
 } from "@/components/ui/Icon";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
-import { getKnowledgeCardTemplates } from "@readany/core/db/database";
+import { getKnowledgeCardTemplates, upsertKnowledgeCardTemplate } from "@readany/core/db/database";
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
   builtInReadAnyCards,
   clearKnowledgeEditorDraft,
+  createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createKnowledgeEditorDraftKey,
   createReadAnyCardAttrsFromTemplate,
@@ -53,6 +54,7 @@ import {
 } from "@readany/core/knowledge";
 import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
+import { generateId } from "@readany/core/utils";
 import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -327,6 +329,12 @@ export function MobileKnowledgeEditor({
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
+  const [isTemplateFormOpen, setIsTemplateFormOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [templateMarkdown, setTemplateMarkdown] = useState("");
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
   const errorMessage = editorIssue?.message ?? null;
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -786,6 +794,55 @@ export function MobileKnowledgeEditor({
     },
     [canInsertCard, runCommand],
   );
+  const createAndInsertTemplate = useCallback(async () => {
+    if (!canUse("readAnyCards") || isSavingTemplate) return;
+    const name = templateName.trim();
+    if (!name) return;
+
+    setIsSavingTemplate(true);
+    setTemplateSaveError(null);
+    try {
+      const template = createCustomReadAnyCardTemplate({
+        id: `card-template-${generateId()}`,
+        name,
+        description: templateDescription,
+        markdown: templateMarkdown,
+      });
+      await upsertKnowledgeCardTemplate(template);
+      setCardTemplates((current) =>
+        [...current.filter((item) => item.id !== template.id), template].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      runCommand(
+        "insertCard",
+        createReadAnyCardAttrsFromTemplate(template) as Record<string, unknown>,
+      );
+      setTemplateName("");
+      setTemplateDescription("");
+      setTemplateMarkdown("");
+      setIsTemplateFormOpen(false);
+      setShowCardMenu(false);
+      setShowBlockInsertMenu(false);
+    } catch (error) {
+      console.warn("[MobileKnowledgeEditor] Failed to create card template:", error);
+      setTemplateSaveError(
+        error instanceof Error
+          ? error.message
+          : t("notes.knowledgeCustomCardCreateFailed", "创建自定义卡片失败"),
+      );
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  }, [
+    canUse,
+    isSavingTemplate,
+    runCommand,
+    t,
+    templateDescription,
+    templateMarkdown,
+    templateName,
+  ]);
 
   const handleFallbackChange = useCallback(
     (markdown: string) => {
@@ -1722,48 +1779,157 @@ export function MobileKnowledgeEditor({
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
-            onPress={() => setShowCardMenu(false)}
+            onPress={() => {
+              setShowCardMenu(false);
+              setTemplateSaveError(null);
+            }}
           />
-          <View style={[styles.cardSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-            <View style={styles.cardSheetHandle} />
-            <View style={styles.cardSheetHeader}>
-              <Text style={styles.cardSheetTitle}>
-                {t("notes.knowledgeCardPickerTitle", "插入知识卡片")}
-              </Text>
-              <Text style={styles.cardSheetHint}>
-                {t("notes.knowledgeCardPickerHint", "选择一种结构，插入后会随知识文档同步和导出。")}
-              </Text>
-            </View>
-            <ScrollView
-              style={styles.cardOptionScroll}
-              contentContainerStyle={styles.cardOptionList}
-              showsVerticalScrollIndicator={false}
-            >
-              {allowedCards.map((card) => {
-                const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
-                return (
-                  <TouchableOpacity
-                    key={card.key}
-                    style={styles.cardOption}
-                    activeOpacity={0.78}
-                    onPress={() => insertCard(card)}
-                  >
-                    <View style={styles.cardOptionIcon}>
-                      <Icon size={18} color={colors.primary} />
-                    </View>
-                    <View style={styles.cardOptionText}>
-                      <Text style={styles.cardOptionTitle}>{card.insertLabel}</Text>
-                      {card.description ? (
-                        <Text style={styles.cardOptionDescription} numberOfLines={2}>
-                          {card.description}
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={[styles.cardSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+              <View style={styles.cardSheetHandle} />
+              <View style={styles.cardSheetHeader}>
+                <Text style={styles.cardSheetTitle}>
+                  {t("notes.knowledgeCardPickerTitle", "插入知识卡片")}
+                </Text>
+                <Text style={styles.cardSheetHint}>
+                  {t(
+                    "notes.knowledgeCardPickerHint",
+                    "选择一种结构，插入后会随知识文档同步和导出。",
+                  )}
+                </Text>
+              </View>
+              <ScrollView
+                style={styles.cardOptionScroll}
+                contentContainerStyle={styles.cardOptionList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {allowedCards.map((card) => {
+                  const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
+                  return (
+                    <TouchableOpacity
+                      key={card.key}
+                      style={styles.cardOption}
+                      activeOpacity={0.78}
+                      onPress={() => insertCard(card)}
+                    >
+                      <View style={styles.cardOptionIcon}>
+                        <Icon size={18} color={colors.primary} />
+                      </View>
+                      <View style={styles.cardOptionText}>
+                        <Text style={styles.cardOptionTitle}>{card.insertLabel}</Text>
+                        {card.description ? (
+                          <Text style={styles.cardOptionDescription} numberOfLines={2}>
+                            {card.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                {canUse("readAnyCards") ? (
+                  <View style={styles.cardTemplateSection}>
+                    {isTemplateFormOpen ? (
+                      <View style={styles.cardTemplateForm}>
+                        <Text style={styles.cardTemplateLabel}>
+                          {t("notes.knowledgeCustomCardName", "卡片名称")}
                         </Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
+                        <TextInput
+                          value={templateName}
+                          onChangeText={(text) => {
+                            setTemplateName(text);
+                            setTemplateSaveError(null);
+                          }}
+                          placeholder={t(
+                            "notes.knowledgeCustomCardNamePlaceholder",
+                            "概念、时间线、阅读问题...",
+                          )}
+                          placeholderTextColor={colors.mutedForeground}
+                          style={styles.linkInput}
+                        />
+                        <Text style={styles.cardTemplateLabel}>
+                          {t("notes.knowledgeCustomCardDescription", "描述")}
+                        </Text>
+                        <TextInput
+                          value={templateDescription}
+                          onChangeText={setTemplateDescription}
+                          placeholder={t(
+                            "notes.knowledgeCustomCardDescriptionPlaceholder",
+                            "这个结构用来记录什么",
+                          )}
+                          placeholderTextColor={colors.mutedForeground}
+                          style={styles.linkInput}
+                        />
+                        <Text style={styles.cardTemplateLabel}>
+                          {t("notes.knowledgeCustomCardDefaultBody", "默认正文")}
+                        </Text>
+                        <TextInput
+                          value={templateMarkdown}
+                          onChangeText={setTemplateMarkdown}
+                          placeholder={t(
+                            "notes.knowledgeCustomCardBodyPlaceholder",
+                            "问题：\n回答：\n来源：",
+                          )}
+                          placeholderTextColor={colors.mutedForeground}
+                          multiline
+                          textAlignVertical="top"
+                          style={[styles.linkInput, styles.cardTemplateBodyInput]}
+                        />
+                        {templateSaveError ? (
+                          <Text style={styles.cardTemplateError}>{templateSaveError}</Text>
+                        ) : null}
+                        <View style={styles.linkActions}>
+                          <TouchableOpacity
+                            style={styles.linkGhostButton}
+                            onPress={() => {
+                              setIsTemplateFormOpen(false);
+                              setTemplateSaveError(null);
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={styles.linkGhostText}>{t("common.cancel", "取消")}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.linkPrimaryButton,
+                              (!templateName.trim() || isSavingTemplate) && styles.disabledButton,
+                            ]}
+                            onPress={createAndInsertTemplate}
+                            activeOpacity={0.82}
+                            disabled={!templateName.trim() || isSavingTemplate}
+                          >
+                            <Text style={styles.linkPrimaryText}>
+                              {isSavingTemplate
+                                ? t("common.saving", "保存中...")
+                                : t("notes.knowledgeCustomCardCreate", "创建卡片")}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.cardOption, styles.customCardOption]}
+                        activeOpacity={0.78}
+                        onPress={() => setIsTemplateFormOpen(true)}
+                      >
+                        <View style={styles.cardOptionIcon}>
+                          <SparklesIcon size={18} color={colors.primary} />
+                        </View>
+                        <View style={styles.cardOptionText}>
+                          <Text style={styles.cardOptionTitle}>
+                            {t("notes.knowledgeCustomCardNew", "新建自定义卡片")}
+                          </Text>
+                          <Text style={styles.cardOptionDescription} numberOfLines={2}>
+                            {t("notes.knowledgeCustomCardNewHint", "创建一个可同步复用的结构。")}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : null}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -2270,6 +2436,41 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     cardOptionList: {
       gap: 8,
       paddingBottom: 2,
+    },
+    cardTemplateSection: {
+      gap: 8,
+      marginTop: 2,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+    },
+    cardTemplateForm: {
+      gap: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+      backgroundColor: withOpacity(colors.muted, 0.28),
+      padding: 10,
+    },
+    cardTemplateLabel: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    cardTemplateBodyInput: {
+      minHeight: 96,
+      paddingTop: 10,
+      paddingBottom: 10,
+      lineHeight: 19,
+    },
+    cardTemplateError: {
+      color: colors.destructive,
+      fontSize: fontSize.xs,
+      lineHeight: 17,
+    },
+    customCardOption: {
+      borderStyle: "dashed",
+      backgroundColor: withOpacity(colors.primary, 0.05),
     },
     cardOption: {
       minHeight: 66,

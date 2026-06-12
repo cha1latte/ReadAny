@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
   getReadAnyCardDefinition,
@@ -220,6 +221,39 @@ describe("ReadAny card registry", () => {
       title: "New concept",
       markdown: "Definition:\nEvidence:",
       data: { kind: "concept" },
+    });
+  });
+
+  it("creates synced custom card templates for user-authored structures", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-reading-question",
+      name: "Reading Question",
+      description: "Track a question and answer.",
+      markdown: "Question:\nAnswer:",
+      now: 123,
+    });
+
+    expect(template).toEqual({
+      id: "template-reading-question",
+      name: "Reading Question",
+      version: 1,
+      schemaJson: {
+        cardType: "custom:template-reading-question",
+        insertLabel: "Reading Question",
+        description: "Track a question and answer.",
+        title: "Reading Question",
+        markdown: "Question:\nAnswer:",
+      },
+      builtIn: false,
+      enabled: true,
+      createdAt: 123,
+      updatedAt: 123,
+    });
+    expect(createReadAnyCardAttrsFromTemplate(template)).toEqual({
+      cardType: "custom:template-reading-question",
+      version: 1,
+      title: "Reading Question",
+      markdown: "Question:\nAnswer:",
     });
   });
 });

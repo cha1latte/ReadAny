@@ -1,4 +1,4 @@
-import type { KnowledgeCardTemplate } from "../types";
+import type { JSONValue, KnowledgeCardTemplate } from "../types";
 
 export interface ReadAnyCardAttrs {
   cardType?: string;
@@ -36,6 +36,14 @@ export interface ReadAnyCardTemplateSchema {
   sourceId?: string;
   cfi?: string;
   attrs?: Record<string, unknown>;
+}
+
+export interface CreateCustomReadAnyCardTemplateInput {
+  id: string;
+  name: string;
+  description?: string;
+  markdown?: string;
+  now?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -408,6 +416,36 @@ export function createDefaultReadAnyCardAttrs(
     version,
     title,
     markdown: "",
+  };
+}
+
+export function createCustomReadAnyCardTemplate({
+  id,
+  name,
+  description,
+  markdown,
+  now = Date.now(),
+}: CreateCustomReadAnyCardTemplateInput): KnowledgeCardTemplate {
+  const trimmedName = name.trim();
+  const title = trimmedName || "Custom card";
+  const schemaJson: Record<string, JSONValue> = {
+    cardType: `custom:${id}`,
+    insertLabel: title,
+    title,
+    markdown: markdown?.trim() ?? "",
+  };
+  const trimmedDescription = description?.trim();
+  if (trimmedDescription) schemaJson.description = trimmedDescription;
+
+  return {
+    id,
+    name: title,
+    version: 1,
+    schemaJson,
+    builtIn: false,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 

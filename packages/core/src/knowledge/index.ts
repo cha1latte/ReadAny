@@ -89,6 +89,7 @@ export type {
 } from "./document-utils";
 export {
   builtInReadAnyCards,
+  createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
   getReadAnyCardDefinition,
@@ -100,6 +101,7 @@ export {
 } from "./card-registry";
 export type {
   ReadAnyCardAttrs,
+  CreateCustomReadAnyCardTemplateInput,
   ReadAnyCardDefinition,
   ReadAnyCardMarkdownContext,
   ReadAnyCardTemplateSchema,

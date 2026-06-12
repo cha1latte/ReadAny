@@ -2142,9 +2142,53 @@ a { color: ${primary} !important; }
       return childStyle.writingMode === 'vertical-rl' || childStyle.writingMode === 'vertical-lr';
     }
 
+    function isPdfTextLayerDoc(doc) {
+      return !!(doc && doc.querySelector && doc.querySelector('.textLayer') && doc.querySelector('#canvas'));
+    }
+
+    function getPdfTextSelectionStyles() {
+      return `
+        #canvas, #canvas canvas {
+          pointer-events: none !important;
+          -webkit-user-select: none !important;
+          user-select: none !important;
+        }
+        .textLayer {
+          z-index: 2 !important;
+          pointer-events: auto !important;
+          -webkit-user-select: text !important;
+          user-select: text !important;
+          touch-action: auto !important;
+          cursor: text !important;
+        }
+        .textLayer span,
+        .textLayer br {
+          -webkit-user-select: text !important;
+          user-select: text !important;
+          touch-action: auto !important;
+          cursor: text !important;
+        }
+        .annotationLayer {
+          z-index: 3 !important;
+          pointer-events: none !important;
+        }
+        .annotationLayer section {
+          pointer-events: none !important;
+        }
+        .annotationLayer a,
+        .annotationLayer button,
+        .annotationLayer input,
+        .annotationLayer select,
+        .annotationLayer textarea {
+          pointer-events: auto !important;
+        }
+      `;
+    }
+
     function applyDocStyles(doc) {
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
+      const pdfTextLayerDoc = isPdfTextLayerDoc(doc);
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.maxWidth = '100%';
@@ -2160,6 +2204,7 @@ a { color: ${primary} !important; }
         a { color: ${primary} !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
         ${verticalDoc ? getVerticalWritingCompatibilityStyles() : ''}
+        ${pdfTextLayerDoc ? getPdfTextSelectionStyles() : ''}
       `;
       doc.head.appendChild(style);
       doc.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); return false; }, true);

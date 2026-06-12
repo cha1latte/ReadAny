@@ -2614,18 +2614,13 @@ function KnowledgeVaultRootOverview({
       <button
         key={document.id}
         type="button"
-        className="group flex w-full items-center gap-3 border-b border-border/30 px-2.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
-        <span
-          className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border",
-            isFolder
-              ? "border-primary/15 bg-primary/[0.06] text-primary"
-              : "border-border/35 bg-muted/20 text-muted-foreground",
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" />
+        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
+          <Icon
+            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
@@ -2637,7 +2632,7 @@ function KnowledgeVaultRootOverview({
           </span>
         </span>
         {isFolder ? (
-          <span className="shrink-0 rounded-md bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
             {childCount}
           </span>
         ) : null}
@@ -3853,18 +3848,13 @@ function KnowledgeFolderOverview({
       <button
         key={document.id}
         type="button"
-        className="group flex w-full items-center gap-3 border-b border-border/30 px-2.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
-        <span
-          className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border",
-            isFolder
-              ? "border-primary/15 bg-primary/[0.06] text-primary"
-              : "border-border/35 bg-muted/20 text-muted-foreground",
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" />
+        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
+          <Icon
+            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
@@ -3876,7 +3866,7 @@ function KnowledgeFolderOverview({
           </span>
         </span>
         {isFolder ? (
-          <span className="shrink-0 rounded-md bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
             {childCount}
           </span>
         ) : null}
@@ -3888,7 +3878,7 @@ function KnowledgeFolderOverview({
   return (
     <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
       <nav
-        className="mb-4 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
+        className="mb-4 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] font-medium text-muted-foreground"
         aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
         title={folderPathLabel}
       >
@@ -3899,33 +3889,35 @@ function KnowledgeFolderOverview({
           const canNavigate = !isCurrent && (isRoot || !!targetDocument);
 
           return (
-            <button
-              key={`${item.id}-${index}`}
-              type="button"
-              disabled={!canNavigate}
-              onClick={() => {
-                if (!canNavigate) return;
-                if (isRoot) {
-                  onSelectRoot();
-                  return;
-                }
-                if (targetDocument) onSelect(targetDocument);
-              }}
-              className={cn(
-                "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-2 transition-colors",
-                isCurrent
-                  ? "border-primary/25 bg-primary/10 text-primary"
-                  : "border-border/45 bg-muted/20 hover:border-primary/25 hover:bg-primary/5 hover:text-foreground",
-                !canNavigate && "cursor-default",
-              )}
-            >
-              {item.type === "folder" || item.id === "__vault__" ? (
-                <Folder className="h-3 w-3 shrink-0" />
-              ) : (
-                <FileText className="h-3 w-3 shrink-0" />
-              )}
-              <span className="truncate">{item.title}</span>
-            </button>
+            <span key={`${item.id}-${index}`} className="inline-flex min-w-0 items-center gap-1">
+              {index > 0 ? <span className="text-border">/</span> : null}
+              <button
+                type="button"
+                disabled={!canNavigate}
+                onClick={() => {
+                  if (!canNavigate) return;
+                  if (isRoot) {
+                    onSelectRoot();
+                    return;
+                  }
+                  if (targetDocument) onSelect(targetDocument);
+                }}
+                className={cn(
+                  "inline-flex h-5 max-w-[14rem] min-w-0 items-center gap-1 rounded-sm px-1 transition-colors",
+                  isCurrent
+                    ? "text-primary"
+                    : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+                  !canNavigate && "cursor-default",
+                )}
+              >
+                {item.type === "folder" || item.id === "__vault__" ? (
+                  <Folder className="h-3 w-3 shrink-0" />
+                ) : (
+                  <FileText className="h-3 w-3 shrink-0" />
+                )}
+                <span className="truncate">{item.title}</span>
+              </button>
+            </span>
           );
         })}
       </nav>

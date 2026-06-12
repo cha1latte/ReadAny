@@ -173,6 +173,7 @@
     "knowledgeDocumentTitle": "知識文件標題",
     "knowledgeUntitledDocument": "未命名文件",
     "knowledgeNewDocument": "新增文件",
+    "knowledgeCreateIn": "建立於",
     "knowledgeNewDocumentTitle": "新文件 {{count}}",
     "knowledgeNewFolder": "新增資料夾",
     "knowledgeNewNote": "新增筆記",

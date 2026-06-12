@@ -173,6 +173,7 @@
     "knowledgeDocumentTitle": "ナレッジドキュメントのタイトル",
     "knowledgeUntitledDocument": "無題のドキュメント",
     "knowledgeNewDocument": "新規ドキュメント",
+    "knowledgeCreateIn": "作成先",
     "knowledgeNewDocumentTitle": "新規ドキュメント {{count}}",
     "knowledgeNewFolder": "新規フォルダー",
     "knowledgeNewNote": "新規ノート",

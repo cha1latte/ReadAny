@@ -173,6 +173,7 @@
     "knowledgeDocumentTitle": "Knowledge document title",
     "knowledgeUntitledDocument": "Untitled document",
     "knowledgeNewDocument": "New document",
+    "knowledgeCreateIn": "Create in",
     "knowledgeNewDocumentTitle": "New document {{count}}",
     "knowledgeNewFolder": "New folder",
     "knowledgeNewNote": "New note",

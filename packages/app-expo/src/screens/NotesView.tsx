@@ -3358,7 +3358,7 @@ function KnowledgeDocumentExplorer({
                 {t("notes.knowledgeNewDocument", "新建文档")}
               </Text>
               <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
-                {t("notes.knowledgeMoveTo", "移动到")} · {createDestinationLabel}
+                {t("notes.knowledgeCreateIn", "创建于")} · {createDestinationLabel}
               </Text>
             </View>
             <TouchableOpacity

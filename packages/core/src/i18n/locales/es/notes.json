@@ -173,6 +173,7 @@
     "knowledgeDocumentTitle": "Título del documento de conocimiento",
     "knowledgeUntitledDocument": "Documento sin título",
     "knowledgeNewDocument": "Nuevo documento",
+    "knowledgeCreateIn": "Crear en",
     "knowledgeNewDocumentTitle": "Nuevo documento {{count}}",
     "knowledgeNewFolder": "Nueva carpeta",
     "knowledgeNewNote": "Nueva nota",

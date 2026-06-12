@@ -173,6 +173,7 @@
     "knowledgeDocumentTitle": "지식 문서 제목",
     "knowledgeUntitledDocument": "제목 없는 문서",
     "knowledgeNewDocument": "새 문서",
+    "knowledgeCreateIn": "생성 위치",
     "knowledgeNewDocumentTitle": "새 문서 {{count}}",
     "knowledgeNewFolder": "새 폴더",
     "knowledgeNewNote": "새 노트",

@@ -98,17 +98,34 @@ async function buildKnowledgeEditor() {
       post({ type: "selectionChanged", ...selectionState() });
     };
 
+    const createContentPayload = (requestId) => {
+      if (!editor) return;
+      return {
+        type: "contentChanged",
+        ...(typeof requestId === "string" && requestId ? { requestId } : {}),
+        contentJson: editor.getJSON(),
+        plainText: editor.getText(),
+      };
+    };
+
     const postContent = () => {
       if (!editor) return;
       clearTimeout(changeTimer);
       changeTimer = setTimeout(() => {
-        post({
-          type: "contentChanged",
-          contentJson: editor.getJSON(),
-          plainText: editor.getText(),
-        });
+        const payload = createContentPayload();
+        if (!payload) return;
+        post(payload);
         scheduleHeight();
       }, 180);
+    };
+
+    const postContentNow = (requestId) => {
+      if (!editor) return;
+      clearTimeout(changeTimer);
+      const payload = createContentPayload(requestId);
+      if (!payload) return;
+      post(payload);
+      scheduleHeight();
     };
 
     const updateCardAttrs = (node, getPos, attrs) => {
@@ -455,6 +472,11 @@ async function buildKnowledgeEditor() {
         onUpdate: () => postContent(),
         onSelectionUpdate: () => postSelection(),
         onTransaction: () => scheduleHeight(),
+        onFocus: () => post({ type: "focusChanged", focused: true }),
+        onBlur: () => {
+          postContentNow();
+          post({ type: "focusChanged", focused: false });
+        },
       });
       ready = true;
     };
@@ -631,18 +653,17 @@ async function buildKnowledgeEditor() {
           case "setEditable":
             editor?.setEditable(message.editable !== false);
             break;
+          case "focus":
+            runCommand("focus", { position: message.position });
+            break;
+          case "blur":
+            runCommand("blur");
+            break;
           case "runCommand":
             runCommand(message.command, message.attrs);
             break;
           case "requestContent":
-            if (editor) {
-              post({
-                type: "contentChanged",
-                requestId: message.requestId,
-                contentJson: editor.getJSON(),
-                plainText: editor.getText(),
-              });
-            }
+            postContentNow(message.requestId);
             break;
           default:
             post({ type: "error", code: "unknown_message", message: "Unknown bridge message: " + message.type });

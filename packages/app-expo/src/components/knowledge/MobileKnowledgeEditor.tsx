@@ -133,7 +133,12 @@ type EditorBridgeMessage =
   | { type: "loaded" }
   | { type: "ready" }
   | { type: "heightChanged"; height?: unknown }
-  | { type: "contentChanged"; contentJson?: unknown; plainText?: unknown }
+  | {
+      type: "contentChanged";
+      requestId?: unknown;
+      contentJson?: unknown;
+      plainText?: unknown;
+    }
   | {
       type: "selectionChanged";
       marks?: SelectionState["marks"];
@@ -142,6 +147,7 @@ type EditorBridgeMessage =
       canUndo?: boolean;
       canRedo?: boolean;
     }
+  | { type: "focusChanged"; focused?: unknown }
   | { type: "error"; code?: string; message?: string };
 
 type EditorCommand =
@@ -154,7 +160,10 @@ type EditorCommand =
       readOnly?: boolean;
     }
   | { type: "setContent"; contentJson: JSONValue }
+  | { type: "focus"; position?: "start" | "end" }
+  | { type: "blur" }
   | { type: "setTheme"; theme: EditorTheme }
+  | { type: "requestContent"; requestId: string }
   | { type: "runCommand"; command: string; attrs?: Record<string, unknown> };
 
 interface EditorTheme {
@@ -255,6 +264,7 @@ export function MobileKnowledgeEditor({
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
   const [isBridgeReady, setIsBridgeReady] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
   const [editorHeight, setEditorHeight] = useState(MIN_EDITOR_HEIGHT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -503,6 +513,7 @@ export function MobileKnowledgeEditor({
     setUseMarkdownFallback(false);
     setIsBridgeReady(false);
     setIsEditorReady(false);
+    setIsEditorFocused(false);
     setEditorReloadKey((key) => key + 1);
     webViewRef.current?.reload();
   }, []);
@@ -527,7 +538,7 @@ export function MobileKnowledgeEditor({
       theme,
     });
     if (autoFocus) {
-      injectCommand({ type: "runCommand", command: "focus", attrs: { position: "end" } });
+      injectCommand({ type: "focus", position: "end" });
     }
   }, [autoFocus, injectCommand, placeholder, t, theme]);
 
@@ -593,6 +604,9 @@ export function MobileKnowledgeEditor({
           onChange(nextValue);
           break;
         }
+        case "focusChanged":
+          setIsEditorFocused(message.focused === true);
+          break;
         case "error":
           console.error("[MobileKnowledgeEditor] WebView error:", message);
           setErrorMessage(message.message || t("notes.knowledgeEditorError", "编辑器出错了"));
@@ -1093,6 +1107,7 @@ export function MobileKnowledgeEditor({
         style={[
           styles.webViewFrame,
           isDocumentLayout ? styles.webViewFrameDocument : { height: editorHeight },
+          isEditorFocused && styles.webViewFrameFocused,
         ]}
       >
         {!htmlUri ? (
@@ -1122,12 +1137,14 @@ export function MobileKnowledgeEditor({
               onError={(event) => {
                 console.error("[MobileKnowledgeEditor] WebView load error:", event.nativeEvent);
                 setErrorMessage(t("notes.knowledgeEditorLoadFailed", "编辑器加载失败"));
+                setIsEditorFocused(false);
                 setUseMarkdownFallback(true);
               }}
               onContentProcessDidTerminate={() => {
                 setErrorMessage(t("notes.knowledgeEditorReloading", "编辑器正在恢复..."));
                 setIsBridgeReady(false);
                 setIsEditorReady(false);
+                setIsEditorFocused(false);
                 setEditorReloadKey((key) => key + 1);
               }}
             />
@@ -1593,7 +1610,12 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     },
     webViewFrame: {
       minHeight: MIN_EDITOR_HEIGHT,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
       backgroundColor: colors.background,
+    },
+    webViewFrameFocused: {
+      borderTopColor: withOpacity(colors.primary, 0.42),
     },
     webViewFrameDocument: {
       flex: 1,

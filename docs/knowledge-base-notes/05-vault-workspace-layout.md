@@ -36,6 +36,24 @@ These decisions are part of the feature contract, not implementation details:
 - The workspace must look like a focused reader/writer tool, not a dashboard,
   settings page, or note-card wall.
 
+### User Experience Correction
+
+The knowledge-base UI must be judged by three simultaneous signals:
+
+- Hierarchy is visible before content density. The user should immediately see
+  folders, nested documents, the active path, and where a new document will be
+  created.
+- Writing is direct manipulation. The document body is a WYSIWYG canvas powered
+  by Tiptap, not a Markdown textarea, JSON editor, or settings-style form.
+- Layout supports the mental model. Desktop should feel like a vault sidebar
+  plus writing canvas plus quiet inspector; mobile should feel like native vault
+  browsing into a focused editor. A stacked card feed fails this feature even if
+  the underlying data model is correct.
+
+This means hierarchy, editor fidelity, and layout are inseparable acceptance
+criteria. If any of them regresses, the feature has drifted back into the old
+notes system.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.
@@ -387,6 +405,10 @@ Before this ships:
 
 - Creating folders and documents produces a visible hierarchy.
 - Moving a document updates the tree, breadcrumb, export path, and sync state.
+- The active path is visible in the desktop vault sidebar, desktop document
+  canvas, and mobile vault browser.
+- Selecting a folder behaves like browsing a folder; selecting a document opens
+  a real writing surface.
 - Search finds documents inside collapsed folders.
 - Desktop can edit a document while seeing the vault tree and context.
 - Mobile can browse the vault and open a focused WYSIWYG editor.

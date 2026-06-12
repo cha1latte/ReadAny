@@ -94,9 +94,26 @@ describe("KnowledgeExporter", () => {
       contentJson: { type: "doc", content: [] },
       contentMd: "Why does this matter?",
     });
+    const nestedFolder = knowledgeDocument({
+      id: "folder-2",
+      parentId: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const nestedNoteWithSameName = knowledgeDocument({
+      id: "note-2",
+      parentId: "folder-2",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "A same-name note can live in a different folder.",
+    });
     const vault = exporter.buildVaultPackage({
       books: [baseBook],
-      documents: [knowledgeDocument(), folder, note],
+      documents: [knowledgeDocument(), folder, note, nestedFolder, nestedNoteWithSameName],
     });
 
     expect(vault.files.map((file) => file.path)).toContain(
@@ -105,12 +122,26 @@ describe("KnowledgeExporter", () => {
     expect(vault.files.map((file) => file.path)).toContain(
       "Books/The Book A Study/Reading Trail/Question Log.md",
     );
+    expect(vault.files.map((file) => file.path)).toContain(
+      "Books/The Book A Study/Reading Trail/Themes/README.md",
+    );
+    expect(vault.files.map((file) => file.path)).toContain(
+      "Books/The Book A Study/Reading Trail/Themes/Question Log.md",
+    );
     expect(vault.files.find((file) => file.path.endsWith("Question Log.md"))?.content).toContain(
       'parentId: "folder-1"',
     );
     expect(vault.manifest.documents["note-1"]).toMatchObject({
       parentId: "folder-1",
       path: "Books/The Book A Study/Reading Trail/Question Log.md",
+    });
+    expect(vault.manifest.documents["folder-2"]).toMatchObject({
+      parentId: "folder-1",
+      path: "Books/The Book A Study/Reading Trail/Themes/README.md",
+    });
+    expect(vault.manifest.documents["note-2"]).toMatchObject({
+      parentId: "folder-2",
+      path: "Books/The Book A Study/Reading Trail/Themes/Question Log.md",
     });
   });
 

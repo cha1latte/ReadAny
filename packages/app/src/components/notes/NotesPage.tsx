@@ -2217,7 +2217,7 @@ function KnowledgeHomePanel({
         />
 
         <section className="flex min-w-0 flex-col overflow-hidden bg-background">
-          <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-background/90 px-4 backdrop-blur">
+          <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-background/95 px-4 backdrop-blur">
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="max-w-56 truncate font-medium text-foreground">{book.title}</span>
@@ -2260,7 +2260,7 @@ function KnowledgeHomePanel({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-7">
             <div className="mx-auto max-w-[840px] pb-5">
               <KnowledgeDocumentBreadcrumbs
                 document={document}
@@ -2348,7 +2348,7 @@ function KnowledgeHomePanel({
         {isContextInspectorOpen ? (
           <aside
             className={cn(
-              "min-h-0 min-w-0 overflow-y-auto border-l border-border/35 bg-muted/[0.13]",
+              "min-h-0 min-w-0 overflow-y-auto border-l border-border/35 bg-muted/[0.10]",
               isCompactWorkspace &&
                 "absolute bottom-0 right-0 top-0 z-20 w-[320px] max-w-[calc(100%-292px)] bg-background shadow-2xl shadow-background/30",
             )}
@@ -3165,6 +3165,10 @@ function KnowledgeDocumentExplorer({
     return (
       <div key={document.id}>
         <div
+          role="treeitem"
+          aria-level={node.depth + 1}
+          aria-selected={isActive}
+          aria-expanded={isFolder && !normalizedQuery ? isExpanded : undefined}
           className={cn(
             "group relative flex min-h-8 items-center gap-1 rounded-md border border-transparent pr-1 transition-colors",
             isActive
@@ -3411,7 +3415,13 @@ function KnowledgeDocumentExplorer({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2.5">
+      <div
+        className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2.5"
+        role="tree"
+        aria-label={`${t("notes.knowledgeVaultRoot", {
+          defaultValue: "Knowledge base",
+        })} ${t("notes.knowledgeDocuments")}`}
+      >
         {normalizedQuery ? (
           visibleSearchNodes.length === 0 ? (
             <p className="rounded-md bg-muted/30 px-2.5 py-3 text-xs leading-relaxed text-muted-foreground">

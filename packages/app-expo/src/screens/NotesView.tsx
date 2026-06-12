@@ -1689,21 +1689,18 @@ function KnowledgeHomePanel({
       ...folderTargets,
     ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
   }, [document, documents, t]);
-  const activePath = useMemo(
-    () => (document ? knowledgeDocumentPathText(document, documents, t, title) : ""),
+  const activePathItems = useMemo(
+    () =>
+      document
+        ? knowledgeDocumentPathItems(document, documents, t, title)
+        : [{ id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") }],
     [document, documents, t, title],
   );
-  const activePathParts = useMemo(() => {
-    const parts = activePath
-      ? activePath.split(" / ").filter(Boolean)
-      : [t("notes.knowledgeVaultRoot", "知识库")];
-    let pathKey = "";
-    return parts.map((part) => {
-      pathKey = `${pathKey}/${part}`;
-      return { id: pathKey, title: part };
-    });
-  }, [activePath, t]);
-  const activePathLastId = activePathParts.at(-1)?.id;
+  const activePath = useMemo(
+    () => activePathItems.map((item) => item.title).join(" / "),
+    [activePathItems],
+  );
+  const activePathLastId = activePathItems.at(-1)?.id;
   const documentOutline = useMemo(
     () =>
       document && !isFolderDocument
@@ -1807,15 +1804,22 @@ function KnowledgeHomePanel({
                 style={styles.knowledgeVaultPathScroll}
                 contentContainerStyle={styles.knowledgeVaultPathTrail}
               >
-                {activePathParts.map((part) => {
+                {activePathItems.map((part) => {
                   const isLastPathPart = part.id === activePathLastId;
+                  const targetDocument = documents.find((item) => item.id === part.id);
                   return (
-                    <View
+                    <TouchableOpacity
                       key={part.id}
+                      activeOpacity={targetDocument && !isLastPathPart ? 0.76 : 1}
                       style={[
                         styles.knowledgeVaultPathChip,
                         isLastPathPart && styles.knowledgeVaultPathChipActive,
                       ]}
+                      onPress={() => {
+                        if (!targetDocument || isLastPathPart) return;
+                        handleSelectKnowledgeDocument(targetDocument);
+                      }}
+                      disabled={!targetDocument || isLastPathPart}
                     >
                       <Text
                         style={[
@@ -1826,12 +1830,35 @@ function KnowledgeHomePanel({
                       >
                         {part.title}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </ScrollView>
             </View>
           </View>
+
+          {!isFolderDocument ? (
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={styles.knowledgeVaultFocusCard}
+              onPress={() => setWorkspaceMode("document")}
+              accessibilityRole="button"
+              accessibilityLabel={t("notes.knowledgeDocumentEdit", "编辑文档")}
+            >
+              <View style={styles.knowledgeVaultFocusIcon}>
+                <ScrollTextIcon size={16} color={colors.primary} />
+              </View>
+              <View style={styles.knowledgeVaultFocusText}>
+                <Text style={styles.knowledgeVaultFocusTitle} numberOfLines={1}>
+                  {title || document.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                </Text>
+                <Text style={styles.knowledgeVaultFocusPath} numberOfLines={1}>
+                  {knowledgeDocumentTypeLabel(document, t)} · {activePath}
+                </Text>
+              </View>
+              <ChevronRightIcon size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
 
           <KnowledgeDocumentExplorer
             documents={documents}
@@ -2570,12 +2597,12 @@ function knowledgeDocumentTypeLabel(document: KnowledgeDocument, t: TFunction): 
   return t("notes.knowledgeDocumentNote", "笔记");
 }
 
-function knowledgeDocumentPathText(
+function knowledgeDocumentPathItems(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],
   t: TFunction,
   activeTitle?: string,
-): string {
+): Array<{ id: string; title: string; type?: KnowledgeDocumentType }> {
   const byId = new Map(documents.map((item) => [item.id, item]));
   const path: KnowledgeDocument[] = [];
   const seen = new Set<string>();
@@ -2588,13 +2615,30 @@ function knowledgeDocumentPathText(
   }
 
   return [
-    t("notes.knowledgeVaultRoot", "知识库"),
-    ...path.map((item, index) =>
-      index === path.length - 1 && activeTitle?.trim()
-        ? activeTitle.trim()
-        : item.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+    { id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") },
+    ...path.map(
+      (item, index) =>
+        ({
+          id: item.id,
+          type: item.type,
+          title:
+            index === path.length - 1 && activeTitle?.trim()
+              ? activeTitle.trim()
+              : item.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+        }) satisfies { id: string; title: string; type?: KnowledgeDocumentType },
     ),
-  ].join(" / ");
+  ];
+}
+
+function knowledgeDocumentPathText(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: TFunction,
+  activeTitle?: string,
+): string {
+  return knowledgeDocumentPathItems(document, documents, t, activeTitle)
+    .map((item) => item.title)
+    .join(" / ");
 }
 
 function knowledgeDocumentParentPathText(

@@ -103,7 +103,8 @@
     "searchKnowledgeBase": "Buscando en la base de conocimiento",
     "getBookKnowledge": "Leyendo conocimiento del libro",
     "proposeKnowledgeDocumentCreate": "Redactando documento de conocimiento",
-    "proposeKnowledgeDocumentUpdate": "Redactando actualización del documento"
+    "proposeKnowledgeDocumentUpdate": "Redactando actualización del documento",
+    "proposeKnowledgeDocumentTagsUpdate": "Redactando actualización de etiquetas"
   },
   "knowledgeProposal": {
     "title": "Propuesta de escritura de conocimiento",

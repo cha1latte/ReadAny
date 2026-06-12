@@ -104,6 +104,7 @@
     "getBookKnowledge": "이 책의 지식 읽는 중",
     "proposeKnowledgeDocumentCreate": "지식 문서 초안 작성 중",
     "proposeKnowledgeDocumentUpdate": "문서 업데이트 초안 작성 중",
+    "proposeKnowledgeDocumentTagsUpdate": "태그 업데이트 초안 작성 중",
     "proposeKnowledgeLinkCreate": "지식 링크 초안 작성 중"
   },
   "knowledgeProposal": {

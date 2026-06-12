@@ -104,6 +104,7 @@
     "getBookKnowledge": "この本のナレッジを読み取り中",
     "proposeKnowledgeDocumentCreate": "ナレッジ文書を下書き中",
     "proposeKnowledgeDocumentUpdate": "文書更新を下書き中",
+    "proposeKnowledgeDocumentTagsUpdate": "タグ更新を下書き中",
     "proposeKnowledgeLinkCreate": "ナレッジリンクを下書き中"
   },
   "knowledgeProposal": {

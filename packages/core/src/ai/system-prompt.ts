@@ -109,6 +109,9 @@ function buildToolsSection(
     "- **proposeKnowledgeDocumentUpdate**: Draft a patch for an existing knowledge document for user confirmation only; it does NOT save anything. Use parentId to move a document between vault folders (params: reasoning, documentId, title, contentMd, parentId, tags)",
   );
   tools.push(
+    "- **proposeKnowledgeDocumentTagsUpdate**: Draft a tag-only update for an existing knowledge document for user confirmation only; it does NOT save anything. Use add/remove/set mode for safe knowledge organization (params: reasoning, documentId, mode, tags)",
+  );
+  tools.push(
     "- **proposeKnowledgeLinkCreate**: Draft a link between knowledge documents, highlights, CFIs, books, URLs, Obsidian paths, or AI messages for user confirmation only; it does NOT save anything (params: reasoning, fromDocumentId, toKind, toId, relation, label, cfi)",
   );
   tools.push(

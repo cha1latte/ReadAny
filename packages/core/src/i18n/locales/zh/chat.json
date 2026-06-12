@@ -104,6 +104,7 @@
     "getBookKnowledge": "读取本书知识",
     "proposeKnowledgeDocumentCreate": "草拟知识文档",
     "proposeKnowledgeDocumentUpdate": "草拟文档更新",
+    "proposeKnowledgeDocumentTagsUpdate": "草拟标签更新",
     "proposeKnowledgeLinkCreate": "草拟知识关联"
   },
   "knowledgeProposal": {

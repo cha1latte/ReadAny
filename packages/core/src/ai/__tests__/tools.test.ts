@@ -153,6 +153,8 @@ describe("getAvailableTools", () => {
     expect(names).toContain("searchKnowledgeBase");
     expect(names).toContain("proposeKnowledgeDocumentCreate");
     expect(names).toContain("proposeKnowledgeDocumentUpdate");
+    expect(names).toContain("proposeKnowledgeDocumentTagsUpdate");
+    expect(names).toContain("proposeKnowledgeLinkCreate");
     expect(names).toContain("getReadingStats");
     expect(names).toContain("getSkills");
     expect(names).toContain("mindmap");

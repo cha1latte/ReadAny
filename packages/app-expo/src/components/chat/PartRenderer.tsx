@@ -171,6 +171,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   getBookKnowledge: "toolLabels.getBookKnowledge",
   proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
+  proposeKnowledgeDocumentTagsUpdate: "toolLabels.proposeKnowledgeDocumentTagsUpdate",
   proposeKnowledgeLinkCreate: "toolLabels.proposeKnowledgeLinkCreate",
 };
 

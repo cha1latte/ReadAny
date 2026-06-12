@@ -17,6 +17,7 @@ const {
   createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
+  createProposeKnowledgeDocumentTagsUpdateTool,
   createProposeKnowledgeDocumentUpdateTool,
   createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
@@ -468,6 +469,113 @@ describe("knowledge tools", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("No changes were proposed");
+  });
+
+  it("creates confirmation-required tag add proposals without saving documents", async () => {
+    const source = doc({ id: "doc-tags", tags: ["reading"] });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([source]);
+
+    const tool = createProposeKnowledgeDocumentTagsUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "Organize the note",
+      documentId: "doc-tags",
+      mode: "add",
+      tags: '["memory","reading","theme"]',
+    })) as {
+      success: boolean;
+      requiresConfirmation: boolean;
+      documentId: string;
+      current: { path: string; tags: string[] };
+      targetPath: string;
+      patch: { tags: string[] };
+      changedFields: string[];
+      tagMode: string;
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-tags");
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
+    expect(result).toMatchObject({
+      success: true,
+      requiresConfirmation: true,
+      documentId: "doc-tags",
+      current: {
+        path: "Knowledge base / Deep Reading Home",
+        tags: ["reading"],
+      },
+      targetPath: "Knowledge base / Deep Reading Home",
+      patch: {
+        tags: ["reading", "memory", "theme"],
+      },
+      changedFields: ["tags"],
+      tagMode: "add",
+    });
+  });
+
+  it("supports tag removal and replacement proposals", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      doc({ id: "doc-tags", tags: ["reading", "memory", "draft"] }),
+    );
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      doc({ id: "doc-tags", tags: ["reading", "memory", "draft"] }),
+    ]);
+
+    const tool = createProposeKnowledgeDocumentTagsUpdateTool();
+    await expect(
+      tool.execute({
+        reasoning: "Remove noisy tags",
+        documentId: "doc-tags",
+        mode: "remove",
+        tags: "draft, missing",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      patch: { tags: ["reading", "memory"] },
+      tagMode: "remove",
+    });
+
+    await expect(
+      tool.execute({
+        reasoning: "Replace with final tags",
+        documentId: "doc-tags",
+        mode: "set",
+        tags: "finished,reflection",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      patch: { tags: ["finished", "reflection"] },
+      tagMode: "set",
+    });
+  });
+
+  it("rejects tag proposals with no effective changes", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(doc({ tags: ["reading", "memory"] }));
+
+    const tool = createProposeKnowledgeDocumentTagsUpdateTool();
+    await expect(
+      tool.execute({
+        reasoning: "No-op",
+        documentId: "doc-1",
+        mode: "add",
+        tags: "reading",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "No tag changes were proposed",
+      documentId: "doc-1",
+    });
+
+    await expect(
+      tool.execute({
+        reasoning: "Missing tags",
+        documentId: "doc-1",
+        mode: "set",
+        tags: "",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "tags is required",
+    });
   });
 
   it("creates confirmation-required link proposals without saving links", async () => {

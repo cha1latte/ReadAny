@@ -104,6 +104,7 @@
     "getBookKnowledge": "Reading book knowledge",
     "proposeKnowledgeDocumentCreate": "Drafting knowledge document",
     "proposeKnowledgeDocumentUpdate": "Drafting document update",
+    "proposeKnowledgeDocumentTagsUpdate": "Drafting tag update",
     "proposeKnowledgeLinkCreate": "Drafting knowledge link"
   },
   "knowledgeProposal": {

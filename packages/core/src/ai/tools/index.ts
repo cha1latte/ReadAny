@@ -9,7 +9,8 @@
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
  * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge, proposeKnowledgeDocumentCreate,
- *   proposeKnowledgeDocumentUpdate, compressKnowledgeDocumentSummary
+ *   proposeKnowledgeDocumentUpdate, proposeKnowledgeDocumentTagsUpdate,
+ *   compressKnowledgeDocumentSummary
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap
  * - Context Tools: getCurrentChapter, getSelection, getReadingProgress, getRecentHighlights, getSurroundingContext
@@ -33,6 +34,7 @@ import {
   createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
   createProposeKnowledgeDocumentCreateTool,
+  createProposeKnowledgeDocumentTagsUpdateTool,
   createProposeKnowledgeDocumentUpdateTool,
   createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
@@ -66,6 +68,7 @@ function getGeneralTools(options: { aiConfig?: AIConfig } = {}): ToolDefinition[
     createSearchKnowledgeBaseTool(),
     createProposeKnowledgeDocumentCreateTool(),
     createProposeKnowledgeDocumentUpdateTool(),
+    createProposeKnowledgeDocumentTagsUpdateTool(),
     createProposeKnowledgeLinkCreateTool(),
     createReadingStatsTool(),
     createGetSkillsTool(),

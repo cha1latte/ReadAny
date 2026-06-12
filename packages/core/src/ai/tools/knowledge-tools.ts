@@ -120,6 +120,27 @@ function parseTags(value: unknown): string[] | undefined {
   return [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
 }
 
+function normalizeTagMode(value: unknown): "add" | "remove" | "set" {
+  const mode = String(value ?? "").trim();
+  return mode === "remove" || mode === "set" ? mode : "add";
+}
+
+function applyTagMode(
+  currentTags: readonly string[],
+  requestedTags: readonly string[],
+  mode: "add" | "remove" | "set",
+): string[] {
+  const normalizedCurrent = [...new Set(currentTags.map((tag) => tag.trim()).filter(Boolean))];
+  const normalizedRequested = [...new Set(requestedTags.map((tag) => tag.trim()).filter(Boolean))];
+
+  if (mode === "set") return normalizedRequested;
+  if (mode === "remove") {
+    const removeSet = new Set(normalizedRequested);
+    return normalizedCurrent.filter((tag) => !removeSet.has(tag));
+  }
+  return [...new Set([...normalizedCurrent, ...normalizedRequested])];
+}
+
 function compactText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
@@ -682,6 +703,84 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         targetPath: createDocumentPath(projectedDocument, targetDocumentsById),
         patch,
         changedFields,
+      };
+    },
+  };
+}
+
+export function createProposeKnowledgeDocumentTagsUpdateTool(): ToolDefinition {
+  return {
+    name: "proposeKnowledgeDocumentTagsUpdate",
+    description:
+      "Create a confirmation-required tag update for an existing ReadAny knowledge document. This tool NEVER saves data. Use it when the user asks AI to organize, add, remove, or replace tags on knowledge documents.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why you are changing knowledge document tags",
+        required: true,
+      },
+      documentId: {
+        type: "string",
+        description: "Knowledge document id whose tags should change",
+        required: true,
+      },
+      mode: {
+        type: "string",
+        description: "Tag operation: add, remove, or set. Defaults to add.",
+      },
+      tags: {
+        type: "string",
+        description: 'Tags as comma-separated text or JSON array, e.g. "theme,memory"',
+        required: true,
+      },
+    },
+    execute: async (args) => {
+      const documentId = String(args.documentId ?? "").trim();
+      if (!documentId) return { success: false, error: "documentId is required" };
+
+      const document = await getKnowledgeDocument(documentId);
+      if (!document) return { success: false, error: "Knowledge document not found" };
+
+      let requestedTags: string[] | undefined;
+      try {
+        requestedTags = parseTags(args.tags);
+      } catch (error) {
+        return { success: false, error: `Invalid tags: ${(error as Error).message}` };
+      }
+      if (!requestedTags || requestedTags.length === 0) {
+        return { success: false, error: "tags is required" };
+      }
+
+      const mode = normalizeTagMode(args.mode);
+      const nextTags = applyTagMode(document.tags, requestedTags, mode);
+      if (JSON.stringify(nextTags) === JSON.stringify(document.tags)) {
+        return {
+          success: false,
+          error: "No tag changes were proposed",
+          documentId,
+        };
+      }
+
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(document.bookId ? { bookId: document.bookId } : {}),
+        limit: 5000,
+      });
+      const documentsById = createDocumentMap([...pathContextDocuments, document]);
+
+      return {
+        success: true,
+        action: "update",
+        requiresConfirmation: true,
+        confirmationKind: "knowledge_document_update",
+        message: "Tag update generated only. The existing knowledge document has not been changed.",
+        documentId,
+        current: documentSummary(document, "", false, documentsById),
+        targetPath: createDocumentPath(document, documentsById),
+        patch: {
+          tags: nextTags,
+        },
+        changedFields: ["tags"],
+        tagMode: mode,
       };
     },
   };

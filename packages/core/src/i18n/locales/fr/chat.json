@@ -103,7 +103,8 @@
     "searchKnowledgeBase": "Recherche dans la base de connaissances",
     "getBookKnowledge": "Lecture des connaissances du livre",
     "proposeKnowledgeDocumentCreate": "Brouillon de document de connaissance",
-    "proposeKnowledgeDocumentUpdate": "Brouillon de mise à jour du document"
+    "proposeKnowledgeDocumentUpdate": "Brouillon de mise à jour du document",
+    "proposeKnowledgeDocumentTagsUpdate": "Brouillon de mise à jour des tags"
   },
   "knowledgeProposal": {
     "title": "Proposition d'écriture de connaissance",

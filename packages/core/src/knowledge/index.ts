@@ -4,6 +4,16 @@ export {
   normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
 } from "./editor-projection";
+export {
+  createAutoKnowledgeInternalLinkId,
+  extractKnowledgeInternalDocumentLinkIds,
+  syncKnowledgeInternalDocumentLinks,
+} from "./internal-links";
+export type {
+  ExtractKnowledgeInternalDocumentLinksOptions,
+  SyncKnowledgeInternalDocumentLinksInput,
+  SyncKnowledgeInternalDocumentLinksResult,
+} from "./internal-links";
 export type {
   MarkdownProjectionOptions,
   TiptapMark,

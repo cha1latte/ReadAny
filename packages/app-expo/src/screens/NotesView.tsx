@@ -75,6 +75,7 @@ import {
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
   resolveKnowledgeAttachmentImageSources,
+  syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
 import { applyKnowledgeWriteProposal } from "@readany/core/knowledge/proposals";
@@ -333,6 +334,10 @@ export function NotesView({
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
+  );
+  const knowledgeDocumentIds = useMemo(
+    () => knowledgeDocuments.map((document) => document.id),
+    [knowledgeDocuments],
   );
 
   useFocusEffect(
@@ -618,6 +623,21 @@ export function NotesView({
           tags: normalizedTags,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        const linkSync = await syncKnowledgeInternalDocumentLinks({
+          documentId: knowledgeHome.id,
+          contentJson: contentJsonForStorage,
+          validDocumentIds: knowledgeDocumentIds,
+        });
+        if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        if (linkSync.added > 0 || linkSync.deleted > 0) {
+          const [links, backlinks] = await Promise.all([
+            getKnowledgeLinks(knowledgeHome.id),
+            getKnowledgeBacklinks(knowledgeHome.id),
+          ]);
+          if (knowledgeSaveVersionRef.current !== saveVersion) return;
+          setKnowledgeLinks(links);
+          setKnowledgeBacklinks(backlinks);
+        }
         const updatedDocument: KnowledgeDocument = {
           ...knowledgeHome,
           title: normalizedTitle,
@@ -657,6 +677,7 @@ export function NotesView({
     return () => clearTimeout(timeout);
   }, [
     knowledgeHome,
+    knowledgeDocumentIds,
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,
@@ -687,6 +708,21 @@ export function NotesView({
         tags: normalizedTags,
       });
       if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      const linkSync = await syncKnowledgeInternalDocumentLinks({
+        documentId: knowledgeHome.id,
+        contentJson: contentJsonForStorage,
+        validDocumentIds: knowledgeDocumentIds,
+      });
+      if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      if (linkSync.added > 0 || linkSync.deleted > 0) {
+        const [links, backlinks] = await Promise.all([
+          getKnowledgeLinks(knowledgeHome.id),
+          getKnowledgeBacklinks(knowledgeHome.id),
+        ]);
+        if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+        setKnowledgeLinks(links);
+        setKnowledgeBacklinks(backlinks);
+      }
       const updatedDocument: KnowledgeDocument = {
         ...knowledgeHome,
         title: normalizedTitle,
@@ -726,6 +762,7 @@ export function NotesView({
     }
   }, [
     knowledgeHome,
+    knowledgeDocumentIds,
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,

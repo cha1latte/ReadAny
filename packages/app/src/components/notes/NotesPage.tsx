@@ -69,6 +69,7 @@ import {
   orderKnowledgeDocuments,
   renderKnowledgeJsonToMarkdown,
   resolveKnowledgeAttachmentImageSources,
+  syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
 } from "@readany/core/knowledge";
 import {
@@ -474,6 +475,10 @@ export function NotesPage() {
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
   );
+  const knowledgeDocumentIds = useMemo(
+    () => knowledgeDocuments.map((document) => document.id),
+    [knowledgeDocuments],
+  );
 
   useEffect(() => {
     if (activeTabId !== "notes") return;
@@ -726,6 +731,21 @@ export function NotesPage() {
           tags: normalizedTags,
         });
         if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        const linkSync = await syncKnowledgeInternalDocumentLinks({
+          documentId: knowledgeHome.id,
+          contentJson: contentJsonForStorage,
+          validDocumentIds: knowledgeDocumentIds,
+        });
+        if (knowledgeSaveVersionRef.current !== saveVersion) return;
+        if (linkSync.added > 0 || linkSync.deleted > 0) {
+          const [links, backlinks] = await Promise.all([
+            getKnowledgeLinks(knowledgeHome.id),
+            getKnowledgeBacklinks(knowledgeHome.id),
+          ]);
+          if (knowledgeSaveVersionRef.current !== saveVersion) return;
+          setKnowledgeLinks(links);
+          setKnowledgeBacklinks(backlinks);
+        }
         const updatedDocument: KnowledgeDocument = {
           ...knowledgeHome,
           title: normalizedTitle,
@@ -768,6 +788,7 @@ export function NotesPage() {
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,
+    knowledgeDocumentIds,
     currentKnowledgeFingerprint,
     savedKnowledgeFingerprint,
     t,
@@ -795,6 +816,21 @@ export function NotesPage() {
         tags: normalizedTags,
       });
       if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      const linkSync = await syncKnowledgeInternalDocumentLinks({
+        documentId: knowledgeHome.id,
+        contentJson: contentJsonForStorage,
+        validDocumentIds: knowledgeDocumentIds,
+      });
+      if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+      if (linkSync.added > 0 || linkSync.deleted > 0) {
+        const [links, backlinks] = await Promise.all([
+          getKnowledgeLinks(knowledgeHome.id),
+          getKnowledgeBacklinks(knowledgeHome.id),
+        ]);
+        if (knowledgeSaveVersionRef.current !== saveVersion) return false;
+        setKnowledgeLinks(links);
+        setKnowledgeBacklinks(backlinks);
+      }
       const updatedDocument: KnowledgeDocument = {
         ...knowledgeHome,
         title: normalizedTitle,

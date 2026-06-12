@@ -29,6 +29,8 @@ export { getAIEndpointRequestPreview, testAIEndpoint } from "./test-endpoint";
 export type { EndpointTestResult } from "./test-endpoint";
 
 export { buildSystemPrompt } from "./system-prompt";
+export { getToolResultError, isToolErrorResult } from "./tool-result";
+export type { ToolErrorResult } from "./tool-result";
 
 export { BUILTIN_EMBEDDING_MODELS } from "./builtin-embedding-models";
 export type { BuiltinEmbeddingModel } from "./builtin-embedding-models";

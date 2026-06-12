@@ -72,6 +72,7 @@
     "loadingMindmap": "Loading mindmap...",
     "toolFailed": "Call failed",
     "toolFailedDetail": "Tool call failed",
+    "toolFailedHint": "Check the parameters and result details. Failed tools do not write to the knowledge base or modify data.",
     "aborted": "Generation stopped by user"
   },
   "toolLabels": {

@@ -72,6 +72,7 @@
     "loadingMindmap": "Cargando mapa mental...",
     "toolFailed": "Llamada fallida",
     "toolFailedDetail": "La llamada de herramienta falló",
+    "toolFailedHint": "Revisa los parámetros y los detalles del resultado. Las herramientas fallidas no escriben en la base de conocimiento ni modifican datos.",
     "aborted": "Generación detenida por el usuario"
   },
   "toolLabels": {

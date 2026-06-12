@@ -72,6 +72,7 @@
     "loadingMindmap": "加载思维导图...",
     "toolFailed": "调用失败",
     "toolFailedDetail": "工具调用失败",
+    "toolFailedHint": "请检查参数和结果详情。失败的工具不会写入知识库或修改数据。",
     "aborted": "用户取消了生成"
   },
   "toolLabels": {

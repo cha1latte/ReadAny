@@ -72,6 +72,7 @@
     "loadingMindmap": "Chargement de la carte mentale...",
     "toolFailed": "Appel échoué",
     "toolFailedDetail": "L'appel de l'outil a échoué",
+    "toolFailedHint": "Vérifiez les paramètres et les détails du résultat. Les outils échoués n'écrivent pas dans la base de connaissances et ne modifient pas les données.",
     "aborted": "Génération arrêtée par l'utilisateur"
   },
   "toolLabels": {

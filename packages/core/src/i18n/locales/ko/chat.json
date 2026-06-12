@@ -72,6 +72,7 @@
     "loadingMindmap": "마인드맵 로딩 중...",
     "toolFailed": "호출 실패",
     "toolFailedDetail": "도구 호출 실패",
+    "toolFailedHint": "매개변수와 결과 세부 정보를 확인하세요. 실패한 도구는 지식 베이스에 쓰거나 데이터를 수정하지 않습니다.",
     "aborted": "사용자가 생성을 중단했어요"
   },
   "toolLabels": {

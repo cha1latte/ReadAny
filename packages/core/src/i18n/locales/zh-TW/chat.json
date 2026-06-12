@@ -72,6 +72,7 @@
     "loadingMindmap": "載入心智圖...",
     "toolFailed": "呼叫失敗",
     "toolFailedDetail": "工具呼叫失敗",
+    "toolFailedHint": "請檢查參數與結果詳情。失敗的工具不會寫入知識庫或修改資料。",
     "aborted": "使用者取消了產生"
   },
   "toolLabels": {

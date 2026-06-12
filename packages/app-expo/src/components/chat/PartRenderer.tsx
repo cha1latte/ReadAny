@@ -4,6 +4,7 @@ import { BrainIcon, CheckIcon, ChevronDownIcon, OctagonXIcon, XIcon } from "@/co
 import { useThrottledValue } from "@/hooks";
 import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
+import { getToolResultError } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
@@ -210,7 +211,8 @@ function formatKnowledgeChangedFields(
 }
 
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
-  const hasError = part.status === "error" || Boolean(part.error);
+  const toolResultError = useMemo(() => getToolResultError(part.result), [part.result]);
+  const hasError = part.status === "error" || Boolean(part.error) || Boolean(toolResultError);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
 
   const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
@@ -241,6 +243,8 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   };
 
   const getStatusIcon = () => {
+    if (hasError) return <XIcon size={14} color={colors.destructive} />;
+
     switch (part.status) {
       case "pending":
         return <View style={[s.dot, { backgroundColor: colors.mutedForeground }]} />;
@@ -257,11 +261,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
   const label = TOOL_LABEL_KEYS[part.name] ? t(TOOL_LABEL_KEYS[part.name]) : part.name;
   const queryText = part.args.query ? String(part.args.query) : "";
-  const errorMessage =
-    part.error ||
-    (part.result && typeof part.result === "object"
-      ? String((part.result as Record<string, unknown>).error || "")
-      : "");
+  const errorMessage = part.error || toolResultError || "";
 
   return (
     <View style={[s.container, hasError && s.errorContainer]}>
@@ -297,6 +297,21 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       </TouchableOpacity>
       {isOpen && (
         <View style={s.body}>
+          {hasError ? (
+            <View style={s.errorBlock}>
+              <Text style={s.errorTitle}>{t("streaming.toolFailedDetail", "工具调用失败")}</Text>
+              <Text style={s.errorText}>
+                {errorMessage || t("streaming.toolFailed", "调用失败")}
+              </Text>
+              <Text style={s.errorHintText}>
+                {t(
+                  "streaming.toolFailedHint",
+                  "请检查参数和结果详情。失败的工具不会写入知识库或修改数据。",
+                )}
+              </Text>
+            </View>
+          ) : null}
+
           {Object.keys(part.args).length > 0 && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{t("common.params", "参数")}</Text>
@@ -332,14 +347,6 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                   </ScrollView>
                 </View>
               )}
-            </View>
-          )}
-          {hasError && (
-            <View style={s.errorBlock}>
-              <Text style={s.errorTitle}>{t("streaming.toolFailedDetail", "工具调用失败")}</Text>
-              <Text style={s.errorText}>
-                {errorMessage || t("streaming.toolFailed", "调用失败")}
-              </Text>
             </View>
           )}
         </View>
@@ -766,6 +773,12 @@ const makeToolStyles = (colors: ThemeColors) =>
     errorText: {
       fontSize: fs.xs,
       color: colors.destructive,
+      lineHeight: 16,
+    },
+    errorHintText: {
+      marginTop: 6,
+      fontSize: fs.xs,
+      color: withOpacity(colors.destructive, 0.78),
       lineHeight: 16,
     },
     errorTitle: {

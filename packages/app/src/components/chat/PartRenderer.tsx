@@ -4,6 +4,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { getToolResultError } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
@@ -268,13 +269,16 @@ function formatKnowledgeChangedFields(
 
 function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const { t } = useTranslation();
-  const hasError = part.status === "error" || Boolean(part.error);
+  const toolResultError = useMemo(() => getToolResultError(part.result), [part.result]);
+  const hasError = part.status === "error" || Boolean(part.error) || Boolean(toolResultError);
   const proposal = useMemo(() => getKnowledgeWriteProposal(part.result), [part.result]);
 
   const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal));
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
 
   const getStatusIcon = () => {
+    if (hasError) return <XCircle className="h-4 w-4 text-destructive" />;
+
     switch (part.status) {
       case "pending":
         return <Circle className="h-4 w-4 text-muted-foreground/50" />;
@@ -292,11 +296,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const label = TOOL_LABEL_KEYS[part.name] ? t(TOOL_LABEL_KEYS[part.name]) : part.name;
   const queryText = part.args.query ? String(part.args.query) : "";
   const scopeText = part.args.scope ? String(part.args.scope) : "";
-  const errorMessage =
-    part.error ||
-    (part.result && typeof part.result === "object"
-      ? String((part.result as Record<string, unknown>).error || "")
-      : "");
+  const errorMessage = part.error || toolResultError || "";
 
   useEffect(() => {
     if (hasError || proposal) setIsOpen(true);
@@ -370,6 +370,14 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 border-t border-border bg-muted/30 p-3">
+              {hasError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
+                  <div className="mb-1 font-semibold">{t("streaming.toolFailedDetail")}</div>
+                  <div className="break-words">{errorMessage || t("streaming.toolFailed")}</div>
+                  <div className="mt-2 text-destructive/80">{t("streaming.toolFailedHint")}</div>
+                </div>
+              )}
+
               {part.reasoning && (
                 <div className="rounded border border-primary/20 bg-primary/5 p-2">
                   <p className="text-xs text-foreground">{part.reasoning}</p>
@@ -416,13 +424,6 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                       </pre>
                     </div>
                   )}
-                </div>
-              )}
-
-              {hasError && (
-                <div className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs leading-relaxed text-destructive">
-                  <div className="mb-1 font-medium">{t("streaming.toolFailedDetail")}</div>
-                  <div className="break-words">{errorMessage || t("streaming.toolFailed")}</div>
                 </div>
               )}
             </div>

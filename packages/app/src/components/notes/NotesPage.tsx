@@ -284,6 +284,27 @@ function uniqueExportPaths(paths: string[]): string[] {
   return Array.from(new Set(paths.map(normalizeExportPath))).filter(Boolean);
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia(query);
+    setMatches(mediaQuery.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setMatches(event.matches);
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, [query]);
+
+  return matches;
+}
+
 function desktopFileName(path: string): string {
   return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? path;
 }
@@ -2148,12 +2169,20 @@ function KnowledgeHomePanel({
   );
   const [outlineTarget, setOutlineTarget] = useState<KnowledgeEditorOutlineTarget | null>(null);
   const [isContextInspectorOpen, setIsContextInspectorOpen] = useState(true);
+  const isCompactWorkspace = useMediaQuery("(max-width: 1320px)");
+  const [hasAutoCollapsedInspector, setHasAutoCollapsedInspector] = useState(false);
   const handleSelectOutlineItem = useCallback((item: KnowledgeDocumentOutlineItem) => {
     setOutlineTarget((current) => ({
       index: item.index,
       requestId: (current?.requestId ?? 0) + 1,
     }));
   }, []);
+
+  useEffect(() => {
+    if (!isCompactWorkspace || hasAutoCollapsedInspector) return;
+    setIsContextInspectorOpen(false);
+    setHasAutoCollapsedInspector(true);
+  }, [hasAutoCollapsedInspector, isCompactWorkspace]);
 
   if (isLoading || !document) {
     return (
@@ -2170,8 +2199,8 @@ function KnowledgeHomePanel({
     <div className="min-h-full bg-background">
       <div
         className={cn(
-          "mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-y border-border/35 bg-background",
-          isContextInspectorOpen
+          "relative mx-auto grid h-[calc(100vh-6.25rem)] max-w-[1680px] gap-0 overflow-hidden border-y border-border/35 bg-background",
+          isContextInspectorOpen && !isCompactWorkspace
             ? "grid-cols-[292px_minmax(0,1fr)_304px]"
             : "grid-cols-[292px_minmax(0,1fr)]",
         )}
@@ -2317,7 +2346,13 @@ function KnowledgeHomePanel({
         </section>
 
         {isContextInspectorOpen ? (
-          <aside className="min-h-0 min-w-0 overflow-y-auto border-l border-border/35 bg-muted/[0.13]">
+          <aside
+            className={cn(
+              "min-h-0 min-w-0 overflow-y-auto border-l border-border/35 bg-muted/[0.13]",
+              isCompactWorkspace &&
+                "absolute bottom-0 right-0 top-0 z-20 w-[320px] max-w-[calc(100%-292px)] bg-background shadow-2xl shadow-background/30",
+            )}
+          >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/35 bg-background/95 px-3 py-2.5 backdrop-blur">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-foreground">

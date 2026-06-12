@@ -1849,6 +1849,7 @@ function KnowledgeHomePanel({
             <KnowledgeFolderOverview
               folder={document}
               items={folderChildren}
+              documents={documents}
               isCreating={isCreatingDocument}
               onSelect={handleSelectKnowledgeDocument}
               onCreate={onCreateDocument}
@@ -3027,6 +3028,7 @@ function KnowledgeDocumentTreeRow({
 function KnowledgeFolderOverview({
   folder,
   items,
+  documents,
   isCreating,
   onSelect,
   onCreate,
@@ -3036,6 +3038,7 @@ function KnowledgeFolderOverview({
 }: {
   folder: KnowledgeDocument;
   items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
@@ -3043,6 +3046,52 @@ function KnowledgeFolderOverview({
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const folderChildren = items.filter((item) => item.type === "folder");
+  const noteChildren = items.filter((item) => item.type !== "folder");
+  const renderItem = (item: KnowledgeDocument) => {
+    const isFolder = item.type === "folder";
+    const childCount = childCountByParentId.get(item.id) ?? 0;
+    const meta = isFolder
+      ? t("notes.knowledgeFolderChildCount", { count: childCount })
+      : item.excerpt;
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        activeOpacity={0.78}
+        style={styles.knowledgeFolderItem}
+        onPress={() => onSelect(item)}
+      >
+        <View style={[styles.knowledgeFolderItemIcon, isFolder && styles.knowledgeFolderIcon]}>
+          {isFolder ? (
+            <FolderIcon size={15} color={colors.primary} />
+          ) : (
+            <ScrollTextIcon size={15} color={colors.mutedForeground} />
+          )}
+        </View>
+        <View style={styles.knowledgeFolderItemText}>
+          <Text style={styles.knowledgeFolderItemTitle} numberOfLines={1}>
+            {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+          </Text>
+          <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
+            {knowledgeDocumentTypeLabel(item, t)}
+            {!!meta && ` · ${meta}`}
+          </Text>
+        </View>
+        {isFolder ? <Text style={styles.knowledgeFolderItemCount}>{childCount}</Text> : null}
+        <ChevronRightIcon size={14} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.knowledgeFolderOverview}>
       <View style={styles.knowledgeFolderHeader}>
@@ -3082,37 +3131,57 @@ function KnowledgeFolderOverview({
           <Text style={styles.knowledgeFolderEmptyHint}>
             {t("notes.knowledgeFolderEmptyHint", "在这里新建笔记或文件夹，慢慢搭出自己的目录。")}
           </Text>
+          <View style={styles.knowledgeFolderActionRow}>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+              onPress={() => onCreate("folder", folder.id)}
+              disabled={isCreating}
+              accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
+            >
+              <FolderPlusIcon size={14} color={colors.primary} />
+              <Text style={styles.knowledgeFolderActionText} numberOfLines={1}>
+                {t("notes.knowledgeNewFolder", "新建文件夹")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              style={[styles.knowledgeFolderAction, isCreating && { opacity: 0.55 }]}
+              onPress={() => onCreate("standalone_note", folder.id)}
+              disabled={isCreating}
+              accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
+            >
+              <PlusIcon size={14} color={colors.primary} />
+              <Text style={styles.knowledgeFolderActionText} numberOfLines={1}>
+                {t("notes.knowledgeNewNote", "新建笔记")}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
-        <View style={styles.knowledgeFolderItemList}>
-          {items.map((item) => {
-            const isFolder = item.type === "folder";
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.78}
-                style={styles.knowledgeFolderItem}
-                onPress={() => onSelect(item)}
-              >
-                <View style={styles.knowledgeFolderItemIcon}>
-                  {isFolder ? (
-                    <FolderIcon size={15} color={colors.foreground} />
-                  ) : (
-                    <ScrollTextIcon size={15} color={colors.mutedForeground} />
-                  )}
-                </View>
-                <View style={styles.knowledgeFolderItemText}>
-                  <Text style={styles.knowledgeFolderItemTitle} numberOfLines={1}>
-                    {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
-                  </Text>
-                  <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
-                    {knowledgeDocumentTypeLabel(item, t)}
-                  </Text>
-                </View>
-                <ChevronRightIcon size={14} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.knowledgeFolderGroupStack}>
+          {folderChildren.length > 0 ? (
+            <View style={styles.knowledgeFolderGroup}>
+              <View style={styles.knowledgeFolderGroupHeader}>
+                <Text style={styles.knowledgeFolderGroupTitle}>
+                  {t("notes.knowledgeFolderChildFolders", "文件夹")}
+                </Text>
+                <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
+              </View>
+              <View style={styles.knowledgeFolderItemList}>{folderChildren.map(renderItem)}</View>
+            </View>
+          ) : null}
+          {noteChildren.length > 0 ? (
+            <View style={styles.knowledgeFolderGroup}>
+              <View style={styles.knowledgeFolderGroupHeader}>
+                <Text style={styles.knowledgeFolderGroupTitle}>
+                  {t("notes.knowledgeFolderChildDocuments", "文档")}
+                </Text>
+                <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
+              </View>
+              <View style={styles.knowledgeFolderItemList}>{noteChildren.map(renderItem)}</View>
+            </View>
+          ) : null}
         </View>
       )}
     </View>

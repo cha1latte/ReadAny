@@ -952,6 +952,8 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeFolderActionRow: {
       flexDirection: "row",
       gap: 8,
+      marginTop: 14,
+      width: "100%",
     },
     knowledgeFolderAction: {
       flex: 1,
@@ -998,6 +1000,24 @@ export const makeStyles = (colors: ThemeColors) =>
       textAlign: "center",
     },
     knowledgeFolderItemList: { gap: 7 },
+    knowledgeFolderGroupStack: { gap: 14 },
+    knowledgeFolderGroup: { gap: 7 },
+    knowledgeFolderGroupHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 2,
+    },
+    knowledgeFolderGroupTitle: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.semibold,
+    },
+    knowledgeFolderGroupCount: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+    },
     knowledgeFolderItem: {
       minHeight: 48,
       flexDirection: "row",
@@ -1018,6 +1038,11 @@ export const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    knowledgeFolderIcon: {
+      backgroundColor: withOpacity(colors.primary, 0.08),
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.primary, 0.18),
+    },
     knowledgeFolderItemText: { flex: 1, minWidth: 0 },
     knowledgeFolderItemTitle: {
       fontSize: fontSize.sm,
@@ -1030,6 +1055,18 @@ export const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       color: colors.mutedForeground,
       lineHeight: 16,
+    },
+    knowledgeFolderItemCount: {
+      minWidth: 22,
+      borderRadius: radius.sm,
+      overflow: "hidden",
+      backgroundColor: colors.muted,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+      textAlign: "center",
     },
     knowledgeSourcesCard: {
       backgroundColor: colors.card,

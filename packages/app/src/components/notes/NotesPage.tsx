@@ -2227,6 +2227,7 @@ function KnowledgeHomePanel({
               <KnowledgeFolderOverview
                 folder={document}
                 items={activeDocumentChildren}
+                documents={documents}
                 isCreating={isCreatingDocument}
                 onSelect={onSelectDocument}
                 onCreate={onCreateDocument}
@@ -3289,6 +3290,7 @@ function KnowledgeDocumentExplorer({
 function KnowledgeFolderOverview({
   folder,
   items,
+  documents,
   isCreating,
   onSelect,
   onCreate,
@@ -3296,12 +3298,66 @@ function KnowledgeFolderOverview({
 }: {
   folder: KnowledgeDocument;
   items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const folderChildren = orderedChildren.filter((document) => document.type === "folder");
+  const noteChildren = orderedChildren.filter((document) => document.type !== "folder");
+  const renderChildRow = (document: KnowledgeDocument) => {
+    const isFolder = document.type === "folder";
+    const Icon = isFolder ? FolderOpen : FileText;
+    const childCount = childCountByParentId.get(document.id) ?? 0;
+    const meta = isFolder
+      ? t("notes.knowledgeFolderChildCount", { count: childCount })
+      : document.excerpt;
+
+    return (
+      <button
+        key={document.id}
+        type="button"
+        className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
+        onClick={() => onSelect(document)}
+      >
+        <span
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
+            isFolder
+              ? "border-primary/15 bg-primary/[0.07] text-primary"
+              : "border-border/45 bg-muted/25 text-muted-foreground",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
+            {document.title || t("notes.knowledgeUntitledDocument")}
+          </span>
+          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+            {knowledgeDocumentTypeLabel(document, t)}
+            {meta ? ` · ${meta}` : ""}
+          </span>
+        </span>
+        {isFolder ? (
+          <span className="shrink-0 rounded-md bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {childCount}
+          </span>
+        ) : null}
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  };
 
   return (
     <div className="mx-auto min-h-[690px] max-w-[780px] px-1 pb-10 pt-1">
@@ -3311,7 +3367,7 @@ function KnowledgeFolderOverview({
             {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
           <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
-            {t("notes.knowledgeDocumentFolder")}
+            {t("notes.knowledgeFolderInside")}
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -3344,39 +3400,53 @@ function KnowledgeFolderOverview({
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               {t("notes.knowledgeFolderEmptyHint")}
             </p>
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isCreating}
+                onClick={() => onCreate("folder", folder.id)}
+              >
+                <Folder className="mr-2 h-3.5 w-3.5" />
+                {t("notes.knowledgeNewFolder")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isCreating}
+                onClick={() => onCreate("standalone_note", folder.id)}
+              >
+                <FileText className="mr-2 h-3.5 w-3.5" />
+                {t("notes.knowledgeNewNote")}
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md border border-border/40 bg-background">
-          {orderedChildren.map((document) => {
-            const isFolder = document.type === "folder";
-            const Icon = isFolder ? Folder : FileText;
-            return (
-              <button
-                key={document.id}
-                type="button"
-                className="group flex w-full items-center gap-3 border-b border-border/35 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/35"
-                onClick={() => onSelect(document)}
-              >
-                <Icon
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    isFolder ? "text-foreground/70" : "text-muted-foreground",
-                  )}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
-                    {document.title || t("notes.knowledgeUntitledDocument")}
-                  </span>
-                  <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-                    {knowledgeDocumentTypeLabel(document, t)}
-                    {document.excerpt ? ` · ${document.excerpt}` : ""}
-                  </span>
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
-              </button>
-            );
-          })}
+        <div className="space-y-4">
+          {folderChildren.length > 0 ? (
+            <section>
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>{t("notes.knowledgeFolderChildFolders")}</span>
+                <span>{folderChildren.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+                {folderChildren.map(renderChildRow)}
+              </div>
+            </section>
+          ) : null}
+          {noteChildren.length > 0 ? (
+            <section>
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                <span>{t("notes.knowledgeFolderChildDocuments")}</span>
+                <span>{noteChildren.length}</span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-border/40 bg-background">
+                {noteChildren.map(renderChildRow)}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
     </div>

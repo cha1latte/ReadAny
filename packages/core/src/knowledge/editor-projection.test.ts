@@ -550,6 +550,37 @@ describe("editor projection", () => {
     expect(markdown).toBe("Link [[doc-1|Durable note]] and [[Loose idea]].");
   });
 
+  it("imports stable ReadAny internal links without losing document ids", () => {
+    const stableDocumentId = "23a0aef7-4188-4f5c-a955-cad6c1d3bb3f";
+    const json = markdownToBasicTiptap(`Reference [[${stableDocumentId}]] and [[Loose idea]].`);
+
+    expect(json).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Reference " },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: stableDocumentId,
+                label: stableDocumentId,
+                title: stableDocumentId,
+              },
+            },
+            { type: "text", text: " and " },
+            {
+              type: "readanyInternalLink",
+              attrs: { label: "Loose idea", title: "Loose idea" },
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+  });
+
   it("imports Markdown image and fenced code blocks without losing blank lines", () => {
     const json = markdownToBasicTiptap(
       ["![Cover](assets/cover.png)", "```ts\nconst a = 1;\n\nconst b = 2;\n```"].join("\n\n"),

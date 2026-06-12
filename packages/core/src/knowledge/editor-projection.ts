@@ -297,15 +297,20 @@ function linkNode(label: string, href: string): TiptapNode {
   return textNode(label, [{ type: "link", attrs: { href } }]);
 }
 
+function looksLikeStableKnowledgeDocumentId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function readAnyInternalLinkNode(value: string): TiptapNode {
   const [target, alias] = value.split("|", 2).map((part) => part.trim());
   const label = alias || target;
+  const documentId = alias || looksLikeStableKnowledgeDocumentId(target) ? target : undefined;
   return {
     type: "readanyInternalLink",
     attrs: {
       label,
       title: label,
-      ...(alias ? { documentId: target } : {}),
+      ...(documentId ? { documentId } : {}),
     },
   };
 }

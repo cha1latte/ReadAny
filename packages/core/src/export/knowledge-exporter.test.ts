@@ -200,12 +200,83 @@ describe("KnowledgeExporter", () => {
     const home = files.find((file) => file.path.endsWith("README.md"));
 
     expect(home?.content).toContain("## ReadAny Links");
-    expect(home?.content).toContain("- **related:** [[Related Idea]]");
+    expect(home?.content).toContain("- **related:** [[Notes/Related Idea|Related Idea]]");
     expect(home?.content).toContain(
       "- **source:** [Original highlight](readany://cfi/epubcfi(%2F6%2F2))",
     );
     expect(home?.content).toContain("## Attachments");
     expect(home?.content).toContain("- [diagram.png](attachments/diagram.png)");
+  });
+
+  it("renders document links with vault paths so same-title notes stay unambiguous", () => {
+    const exporter = new KnowledgeExporter();
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Trail",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const firstNote = knowledgeDocument({
+      id: "note-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "One question.",
+    });
+    const nestedFolder = knowledgeDocument({
+      id: "folder-2",
+      parentId: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const nestedNote = knowledgeDocument({
+      id: "note-2",
+      parentId: "folder-2",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "A same-name note can live in a different folder.",
+    });
+    const links: KnowledgeLink[] = [
+      {
+        id: "link-1",
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "note-1",
+        relation: "related",
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+      {
+        id: "link-2",
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "note-2",
+        relation: "related",
+        label: "Deep question",
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+    ];
+    const vault = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [knowledgeDocument(), folder, firstNote, nestedFolder, nestedNote],
+      links,
+    });
+    const home = vault.files.find((file) => file.path === "Books/The Book A Study/README.md");
+
+    expect(home?.content).toContain(
+      "- **related:** [[Books/The Book A Study/Reading Trail/Question Log|Question Log]]",
+    );
+    expect(home?.content).toContain(
+      "- **related:** [[Books/The Book A Study/Reading Trail/Themes/Question Log|Deep question]]",
+    );
   });
 
   it("skips deleted documents by default and disambiguates duplicate paths", () => {

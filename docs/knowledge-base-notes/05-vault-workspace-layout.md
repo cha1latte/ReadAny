@@ -203,6 +203,23 @@ The runtime UI should reinforce the vault model through its physical structure:
 - Path affordances should read as lightweight file paths. They may be tappable,
   but they should not look like unrelated filter chips.
 
+### Path Fidelity Acceptance
+
+The vault path must survive every surface where a document leaves the current
+screen. This is how ReadAny avoids becoming a flat note list with decorative
+folders.
+
+- Internal document links should display a friendly title, but target the stable
+  document ID or exported vault path behind the scenes.
+- Obsidian export should render wikilinks with the resolved file path, not only
+  `[[Title]]`, because two folders may contain documents with the same title.
+- Import previews, move dialogs, AI tool results, search rows, backlinks, and
+  sync conflict messages should all describe the same folder/document path.
+- A document title is never a unique address. The path plus document ID is the
+  durable address.
+- Folder `README.md` files, book home documents, and standalone notes must all
+  participate in the same path rules.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.

@@ -100,6 +100,7 @@ export interface KnowledgeVaultPackage {
 interface ExportContext {
   booksById: Map<string, Book>;
   documentsById: Map<string, KnowledgeDocument>;
+  documentExportPathsById: Map<string, string>;
   linksByDocumentId: Map<string, KnowledgeLink[]>;
   attachmentsByDocumentId: Map<string, KnowledgeAttachment[]>;
   attachmentExportPathsById: Map<string, string>;
@@ -188,6 +189,7 @@ export function createKnowledgeExportHash(content: string): string {
 function createContext(
   input: KnowledgeExportInput,
   attachmentExportPathsById = new Map<string, string>(),
+  documentExportPathsById = new Map<string, string>(),
 ): ExportContext {
   const booksById = new Map((input.books ?? []).map((book) => [book.id, book]));
   const documentsById = new Map(input.documents.map((document) => [document.id, document]));
@@ -210,6 +212,7 @@ function createContext(
   return {
     booksById,
     documentsById,
+    documentExportPathsById,
     linksByDocumentId,
     attachmentsByDocumentId,
     attachmentExportPathsById,
@@ -280,12 +283,34 @@ function documentPath(
   return joinPath(options.rootDir, scopedPath);
 }
 
+function stripMarkdownExtension(path: string): string {
+  return normalizePath(path).replace(/\.md$/i, "");
+}
+
+function wikiLinkPart(value: string): string {
+  return value.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+}
+
+function documentWikiLink(link: KnowledgeLink, context: ExportContext): string {
+  const target = context.documentsById.get(link.toId);
+  if (!target) return `[[${wikiLinkPart(link.toId)}]]`;
+
+  const targetPath = context.documentExportPathsById.get(target.id);
+  const title = target.title.trim() || target.id;
+  const label = wikiLinkPart(link.label || title);
+  if (!targetPath) return `[[${wikiLinkPart(title)}]]`;
+
+  const wikilinkTarget = wikiLinkPart(stripMarkdownExtension(targetPath));
+  return label && label !== wikilinkTarget
+    ? `[[${wikilinkTarget}|${label}]]`
+    : `[[${wikilinkTarget}]]`;
+}
+
 function renderLinkItem(link: KnowledgeLink, context: ExportContext): string {
   const label = link.label || link.relation;
 
   if (link.toKind === "document") {
-    const target = context.documentsById.get(link.toId);
-    return `- **${link.relation}:** ${target ? `[[${target.title}]]` : `[[${link.toId}]]`}`;
+    return `- **${link.relation}:** ${documentWikiLink(link, context)}`;
   }
 
   const target =
@@ -410,8 +435,8 @@ function createDocumentExportFiles(
     ? input.documents
     : input.documents.filter((document) => !document.deletedAt);
   const canReuseManifestPaths = previousManifest?.rootDir === options.rootDir;
-
-  return documents.map<DocumentExportFile>((document) => {
+  const pathsById = new Map<string, string>();
+  const fileDrafts = documents.map((document) => {
     const previousPath = canReuseManifestPaths
       ? previousManifest?.documents[document.id]?.path
       : undefined;
@@ -419,12 +444,20 @@ function createDocumentExportFiles(
       previousPath || documentPath(document, context, options),
       usedPaths,
     );
+    pathsById.set(document.id, path);
 
     return {
       documentId: document.id,
       document,
       path,
-      content: renderDocument(document, context, options, path),
+    };
+  });
+  const renderContext = createContext(input, attachmentExportPathsById, pathsById);
+
+  return fileDrafts.map<DocumentExportFile>((file) => {
+    return {
+      ...file,
+      content: renderDocument(file.document, renderContext, options, file.path),
       mimeType: "text/markdown",
     };
   });

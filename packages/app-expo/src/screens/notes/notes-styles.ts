@@ -278,20 +278,20 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     knowledgeVaultPathScroll: {
-      marginTop: 8,
+      marginTop: 7,
       maxHeight: 24,
     },
     knowledgeVaultPathTrail: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 4,
+      gap: 3,
       paddingRight: 14,
     },
     knowledgeVaultPathSegment: {
       flexDirection: "row",
       alignItems: "center",
       gap: 3,
-      maxWidth: 190,
+      maxWidth: 220,
     },
     knowledgeVaultPathSlash: {
       fontSize: 11,
@@ -300,8 +300,8 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.medium,
     },
     knowledgeVaultPathChip: {
-      maxWidth: 158,
-      minHeight: 20,
+      maxWidth: 180,
+      minHeight: 21,
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
@@ -310,7 +310,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: "transparent",
       backgroundColor: "transparent",
       justifyContent: "center",
-      paddingHorizontal: 1,
+      paddingHorizontal: 0,
     },
     knowledgeVaultPathChipActive: {
       backgroundColor: "transparent",
@@ -392,7 +392,7 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     knowledgeCanvasMeta: {
-      marginTop: 1,
+      marginTop: 3,
       fontSize: 11,
       lineHeight: 14,
       color: colors.mutedForeground,

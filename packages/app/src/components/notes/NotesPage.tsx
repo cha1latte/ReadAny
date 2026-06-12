@@ -3378,7 +3378,7 @@ function KnowledgeDocumentBreadcrumbs({
   return (
     <nav
       className={cn(
-        "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] font-medium text-muted-foreground",
+        "flex min-w-0 items-center gap-x-1 overflow-x-auto whitespace-nowrap text-[11px] font-medium text-muted-foreground",
         className,
       )}
       aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
@@ -3396,7 +3396,7 @@ function KnowledgeDocumentBreadcrumbs({
             {isClickable ? (
               <button
                 type="button"
-                className="inline-flex max-w-40 items-center gap-1 truncate rounded-sm px-0.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+                className="inline-flex max-w-[12rem] items-center gap-1 truncate rounded-sm px-0.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
                 onClick={() => {
                   if (isRoot) {
                     onSelectRoot?.();
@@ -3412,7 +3412,7 @@ function KnowledgeDocumentBreadcrumbs({
             ) : (
               <span
                 className={cn(
-                  "inline-flex max-w-40 items-center gap-1 truncate rounded-sm px-0.5 py-0.5",
+                  "inline-flex max-w-[12rem] items-center gap-1 truncate rounded-sm px-0.5 py-0.5",
                   isLast ? "text-primary" : "text-muted-foreground",
                 )}
                 title={item.title}
@@ -3766,7 +3766,7 @@ function KnowledgeDocumentExplorer({
               </p>
             </div>
             <nav
-              className="mt-2 flex max-h-[3.15rem] min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 overflow-hidden text-[10px] font-medium text-muted-foreground"
+              className="mt-2 flex min-w-0 items-center gap-x-1 overflow-x-auto whitespace-nowrap text-[10px] font-medium text-muted-foreground"
               title={activePath}
               aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
             >

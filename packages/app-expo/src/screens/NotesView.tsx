@@ -1958,10 +1958,6 @@ function KnowledgeHomePanel({
           : [{ id: "__vault__", title: t("notes.knowledgeVaultRoot", "知识库") }],
     [document, documents, isVaultRootOpen, t, title],
   );
-  const activePath = useMemo(
-    () => activePathItems.map((item) => item.title).join(" / "),
-    [activePathItems],
-  );
   const activePathLastId = activePathItems.at(-1)?.id;
   const documentOutline = useMemo(
     () =>
@@ -2135,64 +2131,15 @@ function KnowledgeHomePanel({
               <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
                 {book.title}
               </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.knowledgeVaultPathScroll}
-                contentContainerStyle={styles.knowledgeVaultPathTrail}
-              >
-                {activePathItems.map((part, index) => {
-                  const isLastPathPart = part.id === activePathLastId;
-                  const isRootPathPart = part.id === "__vault__";
-                  const targetDocument = documents.find((item) => item.id === part.id);
-                  const isFolderLike = isRootPathPart || part.type === "folder";
-                  return (
-                    <View key={part.id} style={styles.knowledgeVaultPathSegment}>
-                      {index > 0 ? <Text style={styles.knowledgeVaultPathSlash}>/</Text> : null}
-                      <TouchableOpacity
-                        activeOpacity={
-                          (targetDocument || isRootPathPart) && !isLastPathPart ? 0.76 : 1
-                        }
-                        style={[
-                          styles.knowledgeVaultPathChip,
-                          isLastPathPart && styles.knowledgeVaultPathChipActive,
-                        ]}
-                        onPress={() => {
-                          if (isLastPathPart) return;
-                          if (isRootPathPart) {
-                            void onOpenVaultRoot();
-                            return;
-                          }
-                          if (!targetDocument) return;
-                          handleSelectKnowledgeDocument(targetDocument);
-                        }}
-                        disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
-                      >
-                        {isFolderLike ? (
-                          <FolderIcon
-                            size={12}
-                            color={isLastPathPart ? colors.primary : colors.mutedForeground}
-                          />
-                        ) : (
-                          <ScrollTextIcon
-                            size={12}
-                            color={isLastPathPart ? colors.primary : colors.mutedForeground}
-                          />
-                        )}
-                        <Text
-                          style={[
-                            styles.knowledgeVaultPathChipText,
-                            isLastPathPart && styles.knowledgeVaultPathChipTextActive,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {part.title}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-              </ScrollView>
+              <KnowledgePathTrail
+                items={activePathItems}
+                activeId={activePathLastId}
+                documents={documents}
+                onSelectRoot={onOpenVaultRoot}
+                onSelectDocument={handleSelectKnowledgeDocument}
+                styles={styles}
+                colors={colors}
+              />
             </View>
           </View>
 
@@ -2259,9 +2206,21 @@ function KnowledgeHomePanel({
                 style={styles.knowledgeCanvasTitleInput}
                 returnKeyType="done"
               />
-              <Text style={styles.knowledgeCanvasPath} numberOfLines={1}>
-                {activePath}
-              </Text>
+              <KnowledgePathTrail
+                items={activePathItems}
+                activeId={activePathLastId}
+                documents={documents}
+                onSelectRoot={() => {
+                  onOpenVaultRoot();
+                  setWorkspaceMode("vault");
+                }}
+                onSelectDocument={(targetDocument) => {
+                  handleSelectKnowledgeDocument(targetDocument);
+                  if (targetDocument.type === "folder") setWorkspaceMode("vault");
+                }}
+                styles={styles}
+                colors={colors}
+              />
               <Text style={styles.knowledgeCanvasMeta} numberOfLines={1}>
                 {saveStatusLabel}
               </Text>
@@ -2594,6 +2553,84 @@ function KnowledgeHomePanel({
         </View>
       </Modal>
     </View>
+  );
+}
+
+function KnowledgePathTrail({
+  items,
+  activeId,
+  documents,
+  onSelectRoot,
+  onSelectDocument,
+  styles,
+  colors,
+}: {
+  items: Array<{ id: string; title: string; type?: KnowledgeDocumentType }>;
+  activeId?: string;
+  documents: KnowledgeDocument[];
+  onSelectRoot: () => void;
+  onSelectDocument: (document: KnowledgeDocument) => void;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.knowledgeVaultPathScroll}
+      contentContainerStyle={styles.knowledgeVaultPathTrail}
+    >
+      {items.map((part, index) => {
+        const isLastPathPart = part.id === activeId;
+        const isRootPathPart = part.id === "__vault__";
+        const targetDocument = documents.find((item) => item.id === part.id);
+        const isFolderLike = isRootPathPart || part.type === "folder";
+
+        return (
+          <View key={`${part.id}-${index}`} style={styles.knowledgeVaultPathSegment}>
+            {index > 0 ? <Text style={styles.knowledgeVaultPathSlash}>/</Text> : null}
+            <TouchableOpacity
+              activeOpacity={(targetDocument || isRootPathPart) && !isLastPathPart ? 0.76 : 1}
+              style={[
+                styles.knowledgeVaultPathChip,
+                isLastPathPart && styles.knowledgeVaultPathChipActive,
+              ]}
+              onPress={() => {
+                if (isLastPathPart) return;
+                if (isRootPathPart) {
+                  onSelectRoot();
+                  return;
+                }
+                if (!targetDocument) return;
+                onSelectDocument(targetDocument);
+              }}
+              disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
+            >
+              {isFolderLike ? (
+                <FolderIcon
+                  size={12}
+                  color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                />
+              ) : (
+                <ScrollTextIcon
+                  size={12}
+                  color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                />
+              )}
+              <Text
+                style={[
+                  styles.knowledgeVaultPathChipText,
+                  isLastPathPart && styles.knowledgeVaultPathChipTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {part.title}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -3360,8 +3397,9 @@ function KnowledgeDocumentExplorer({
     () => documents.find((document) => document.id === createParentId),
     [createParentId, documents],
   );
-  const createDestinationLabel =
-    createParentDocument?.title.trim() || t("notes.knowledgeVaultRoot", "知识库");
+  const createDestinationLabel = createParentDocument
+    ? knowledgeDocumentPathText(createParentDocument, documents, t)
+    : t("notes.knowledgeVaultRoot", "知识库");
   const createOptions = useMemo(
     () =>
       [

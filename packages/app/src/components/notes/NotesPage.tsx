@@ -2182,10 +2182,12 @@ function KnowledgeHomePanel({
     );
   }, [documents]);
   const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
-  const activeLocationLabel = isVaultRootOpen
+  const activePathLabel = isVaultRootOpen
     ? t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })
     : document
-      ? knowledgeDocumentTypeLabel(document, t)
+      ? knowledgeDocumentPath(document, documents, t, title)
+          .map((item) => item.title)
+          .join(" / ")
       : t("notes.knowledgeDocuments");
   const documentOutline = useMemo(
     () =>
@@ -2269,7 +2271,9 @@ function KnowledgeHomePanel({
               <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="max-w-56 truncate font-medium text-foreground">{book.title}</span>
               <span className="h-1 w-1 rounded-full bg-border" />
-              <span className="truncate">{activeLocationLabel}</span>
+              <span className="max-w-[28rem] truncate" title={activePathLabel}>
+                {activePathLabel}
+              </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 items-center gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 text-xs text-muted-foreground">
@@ -2558,7 +2562,7 @@ function KnowledgeVaultRootTitle({
           {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
         </span>
       </nav>
-      <h2 className="block w-full min-w-0 text-[38px] font-semibold leading-[1.08] text-foreground">
+      <h2 className="block w-full min-w-0 text-[30px] font-semibold leading-[1.12] text-foreground">
         {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
       </h2>
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">

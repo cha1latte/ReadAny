@@ -114,6 +114,52 @@ Implications:
 - Obsidian export should preserve this tree as real folders and Markdown files,
   not only as frontmatter fields.
 
+### Vault Navigation Contract
+
+The vault tree is the primary navigation surface. It should never be treated as
+a decorative filter beside a flat notes list.
+
+Interaction rules:
+
+- Selecting the vault root opens the root folder browser.
+- Selecting a folder opens that folder browser and expands its branch in the
+  tree.
+- Selecting a document opens the WYSIWYG document editor immediately.
+- Returning from a document on mobile goes back to the vault browser with the
+  same document highlighted in the tree; it must not insert a large intermediate
+  "current document" card.
+- The active path is visible in three places: tree ancestry, breadcrumb/path
+  text, and export/import destination previews.
+- Create actions always inherit the current folder context. If a document is
+  active, create beside that document under its parent folder.
+- Move actions show the real folder tree and reject cycles before writing.
+- Tags, groups, search results, and recent documents are secondary views. They
+  can help discovery, but they must route back to a real folder/document path.
+
+The user should be able to answer "where will this document live if I create it
+now?" before pressing the create button.
+
+### WYSIWYG Product Contract
+
+ReadAny should feel like a modern writing app with book-aware evidence, not like
+a Markdown field with better CSS.
+
+Editor rules:
+
+- The default document body is Tiptap-rendered rich content.
+- The title behaves like the top of the document, not like a settings field.
+- Source cards, AI cards, callouts, images, review cards, and custom ReadAny
+  cards render as document blocks with readable fallback text.
+- Markdown shortcuts are allowed only when they immediately transform into
+  rich blocks.
+- Raw Markdown/source mode can be an advanced mode later, but it cannot be the
+  default knowledge authoring surface.
+- Empty documents show a writing placeholder and insert affordance, not setup
+  cards.
+
+This is the dividing line between a knowledge base and a prettier notes CRUD
+page.
+
 ## WYSIWYG Contract
 
 The primary editing surface must be WYSIWYG. Markdown is an export and

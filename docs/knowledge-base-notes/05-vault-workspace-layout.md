@@ -79,6 +79,25 @@ Concrete correction:
   same mental model: vault browser first, focused WYSIWYG editor second,
   context/actions in sheets.
 
+### Visual Acceptance Rules
+
+The hierarchy must be visible in the interface language, not only in the data
+model.
+
+- Breadcrumbs should read like file paths, with lightweight separators. They
+  should not look like unrelated tags or status chips.
+- The vault navigator should look and behave like a file explorer: indentation,
+  active ancestry, folder disclosure, and quiet row actions.
+- Folder screens should look like an opened folder. Use clear folder/document
+  rows and section dividers; avoid dashboard cards, metric tiles, or form-like
+  panels.
+- Document screens should look like a writing canvas. Title and body should be
+  directly editable, with metadata, tags, sources, and AI context kept around
+  the edges.
+- Mobile should not compress everything into one scroll of cards. Browsing the
+  vault and writing a document are separate modes with the same underlying
+  path.
+
 ## Directory Model
 
 The directory hierarchy is a first-class product model, similar to Obsidian.

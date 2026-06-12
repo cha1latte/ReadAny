@@ -2093,41 +2093,43 @@ function KnowledgeHomePanel({
                 style={styles.knowledgeVaultPathScroll}
                 contentContainerStyle={styles.knowledgeVaultPathTrail}
               >
-                {activePathItems.map((part) => {
+                {activePathItems.map((part, index) => {
                   const isLastPathPart = part.id === activePathLastId;
                   const isRootPathPart = part.id === "__vault__";
                   const targetDocument = documents.find((item) => item.id === part.id);
                   return (
-                    <TouchableOpacity
-                      key={part.id}
-                      activeOpacity={
-                        (targetDocument || isRootPathPart) && !isLastPathPart ? 0.76 : 1
-                      }
-                      style={[
-                        styles.knowledgeVaultPathChip,
-                        isLastPathPart && styles.knowledgeVaultPathChipActive,
-                      ]}
-                      onPress={() => {
-                        if (isLastPathPart) return;
-                        if (isRootPathPart) {
-                          void onOpenVaultRoot();
-                          return;
+                    <View key={part.id} style={styles.knowledgeVaultPathSegment}>
+                      {index > 0 ? <Text style={styles.knowledgeVaultPathSlash}>/</Text> : null}
+                      <TouchableOpacity
+                        activeOpacity={
+                          (targetDocument || isRootPathPart) && !isLastPathPart ? 0.76 : 1
                         }
-                        if (!targetDocument) return;
-                        handleSelectKnowledgeDocument(targetDocument);
-                      }}
-                      disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
-                    >
-                      <Text
                         style={[
-                          styles.knowledgeVaultPathChipText,
-                          isLastPathPart && styles.knowledgeVaultPathChipTextActive,
+                          styles.knowledgeVaultPathChip,
+                          isLastPathPart && styles.knowledgeVaultPathChipActive,
                         ]}
-                        numberOfLines={1}
+                        onPress={() => {
+                          if (isLastPathPart) return;
+                          if (isRootPathPart) {
+                            void onOpenVaultRoot();
+                            return;
+                          }
+                          if (!targetDocument) return;
+                          handleSelectKnowledgeDocument(targetDocument);
+                        }}
+                        disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
                       >
-                        {part.title}
-                      </Text>
-                    </TouchableOpacity>
+                        <Text
+                          style={[
+                            styles.knowledgeVaultPathChipText,
+                            isLastPathPart && styles.knowledgeVaultPathChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {part.title}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   );
                 })}
               </ScrollView>

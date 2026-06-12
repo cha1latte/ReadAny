@@ -3629,8 +3629,8 @@ function KnowledgeDocumentExplorer({
                 {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
               </p>
             </div>
-            <div
-              className="mt-2 flex max-h-[3.15rem] flex-wrap gap-1 overflow-hidden"
+            <nav
+              className="mt-2 flex max-h-[3.15rem] min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 overflow-hidden text-[10px] font-medium text-muted-foreground"
               title={activePath}
               aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
             >
@@ -3641,37 +3641,42 @@ function KnowledgeDocumentExplorer({
                 const isFolderLike = isRoot || item.type === "folder";
 
                 return (
-                  <button
+                  <span
                     key={`${item.id}-${index}`}
-                    type="button"
-                    disabled={(!targetDocument && !isRoot) || isCurrent}
-                    onClick={() => {
-                      if (isCurrent) return;
-                      if (isRoot) {
-                        onSelectRoot();
-                        return;
-                      }
-                      if (!targetDocument) return;
-                      onSelect(targetDocument);
-                    }}
-                    className={cn(
-                      "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border px-1.5 text-[10px] font-medium transition-colors",
-                      isCurrent
-                        ? "border-primary/25 bg-primary/10 text-primary"
-                        : "border-border/45 bg-background/75 text-muted-foreground hover:border-primary/25 hover:bg-primary/5 hover:text-foreground",
-                      (!targetDocument || isCurrent) && "cursor-default",
-                    )}
+                    className="inline-flex min-w-0 items-center gap-1"
                   >
-                    {isFolderLike ? (
-                      <Folder className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <FileText className="h-3 w-3 shrink-0" />
-                    )}
-                    <span className="truncate">{item.title}</span>
-                  </button>
+                    {index > 0 ? <span className="text-border">/</span> : null}
+                    <button
+                      type="button"
+                      disabled={(!targetDocument && !isRoot) || isCurrent}
+                      onClick={() => {
+                        if (isCurrent) return;
+                        if (isRoot) {
+                          onSelectRoot();
+                          return;
+                        }
+                        if (!targetDocument) return;
+                        onSelect(targetDocument);
+                      }}
+                      className={cn(
+                        "inline-flex h-5 max-w-[9.5rem] min-w-0 items-center gap-1 rounded-sm px-1 text-[10px] transition-colors",
+                        isCurrent
+                          ? "text-primary"
+                          : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+                        (!targetDocument || isCurrent) && "cursor-default",
+                      )}
+                    >
+                      {isFolderLike ? (
+                        <Folder className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <FileText className="h-3 w-3 shrink-0" />
+                      )}
+                      <span className="truncate">{item.title}</span>
+                    </button>
+                  </span>
                 );
               })}
-            </div>
+            </nav>
             <p
               className="mt-1.5 truncate text-[10px] font-medium text-muted-foreground"
               title={createDestinationPath}

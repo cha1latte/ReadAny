@@ -242,8 +242,10 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeVaultHeader: {
       minHeight: 54,
+      zIndex: 2,
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
+      backgroundColor: colors.background,
       paddingHorizontal: 1,
       paddingBottom: 9,
     },
@@ -832,13 +834,6 @@ export const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.xs,
       color: colors.mutedForeground,
       lineHeight: 16,
-    },
-    knowledgeExplorerPath: {
-      marginTop: 5,
-      fontSize: 11,
-      color: colors.foreground,
-      lineHeight: 15,
-      fontWeight: fontWeight.medium,
     },
     knowledgeExplorerCreateButton: {
       width: 34,

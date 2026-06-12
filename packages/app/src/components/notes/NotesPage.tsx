@@ -2650,7 +2650,7 @@ function KnowledgeVaultRootOverview({
       <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-            {t("notes.knowledgeFolderInside")}
+            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {items.length} {t("notes.knowledgeDocuments")}
@@ -3807,6 +3807,7 @@ function KnowledgeFolderOverview({
     [folder, documents, t],
   );
   const folderPathLabel = folderPathItems.map((item) => item.title).join(" / ");
+  const folderTitle = folder.title.trim() || t("notes.knowledgeUntitledDocument");
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const document of documents) {
@@ -3895,7 +3896,7 @@ function KnowledgeFolderOverview({
       <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-            {t("notes.knowledgeFolderInside")}
+            {folderTitle}
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {orderedChildren.length} {t("notes.knowledgeDocuments")}

@@ -10,6 +10,7 @@ import {
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
+  getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
@@ -1358,6 +1359,11 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
   const cardType = attrs.cardType || "callout";
+  const definition = getReadAnyCardDefinition(cardType);
+  const version = Number.isFinite(Number(attrs.version)) ? Number(attrs.version) : 1;
+  const isFutureVersion = !!definition && version > definition.version;
+  const isCustomCard = cardType.startsWith("custom:");
+  const isFallbackCard = !definition && !isCustomCard;
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
   const title = attrs.title || "";
@@ -1401,6 +1407,25 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
             <span className="shrink-0 rounded-sm bg-muted/45 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {cardType}
             </span>
+            {isFutureVersion || isFallbackCard || isCustomCard ? (
+              <span
+                className={cn(
+                  "shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium",
+                  isFutureVersion || isFallbackCard
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                    : "bg-primary/10 text-primary",
+                )}
+              >
+                {isFutureVersion
+                  ? t("notes.knowledgeCardNewerVersion", {
+                      version,
+                      defaultValue: `v${version} newer`,
+                    })
+                  : isFallbackCard
+                    ? t("notes.knowledgeCardFallback", { defaultValue: "fallback" })
+                    : `v${version}`}
+              </span>
+            ) : null}
             {attrs.sourceTitle ? (
               <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                 {t("notes.knowledgeCardSource", { defaultValue: "Source" })}: {attrs.sourceTitle}

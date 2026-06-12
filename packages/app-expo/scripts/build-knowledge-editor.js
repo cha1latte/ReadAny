@@ -144,6 +144,35 @@ async function buildKnowledgeEditor() {
       element.style.height = Math.max(72, element.scrollHeight) + "px";
     };
 
+    const readAnyCardVersions = {
+      bookQuote: 1,
+      callout: 1,
+      bookMetadata: 1,
+      aiSummary: 1,
+      aiToolFailure: 1,
+      qa: 1,
+      review: 1,
+      mindmap: 1,
+      mermaid: 1,
+      relatedNotes: 1,
+    };
+
+    const cardMetaText = (attrs = {}) => {
+      const cardType = attrs.cardType || "Card";
+      const version = Number.isFinite(Number(attrs.version)) ? Number(attrs.version) : 1;
+      const currentVersion = readAnyCardVersions[cardType];
+      const isFutureVersion = currentVersion && version > currentVersion;
+      const isCustomCard = String(cardType).startsWith("custom:");
+      const isFallbackCard = !currentVersion && !isCustomCard;
+      return [
+        cardType,
+        isFutureVersion || isFallbackCard || isCustomCard ? "v" + version : "",
+        isFutureVersion ? "newer" : isFallbackCard ? "fallback" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    };
+
     const ReadAnyCard = Node.create({
       name: "readanyCard",
       group: "block",
@@ -198,7 +227,7 @@ async function buildKnowledgeEditor() {
 
           const meta = document.createElement("div");
           meta.className = "readany-card-meta";
-          meta.textContent = attrs.cardType || "Card";
+          meta.textContent = cardMetaText(attrs);
           body.appendChild(meta);
 
           const title = document.createElement("input");
@@ -244,7 +273,7 @@ async function buildKnowledgeEditor() {
               currentNode = nextNode;
               const nextAttrs = nextNode.attrs || {};
               dom.dataset.cardType = nextAttrs.cardType || "callout";
-              meta.textContent = nextAttrs.cardType || "Card";
+              meta.textContent = cardMetaText(nextAttrs);
               title.value = nextAttrs.title || "";
               title.placeholder = nextAttrs.cardType || "Card";
               const nextText = nextAttrs.markdown || nextAttrs.text || "";

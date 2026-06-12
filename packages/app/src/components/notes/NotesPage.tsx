@@ -2387,6 +2387,8 @@ function KnowledgeHomePanel({
                 isCreating={isCreatingDocument}
                 onSelect={onSelectDocument}
                 onCreate={onCreateDocument}
+                onDelete={onDeleteDocument}
+                onMove={onMoveDocument}
                 t={t}
               />
             ) : isFolderDocument ? (
@@ -2398,6 +2400,8 @@ function KnowledgeHomePanel({
                 onSelectRoot={onOpenVaultRoot}
                 onSelect={onSelectDocument}
                 onCreate={onCreateDocument}
+                onDelete={onDeleteDocument}
+                onMove={onMoveDocument}
                 t={t}
               />
             ) : (
@@ -2585,6 +2589,8 @@ function KnowledgeVaultRootOverview({
   isCreating,
   onSelect,
   onCreate,
+  onDelete,
+  onMove,
   t,
 }: {
   items: KnowledgeDocument[];
@@ -2592,6 +2598,8 @@ function KnowledgeVaultRootOverview({
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  onDelete: (document: KnowledgeDocument) => void;
+  onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const childCountByParentId = useMemo(() => {
@@ -2604,44 +2612,6 @@ function KnowledgeVaultRootOverview({
   }, [documents]);
   const folderChildren = items.filter((document) => document.type === "folder");
   const documentChildren = items.filter((document) => document.type !== "folder");
-  const renderChildRow = (document: KnowledgeDocument) => {
-    const isFolder = document.type === "folder";
-    const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
-    const childCount = childCountByParentId.get(document.id) ?? 0;
-    const meta = isFolder
-      ? t("notes.knowledgeFolderChildCount", { count: childCount })
-      : document.excerpt;
-
-    return (
-      <button
-        key={document.id}
-        type="button"
-        className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
-        onClick={() => onSelect(document)}
-      >
-        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
-          <Icon
-            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
-            {document.title || t("notes.knowledgeUntitledDocument")}
-          </span>
-          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-            {knowledgeDocumentTypeLabel(document, t)}
-            {meta ? ` · ${meta}` : ""}
-          </span>
-        </span>
-        {isFolder ? (
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-            {childCount}
-          </span>
-        ) : null}
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
-      </button>
-    );
-  };
 
   return (
     <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
@@ -2716,7 +2686,18 @@ function KnowledgeVaultRootOverview({
                 <span>{folderChildren.length}</span>
               </div>
               <div className="overflow-hidden border-b border-border/35 bg-background">
-                {folderChildren.map(renderChildRow)}
+                {folderChildren.map((document) => (
+                  <KnowledgeFolderBrowserRow
+                    key={document.id}
+                    document={document}
+                    documents={documents}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onMove={onMove}
+                    t={t}
+                  />
+                ))}
               </div>
             </section>
           ) : null}
@@ -2727,12 +2708,162 @@ function KnowledgeVaultRootOverview({
                 <span>{documentChildren.length}</span>
               </div>
               <div className="overflow-hidden border-b border-border/35 bg-background">
-                {documentChildren.map(renderChildRow)}
+                {documentChildren.map((document) => (
+                  <KnowledgeFolderBrowserRow
+                    key={document.id}
+                    document={document}
+                    documents={documents}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onMove={onMove}
+                    t={t}
+                  />
+                ))}
               </div>
             </section>
           ) : null}
         </div>
       )}
+    </div>
+  );
+}
+
+interface KnowledgeMoveTarget {
+  id?: string;
+  title: string;
+  depth: number;
+}
+
+function knowledgeDocumentMoveTargets(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): KnowledgeMoveTarget[] {
+  if (document.type === "book_home") return [];
+  const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+  const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+  const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
+    .filter((node) => node.document.type === "folder")
+    .map((node) => ({
+      id: node.document.id,
+      title: node.document.title.trim() || t("notes.knowledgeUntitledDocument"),
+      depth: node.depth + 1,
+    }));
+
+  return [
+    { id: undefined, title: t("notes.knowledgeMoveRoot"), depth: 0 },
+    ...folderTargets,
+  ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
+}
+
+function KnowledgeFolderBrowserRow({
+  document,
+  documents,
+  childCountByParentId,
+  onSelect,
+  onDelete,
+  onMove,
+  t,
+}: {
+  document: KnowledgeDocument;
+  documents: KnowledgeDocument[];
+  childCountByParentId: Map<string, number>;
+  onSelect: (document: KnowledgeDocument) => void;
+  onDelete: (document: KnowledgeDocument) => void;
+  onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const isFolder = document.type === "folder";
+  const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
+  const childCount = childCountByParentId.get(document.id) ?? 0;
+  const meta = isFolder
+    ? t("notes.knowledgeFolderChildCount", { count: childCount })
+    : document.excerpt;
+  const canDelete =
+    canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
+  const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
+
+  return (
+    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-1.5 transition-colors last:border-b-0 hover:bg-muted/30">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        onClick={() => onSelect(document)}
+      >
+        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
+          <Icon
+            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
+            {document.title || t("notes.knowledgeUntitledDocument")}
+          </span>
+          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+            {knowledgeDocumentTypeLabel(document, t)}
+            {meta ? ` · ${meta}` : ""}
+          </span>
+        </span>
+        {isFolder ? (
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+            {childCount}
+          </span>
+        ) : null}
+      </button>
+
+      <div className="flex h-7 shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {moveTargets.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label={t("notes.knowledgeMoveDocument")}
+                title={t("notes.knowledgeMoveDocument")}
+              >
+                <FolderDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 min-w-48 overflow-y-auto">
+              <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                {t("notes.knowledgeMoveTo")}
+              </div>
+              {moveTargets.map((target) => (
+                <DropdownMenuItem
+                  key={target.id ?? "__root__"}
+                  onClick={() => onMove(document, target.id)}
+                  className="text-xs"
+                >
+                  <span
+                    className="inline-flex min-w-0 items-center gap-2"
+                    style={{ paddingLeft: `${Math.min(target.depth, 7) * 10}px` }}
+                  >
+                    {target.id ? (
+                      <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <FolderUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate">{target.title}</span>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+        {canDelete ? (
+          <button
+            type="button"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => onDelete(document)}
+            aria-label={t("notes.knowledgeDeleteDocument")}
+            title={t("notes.knowledgeDeleteDocument")}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
+      </div>
     </div>
   );
 }
@@ -3810,6 +3941,8 @@ function KnowledgeFolderOverview({
   onSelectRoot,
   onSelect,
   onCreate,
+  onDelete,
+  onMove,
   t,
 }: {
   folder: KnowledgeDocument;
@@ -3819,6 +3952,8 @@ function KnowledgeFolderOverview({
   onSelectRoot: () => void;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  onDelete: (document: KnowledgeDocument) => void;
+  onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
@@ -3838,44 +3973,6 @@ function KnowledgeFolderOverview({
   }, [documents]);
   const folderChildren = orderedChildren.filter((document) => document.type === "folder");
   const noteChildren = orderedChildren.filter((document) => document.type !== "folder");
-  const renderChildRow = (document: KnowledgeDocument) => {
-    const isFolder = document.type === "folder";
-    const Icon = isFolder ? FolderOpen : FileText;
-    const childCount = childCountByParentId.get(document.id) ?? 0;
-    const meta = isFolder
-      ? t("notes.knowledgeFolderChildCount", { count: childCount })
-      : document.excerpt;
-
-    return (
-      <button
-        key={document.id}
-        type="button"
-        className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
-        onClick={() => onSelect(document)}
-      >
-        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
-          <Icon
-            className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
-            {document.title || t("notes.knowledgeUntitledDocument")}
-          </span>
-          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-            {knowledgeDocumentTypeLabel(document, t)}
-            {meta ? ` · ${meta}` : ""}
-          </span>
-        </span>
-        {isFolder ? (
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-            {childCount}
-          </span>
-        ) : null}
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100" />
-      </button>
-    );
-  };
 
   return (
     <div className="mx-auto max-w-[820px] px-1 pb-10 pt-1">
@@ -3995,7 +4092,18 @@ function KnowledgeFolderOverview({
                 <span>{folderChildren.length}</span>
               </div>
               <div className="overflow-hidden border-b border-border/35 bg-background">
-                {folderChildren.map(renderChildRow)}
+                {folderChildren.map((document) => (
+                  <KnowledgeFolderBrowserRow
+                    key={document.id}
+                    document={document}
+                    documents={documents}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onMove={onMove}
+                    t={t}
+                  />
+                ))}
               </div>
             </section>
           ) : null}
@@ -4006,7 +4114,18 @@ function KnowledgeFolderOverview({
                 <span>{noteChildren.length}</span>
               </div>
               <div className="overflow-hidden border-b border-border/35 bg-background">
-                {noteChildren.map(renderChildRow)}
+                {noteChildren.map((document) => (
+                  <KnowledgeFolderBrowserRow
+                    key={document.id}
+                    document={document}
+                    documents={documents}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onMove={onMove}
+                    t={t}
+                  />
+                ))}
               </div>
             </section>
           ) : null}

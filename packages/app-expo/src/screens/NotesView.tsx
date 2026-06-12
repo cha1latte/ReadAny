@@ -18,6 +18,7 @@ import {
   HighlighterIcon,
   ListIcon,
   LoaderIcon,
+  MoreVerticalIcon,
   NotebookPenIcon,
   PlusIcon,
   ScrollTextIcon,
@@ -1941,23 +1942,6 @@ function KnowledgeHomePanel({
       undefined,
     );
   }, [document, documents, isVaultRootOpen]);
-  const [isMovePickerVisible, setIsMovePickerVisible] = useState(false);
-  const moveTargets = useMemo(() => {
-    if (!document || document.type === "book_home") return [];
-    const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
-    const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
-    const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
-      .filter((node) => node.document.type === "folder")
-      .map((node) => ({
-        id: node.document.id,
-        title: node.document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
-        depth: node.depth + 1,
-      }));
-    return [
-      { id: undefined, title: t("notes.knowledgeMoveRoot", "根目录"), depth: 0 },
-      ...folderTargets,
-    ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
-  }, [document, documents, t]);
   const activePathItems = useMemo(
     () =>
       isVaultRootOpen
@@ -2002,19 +1986,71 @@ function KnowledgeHomePanel({
   );
   const [workspaceMode, setWorkspaceMode] = useState<MobileKnowledgeWorkspaceMode>("vault");
   const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
+  const [actionDocument, setActionDocument] = useState<KnowledgeDocument | null>(null);
+  const [moveDocument, setMoveDocument] = useState<KnowledgeDocument | null>(null);
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of documents) {
+      if (!item.parentId) continue;
+      counts.set(item.parentId, (counts.get(item.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const getMoveTargets = useCallback(
+    (targetDocument: KnowledgeDocument) => {
+      if (targetDocument.type === "book_home") return [];
+      const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+      const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+      const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
+        .filter((node) => node.document.type === "folder")
+        .map((node) => ({
+          id: node.document.id,
+          title: node.document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
+          depth: node.depth + 1,
+        }));
 
-  const showMovePicker = useCallback(() => {
-    if (!document || moveTargets.length === 0) return;
-    setIsMovePickerVisible(true);
-  }, [document, moveTargets.length]);
+      return [
+        { id: undefined, title: t("notes.knowledgeMoveRoot", "根目录"), depth: 0 },
+        ...folderTargets,
+      ].filter(
+        (target) => validateKnowledgeDocumentParent(targetDocument.id, target.id, documents).ok,
+      );
+    },
+    [documents, t],
+  );
+  const currentDocumentMoveTargets = useMemo(
+    () => (document ? getMoveTargets(document) : []),
+    [document, getMoveTargets],
+  );
+  const moveTargets = useMemo(
+    () => (moveDocument ? getMoveTargets(moveDocument) : []),
+    [getMoveTargets, moveDocument],
+  );
+  const actionDocumentChildCount = actionDocument
+    ? (childCountByParentId.get(actionDocument.id) ?? 0)
+    : 0;
+  const canDeleteActionDocument =
+    !!actionDocument &&
+    canDeleteKnowledgeDocument(actionDocument) &&
+    !(actionDocument.type === "folder" && actionDocumentChildCount > 0);
+  const canMoveActionDocument = !!actionDocument && getMoveTargets(actionDocument).length > 0;
+
+  const showMovePicker = useCallback(
+    (targetDocument?: KnowledgeDocument | null) => {
+      if (!targetDocument || getMoveTargets(targetDocument).length === 0) return;
+      setActionDocument(null);
+      setMoveDocument(targetDocument);
+    },
+    [getMoveTargets],
+  );
 
   const handleMoveToTarget = useCallback(
     (targetId?: string) => {
-      if (!document) return;
-      setIsMovePickerVisible(false);
-      onMoveDocument(document, targetId);
+      if (!moveDocument) return;
+      setMoveDocument(null);
+      onMoveDocument(moveDocument, targetId);
     },
-    [document, onMoveDocument],
+    [moveDocument, onMoveDocument],
   );
 
   const handleSelectKnowledgeDocument = useCallback(
@@ -2157,6 +2193,7 @@ function KnowledgeHomePanel({
               isCreating={isCreatingDocument}
               onSelect={handleSelectKnowledgeDocument}
               onCreate={onCreateDocument}
+              onOpenActions={setActionDocument}
               t={t}
               styles={styles}
               colors={colors}
@@ -2169,6 +2206,7 @@ function KnowledgeHomePanel({
               isCreating={isCreatingDocument}
               onSelect={handleSelectKnowledgeDocument}
               onCreate={onCreateDocument}
+              onOpenActions={setActionDocument}
               t={t}
               styles={styles}
               colors={colors}
@@ -2214,11 +2252,11 @@ function KnowledgeHomePanel({
               >
                 <BrainIcon size={14} color={colors.foreground} />
               </TouchableOpacity>
-              {moveTargets.length > 0 ? (
+              {currentDocumentMoveTargets.length > 0 ? (
                 <TouchableOpacity
                   activeOpacity={0.78}
                   style={styles.knowledgeCanvasIconButton}
-                  onPress={showMovePicker}
+                  onPress={() => showMovePicker(document)}
                   accessibilityLabel={t("notes.knowledgeMoveDocument", "移动文档")}
                 >
                   <FolderInputIcon size={14} color={colors.foreground} />
@@ -2267,14 +2305,14 @@ function KnowledgeHomePanel({
       )}
 
       <Modal
-        visible={isMovePickerVisible}
+        visible={!!moveDocument}
         transparent
         animationType="fade"
-        onRequestClose={() => setIsMovePickerVisible(false)}
+        onRequestClose={() => setMoveDocument(null)}
       >
         <Pressable
           style={styles.knowledgeMoveSheetBackdrop}
-          onPress={() => setIsMovePickerVisible(false)}
+          onPress={() => setMoveDocument(null)}
         />
         <View style={styles.knowledgeMoveSheet}>
           <View style={styles.knowledgeMoveSheetHeader}>
@@ -2283,13 +2321,13 @@ function KnowledgeHomePanel({
                 {t("notes.knowledgeMoveTo", "移动到")}
               </Text>
               <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
-                {document.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                {moveDocument?.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
               </Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.76}
               style={styles.knowledgeMoveSheetClose}
-              onPress={() => setIsMovePickerVisible(false)}
+              onPress={() => setMoveDocument(null)}
               accessibilityLabel={t("common.cancel", "取消")}
             >
               <XIcon size={16} color={colors.mutedForeground} />
@@ -2324,6 +2362,101 @@ function KnowledgeHomePanel({
               </TouchableOpacity>
             ))}
           </ScrollView>
+        </View>
+      </Modal>
+      <Modal
+        visible={!!actionDocument}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionDocument(null)}
+      >
+        <Pressable
+          style={styles.knowledgeMoveSheetBackdrop}
+          onPress={() => setActionDocument(null)}
+        />
+        <View style={styles.knowledgeMoveSheet}>
+          <View style={styles.knowledgeMoveSheetHeader}>
+            <View style={styles.knowledgeMoveSheetTitleBlock}>
+              <Text style={styles.knowledgeMoveSheetTitle}>
+                {actionDocument?.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+              </Text>
+              <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
+                {actionDocument ? knowledgeDocumentTypeLabel(actionDocument, t) : ""}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.76}
+              style={styles.knowledgeMoveSheetClose}
+              onPress={() => setActionDocument(null)}
+              accessibilityLabel={t("common.cancel", "取消")}
+            >
+              <XIcon size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          {actionDocument ? (
+            <View style={[styles.knowledgeMoveTargetList, styles.knowledgeCreateTargetList]}>
+              <TouchableOpacity
+                activeOpacity={0.78}
+                style={styles.knowledgeMoveTarget}
+                onPress={() => {
+                  const target = actionDocument;
+                  setActionDocument(null);
+                  handleSelectKnowledgeDocument(target);
+                }}
+              >
+                <View style={styles.knowledgeMoveTargetIcon}>
+                  {actionDocument.type === "folder" ? (
+                    <FolderIcon size={15} color={colors.foreground} />
+                  ) : (
+                    <ScrollTextIcon size={15} color={colors.foreground} />
+                  )}
+                </View>
+                <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
+                  {t("notes.knowledgeOpenDocument", "打开文档")}
+                </Text>
+                <ChevronRightIcon size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+
+              {canMoveActionDocument ? (
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={styles.knowledgeMoveTarget}
+                  onPress={() => showMovePicker(actionDocument)}
+                >
+                  <View style={styles.knowledgeMoveTargetIcon}>
+                    <FolderInputIcon size={15} color={colors.primary} />
+                  </View>
+                  <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
+                    {t("notes.knowledgeMoveDocument", "移动文档")}
+                  </Text>
+                  <ChevronRightIcon size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              ) : null}
+
+              {canDeleteActionDocument ? (
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={styles.knowledgeMoveTarget}
+                  onPress={() => {
+                    const target = actionDocument;
+                    setActionDocument(null);
+                    onDeleteDocument(target);
+                  }}
+                >
+                  <View style={styles.knowledgeMoveTargetIcon}>
+                    <Trash2Icon size={15} color={colors.destructive} />
+                  </View>
+                  <Text
+                    style={[styles.knowledgeMoveTargetText, styles.knowledgeMoveTargetDangerText]}
+                    numberOfLines={1}
+                  >
+                    {t("notes.knowledgeDeleteDocument", "删除文档")}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </Modal>
       <Modal
@@ -3603,48 +3736,35 @@ function KnowledgeDocumentTreeRow({
   );
 }
 
-function KnowledgeVaultRootOverview({
-  items,
-  documents,
-  isCreating,
+function KnowledgeFolderBrowserItem({
+  item,
+  childCountByParentId,
   onSelect,
-  onCreate,
+  onOpenActions,
   t,
   styles,
   colors,
 }: {
-  items: KnowledgeDocument[];
-  documents: KnowledgeDocument[];
-  isCreating: boolean;
+  item: KnowledgeDocument;
+  childCountByParentId: Map<string, number>;
   onSelect: (document: KnowledgeDocument) => void;
-  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  onOpenActions: (document: KnowledgeDocument) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
 }) {
-  const childCountByParentId = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const document of documents) {
-      if (!document.parentId) continue;
-      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
-    }
-    return counts;
-  }, [documents]);
-  const folderChildren = items.filter((item) => item.type === "folder");
-  const noteChildren = items.filter((item) => item.type !== "folder");
-  const renderItem = (item: KnowledgeDocument) => {
-    const isFolder = item.type === "folder";
-    const isHome = item.type === "book_home";
-    const childCount = childCountByParentId.get(item.id) ?? 0;
-    const meta = isFolder
-      ? t("notes.knowledgeFolderChildCount", { count: childCount })
-      : item.excerpt;
+  const isFolder = item.type === "folder";
+  const isHome = item.type === "book_home";
+  const childCount = childCountByParentId.get(item.id) ?? 0;
+  const meta = isFolder
+    ? t("notes.knowledgeFolderChildCount", { count: childCount })
+    : item.excerpt;
 
-    return (
+  return (
+    <View style={styles.knowledgeFolderItem}>
       <TouchableOpacity
-        key={item.id}
         activeOpacity={0.78}
-        style={styles.knowledgeFolderItem}
+        style={styles.knowledgeFolderItemMain}
         onPress={() => onSelect(item)}
       >
         <View style={[styles.knowledgeFolderItemIcon, isFolder && styles.knowledgeFolderIcon]}>
@@ -3668,8 +3788,50 @@ function KnowledgeVaultRootOverview({
         {isFolder ? <Text style={styles.knowledgeFolderItemCount}>{childCount}</Text> : null}
         <ChevronRightIcon size={14} color={colors.mutedForeground} />
       </TouchableOpacity>
-    );
-  };
+
+      <TouchableOpacity
+        activeOpacity={0.72}
+        style={styles.knowledgeFolderItemMore}
+        onPress={() => onOpenActions(item)}
+        accessibilityLabel={t("notes.knowledgeDocumentActions", "文档操作")}
+      >
+        <MoreVerticalIcon size={15} color={colors.mutedForeground} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function KnowledgeVaultRootOverview({
+  items,
+  documents,
+  isCreating,
+  onSelect,
+  onCreate,
+  onOpenActions,
+  t,
+  styles,
+  colors,
+}: {
+  items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+  isCreating: boolean;
+  onSelect: (document: KnowledgeDocument) => void;
+  onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  onOpenActions: (document: KnowledgeDocument) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const childCountByParentId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) {
+      if (!document.parentId) continue;
+      counts.set(document.parentId, (counts.get(document.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [documents]);
+  const folderChildren = items.filter((item) => item.type === "folder");
+  const noteChildren = items.filter((item) => item.type !== "folder");
 
   return (
     <View style={styles.knowledgeFolderOverview}>
@@ -3750,7 +3912,20 @@ function KnowledgeVaultRootOverview({
                 </Text>
                 <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
               </View>
-              <View style={styles.knowledgeFolderItemList}>{folderChildren.map(renderItem)}</View>
+              <View style={styles.knowledgeFolderItemList}>
+                {folderChildren.map((item) => (
+                  <KnowledgeFolderBrowserItem
+                    key={item.id}
+                    item={item}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onOpenActions={onOpenActions}
+                    t={t}
+                    styles={styles}
+                    colors={colors}
+                  />
+                ))}
+              </View>
             </View>
           ) : null}
           {noteChildren.length > 0 ? (
@@ -3761,7 +3936,20 @@ function KnowledgeVaultRootOverview({
                 </Text>
                 <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
               </View>
-              <View style={styles.knowledgeFolderItemList}>{noteChildren.map(renderItem)}</View>
+              <View style={styles.knowledgeFolderItemList}>
+                {noteChildren.map((item) => (
+                  <KnowledgeFolderBrowserItem
+                    key={item.id}
+                    item={item}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onOpenActions={onOpenActions}
+                    t={t}
+                    styles={styles}
+                    colors={colors}
+                  />
+                ))}
+              </View>
             </View>
           ) : null}
         </View>
@@ -3777,6 +3965,7 @@ function KnowledgeFolderOverview({
   isCreating,
   onSelect,
   onCreate,
+  onOpenActions,
   t,
   styles,
   colors,
@@ -3787,6 +3976,7 @@ function KnowledgeFolderOverview({
   isCreating: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
+  onOpenActions: (document: KnowledgeDocument) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
@@ -3802,41 +3992,6 @@ function KnowledgeFolderOverview({
   }, [documents]);
   const folderChildren = items.filter((item) => item.type === "folder");
   const noteChildren = items.filter((item) => item.type !== "folder");
-  const renderItem = (item: KnowledgeDocument) => {
-    const isFolder = item.type === "folder";
-    const childCount = childCountByParentId.get(item.id) ?? 0;
-    const meta = isFolder
-      ? t("notes.knowledgeFolderChildCount", { count: childCount })
-      : item.excerpt;
-
-    return (
-      <TouchableOpacity
-        key={item.id}
-        activeOpacity={0.78}
-        style={styles.knowledgeFolderItem}
-        onPress={() => onSelect(item)}
-      >
-        <View style={[styles.knowledgeFolderItemIcon, isFolder && styles.knowledgeFolderIcon]}>
-          {isFolder ? (
-            <FolderIcon size={15} color={colors.primary} />
-          ) : (
-            <ScrollTextIcon size={15} color={colors.mutedForeground} />
-          )}
-        </View>
-        <View style={styles.knowledgeFolderItemText}>
-          <Text style={styles.knowledgeFolderItemTitle} numberOfLines={1}>
-            {item.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
-          </Text>
-          <Text style={styles.knowledgeFolderItemMeta} numberOfLines={1}>
-            {knowledgeDocumentTypeLabel(item, t)}
-            {!!meta && ` · ${meta}`}
-          </Text>
-        </View>
-        {isFolder ? <Text style={styles.knowledgeFolderItemCount}>{childCount}</Text> : null}
-        <ChevronRightIcon size={14} color={colors.mutedForeground} />
-      </TouchableOpacity>
-    );
-  };
 
   return (
     <View style={styles.knowledgeFolderOverview}>
@@ -3917,7 +4072,20 @@ function KnowledgeFolderOverview({
                 </Text>
                 <Text style={styles.knowledgeFolderGroupCount}>{folderChildren.length}</Text>
               </View>
-              <View style={styles.knowledgeFolderItemList}>{folderChildren.map(renderItem)}</View>
+              <View style={styles.knowledgeFolderItemList}>
+                {folderChildren.map((item) => (
+                  <KnowledgeFolderBrowserItem
+                    key={item.id}
+                    item={item}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onOpenActions={onOpenActions}
+                    t={t}
+                    styles={styles}
+                    colors={colors}
+                  />
+                ))}
+              </View>
             </View>
           ) : null}
           {noteChildren.length > 0 ? (
@@ -3928,7 +4096,20 @@ function KnowledgeFolderOverview({
                 </Text>
                 <Text style={styles.knowledgeFolderGroupCount}>{noteChildren.length}</Text>
               </View>
-              <View style={styles.knowledgeFolderItemList}>{noteChildren.map(renderItem)}</View>
+              <View style={styles.knowledgeFolderItemList}>
+                {noteChildren.map((item) => (
+                  <KnowledgeFolderBrowserItem
+                    key={item.id}
+                    item={item}
+                    childCountByParentId={childCountByParentId}
+                    onSelect={onSelect}
+                    onOpenActions={onOpenActions}
+                    t={t}
+                    styles={styles}
+                    colors={colors}
+                  />
+                ))}
+              </View>
             </View>
           ) : null}
         </View>

@@ -770,6 +770,9 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.medium,
       lineHeight: 18,
     },
+    knowledgeMoveTargetDangerText: {
+      color: colors.destructive,
+    },
     knowledgeTagWrap: { gap: 7 },
     knowledgeTagLabel: {
       fontSize: fontSize.xs,
@@ -1126,6 +1129,21 @@ export const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       paddingHorizontal: 0,
       paddingVertical: 7,
+    },
+    knowledgeFolderItemMain: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    knowledgeFolderItemMore: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "transparent",
     },
     knowledgeFolderItemIcon: {
       width: 22,

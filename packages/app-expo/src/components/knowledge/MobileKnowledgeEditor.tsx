@@ -16,6 +16,7 @@ import {
   ListTodoIcon,
   MessageCirclePlusIcon,
   MinusIcon,
+  PlusIcon,
   QuoteIcon,
   Redo2Icon,
   ScrollTextIcon,
@@ -279,6 +280,7 @@ export function MobileKnowledgeEditor({
   });
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showInternalLinkModal, setShowInternalLinkModal] = useState(false);
+  const [showBlockInsertMenu, setShowBlockInsertMenu] = useState(false);
   const [showCardMenu, setShowCardMenu] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -676,6 +678,7 @@ export function MobileKnowledgeEditor({
     if (!canUse("image")) return;
     setImageUrl("");
     setImageAlt("");
+    setShowBlockInsertMenu(false);
     setShowImageModal(true);
   }, [canUse]);
 
@@ -719,6 +722,7 @@ export function MobileKnowledgeEditor({
       if (!canInsertCard(card.cardType)) return;
       runCommand("insertCard", card.createAttrs());
       setShowCardMenu(false);
+      setShowBlockInsertMenu(false);
     },
     [canInsertCard, runCommand],
   );
@@ -1005,6 +1009,15 @@ export function MobileKnowledgeEditor({
   const toolbarGroups = toolbarGroupCandidates.filter(
     (group): group is { key: string; node: React.ReactNode } => group !== null,
   );
+  const hasBlockInsertItems =
+    canUse("heading1") ||
+    canUse("heading2") ||
+    canUse("bulletList") ||
+    canUse("taskList") ||
+    canUse("blockquote") ||
+    canUse("horizontalRule") ||
+    canUse("image") ||
+    allowedCards.length > 0;
 
   if (useMarkdownFallback) {
     return (
@@ -1062,6 +1075,18 @@ export function MobileKnowledgeEditor({
         style={styles.toolbar}
         contentContainerStyle={styles.toolbarContent}
       >
+        {hasBlockInsertItems ? (
+          <>
+            <ToolbarButton
+              onPress={() => setShowBlockInsertMenu(true)}
+              disabled={!isEditorReady}
+              styles={styles}
+            >
+              <PlusIcon size={15} color={colors.primary} />
+            </ToolbarButton>
+            <ToolbarDivider styles={styles} />
+          </>
+        ) : null}
         {toolbarGroups.map((group, index) => (
           <Fragment key={group.key}>
             {index > 0 ? <ToolbarDivider styles={styles} /> : null}
@@ -1183,6 +1208,149 @@ export function MobileKnowledgeEditor({
       </View>
 
       {errorMessage && isEditorReady ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+      <Modal
+        visible={showBlockInsertMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBlockInsertMenu(false)}
+      >
+        <View style={styles.cardSheetOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowBlockInsertMenu(false)}
+          />
+          <View style={[styles.cardSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+            <View style={styles.cardSheetHandle} />
+            <View style={styles.cardSheetHeader}>
+              <Text style={styles.cardSheetTitle}>{t("notes.knowledgeInsertBlock", "插入块")}</Text>
+              <Text style={styles.cardSheetHint}>
+                {t("notes.knowledgeInsertBlockHint", "插入标题、列表、引用、图片或知识卡片。")}
+              </Text>
+            </View>
+            <ScrollView
+              style={styles.cardOptionScroll}
+              contentContainerStyle={styles.cardOptionList}
+              showsVerticalScrollIndicator={false}
+            >
+              {canUse("heading1") ? (
+                <BlockSheetOption
+                  icon={<Heading1Icon size={18} color={colors.primary} />}
+                  title={t("editor.heading1", "一级标题")}
+                  hint={t("notes.knowledgeInsertHeadingHint", "开始一个章节")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("heading", { level: 1 });
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("heading2") ? (
+                <BlockSheetOption
+                  icon={<Heading2Icon size={18} color={colors.primary} />}
+                  title={t("editor.heading2", "二级标题")}
+                  hint={t("notes.knowledgeInsertSubheadingHint", "拆出一个小节")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("heading", { level: 2 });
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("bulletList") ? (
+                <BlockSheetOption
+                  icon={<ListIcon size={18} color={colors.primary} />}
+                  title={t("editor.bulletList", "无序列表")}
+                  hint={t("notes.knowledgeInsertListHint", "整理要点")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("bulletList");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("taskList") ? (
+                <BlockSheetOption
+                  icon={<ListTodoIcon size={18} color={colors.primary} />}
+                  title={t("editor.taskList", "任务列表")}
+                  hint={t("notes.knowledgeInsertTaskHint", "记录后续阅读动作")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("taskList");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("blockquote") ? (
+                <BlockSheetOption
+                  icon={<QuoteIcon size={18} color={colors.primary} />}
+                  title={t("editor.blockquote", "引用")}
+                  hint={t("notes.knowledgeInsertQuoteHint", "突出想法或引文")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("blockquote");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("horizontalRule") ? (
+                <BlockSheetOption
+                  icon={<MinusIcon size={18} color={colors.primary} />}
+                  title={t("editor.horizontalRule", "分割线")}
+                  hint={t("notes.knowledgeInsertDividerHint", "分隔两个段落")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("horizontalRule");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("image") ? (
+                <BlockSheetOption
+                  icon={<ImagePlusIcon size={18} color={colors.primary} />}
+                  title={t("notes.knowledgeInsertImage", "插入图片")}
+                  hint={t("notes.knowledgeInsertImageHint", "添加可同步的图片附件")}
+                  styles={styles}
+                  onPress={openImageModal}
+                />
+              ) : null}
+              {allowedCards.length > 0 ? (
+                <>
+                  {allowedCards.slice(0, 4).map((card) => {
+                    const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
+                    return (
+                      <BlockSheetOption
+                        key={card.key}
+                        icon={<Icon size={18} color={colors.primary} />}
+                        title={card.insertLabel}
+                        hint={card.description || t("notes.knowledgeInsertCard", "插入卡片")}
+                        styles={styles}
+                        onPress={() => insertCard(card)}
+                      />
+                    );
+                  })}
+                  {allowedCards.length > 4 ? (
+                    <BlockSheetOption
+                      icon={<SparklesIcon size={18} color={colors.primary} />}
+                      title={t("notes.knowledgeCardPickerTitle", "插入知识卡片")}
+                      hint={t(
+                        "notes.knowledgeCardPickerHint",
+                        "选择一种结构，插入后会随知识文档同步和导出。",
+                      )}
+                      styles={styles}
+                      onPress={() => {
+                        setShowBlockInsertMenu(false);
+                        setShowCardMenu(true);
+                      }}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showLinkModal}
@@ -1553,6 +1721,36 @@ function ToolbarButton({
 
 function ToolbarDivider({ styles }: { styles: ReturnType<typeof makeStyles> }) {
   return <View style={styles.toolbarDivider} />;
+}
+
+function BlockSheetOption({
+  icon,
+  title,
+  hint,
+  onPress,
+  styles,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint?: string;
+  onPress: () => void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <TouchableOpacity style={styles.blockOption} activeOpacity={0.78} onPress={onPress}>
+      <View style={styles.blockOptionIcon}>{icon}</View>
+      <View style={styles.blockOptionText}>
+        <Text style={styles.blockOptionTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {hint ? (
+          <Text style={styles.blockOptionHint} numberOfLines={2}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 const makeStyles = (colors: ReturnType<typeof useColors>) =>
@@ -1953,5 +2151,41 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.mutedForeground,
       fontSize: fontSize.xs,
       lineHeight: 17,
+    },
+    blockOption: {
+      minHeight: 58,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 11,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.background,
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+    },
+    blockOptionIcon: {
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    blockOptionText: {
+      minWidth: 0,
+      flex: 1,
+      gap: 2,
+    },
+    blockOptionTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      lineHeight: 18,
+    },
+    blockOptionHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 16,
     },
   });

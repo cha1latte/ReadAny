@@ -50,6 +50,7 @@ import {
   MessageSquareQuote,
   Minus,
   Network,
+  Plus,
   Quote,
   Redo2,
   Sparkles,
@@ -292,6 +293,7 @@ export function KnowledgeEditor({
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
+  const [isBlockInsertOpen, setIsBlockInsertOpen] = useState(false);
   const [isImageInsertOpen, setIsImageInsertOpen] = useState(false);
   const [isInternalLinkOpen, setIsInternalLinkOpen] = useState(false);
   const [internalLinkQuery, setInternalLinkQuery] = useState("");
@@ -637,13 +639,172 @@ export function KnowledgeEditor({
         })
         .run();
       setIsInsertOpen(false);
+      setIsBlockInsertOpen(false);
     },
     [canInsertCard, editor],
   );
 
   if (!editor) return null;
 
+  const hasBlockInsertItems =
+    canUse("heading1") ||
+    canUse("heading2") ||
+    canUse("bulletList") ||
+    canUse("taskList") ||
+    canUse("blockquote") ||
+    canUse("horizontalRule") ||
+    canUse("image") ||
+    allowedCards.length > 0;
   const toolbarGroupCandidates: ({ key: string; node: ReactNode } | null)[] = [
+    hasBlockInsertItems
+      ? {
+          key: "insert",
+          node: (
+            <div className="relative">
+              <ToolbarButton
+                onClick={() => {
+                  setIsBlockInsertOpen((open) => !open);
+                  setIsInternalLinkOpen(false);
+                  setIsImageInsertOpen(false);
+                  setIsInsertOpen(false);
+                }}
+                isActive={isBlockInsertOpen}
+                title={t("notes.knowledgeInsertBlock", { defaultValue: "Insert block" })}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </ToolbarButton>
+
+              {isBlockInsertOpen ? (
+                <div className="absolute left-0 top-8 z-20 w-72 rounded-lg border border-border/70 bg-popover p-1.5 shadow-lg">
+                  <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {t("notes.knowledgeInsertBlock", { defaultValue: "Insert block" })}
+                  </div>
+                  {canUse("heading1") ? (
+                    <BlockInsertButton
+                      icon={<Heading1 className="h-3.5 w-3.5" />}
+                      title={t("editor.heading1")}
+                      hint={t("notes.knowledgeInsertHeadingHint", {
+                        defaultValue: "Start a section",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleHeading({ level: 1 }).run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("heading2") ? (
+                    <BlockInsertButton
+                      icon={<Heading2 className="h-3.5 w-3.5" />}
+                      title={t("editor.heading2")}
+                      hint={t("notes.knowledgeInsertSubheadingHint", {
+                        defaultValue: "Nest a smaller section",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleHeading({ level: 2 }).run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("bulletList") ? (
+                    <BlockInsertButton
+                      icon={<List className="h-3.5 w-3.5" />}
+                      title={t("editor.bulletList")}
+                      hint={t("notes.knowledgeInsertListHint", {
+                        defaultValue: "Collect points",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleBulletList().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("taskList") ? (
+                    <BlockInsertButton
+                      icon={<ListTodo className="h-3.5 w-3.5" />}
+                      title={t("editor.taskList")}
+                      hint={t("notes.knowledgeInsertTaskHint", {
+                        defaultValue: "Track follow-up reading work",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleTaskList().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("blockquote") ? (
+                    <BlockInsertButton
+                      icon={<Quote className="h-3.5 w-3.5" />}
+                      title={t("editor.blockquote")}
+                      hint={t("notes.knowledgeInsertQuoteHint", {
+                        defaultValue: "Set off an idea or cited passage",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleBlockquote().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("horizontalRule") ? (
+                    <BlockInsertButton
+                      icon={<Minus className="h-3.5 w-3.5" />}
+                      title={t("editor.horizontalRule")}
+                      hint={t("notes.knowledgeInsertDividerHint", {
+                        defaultValue: "Separate two sections",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().setHorizontalRule().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("image") ? (
+                    <BlockInsertButton
+                      icon={<ImagePlus className="h-3.5 w-3.5" />}
+                      title={t("notes.knowledgeInsertImage")}
+                      hint={t("notes.knowledgeInsertImageHint", {
+                        defaultValue: "Add a synced image attachment",
+                      })}
+                      onClick={() => {
+                        setIsImageInsertOpen(true);
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {allowedCards.length > 0 ? (
+                    <>
+                      <div className="my-1 h-px bg-border/50" />
+                      {allowedCards.slice(0, 5).map((card) => {
+                        const Icon =
+                          cardIconMap[card.cardType as keyof typeof cardIconMap] ?? Sparkles;
+                        return (
+                          <BlockInsertButton
+                            key={card.key}
+                            icon={<Icon className="h-3.5 w-3.5" />}
+                            title={card.insertLabel}
+                            hint={card.description || t("notes.knowledgeInsertCard")}
+                            onClick={() => insertCard(card)}
+                          />
+                        );
+                      })}
+                      {allowedCards.length > 5 ? (
+                        <BlockInsertButton
+                          icon={<Sparkles className="h-3.5 w-3.5" />}
+                          title={t("notes.knowledgeCardPickerTitle")}
+                          hint={t("notes.knowledgeCardPickerHint")}
+                          onClick={() => {
+                            setIsInsertOpen(true);
+                            setIsBlockInsertOpen(false);
+                          }}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ),
+        }
+      : null,
     canUse("undo") || canUse("redo")
       ? {
           key: "history",
@@ -763,6 +924,7 @@ export function KnowledgeEditor({
                   setIsInternalLinkOpen((open) => !open);
                   setIsImageInsertOpen(false);
                   setIsInsertOpen(false);
+                  setIsBlockInsertOpen(false);
                 }}
                 isActive={isInternalLinkOpen}
                 title={t("notes.knowledgeInsertInternalLink")}
@@ -892,6 +1054,7 @@ export function KnowledgeEditor({
                 <ToolbarButton
                   onClick={() => {
                     setIsImageInsertOpen((open) => !open);
+                    setIsBlockInsertOpen(false);
                     setIsInsertOpen(false);
                   }}
                   title={t("notes.knowledgeInsertImage")}
@@ -996,6 +1159,7 @@ export function KnowledgeEditor({
                 onClick={() => {
                   setIsInsertOpen((open) => !open);
                   setIsImageInsertOpen(false);
+                  setIsBlockInsertOpen(false);
                 }}
                 isActive={isInsertOpen}
                 title={t("notes.knowledgeInsertCard", { defaultValue: "Insert card" })}
@@ -1151,6 +1315,36 @@ export function KnowledgeEditor({
         )}
       />
     </div>
+  );
+}
+
+function BlockInsertButton({
+  icon,
+  title,
+  hint,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+      onClick={onClick}
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-popover-foreground">{title}</span>
+        {hint ? (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{hint}</span>
+        ) : null}
+      </span>
+    </button>
   );
 }
 

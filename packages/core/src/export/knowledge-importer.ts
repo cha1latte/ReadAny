@@ -15,6 +15,7 @@ export interface KnowledgeMarkdownImportInput {
   path?: string;
   content: string;
   defaultType?: KnowledgeDocumentType;
+  defaultParentId?: string;
   bookId?: string;
 }
 
@@ -302,6 +303,9 @@ export function parseKnowledgeMarkdownDocument(
   const sourceId = metadata.sourceId ?? input.path;
   const sourceKind = metadata.sourceKind ?? (input.path ? "obsidian" : "external");
   const bookId = input.bookId ?? metadata.bookId;
+  const parentId =
+    metadata.parentId ??
+    (!isReadAnyExport && documentType !== "book_home" ? input.defaultParentId : undefined);
 
   return {
     path: input.path,
@@ -311,7 +315,7 @@ export function parseKnowledgeMarkdownDocument(
     contentMd,
     draft: {
       id: metadata.id,
-      parentId: metadata.parentId,
+      parentId,
       type: documentType,
       title,
       bookId,

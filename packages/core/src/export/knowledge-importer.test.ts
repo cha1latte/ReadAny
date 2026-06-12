@@ -213,6 +213,48 @@ Why does this matter?
     });
   });
 
+  it("places ordinary Markdown in the provided default parent folder", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Vault/Ideas/Slow Reading.md",
+      content: "# Slow Reading\n\nRead slowly.",
+      defaultParentId: "folder-current",
+      bookId: "book-1",
+    });
+
+    expect(imported.draft).toMatchObject({
+      bookId: "book-1",
+      parentId: "folder-current",
+      type: "imported_markdown",
+      title: "Slow Reading",
+    });
+  });
+
+  it("keeps ReadAny exported root documents at their explicit parent", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Books/The Book/README.md",
+      content: `---
+type: "readany-knowledge"
+id: "home-1"
+documentType: "book_home"
+title: "The Book"
+bookId: "book-1"
+tags: []
+---
+# The Book
+
+Home note.
+`,
+      defaultParentId: "folder-current",
+    });
+
+    expect(imported.draft).toMatchObject({
+      id: "home-1",
+      type: "book_home",
+      title: "The Book",
+      parentId: undefined,
+    });
+  });
+
   it("uses the file name when ordinary Markdown has no title", () => {
     const imported = parseKnowledgeMarkdownDocument({
       path: "Vault/Untitled Note.md",

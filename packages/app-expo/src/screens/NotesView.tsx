@@ -1337,12 +1337,15 @@ export function NotesView({
       if (!saved) return;
 
       const items: KnowledgeMarkdownImportReviewItem[] = [];
+      const defaultParentId =
+        knowledgeHome?.type === "folder" ? knowledgeHome.id : knowledgeHome?.parentId;
       for (const path of paths) {
         const content = await platform.readTextFile(path);
         const imported = parseKnowledgeMarkdownDocument({
           path,
           content,
           bookId: selectedKnowledgeBookId,
+          defaultParentId,
         });
         items.push({
           path,
@@ -1368,6 +1371,9 @@ export function NotesView({
   }, [
     isKnowledgeMarkdownImportApplying,
     isKnowledgeMarkdownImporting,
+    knowledgeHome?.id,
+    knowledgeHome?.parentId,
+    knowledgeHome?.type,
     saveActiveKnowledgeDocumentNow,
     selectedKnowledgeBookId,
     t,

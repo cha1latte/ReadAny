@@ -1448,12 +1448,15 @@ export function NotesPage() {
 
       const { readTextFile } = await import("@tauri-apps/plugin-fs");
       const items: KnowledgeMarkdownImportReviewItem[] = [];
+      const defaultParentId =
+        knowledgeHome?.type === "folder" ? knowledgeHome.id : knowledgeHome?.parentId;
       for (const path of paths) {
         const content = await readTextFile(path);
         const imported = parseKnowledgeMarkdownDocument({
           path,
           content,
           bookId: selectedKnowledgeBookId,
+          defaultParentId,
         });
         items.push({
           path,

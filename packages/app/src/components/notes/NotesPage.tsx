@@ -2337,11 +2337,9 @@ function KnowledgeHomePanel({
                     placeholder={t("notes.knowledgeUntitledDocument")}
                     className="block w-full min-w-0 bg-transparent text-[38px] font-semibold leading-[1.08] text-foreground outline-none placeholder:text-muted-foreground/45 focus-visible:text-foreground"
                   />
-                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className="rounded-md bg-muted/30 px-2 py-1">
-                      {knowledgeDocumentTypeLabel(document, t)}
-                    </span>
-                    <span className="h-1 w-1 rounded-full bg-border" />
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <span>{knowledgeDocumentTypeLabel(document, t)}</span>
+                    <span className="text-border">/</span>
                     <span className="truncate">{book.title}</span>
                   </div>
                   {!isFolderDocument ? (
@@ -2564,19 +2562,19 @@ function KnowledgeVaultRootTitle({
         className="mb-3 flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-medium text-muted-foreground"
         aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
       >
-        <span className="inline-flex min-w-0 items-center gap-1 text-foreground/80">
-          <FolderOpen className="h-3 w-3 shrink-0" />
+        <span className="inline-flex min-w-0 items-center gap-1 text-primary">
+          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
           {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
         </span>
       </nav>
       <h2 className="block w-full min-w-0 text-[30px] font-semibold leading-[1.12] text-foreground">
         {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
       </h2>
-      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="rounded-md bg-muted/30 px-2 py-1">
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+        <span>
           {documentCount} {t("notes.knowledgeDocuments")}
         </span>
-        <span className="h-1 w-1 rounded-full bg-border" />
+        <span className="text-border">/</span>
         <span className="truncate">{bookTitle}</span>
       </div>
     </>
@@ -2785,13 +2783,18 @@ function KnowledgeFolderBrowserRow({
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
 
   return (
-    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-1.5 transition-colors last:border-b-0 hover:bg-muted/30">
+    <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1.5 py-1.5 transition-colors last:border-b-0 hover:bg-muted/20">
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+        className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-sm py-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
         onClick={() => onSelect(document)}
       >
-        <span className="flex h-7 w-5 shrink-0 items-center justify-center">
+        <span
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm",
+            isFolder ? "bg-primary/[0.08]" : "bg-muted/25",
+          )}
+        >
           <Icon
             className={cn("h-3.5 w-3.5", isFolder ? "text-primary" : "text-muted-foreground")}
           />
@@ -2800,7 +2803,7 @@ function KnowledgeFolderBrowserRow({
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
             {document.title || t("notes.knowledgeUntitledDocument")}
           </span>
-          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
             {knowledgeDocumentTypeLabel(document, t)}
             {meta ? ` · ${meta}` : ""}
           </span>
@@ -3370,7 +3373,7 @@ function KnowledgeDocumentBreadcrumbs({
   return (
     <nav
       className={cn(
-        "flex min-w-0 flex-wrap items-center gap-1 text-[11px] font-medium text-muted-foreground",
+        "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] font-medium text-muted-foreground",
         className,
       )}
       aria-label={t("notes.knowledgeDocumentPath", { defaultValue: "Document path" })}
@@ -3384,11 +3387,11 @@ function KnowledgeDocumentBreadcrumbs({
 
         return (
           <span key={item.id} className="inline-flex min-w-0 items-center gap-1">
-            {index > 0 ? <span className="text-border">/</span> : null}
+            {index > 0 ? <span className="text-border/80">/</span> : null}
             {isClickable ? (
               <button
                 type="button"
-                className="inline-flex max-w-40 items-center gap-1 truncate rounded-md border border-transparent px-1.5 py-0.5 text-muted-foreground transition-colors hover:border-border/50 hover:bg-muted/45 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                className="inline-flex max-w-40 items-center gap-1 truncate rounded-sm px-0.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
                 onClick={() => {
                   if (isRoot) {
                     onSelectRoot?.();
@@ -3404,8 +3407,8 @@ function KnowledgeDocumentBreadcrumbs({
             ) : (
               <span
                 className={cn(
-                  "inline-flex max-w-40 items-center gap-1 truncate rounded-md px-1.5 py-0.5",
-                  isLast ? "text-foreground/80" : "text-muted-foreground",
+                  "inline-flex max-w-40 items-center gap-1 truncate rounded-sm px-0.5 py-0.5",
+                  isLast ? "text-primary" : "text-muted-foreground",
                 )}
                 title={item.title}
               >

@@ -2034,6 +2034,11 @@ function KnowledgeHomePanel({
     canDeleteKnowledgeDocument(actionDocument) &&
     !(actionDocument.type === "folder" && actionDocumentChildCount > 0);
   const canMoveActionDocument = !!actionDocument && getMoveTargets(actionDocument).length > 0;
+  const saveStatusLabel = isSaving
+    ? t("notes.knowledgeSaving", "保存中")
+    : isSaved
+      ? t("notes.knowledgeSaved", "已保存")
+      : t("notes.knowledgePending", "待保存");
 
   const showMovePicker = useCallback(
     (targetDocument?: KnowledgeDocument | null) => {
@@ -2133,6 +2138,7 @@ function KnowledgeHomePanel({
                   const isLastPathPart = part.id === activePathLastId;
                   const isRootPathPart = part.id === "__vault__";
                   const targetDocument = documents.find((item) => item.id === part.id);
+                  const isFolderLike = isRootPathPart || part.type === "folder";
                   return (
                     <View key={part.id} style={styles.knowledgeVaultPathSegment}>
                       {index > 0 ? <Text style={styles.knowledgeVaultPathSlash}>/</Text> : null}
@@ -2155,6 +2161,17 @@ function KnowledgeHomePanel({
                         }}
                         disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
                       >
+                        {isFolderLike ? (
+                          <FolderIcon
+                            size={12}
+                            color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                          />
+                        ) : (
+                          <ScrollTextIcon
+                            size={12}
+                            color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                          />
+                        )}
                         <Text
                           style={[
                             styles.knowledgeVaultPathChipText,
@@ -2238,6 +2255,9 @@ function KnowledgeHomePanel({
               <Text style={styles.knowledgeCanvasPath} numberOfLines={1}>
                 {activePath}
               </Text>
+              <Text style={styles.knowledgeCanvasMeta} numberOfLines={1}>
+                {saveStatusLabel}
+              </Text>
             </View>
 
             <View style={styles.knowledgeDocumentActionRail}>
@@ -2274,14 +2294,6 @@ function KnowledgeHomePanel({
               ) : null}
             </View>
           </View>
-
-          <Text style={styles.knowledgeCanvasSaveText}>
-            {isSaving
-              ? t("notes.knowledgeSaving", "保存中")
-              : isSaved
-                ? t("notes.knowledgeSaved", "已保存")
-                : t("notes.knowledgePending", "待保存")}
-          </Text>
 
           <View style={styles.knowledgeDocumentCanvas}>
             <MobileKnowledgeEditor

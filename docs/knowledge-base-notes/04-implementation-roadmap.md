@@ -183,8 +183,9 @@ Verification:
 
 Status: partially implemented. Built-in card registry, card templates, desktop
 node views, mobile WebView card rendering, Markdown fallbacks, shared card
-attribute upgrades, and a document-preserved AI/tool failure card exist. Richer
-card editing and complex schema migrations remain future work.
+attribute upgrades, unknown/future-version card fallback metadata, and a
+document-preserved AI/tool failure card exist. Richer card editing and complex
+schema migrations remain future work.
 
 Goal:
 

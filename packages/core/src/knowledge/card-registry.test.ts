@@ -38,13 +38,48 @@ describe("ReadAny card registry", () => {
     });
   });
 
-  it("keeps unknown cards readable through a generic callout fallback", () => {
+  it("keeps unknown cards readable with ReadAny metadata in the fallback", () => {
     expect(
       renderReadAnyCardMarkdownFallback(
-        { cardType: "customMetric", title: "Reading score", text: "Focus: 92%" },
+        {
+          cardType: "customMetric",
+          version: 3,
+          title: "Reading score",
+          text: "Focus: 92%",
+          sourceTitle: "Chapter 4",
+          cfi: "epubcfi(/6/4)",
+        },
         { body: "" },
       ),
-    ).toBe("> [!note] Reading score\n> Focus: 92%");
+    ).toBe(
+      [
+        "> [!note] Reading score",
+        "> Focus: 92%",
+        "> ReadAny card: customMetric v3",
+        "> Source: Chapter 4",
+        "> CFI: epubcfi(/6/4)",
+      ].join("\n"),
+    );
+  });
+
+  it("does not silently pretend future built-in card versions are fully supported", () => {
+    expect(
+      renderReadAnyCardMarkdownFallback(
+        {
+          cardType: "aiSummary",
+          version: 99,
+          title: "Future summary",
+          markdown: "Readable fallback body.",
+        },
+        { body: "" },
+      ),
+    ).toBe(
+      [
+        "> [!note] Future summary",
+        "> Readable fallback body.",
+        "> ReadAny card: aiSummary v99",
+      ].join("\n"),
+    );
   });
 
   it("normalizes legacy card aliases and unsafe versions", () => {

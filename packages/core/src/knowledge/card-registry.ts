@@ -81,6 +81,27 @@ function callout(kind: string, title: string, body: string, footer?: string): st
   return lines.join("\n");
 }
 
+function unsupportedCardFooter(attrs: ReadAnyCardAttrs): string {
+  const version = attrs.version ? `v${attrs.version}` : "v1";
+  const source = attrs.sourceTitle || attrs.sourceId;
+  return [
+    `ReadAny card: ${attrs.cardType || "custom"} ${version}`,
+    source ? `Source: ${source}` : undefined,
+    attrs.cfi ? `CFI: ${attrs.cfi}` : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n> ");
+}
+
+function unsupportedCardCallout(attrs: ReadAnyCardAttrs, body: string): string {
+  return callout(
+    "note",
+    cardTitle(attrs, attrs.cardType || "ReadAny card"),
+    body,
+    unsupportedCardFooter(attrs),
+  );
+}
+
 function cardTitle(attrs: ReadAnyCardAttrs, fallback: string): string {
   return attrs.title || attrs.sourceTitle || fallback;
 }
@@ -431,11 +452,10 @@ export function renderReadAnyCardMarkdownFallback(
   const normalizedAttrs = normalizeReadAnyCardAttrs(attrs);
   const cardType = normalizedAttrs.cardType || "custom";
   const definition = getReadAnyCardDefinition(cardType);
-  if (definition) return definition.markdownFallback(normalizedAttrs, context);
+  const body = bodyFromAttrs(normalizedAttrs, context);
+  if (definition && (normalizedAttrs.version ?? 1) <= definition.version) {
+    return definition.markdownFallback(normalizedAttrs, context);
+  }
 
-  return callout(
-    "note",
-    cardTitle(normalizedAttrs, cardType),
-    bodyFromAttrs(normalizedAttrs, context),
-  );
+  return unsupportedCardCallout(normalizedAttrs, body);
 }

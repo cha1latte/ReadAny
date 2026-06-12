@@ -173,7 +173,14 @@ describe("editor projection", () => {
       ],
     });
 
-    expect(markdown).toBe("> [!note] Reading timeline\n> A -> B");
+    expect(markdown).toBe(
+      [
+        "> [!note] Reading timeline",
+        "> A -> B",
+        "> ReadAny card: legacyTimeline v2",
+        "> Source: Chapter 2",
+      ].join("\n"),
+    );
   });
 
   it("upgrades card attrs while normalizing Tiptap documents", () => {

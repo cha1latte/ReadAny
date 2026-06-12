@@ -1,6 +1,7 @@
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import {
   MobileKnowledgeEditor,
+  type MobileKnowledgeEditorOutlineTarget,
   type MobileKnowledgeEditorValue,
 } from "@/components/knowledge/MobileKnowledgeEditor";
 import {
@@ -1699,6 +1700,9 @@ function KnowledgeHomePanel({
         : [],
     [document, isFolderDocument, value.contentJson, value.contentMd],
   );
+  const [outlineTarget, setOutlineTarget] = useState<MobileKnowledgeEditorOutlineTarget | null>(
+    null,
+  );
   const [workspaceMode, setWorkspaceMode] = useState<MobileKnowledgeWorkspaceMode>("vault");
   const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
 
@@ -1737,6 +1741,14 @@ function KnowledgeHomePanel({
     },
     [onOpenBook],
   );
+  const handleSelectOutlineItem = useCallback((item: KnowledgeDocumentOutlineItem) => {
+    setIsContextSheetVisible(false);
+    setWorkspaceMode("document");
+    setOutlineTarget((current) => ({
+      index: item.index,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+  }, []);
 
   useEffect(() => {
     if (document?.type === "folder" && workspaceMode === "document") {
@@ -1924,6 +1936,7 @@ function KnowledgeHomePanel({
               value={value}
               onChange={onChange}
               isSaved={isSaved}
+              outlineTarget={outlineTarget}
               placeholder={t(
                 "notes.knowledgePlaceholder",
                 "记录这本书的摘要、问题、想法和长期知识...",
@@ -2036,6 +2049,7 @@ function KnowledgeHomePanel({
             {!isFolderDocument ? (
               <KnowledgeDocumentOutlineCard
                 outline={documentOutline}
+                onSelectItem={handleSelectOutlineItem}
                 t={t}
                 styles={styles}
                 colors={colors}
@@ -2180,11 +2194,13 @@ function KnowledgeTagEditor({
 
 function KnowledgeDocumentOutlineCard({
   outline,
+  onSelectItem,
   t,
   styles,
   colors,
 }: {
   outline: KnowledgeDocumentOutlineItem[];
+  onSelectItem: (item: KnowledgeDocumentOutlineItem) => void;
   t: TFunction;
   styles: ReturnType<typeof makeStyles>;
   colors: ReturnType<typeof useColors>;
@@ -2210,19 +2226,23 @@ function KnowledgeDocumentOutlineCard({
       ) : (
         <View style={styles.knowledgeOutlineList}>
           {outline.map((item) => (
-            <View
+            <TouchableOpacity
               key={item.id}
               style={[
                 styles.knowledgeOutlineRow,
                 { paddingLeft: 10 + Math.min(item.level - 1, 4) * 12 },
               ]}
+              activeOpacity={0.74}
+              onPress={() => onSelectItem(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("notes.knowledgeDocumentOutline", "文档大纲")} ${item.title}`}
             >
               <View style={styles.knowledgeOutlineDot} />
               <Text style={styles.knowledgeOutlineLevel}>H{item.level}</Text>
               <Text style={styles.knowledgeOutlineText} numberOfLines={1}>
                 {item.title}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}

@@ -83,6 +83,11 @@ export interface KnowledgeImageInsertAttrs {
   fileName?: string;
 }
 
+export interface KnowledgeEditorOutlineTarget {
+  index: number;
+  requestId: number;
+}
+
 interface KnowledgeEditorProps {
   value: KnowledgeEditorValue;
   onChange: (value: KnowledgeEditorValue) => void;
@@ -94,6 +99,7 @@ interface KnowledgeEditorProps {
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
   onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
+  outlineTarget?: KnowledgeEditorOutlineTarget | null;
 }
 
 const cardIconMap = {
@@ -200,6 +206,7 @@ export function KnowledgeEditor({
   tier = "knowledge_doc",
   surface,
   onPickLocalImage,
+  outlineTarget,
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
@@ -354,6 +361,24 @@ export function KnowledgeEditor({
       editor.commands.focus();
     }
   }, [editor, autoFocus]);
+
+  useEffect(() => {
+    if (!editor || !outlineTarget) return;
+    const headings = Array.from(
+      editor.view.dom.querySelectorAll("h1,h2,h3,h4,h5,h6"),
+    ) as HTMLElement[];
+    const target = headings[outlineTarget.index];
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.animate?.(
+      [
+        { outline: "0 solid transparent", outlineOffset: "0px" },
+        { outline: "2px solid var(--primary)", outlineOffset: "4px" },
+        { outline: "0 solid transparent", outlineOffset: "8px" },
+      ],
+      { duration: 900, easing: "ease-out" },
+    );
+  }, [editor, outlineTarget]);
 
   const setLink = useCallback(() => {
     if (!editor || !canUse("link")) return;

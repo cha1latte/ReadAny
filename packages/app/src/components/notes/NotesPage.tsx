@@ -1,5 +1,6 @@
 import {
   KnowledgeEditor,
+  type KnowledgeEditorOutlineTarget,
   type KnowledgeEditorValue,
   type KnowledgeImageInsertAttrs,
 } from "@/components/knowledge/KnowledgeEditor";
@@ -2087,7 +2088,14 @@ function KnowledgeHomePanel({
         : [],
     [document, isFolderDocument, value.contentJson, value.contentMd],
   );
+  const [outlineTarget, setOutlineTarget] = useState<KnowledgeEditorOutlineTarget | null>(null);
   const [isContextInspectorOpen, setIsContextInspectorOpen] = useState(true);
+  const handleSelectOutlineItem = useCallback((item: KnowledgeDocumentOutlineItem) => {
+    setOutlineTarget((current) => ({
+      index: item.index,
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+  }, []);
 
   if (isLoading || !document) {
     return (
@@ -2233,6 +2241,7 @@ function KnowledgeHomePanel({
                 onPickLocalImage={() => onPickImageAttachment(document)}
                 placeholder={t("notes.knowledgePlaceholder")}
                 chrome="canvas"
+                outlineTarget={outlineTarget}
                 contentClassName="max-h-none min-h-[690px] px-0 pb-12 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[780px] [&_.ProseMirror]:rounded-md [&_.ProseMirror]:bg-background [&_.ProseMirror]:px-10 [&_.ProseMirror]:py-8 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
               />
             )}
@@ -2283,7 +2292,11 @@ function KnowledgeHomePanel({
             </div>
 
             {!isFolderDocument ? (
-              <KnowledgeDocumentOutlinePanel outline={documentOutline} t={t} />
+              <KnowledgeDocumentOutlinePanel
+                outline={documentOutline}
+                onSelectItem={handleSelectOutlineItem}
+                t={t}
+              />
             ) : null}
 
             <KnowledgeRelationsPanel
@@ -2458,9 +2471,11 @@ function knowledgeLinkTargetLabel(
 
 function KnowledgeDocumentOutlinePanel({
   outline,
+  onSelectItem,
   t,
 }: {
   outline: KnowledgeDocumentOutlineItem[];
+  onSelectItem: (item: KnowledgeDocumentOutlineItem) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   return (
@@ -2484,17 +2499,20 @@ function KnowledgeDocumentOutlinePanel({
       ) : (
         <div className="space-y-1">
           {outline.map((item) => (
-            <div
+            <button
               key={item.id}
-              className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/90"
+              type="button"
+              className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-muted/55 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
               style={{ paddingLeft: `${8 + Math.min(item.level - 1, 4) * 12}px` }}
+              onClick={() => onSelectItem(item)}
+              title={item.title}
             >
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/45" />
               <span className="w-5 shrink-0 text-[10px] font-medium text-muted-foreground">
                 H{item.level}
               </span>
               <span className="truncate">{item.title}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}

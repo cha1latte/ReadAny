@@ -158,8 +158,8 @@ describe("knowledge document utilities", () => {
     });
 
     expect(outline).toEqual([
-      { id: "heading-1", level: 1, title: "第一章 起点" },
-      { id: "heading-2", level: 3, title: "关键问题 继续" },
+      { id: "heading-1", index: 0, level: 1, title: "第一章 起点" },
+      { id: "heading-2", index: 1, level: 3, title: "关键问题 继续" },
     ]);
   });
 
@@ -177,8 +177,8 @@ describe("knowledge document utilities", () => {
     );
 
     expect(outline).toEqual([
-      { id: "heading-1-main-idea", level: 1, title: "Main Idea" },
-      { id: "heading-2-linked-section", level: 3, title: "Linked section" },
+      { id: "heading-1-main-idea", index: 0, level: 1, title: "Main Idea" },
+      { id: "heading-2-linked-section", index: 1, level: 3, title: "Linked section" },
     ]);
   });
 
@@ -193,8 +193,8 @@ describe("knowledge document utilities", () => {
     });
 
     expect(outline).toEqual([
-      { id: "heading-1-low", level: 1, title: "Low" },
-      { id: "heading-2-high", level: 6, title: "High" },
+      { id: "heading-1-low", index: 0, level: 1, title: "Low" },
+      { id: "heading-2-high", index: 1, level: 6, title: "High" },
     ]);
   });
 

@@ -347,6 +347,26 @@ async function buildKnowledgeEditor() {
       ready = true;
     };
 
+    const scrollToOutline = (index) => {
+      if (!editor) return;
+      const numericIndex = Number(index);
+      if (!Number.isFinite(numericIndex) || numericIndex < 0) return;
+      const headings = Array.from(
+        document.querySelectorAll(".readany-prosemirror h1, .readany-prosemirror h2, .readany-prosemirror h3, .readany-prosemirror h4, .readany-prosemirror h5, .readany-prosemirror h6"),
+      );
+      const target = headings[Math.floor(numericIndex)];
+      if (!target) return;
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.animate?.(
+        [
+          { outline: "0 solid transparent", outlineOffset: "0px" },
+          { outline: "2px solid var(--primary)", outlineOffset: "4px" },
+          { outline: "0 solid transparent", outlineOffset: "8px" },
+        ],
+        { duration: 900, easing: "ease-out" },
+      );
+    };
+
     const runCommand = (command, attrs = {}) => {
       if (!editor) return;
       const chain = editor.chain().focus();
@@ -439,6 +459,9 @@ async function buildKnowledgeEditor() {
         }
         case "focus":
           editor.commands.focus(attrs.position || "end");
+          break;
+        case "scrollToOutline":
+          scrollToOutline(attrs.index);
           break;
         case "blur":
           editor.commands.blur();

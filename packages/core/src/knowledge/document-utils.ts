@@ -24,6 +24,7 @@ export interface KnowledgeDocumentTree {
 
 export interface KnowledgeDocumentOutlineItem {
   id: string;
+  index: number;
   level: number;
   title: string;
 }
@@ -105,6 +106,7 @@ function extractOutlineFromMarkdown(markdown: string): KnowledgeDocumentOutlineI
 
     outline.push({
       id: createOutlineItemId(outline.length, title),
+      index: outline.length,
       level: heading[1].length,
       title,
     });
@@ -124,6 +126,7 @@ export function extractKnowledgeDocumentOutline(
       if (title) {
         outline.push({
           id: createOutlineItemId(outline.length, title),
+          index: outline.length,
           level: normalizeHeadingLevel(node.attrs?.level),
           title,
         });

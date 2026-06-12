@@ -75,6 +75,11 @@ export interface MobileKnowledgeEditorValue {
   plainText: string;
 }
 
+export interface MobileKnowledgeEditorOutlineTarget {
+  index: number;
+  requestId: number;
+}
+
 interface MobileKnowledgeEditorProps {
   documentId?: string;
   value: MobileKnowledgeEditorValue;
@@ -84,6 +89,7 @@ interface MobileKnowledgeEditorProps {
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
   isSaved?: boolean;
+  outlineTarget?: MobileKnowledgeEditorOutlineTarget | null;
 }
 
 interface SelectionState {
@@ -211,6 +217,7 @@ export function MobileKnowledgeEditor({
   tier = "knowledge_doc",
   surface,
   isSaved,
+  outlineTarget,
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -497,6 +504,15 @@ export function MobileKnowledgeEditor({
     localFingerprintRef.current = valueFingerprint;
     injectCommand({ type: "setContent", contentJson: value.contentJson });
   }, [injectCommand, isBridgeReady, isEditorReady, value.contentJson, valueFingerprint]);
+
+  useEffect(() => {
+    if (!outlineTarget || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;
+    injectCommand({
+      type: "runCommand",
+      command: "scrollToOutline",
+      attrs: { index: outlineTarget.index },
+    });
+  }, [injectCommand, isBridgeReady, isEditorReady, outlineTarget, useMarkdownFallback]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

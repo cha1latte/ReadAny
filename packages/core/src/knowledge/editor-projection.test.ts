@@ -144,6 +144,27 @@ describe("editor projection", () => {
     );
   });
 
+  it("normalizes legacy card attrs into readable fallbacks", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            type: "legacyTimeline",
+            version: "2",
+            title: "Reading timeline",
+            source: "highlight-1",
+            "source-title": "Chapter 2",
+            text: "A -> B",
+          },
+        },
+      ],
+    });
+
+    expect(markdown).toBe("> [!note] Reading timeline\n> A -> B");
+  });
+
   it("can preserve ReadAny card metadata for round-tripping", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {
@@ -166,6 +187,33 @@ describe("editor projection", () => {
 
     expect(markdown).toBe(
       ':::readany-card type="bookQuote" id="card-1" version="2" source="hl-1"\n> Quote\n:::',
+    );
+  });
+
+  it("preserves normalized legacy card metadata when requested", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              type: "legacyTimeline",
+              version: "2",
+              title: "Reading timeline",
+              source: "highlight-1",
+              "source-title": "Chapter 2",
+              cfi: "epubcfi(/6/8)",
+              markdown: "A -> B",
+            },
+          },
+        ],
+      },
+      { includeReadAnyCardMetadata: true },
+    );
+
+    expect(markdown).toBe(
+      ':::readany-card type="legacyTimeline" version="2" title="Reading timeline" source="highlight-1" source-title="Chapter 2" cfi="epubcfi(/6/8)"\nA -> B\n:::',
     );
   });
 

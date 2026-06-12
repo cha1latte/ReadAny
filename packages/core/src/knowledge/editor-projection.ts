@@ -1,7 +1,11 @@
 import type { JSONValue } from "../types";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { createKnowledgeAttachmentUri, parseKnowledgeAttachmentUri } from "./attachments";
-import { type ReadAnyCardAttrs, renderReadAnyCardMarkdownFallback } from "./card-registry";
+import {
+  type ReadAnyCardAttrs,
+  normalizeReadAnyCardAttrs,
+  renderReadAnyCardMarkdownFallback,
+} from "./card-registry";
 export type { ReadAnyCardAttrs } from "./card-registry";
 
 export interface TiptapMark {
@@ -95,7 +99,7 @@ function prefixLines(text: string, prefix: string): string {
 }
 
 function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions): string {
-  const attrs = (node.attrs ?? {}) as ReadAnyCardAttrs;
+  const attrs = normalizeReadAnyCardAttrs(node.attrs ?? {});
   const cardType = attrs.cardType || "custom";
   const body =
     attrs.markdown ||

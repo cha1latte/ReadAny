@@ -45,6 +45,15 @@ function stringAttr(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  return stringAttr(record[key]);
+}
+
+function numberAttr(value: unknown): number | undefined {
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : undefined;
+}
+
 function templateSchema(template: KnowledgeCardTemplate): ReadAnyCardTemplateSchema {
   return isRecord(template.schemaJson) ? (template.schemaJson as ReadAnyCardTemplateSchema) : {};
 }
@@ -69,6 +78,34 @@ function cardTitle(attrs: ReadAnyCardAttrs, fallback: string): string {
 
 function bodyFromAttrs(attrs: ReadAnyCardAttrs, context: ReadAnyCardMarkdownContext): string {
   return attrs.markdown || attrs.text || context.body;
+}
+
+export function normalizeReadAnyCardAttrs(
+  input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
+): ReadAnyCardAttrs {
+  const raw = isRecord(input) ? input : {};
+  const cardType = stringField(raw, "cardType") ?? stringField(raw, "type") ?? "custom";
+  const definition = getReadAnyCardDefinition(cardType);
+  const version = numberAttr(raw.version) ?? definition?.version ?? 1;
+  const attrs: ReadAnyCardAttrs = { cardType, version };
+
+  const id = stringField(raw, "id");
+  const title = stringField(raw, "title");
+  const text = stringField(raw, "text");
+  const sourceTitle = stringField(raw, "sourceTitle") ?? stringField(raw, "source-title");
+  const sourceId = stringField(raw, "sourceId") ?? stringField(raw, "source");
+  const cfi = stringField(raw, "cfi");
+
+  if (id) attrs.id = id;
+  if (title) attrs.title = title;
+  if (typeof raw.markdown === "string") attrs.markdown = raw.markdown;
+  if (text) attrs.text = text;
+  if (sourceTitle) attrs.sourceTitle = sourceTitle;
+  if (sourceId) attrs.sourceId = sourceId;
+  if (cfi) attrs.cfi = cfi;
+  if ("data" in raw) attrs.data = raw.data;
+
+  return attrs;
 }
 
 export const builtInReadAnyCards: ReadAnyCardDefinition[] = [
@@ -208,24 +245,18 @@ export function createReadAnyCardAttrsFromTemplate(
   const schemaAttrs = isRecord(schema.attrs) ? schema.attrs : {};
   const cardType =
     stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
-  const version = typeof schemaAttrs.version === "number" ? schemaAttrs.version : template.version;
-  const attrs: ReadAnyCardAttrs = {
+  const version = numberAttr(schemaAttrs.version) ?? template.version;
+  const attrs = normalizeReadAnyCardAttrs({
+    ...schemaAttrs,
     cardType,
     version,
-    id: stringAttr(schemaAttrs.id),
     title: stringAttr(schema.title) ?? stringAttr(schema.insertLabel) ?? template.name,
     markdown: stringAttr(schema.markdown) ?? "",
-  };
-
-  const text = stringAttr(schema.text);
-  const sourceTitle = stringAttr(schema.sourceTitle);
-  const sourceId = stringAttr(schema.sourceId);
-  const cfi = stringAttr(schema.cfi);
-  if (text) attrs.text = text;
-  if (sourceTitle) attrs.sourceTitle = sourceTitle;
-  if (sourceId) attrs.sourceId = sourceId;
-  if (cfi) attrs.cfi = cfi;
-  if ("data" in schemaAttrs) attrs.data = schemaAttrs.data;
+    text: schema.text,
+    sourceTitle: schema.sourceTitle,
+    sourceId: schema.sourceId,
+    cfi: schema.cfi,
+  });
 
   return attrs;
 }
@@ -245,9 +276,14 @@ export function renderReadAnyCardMarkdownFallback(
   attrs: ReadAnyCardAttrs,
   context: ReadAnyCardMarkdownContext,
 ): string {
-  const cardType = attrs.cardType || "custom";
+  const normalizedAttrs = normalizeReadAnyCardAttrs(attrs);
+  const cardType = normalizedAttrs.cardType || "custom";
   const definition = getReadAnyCardDefinition(cardType);
-  if (definition) return definition.markdownFallback(attrs, context);
+  if (definition) return definition.markdownFallback(normalizedAttrs, context);
 
-  return callout("note", cardTitle(attrs, cardType), bodyFromAttrs(attrs, context));
+  return callout(
+    "note",
+    cardTitle(normalizedAttrs, cardType),
+    bodyFromAttrs(normalizedAttrs, context),
+  );
 }

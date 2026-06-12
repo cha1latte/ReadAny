@@ -5,6 +5,7 @@ import {
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
+  normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
 } from "./card-registry";
 
@@ -37,6 +38,31 @@ describe("ReadAny card registry", () => {
         { body: "" },
       ),
     ).toBe("> [!note] Reading score\n> Focus: 92%");
+  });
+
+  it("normalizes legacy card aliases and unsafe versions", () => {
+    expect(
+      normalizeReadAnyCardAttrs({
+        type: "legacyTimeline",
+        version: "3",
+        title: "Reading timeline",
+        source: "highlight-1",
+        "source-title": "Chapter 2",
+        markdown: "A -> B",
+      }),
+    ).toEqual({
+      cardType: "legacyTimeline",
+      version: 3,
+      title: "Reading timeline",
+      sourceId: "highlight-1",
+      sourceTitle: "Chapter 2",
+      markdown: "A -> B",
+    });
+
+    expect(normalizeReadAnyCardAttrs({ cardType: "callout", version: 0 })).toEqual({
+      cardType: "callout",
+      version: 1,
+    });
   });
 
   it("creates insertable attrs from synced card templates", () => {

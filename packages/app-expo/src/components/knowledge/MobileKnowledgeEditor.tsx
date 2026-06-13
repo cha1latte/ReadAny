@@ -321,6 +321,7 @@ export function MobileKnowledgeEditor({
   const baseFingerprintRef = useRef(fingerprintJson(normalizedValue.contentJson));
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWrittenDraftFingerprintRef = useRef<string | null>(null);
+  const handledSourceReferenceRequestIdRef = useRef<number | null>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
   const [isBridgeReady, setIsBridgeReady] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
@@ -655,8 +656,10 @@ export function MobileKnowledgeEditor({
 
   useEffect(() => {
     if (!sourceReferenceRequest || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;
+    if (handledSourceReferenceRequestIdRef.current === sourceReferenceRequest.requestId) return;
     const label = sourceReferenceRequest.label.trim();
     if (!label) return;
+    handledSourceReferenceRequestIdRef.current = sourceReferenceRequest.requestId;
     injectCommand({
       type: "runCommand",
       command: "insertSourceReference",

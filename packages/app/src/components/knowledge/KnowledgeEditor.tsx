@@ -405,6 +405,7 @@ export function KnowledgeEditor({
   const isInternalUpdate = useRef(false);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
   const internalLinkInputRef = useRef<HTMLInputElement | null>(null);
+  const handledSourceReferenceRequestIdRef = useRef<number | null>(null);
   const normalizedContentJson = useMemo(
     () => normalizeTiptapDocument(value.contentJson),
     [value.contentJson],
@@ -598,8 +599,10 @@ export function KnowledgeEditor({
 
   useEffect(() => {
     if (!editor || !sourceReferenceRequest || !canUse("sourceReference")) return;
+    if (handledSourceReferenceRequestIdRef.current === sourceReferenceRequest.requestId) return;
     const label = sourceReferenceRequest.label.trim();
     if (!label) return;
+    handledSourceReferenceRequestIdRef.current = sourceReferenceRequest.requestId;
     editor
       .chain()
       .focus()

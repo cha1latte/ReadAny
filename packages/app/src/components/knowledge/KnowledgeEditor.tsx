@@ -16,6 +16,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
   normalizeTiptapDocument,
+  READANY_ATTACHMENT_URI_PREFIX,
   renderKnowledgeJsonToMarkdown,
 } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
@@ -284,7 +285,73 @@ const KnowledgeImageExtension = Node.create({
       }),
     ];
   },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(KnowledgeImageNodeView);
+  },
 });
+
+function KnowledgeImageNodeView({ node }: NodeViewProps) {
+  const { t } = useTranslation();
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const attrs = node.attrs as KnowledgeImageInsertAttrs;
+  const src = typeof attrs.src === "string" ? attrs.src.trim() : "";
+  const fileName =
+    (typeof attrs.fileName === "string" && attrs.fileName.trim()) ||
+    (typeof attrs.title === "string" && attrs.title.trim()) ||
+    (typeof attrs.alt === "string" && attrs.alt.trim()) ||
+    t("notes.knowledgeAttachmentFile", { defaultValue: "Attachment" });
+  const isUnresolvedAttachment =
+    !!attrs.attachmentId && (!src || src.startsWith(READANY_ATTACHMENT_URI_PREFIX));
+  const isMissing = hasLoadError || !src || isUnresolvedAttachment;
+
+  useEffect(() => {
+    setHasLoadError(false);
+  }, [src]);
+
+  return (
+    <NodeViewWrapper
+      as="figure"
+      className="my-4"
+      data-readany-image="true"
+      contentEditable={false}
+    >
+      {isMissing ? (
+        <div className="mx-auto flex min-h-32 max-w-xl items-center gap-3 rounded-md border border-dashed border-border/70 bg-muted/25 px-4 py-4 text-left">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground">
+            <FileQuestion className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {t("notes.knowledgeAttachmentUnavailable", {
+                defaultValue: "Image attachment is not available on this device yet.",
+              })}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">
+              {t("notes.knowledgeAttachmentUnavailableHint", {
+                defaultValue: "Sync again or keep the original device online to restore it.",
+              })}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={attrs.alt?.trim() ?? ""}
+          title={attrs.title?.trim() ?? ""}
+          className="mx-auto max-h-[520px] max-w-full rounded-md border border-border/60 object-contain"
+          onError={() => setHasLoadError(true)}
+        />
+      )}
+      {attrs.alt?.trim() && !isMissing ? (
+        <figcaption className="mt-2 text-center text-xs leading-relaxed text-muted-foreground">
+          {attrs.alt.trim()}
+        </figcaption>
+      ) : null}
+    </NodeViewWrapper>
+  );
+}
 
 function contentJsonEquals(left: JSONValue, right: JSONValue): boolean {
   return JSON.stringify(left) === JSON.stringify(right);

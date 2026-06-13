@@ -230,6 +230,55 @@
         line-height: 1.45;
       }
 
+      .readany-image-missing {
+        display: flex;
+        max-width: 100%;
+        min-height: 112px;
+        align-items: center;
+        gap: 11px;
+        border: 1px dashed color-mix(in srgb, var(--border) 84%, var(--muted-foreground));
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--muted) 62%, transparent);
+        padding: 14px;
+        text-align: left;
+      }
+
+      .readany-image-missing-icon {
+        display: flex;
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--muted-foreground);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .readany-image-missing-text {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .readany-image-missing-title {
+        overflow: hidden;
+        color: var(--foreground);
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .readany-image-missing-hint {
+        margin-top: 4px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
       .readany-prosemirror p.is-editor-empty:first-child::before {
         float: left;
         height: 0;

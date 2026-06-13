@@ -187,6 +187,8 @@ type EditorCommand =
       theme: EditorTheme;
       placeholder?: string;
       cardBodyPlaceholder?: string;
+      imageUnavailableTitle?: string;
+      imageUnavailableHint?: string;
       readOnly?: boolean;
     }
   | { type: "setContent"; contentJson: JSONValue }
@@ -605,6 +607,14 @@ export function MobileKnowledgeEditor({
       contentJson: current.contentJson,
       placeholder,
       cardBodyPlaceholder: t("notes.knowledgeCardBodyPlaceholder", "直接在卡片里书写..."),
+      imageUnavailableTitle: t(
+        "notes.knowledgeAttachmentUnavailable",
+        "图片附件暂时无法在这台设备显示。",
+      ),
+      imageUnavailableHint: t(
+        "notes.knowledgeAttachmentUnavailableHint",
+        "重新同步，或让原设备保持在线后再试。",
+      ),
       readOnly: false,
       theme,
     });

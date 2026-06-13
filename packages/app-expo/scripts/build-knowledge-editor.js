@@ -29,6 +29,8 @@ async function buildKnowledgeEditor() {
     let pendingInit = null;
     let changeTimer = null;
     let cardBodyPlaceholder = "Write inside this card...";
+    let imageUnavailableTitle = "Image attachment is not available on this device yet.";
+    let imageUnavailableHint = "Sync again or keep the original device online to restore it.";
 
     const post = (payload) => {
       try {
@@ -433,15 +435,51 @@ async function buildKnowledgeEditor() {
       addNodeView() {
         return ({ node }) => {
           const attrs = node.attrs || {};
+          let currentAttrs = attrs;
           const figure = document.createElement("figure");
           figure.className = "readany-image";
           figure.contentEditable = "false";
 
           const image = document.createElement("img");
+          const fallback = document.createElement("div");
+          fallback.className = "readany-image-missing";
+
+          const icon = document.createElement("div");
+          icon.className = "readany-image-missing-icon";
+          icon.textContent = "!";
+          fallback.appendChild(icon);
+
+          const text = document.createElement("div");
+          text.className = "readany-image-missing-text";
+          fallback.appendChild(text);
+
+          const title = document.createElement("div");
+          title.className = "readany-image-missing-title";
+          text.appendChild(title);
+
+          const hint = document.createElement("div");
+          hint.className = "readany-image-missing-hint";
+          text.appendChild(hint);
+
+          const updateFallback = (nextAttrs = {}, failed = false) => {
+            const src = typeof nextAttrs.src === "string" ? nextAttrs.src.trim() : "";
+            const attachmentId =
+              typeof nextAttrs.attachmentId === "string" ? nextAttrs.attachmentId.trim() : "";
+            const unresolved = attachmentId && (!src || src.startsWith("readany-attachment://"));
+            const missing = failed || !src || unresolved;
+            title.textContent =
+              nextAttrs.fileName || nextAttrs.title || nextAttrs.alt || imageUnavailableTitle;
+            hint.textContent = imageUnavailableHint;
+            image.style.display = missing ? "none" : "block";
+            fallback.style.display = missing ? "flex" : "none";
+          };
+
           image.src = attrs.src || "";
           image.alt = attrs.alt || "";
           image.title = attrs.title || "";
+          image.addEventListener("error", () => updateFallback(currentAttrs, true));
           figure.appendChild(image);
+          figure.appendChild(fallback);
 
           if (attrs.alt) {
             const caption = document.createElement("figcaption");
@@ -449,14 +487,18 @@ async function buildKnowledgeEditor() {
             figure.appendChild(caption);
           }
 
+          updateFallback(attrs);
+
           return {
             dom: figure,
             update(nextNode) {
               if (nextNode.type.name !== "image") return false;
               const nextAttrs = nextNode.attrs || {};
+              currentAttrs = nextAttrs;
               image.src = nextAttrs.src || "";
               image.alt = nextAttrs.alt || "";
               image.title = nextAttrs.title || "";
+              updateFallback(nextAttrs);
               const nextAlt = nextAttrs.alt || "";
               let caption = figure.querySelector("figcaption");
               if (nextAlt && !caption) {
@@ -482,6 +524,14 @@ async function buildKnowledgeEditor() {
         typeof payload.cardBodyPlaceholder === "string" && payload.cardBodyPlaceholder
           ? payload.cardBodyPlaceholder
           : "Write inside this card...";
+      imageUnavailableTitle =
+        typeof payload.imageUnavailableTitle === "string" && payload.imageUnavailableTitle
+          ? payload.imageUnavailableTitle
+          : "Image attachment is not available on this device yet.";
+      imageUnavailableHint =
+        typeof payload.imageUnavailableHint === "string" && payload.imageUnavailableHint
+          ? payload.imageUnavailableHint
+          : "Sync again or keep the original device online to restore it.";
       editor?.destroy();
       editor = new Editor({
         element: el,

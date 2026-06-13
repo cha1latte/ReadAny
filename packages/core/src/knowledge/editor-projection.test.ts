@@ -924,6 +924,45 @@ describe("editor projection", () => {
     });
   });
 
+  it("round-trips inline links with bracketed labels and parenthesized URLs", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Open " },
+            {
+              type: "text",
+              text: "Spec [draft]",
+              marks: [{ type: "link", attrs: { href: "https://example.com/docs/ref(1)" } }],
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+
+    expect(markdown).toBe("Open [Spec \\[draft\\]](<https://example.com/docs/ref(1)>).");
+    expect(markdownToBasicTiptap(markdown)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Open " },
+            {
+              type: "text",
+              text: "Spec [draft]",
+              marks: [{ type: "link", attrs: { href: "https://example.com/docs/ref(1)" } }],
+            },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    });
+  });
+
   it("exports Obsidian-style internal links without losing aliases", () => {
     const markdown = renderKnowledgeJsonToMarkdown({
       type: "doc",

@@ -101,6 +101,10 @@ function markdownImageDestination(src: string): string {
   return `<${src.replace(/</g, "%3C").replace(/>/g, "%3E")}>`;
 }
 
+function escapeMarkdownLinkLabel(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/([\[\]])/g, "\\$1");
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -142,7 +146,9 @@ function applyMark(markdown: string, mark: TiptapMark): string {
       return `\`${markdown.replace(/`/g, "\\`")}\``;
     case "link": {
       const href = typeof mark.attrs?.href === "string" ? mark.attrs.href : "";
-      return href ? `[${markdown}](${href})` : markdown;
+      return href
+        ? `[${escapeMarkdownLinkLabel(markdown)}](${markdownImageDestination(href)})`
+        : markdown;
     }
     default:
       return markdown;
@@ -761,10 +767,10 @@ function parseInlineMarkdown(markdown: string): TiptapNode[] {
     }
 
     if (markdown.startsWith("[", index)) {
-      const match = markdown.slice(index).match(/^\[([^\]]+)\]\(([^)]+)\)/);
-      if (match) {
-        nodes.push(linkNode(match[1], match[2]));
-        index += match[0].length;
+      const link = parseMarkdownLinkAt(markdown, index);
+      if (link) {
+        nodes.push(linkNode(link.label, link.href));
+        index = link.endIndex;
         continue;
       }
     }
@@ -788,6 +794,95 @@ function parseInlineMarkdown(markdown: string): TiptapNode[] {
   }
 
   return nodes;
+}
+
+function parseMarkdownLinkAt(
+  markdown: string,
+  startIndex: number,
+): { label: string; href: string; endIndex: number } | null {
+  if (markdown[startIndex] !== "[") return null;
+
+  let index = startIndex + 1;
+  let escaped = false;
+  let label = "";
+
+  for (; index < markdown.length; index += 1) {
+    const char = markdown[index];
+    if (escaped) {
+      label += `\\${char}`;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "]") break;
+    label += char;
+  }
+
+  if (index >= markdown.length || markdown[index] !== "]" || markdown[index + 1] !== "(") {
+    return null;
+  }
+  index += 2;
+
+  let href = "";
+  if (markdown[index] === "<") {
+    index += 1;
+    for (; index < markdown.length; index += 1) {
+      const char = markdown[index];
+      if (char === ">") {
+        index += 1;
+        break;
+      }
+      href += char;
+    }
+    if (markdown[index] !== ")") return null;
+    index += 1;
+  } else {
+    let depth = 0;
+    escaped = false;
+    let closed = false;
+
+    for (; index < markdown.length; index += 1) {
+      const char = markdown[index];
+      if (escaped) {
+        href += char;
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "(") {
+        depth += 1;
+        href += char;
+        continue;
+      }
+      if (char === ")") {
+        if (depth === 0) {
+          index += 1;
+          closed = true;
+          break;
+        }
+        depth -= 1;
+        href += char;
+        continue;
+      }
+      href += char;
+    }
+    if (!closed) return null;
+  }
+
+  const trimmedHref = href.trim();
+  if (!trimmedHref) return null;
+
+  return {
+    label: unescapeMarkdownText(label),
+    href: trimmedHref,
+    endIndex: index,
+  };
 }
 
 function unescapeMarkdownText(value: string): string {
@@ -835,6 +930,7 @@ function parseMarkdownImageBlock(block: string): { alt: string; src: string } | 
   } else {
     let depth = 0;
     escaped = false;
+    let closed = false;
 
     for (; index < block.length; index += 1) {
       const char = block[index];
@@ -855,6 +951,7 @@ function parseMarkdownImageBlock(block: string): { alt: string; src: string } | 
       if (char === ")") {
         if (depth === 0) {
           index += 1;
+          closed = true;
           break;
         }
         depth -= 1;
@@ -863,6 +960,7 @@ function parseMarkdownImageBlock(block: string): { alt: string; src: string } | 
       }
       src += char;
     }
+    if (!closed) return null;
   }
 
   if (block.slice(index).trim()) return null;

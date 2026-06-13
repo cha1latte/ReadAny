@@ -407,10 +407,38 @@ async function buildKnowledgeEditor() {
 
       addAttributes() {
         return {
-          label: { default: null },
-          sourceTitle: { default: null },
-          sourceId: { default: null },
-          cfi: { default: null },
+          label: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-label") || element.textContent || null,
+            renderHTML: (attributes) =>
+              attributes.label ? { "data-label": attributes.label } : {},
+          },
+          sourceTitle: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-source-title") || element.textContent || null,
+            renderHTML: (attributes) =>
+              attributes.sourceTitle ? { "data-source-title": attributes.sourceTitle } : {},
+          },
+          sourceId: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-source-id") ||
+              element.getAttribute("data-readany-source-id") ||
+              null,
+            renderHTML: (attributes) =>
+              attributes.sourceId ? { "data-source-id": attributes.sourceId } : {},
+          },
+          cfi: {
+            default: null,
+            parseHTML: (element) => {
+              const cfi = element.getAttribute("data-cfi");
+              if (cfi) return cfi;
+              const legacyReference = element.getAttribute("data-readany-source-reference") || "";
+              return legacyReference.startsWith("epubcfi(") ? legacyReference : null;
+            },
+            renderHTML: (attributes) => (attributes.cfi ? { "data-cfi": attributes.cfi } : {}),
+          },
         };
       },
 
@@ -418,15 +446,12 @@ async function buildKnowledgeEditor() {
         return [{ tag: "span[data-readany-source-reference]" }];
       },
 
-      renderHTML({ HTMLAttributes }) {
-        const label = HTMLAttributes.label || HTMLAttributes.sourceTitle || "Source reference";
+      renderHTML({ node, HTMLAttributes }) {
+        const label = node.attrs.label || node.attrs.sourceTitle || "Source reference";
         return [
           "span",
           mergeAttributes(HTMLAttributes, {
-            "data-readany-source-reference": HTMLAttributes.cfi || HTMLAttributes.sourceId || label,
-            ...(HTMLAttributes.sourceId
-              ? { "data-readany-source-id": HTMLAttributes.sourceId }
-              : {}),
+            "data-readany-source-reference": node.attrs.cfi || node.attrs.sourceId || label,
             class: "readany-source-reference",
           }),
           label,

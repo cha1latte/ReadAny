@@ -249,10 +249,40 @@ const ReadAnySourceReferenceExtension = Node.create({
 
   addAttributes() {
     return {
-      label: { default: null },
-      sourceTitle: { default: null },
-      sourceId: { default: null },
-      cfi: { default: null },
+      label: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-label") || element.textContent || null,
+        renderHTML: (attributes: { label?: string | null }) =>
+          attributes.label ? { "data-label": attributes.label } : {},
+      },
+      sourceTitle: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-source-title") || element.textContent || null,
+        renderHTML: (attributes: { sourceTitle?: string | null }) =>
+          attributes.sourceTitle ? { "data-source-title": attributes.sourceTitle } : {},
+      },
+      sourceId: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-source-id") ||
+          element.getAttribute("data-readany-source-id") ||
+          null,
+        renderHTML: (attributes: { sourceId?: string | null }) =>
+          attributes.sourceId ? { "data-source-id": attributes.sourceId } : {},
+      },
+      cfi: {
+        default: null,
+        parseHTML: (element: HTMLElement) => {
+          const cfi = element.getAttribute("data-cfi");
+          if (cfi) return cfi;
+          const legacyReference = element.getAttribute("data-readany-source-reference") || "";
+          return legacyReference.startsWith("epubcfi(") ? legacyReference : null;
+        },
+        renderHTML: (attributes: { cfi?: string | null }) =>
+          attributes.cfi ? { "data-cfi": attributes.cfi } : {},
+      },
     };
   },
 
@@ -260,13 +290,12 @@ const ReadAnySourceReferenceExtension = Node.create({
     return [{ tag: "span[data-readany-source-reference]" }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    const label = HTMLAttributes.label || HTMLAttributes.sourceTitle || "Source";
+  renderHTML({ node, HTMLAttributes }) {
+    const label = node.attrs.label || node.attrs.sourceTitle || "Source";
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
-        "data-readany-source-reference": HTMLAttributes.cfi || HTMLAttributes.sourceId || label,
-        ...(HTMLAttributes.sourceId ? { "data-readany-source-id": HTMLAttributes.sourceId } : {}),
+        "data-readany-source-reference": node.attrs.cfi || node.attrs.sourceId || label,
         class: "readany-source-reference",
       }),
       label,

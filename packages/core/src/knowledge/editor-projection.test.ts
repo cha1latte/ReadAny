@@ -153,6 +153,7 @@ describe("editor projection", () => {
               type: "readanySourceReference",
               attrs: {
                 label: "Chapter 1",
+                sourceId: "hl-1",
                 cfi: "epubcfi(/6/2)",
               },
             },
@@ -173,7 +174,7 @@ describe("editor projection", () => {
       [
         "<h2>Chapter &lt;Notes&gt;</h2>",
         "<p>Read <strong>deeply</strong> and ignore bad links.</p>",
-        '<p><span class="readany-internal-link" data-document-id="doc-1" data-target="doc-1">Linked Note</span> <span class="readany-source-reference" data-cfi="epubcfi(/6/2)">Chapter 1</span></p>',
+        '<p><span class="readany-internal-link" data-document-id="doc-1" data-target="doc-1">Linked Note</span> <span class="readany-source-reference" data-cfi="epubcfi(/6/2)" data-source-id="hl-1">Chapter 1</span></p>',
         '<figure class="readany-image"><img src="readany-attachment://att-1" alt="Cover"><figcaption>Cover</figcaption></figure>',
       ].join(""),
     );

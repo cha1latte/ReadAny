@@ -671,6 +671,15 @@ function KnowledgeProposalCard({
           <div className="min-w-0">
             <div className="text-xs font-medium text-primary">{actionLabel}</div>
             <div className="truncate text-sm font-semibold text-foreground">{preview.title}</div>
+            {preview.visiblePath ? (
+              <div
+                className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground"
+                title={preview.visiblePath}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/55" />
+                <span className="truncate font-mono">{preview.visiblePath}</span>
+              </div>
+            ) : null}
           </div>
           <div className="shrink-0 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
             {typeLabel}
@@ -713,12 +722,16 @@ function KnowledgeProposalCard({
               {t("knowledgeProposal.location")}
             </div>
             {preview.hasPathChange ? (
-              <div className="space-y-1 rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed">
-                <div className="break-words text-muted-foreground">{preview.currentPath}</div>
-                <div className="text-primary">→ {preview.targetPath}</div>
+              <div className="space-y-1.5 rounded-md border border-border bg-muted/25 p-2 text-xs leading-relaxed">
+                <div className="break-words font-mono text-muted-foreground">
+                  {preview.currentPath}
+                </div>
+                <div className="break-words border-t border-border/55 pt-1.5 font-mono text-primary">
+                  → {preview.targetPath}
+                </div>
               </div>
             ) : (
-              <div className="break-words rounded border border-border bg-muted/25 p-2 text-xs leading-relaxed text-foreground">
+              <div className="break-words rounded-md border border-border bg-muted/25 p-2 font-mono text-xs leading-relaxed text-foreground">
                 {preview.visiblePath}
               </div>
             )}

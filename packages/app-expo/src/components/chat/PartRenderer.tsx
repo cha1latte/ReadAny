@@ -561,6 +561,14 @@ function KnowledgeProposalCard({
           <Text style={s.proposalTitleText} numberOfLines={2}>
             {preview.title}
           </Text>
+          {preview.visiblePath ? (
+            <View style={s.proposalHeaderPath}>
+              <View style={s.proposalHeaderPathDot} />
+              <Text style={s.proposalHeaderPathText} numberOfLines={1}>
+                {preview.visiblePath}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <View style={s.proposalTypeBadge}>
           <Text style={s.proposalTypeText} numberOfLines={1}>
@@ -604,6 +612,7 @@ function KnowledgeProposalCard({
                 <Text style={s.proposalPathMutedText} numberOfLines={2}>
                   {preview.currentPath}
                 </Text>
+                <View style={s.proposalPathDivider} />
                 <Text style={s.proposalPathText} numberOfLines={2}>
                   → {preview.targetPath}
                 </Text>
@@ -1003,6 +1012,24 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontWeight: fw.semibold,
       color: colors.foreground,
     },
+    proposalHeaderPath: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    proposalHeaderPathDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: withOpacity(colors.primary, 0.58),
+    },
+    proposalHeaderPathText: {
+      flex: 1,
+      fontSize: fs.xs,
+      lineHeight: 16,
+      fontFamily: "Menlo",
+      color: colors.mutedForeground,
+    },
     proposalTypeBadge: {
       maxWidth: 110,
       borderRadius: radius.sm,
@@ -1058,6 +1085,11 @@ const makeToolStyles = (colors: ThemeColors) =>
       borderRadius: radius.sm,
       padding: 8,
     },
+    proposalPathDivider: {
+      height: 0.5,
+      backgroundColor: colors.border,
+      marginVertical: 2,
+    },
     proposalPathBoxText: {
       borderWidth: 0.5,
       borderColor: colors.border,
@@ -1066,16 +1098,19 @@ const makeToolStyles = (colors: ThemeColors) =>
       padding: 8,
       fontSize: fs.xs,
       lineHeight: 17,
+      fontFamily: "Menlo",
       color: colors.foreground,
     },
     proposalPathMutedText: {
       fontSize: fs.xs,
       lineHeight: 17,
+      fontFamily: "Menlo",
       color: colors.mutedForeground,
     },
     proposalPathText: {
       fontSize: fs.xs,
       lineHeight: 17,
+      fontFamily: "Menlo",
       color: colors.primary,
       fontWeight: fw.medium,
     },

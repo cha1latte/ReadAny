@@ -147,6 +147,8 @@ type CreatableKnowledgeDocumentType = Extract<
   "folder" | "standalone_note" | "review" | "summary"
 >;
 
+const KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS = 45_000;
+
 interface KnowledgeMarkdownImportReviewItem {
   path: string;
   proposal: KnowledgeImportWriteProposal;
@@ -400,6 +402,10 @@ export function NotesView({
     useState<KnowledgeMarkdownImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const knowledgeSourceReferenceRequestIdRef = useRef(0);
+  const knowledgeSummaryMaintenanceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  const knowledgeSummaryMaintenanceFingerprintsRef = useRef<Map<string, string>>(new Map());
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
@@ -408,6 +414,16 @@ export function NotesView({
     () => knowledgeDocuments.map((document) => document.id),
     [knowledgeDocuments],
   );
+
+  useEffect(() => {
+    const timers = knowledgeSummaryMaintenanceTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -1366,18 +1382,71 @@ export function NotesView({
     [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
-  const queueKnowledgeSummaryMaintenance = useCallback((documentIds: string[]) => {
+  const queueKnowledgeSummaryMaintenance = useCallback((
+    documentIds: string[],
+    options: {
+      delayMs?: number;
+      sourceFingerprints?: Map<string, string>;
+    } = {},
+  ) => {
     const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
     if (uniqueDocumentIds.length === 0) return;
 
-    void (async () => {
-      const resolvedAIConfig = await resolveActiveAIConfig(useSettingsStore.getState());
-      if (!resolvedAIConfig) return;
-      await maybeCompressKnowledgeDocumentsById(uniqueDocumentIds, resolvedAIConfig);
-    })().catch((error) => {
-      console.warn("[Notes] Background knowledge summary maintenance failed:", error);
-    });
+    const delayMs = Math.max(0, options.delayMs ?? 0);
+    for (const documentId of uniqueDocumentIds) {
+      const nextFingerprint = options.sourceFingerprints?.get(documentId);
+      if (
+        nextFingerprint &&
+        knowledgeSummaryMaintenanceFingerprintsRef.current.get(documentId) === nextFingerprint
+      ) {
+        continue;
+      }
+      if (nextFingerprint) {
+        knowledgeSummaryMaintenanceFingerprintsRef.current.set(documentId, nextFingerprint);
+      }
+
+      const existingTimer = knowledgeSummaryMaintenanceTimersRef.current.get(documentId);
+      if (existingTimer) clearTimeout(existingTimer);
+
+      const timer = setTimeout(() => {
+        knowledgeSummaryMaintenanceTimersRef.current.delete(documentId);
+        void (async () => {
+          const resolvedAIConfig = await resolveActiveAIConfig(useSettingsStore.getState());
+          if (!resolvedAIConfig) {
+            knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+            return;
+          }
+          const results = await maybeCompressKnowledgeDocumentsById([documentId], resolvedAIConfig);
+          const result = results[0];
+          if (result?.status === "failed" || result?.status === "missing") {
+            knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+          }
+        })().catch((error) => {
+          knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+          console.warn("[Notes] Background knowledge summary maintenance failed:", error);
+        });
+      }, delayMs);
+      knowledgeSummaryMaintenanceTimersRef.current.set(documentId, timer);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!knowledgeHome || knowledgeHome.type === "folder") return;
+    if (currentKnowledgeFingerprint !== savedKnowledgeFingerprint) return;
+
+    const sourceFingerprint = createKnowledgeSummarySourceFingerprint(knowledgeHome);
+    if (knowledgeHome.summarySourceFingerprint === sourceFingerprint) return;
+
+    queueKnowledgeSummaryMaintenance([knowledgeHome.id], {
+      delayMs: KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS,
+      sourceFingerprints: new Map([[knowledgeHome.id, sourceFingerprint]]),
+    });
+  }, [
+    currentKnowledgeFingerprint,
+    knowledgeHome,
+    queueKnowledgeSummaryMaintenance,
+    savedKnowledgeFingerprint,
+  ]);
 
   const handleCompressKnowledgeSummary = useCallback(async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;

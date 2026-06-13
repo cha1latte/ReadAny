@@ -153,6 +153,8 @@ type CreatableKnowledgeDocumentType = Extract<
   "folder" | "standalone_note" | "review" | "summary"
 >;
 
+const KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS = 45_000;
+
 interface KnowledgeVaultConflictNotice {
   rootPath: string;
   paths: string[];
@@ -602,6 +604,8 @@ export function NotesPage() {
     useState<KnowledgeVaultImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
   const knowledgeSourceReferenceRequestIdRef = useRef(0);
+  const knowledgeSummaryMaintenanceTimersRef = useRef<Map<string, number>>(new Map());
+  const knowledgeSummaryMaintenanceFingerprintsRef = useRef<Map<string, string>>(new Map());
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
@@ -614,6 +618,16 @@ export function NotesPage() {
     () => knowledgeDocuments.filter((document) => document.type === "folder").length,
     [knowledgeDocuments],
   );
+
+  useEffect(() => {
+    const timers = knowledgeSummaryMaintenanceTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        window.clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
 
   useEffect(() => {
     if (activeTabId !== "notes") return;
@@ -1456,17 +1470,65 @@ export function NotesPage() {
     return aiConfig;
   };
 
-  const queueKnowledgeSummaryMaintenance = (documentIds: string[]) => {
+  const queueKnowledgeSummaryMaintenance = (
+    documentIds: string[],
+    options: {
+      delayMs?: number;
+      sourceFingerprints?: Map<string, string>;
+    } = {},
+  ) => {
     const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
     if (uniqueDocumentIds.length === 0) return;
 
     const config = getKnowledgeSummaryAIConfig();
     if (!config) return;
 
-    void maybeCompressKnowledgeDocumentsById(uniqueDocumentIds, config).catch((error) => {
-      console.warn("[Notes] Background knowledge summary maintenance failed:", error);
-    });
+    const delayMs = Math.max(0, options.delayMs ?? 0);
+    for (const documentId of uniqueDocumentIds) {
+      const nextFingerprint = options.sourceFingerprints?.get(documentId);
+      if (
+        nextFingerprint &&
+        knowledgeSummaryMaintenanceFingerprintsRef.current.get(documentId) === nextFingerprint
+      ) {
+        continue;
+      }
+      if (nextFingerprint) {
+        knowledgeSummaryMaintenanceFingerprintsRef.current.set(documentId, nextFingerprint);
+      }
+
+      const existingTimer = knowledgeSummaryMaintenanceTimersRef.current.get(documentId);
+      if (existingTimer) window.clearTimeout(existingTimer);
+
+      const timer = window.setTimeout(() => {
+        knowledgeSummaryMaintenanceTimersRef.current.delete(documentId);
+        void maybeCompressKnowledgeDocumentsById([documentId], config)
+          .then((results) => {
+            const result = results[0];
+            if (result?.status === "failed" || result?.status === "missing") {
+              knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+            }
+          })
+          .catch((error) => {
+            knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+            console.warn("[Notes] Background knowledge summary maintenance failed:", error);
+          });
+      }, delayMs);
+      knowledgeSummaryMaintenanceTimersRef.current.set(documentId, timer);
+    }
   };
+
+  useEffect(() => {
+    if (!knowledgeHome || knowledgeHome.type === "folder") return;
+    if (currentKnowledgeFingerprint !== savedKnowledgeFingerprint) return;
+
+    const sourceFingerprint = createKnowledgeSummarySourceFingerprint(knowledgeHome);
+    if (knowledgeHome.summarySourceFingerprint === sourceFingerprint) return;
+
+    queueKnowledgeSummaryMaintenance([knowledgeHome.id], {
+      delayMs: KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS,
+      sourceFingerprints: new Map([[knowledgeHome.id, sourceFingerprint]]),
+    });
+  }, [knowledgeHome, currentKnowledgeFingerprint, savedKnowledgeFingerprint]);
 
   const handleCompressKnowledgeSummary = async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;

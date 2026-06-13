@@ -106,6 +106,39 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).not.toContain("Book Home");
   });
 
+  it("prioritizes documents whose vault path matches the current question", () => {
+    const home = doc({
+      id: "home-1",
+      type: "book_home",
+      title: "Book Home",
+      summaryMd: "The central reading workspace.",
+      updatedAt: 20,
+    });
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+      updatedAt: 10,
+    });
+    const childNote = doc({
+      id: "child-1",
+      parentId: "folder-1",
+      title: "Reading Thread",
+      excerpt: "Shared attention and ritual timing.",
+      updatedAt: 10,
+    });
+
+    const context = buildKnowledgePromptContext([home, folder, childNote], {
+      query: "themes",
+      maxDocuments: 1,
+    });
+
+    expect(context).toContain("Reading Thread");
+    expect(context).toContain("path: Knowledge base / Themes / Reading Thread");
+    expect(context).not.toContain("Book Home");
+  });
+
   it("keeps the prompt snapshot bounded", () => {
     const context = buildKnowledgePromptContext(
       [

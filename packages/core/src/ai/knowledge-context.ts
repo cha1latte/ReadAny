@@ -58,10 +58,34 @@ function documentPriority(document: KnowledgeDocument): number {
   return typeScore[document.type] + contentScore;
 }
 
-function queryScore(document: KnowledgeDocument, normalizedQuery: string): number {
+function createPathSearchText(
+  document: KnowledgeDocument,
+  documentsById: Map<string, KnowledgeDocument>,
+): string {
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let current: KnowledgeDocument | undefined = document;
+
+  while (current) {
+    if (seen.has(current.id)) break;
+    seen.add(current.id);
+    segments.unshift(current.title || UNTITLED_TITLE);
+    current = current.parentId ? documentsById.get(current.parentId) : undefined;
+  }
+
+  return [ROOT_TITLE, ...segments].join(" / ").toLowerCase();
+}
+
+function queryScore(
+  document: KnowledgeDocument,
+  normalizedQuery: string,
+  documentsById: Map<string, KnowledgeDocument>,
+): number {
   if (!normalizedQuery) return 0;
 
+  const path = createPathSearchText(document, documentsById);
   const haystacks = [
+    path,
     document.title,
     document.excerpt ?? "",
     document.summaryMd ?? "",
@@ -87,9 +111,11 @@ function sortKnowledgeContextDocuments(
   documents: KnowledgeDocument[],
   normalizedQuery = "",
 ): KnowledgeDocument[] {
+  const documentsById = new Map(documents.map((document) => [document.id, document]));
   return [...documents].sort(
     (left, right) =>
-      queryScore(right, normalizedQuery) - queryScore(left, normalizedQuery) ||
+      queryScore(right, normalizedQuery, documentsById) -
+        queryScore(left, normalizedQuery, documentsById) ||
       documentPriority(right) - documentPriority(left) ||
       right.updatedAt - left.updatedAt ||
       right.createdAt - left.createdAt,

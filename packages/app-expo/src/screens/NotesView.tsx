@@ -4031,6 +4031,73 @@ function KnowledgeFolderBrowserItem({
   );
 }
 
+function createKnowledgeFolderDisplaySections(
+  orderedItems: KnowledgeDocument[],
+  homeDocumentId?: string,
+) {
+  const home: KnowledgeDocument[] = [];
+  const folders: KnowledgeDocument[] = [];
+  const documents: KnowledgeDocument[] = [];
+
+  for (const item of orderedItems) {
+    if (item.id === homeDocumentId || item.type === "book_home") home.push(item);
+    else if (item.type === "folder") folders.push(item);
+    else documents.push(item);
+  }
+
+  return { home, folders, documents };
+}
+
+function KnowledgeFolderBrowserGroup({
+  title,
+  items,
+  documents,
+  childCountByParentId,
+  onSelect,
+  onOpenActions,
+  t,
+  styles,
+  colors,
+}: {
+  title: string;
+  items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+  childCountByParentId: Map<string, number>;
+  onSelect: (document: KnowledgeDocument) => void;
+  onOpenActions: (document: KnowledgeDocument) => void;
+  t: TFunction;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ReturnType<typeof useColors>;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <View style={styles.knowledgeFolderGroup}>
+      <View style={styles.knowledgeFolderGroupHeader}>
+        <Text style={styles.knowledgeFolderGroupTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.knowledgeFolderGroupCount}>{items.length}</Text>
+      </View>
+      <View style={styles.knowledgeFolderItemList}>
+        {items.map((item) => (
+          <KnowledgeFolderBrowserItem
+            key={item.id}
+            item={item}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function KnowledgeVaultRootOverview({
   items,
   documents,
@@ -4064,6 +4131,10 @@ function KnowledgeVaultRootOverview({
   const orderedItems = useMemo(
     () => orderKnowledgeDocuments(items, homeDocumentId),
     [homeDocumentId, items],
+  );
+  const childSections = useMemo(
+    () => createKnowledgeFolderDisplaySections(orderedItems, homeDocumentId),
+    [homeDocumentId, orderedItems],
   );
 
   return (
@@ -4134,20 +4205,40 @@ function KnowledgeVaultRootOverview({
           </View>
         </View>
       ) : (
-        <View style={styles.knowledgeFolderItemList}>
-          {orderedItems.map((item) => (
-            <KnowledgeFolderBrowserItem
-              key={item.id}
-              item={item}
-              documents={documents}
-              childCountByParentId={childCountByParentId}
-              onSelect={onSelect}
-              onOpenActions={onOpenActions}
-              t={t}
-              styles={styles}
-              colors={colors}
-            />
-          ))}
+        <View style={styles.knowledgeFolderGroupStack}>
+          <KnowledgeFolderBrowserGroup
+            title={t("notes.knowledgeDocumentHome", "主页")}
+            items={childSections.home}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
+          <KnowledgeFolderBrowserGroup
+            title={t("notes.knowledgeFolderChildFolders", "文件夹")}
+            items={childSections.folders}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
+          <KnowledgeFolderBrowserGroup
+            title={t("notes.knowledgeFolderChildDocuments", "文档")}
+            items={childSections.documents}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
         </View>
       )}
     </View>
@@ -4187,6 +4278,10 @@ function KnowledgeFolderOverview({
     return counts;
   }, [documents]);
   const orderedItems = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
+  const childSections = useMemo(
+    () => createKnowledgeFolderDisplaySections(orderedItems),
+    [orderedItems],
+  );
 
   return (
     <View style={styles.knowledgeFolderOverview}>
@@ -4263,20 +4358,29 @@ function KnowledgeFolderOverview({
           </View>
         </View>
       ) : (
-        <View style={styles.knowledgeFolderItemList}>
-          {orderedItems.map((item) => (
-            <KnowledgeFolderBrowserItem
-              key={item.id}
-              item={item}
-              documents={documents}
-              childCountByParentId={childCountByParentId}
-              onSelect={onSelect}
-              onOpenActions={onOpenActions}
-              t={t}
-              styles={styles}
-              colors={colors}
-            />
-          ))}
+        <View style={styles.knowledgeFolderGroupStack}>
+          <KnowledgeFolderBrowserGroup
+            title={t("notes.knowledgeFolderChildFolders", "文件夹")}
+            items={childSections.folders}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
+          <KnowledgeFolderBrowserGroup
+            title={t("notes.knowledgeFolderChildDocuments", "文档")}
+            items={childSections.documents}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onOpenActions={onOpenActions}
+            t={t}
+            styles={styles}
+            colors={colors}
+          />
         </View>
       )}
     </View>

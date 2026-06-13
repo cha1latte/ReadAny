@@ -566,10 +566,16 @@ Folder view should show:
 - Folder title and path.
 - Child folders first, then documents, using rows that preserve the same
   indentation and icons as the vault tree.
+- Root folder views may pin the book home document first, then separate child
+  folders and documents into quiet file-browser sections.
 - Small metadata per child: type, updated time or excerpt.
 - Empty state with two direct actions: new folder, new note.
 - Create destination preview, for example `Create in Chapter Notes / Themes`.
 - Path-aware actions: rename, move, export this folder, and create inside.
+
+The visual sectioning matters. A mixed flat list makes folders feel like tags;
+folder and document sections make the hierarchy readable before the user opens
+anything.
 
 It should not show:
 

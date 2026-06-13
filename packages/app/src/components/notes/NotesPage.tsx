@@ -2703,6 +2703,10 @@ function KnowledgeVaultRootOverview({
     () => orderKnowledgeDocuments(items, homeDocumentId),
     [homeDocumentId, items],
   );
+  const childSections = useMemo(
+    () => createKnowledgeFolderDisplaySections(orderedChildren, homeDocumentId),
+    [homeDocumentId, orderedChildren],
+  );
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
@@ -2770,30 +2774,114 @@ function KnowledgeVaultRootOverview({
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden border-y border-border/35 bg-background">
-          <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_3rem_4.5rem] border-b border-border/30 px-1 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 md:grid">
-            <span>{t("notes.knowledgeDocuments")}</span>
-            <span className="text-right">
-              {t("notes.knowledgeUpdated", { defaultValue: "Updated" })}
-            </span>
-            <span className="text-right">{t("notes.knowledgeDocumentFolder")}</span>
-            <span />
-          </div>
-          {orderedChildren.map((document) => (
-            <KnowledgeFolderBrowserRow
-              key={document.id}
-              document={document}
-              documents={documents}
-              childCountByParentId={childCountByParentId}
-              onSelect={onSelect}
-              onDelete={onDelete}
-              onMove={onMove}
-              t={t}
-            />
-          ))}
+        <div className="space-y-5">
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeDocumentHome")}
+            items={childSections.home}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeFolderChildFolders")}
+            items={childSections.folders}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeFolderChildDocuments")}
+            items={childSections.documents}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
         </div>
       )}
     </div>
+  );
+}
+
+function createKnowledgeFolderDisplaySections(
+  orderedItems: KnowledgeDocument[],
+  homeDocumentId?: string,
+) {
+  const home: KnowledgeDocument[] = [];
+  const folders: KnowledgeDocument[] = [];
+  const documents: KnowledgeDocument[] = [];
+
+  for (const item of orderedItems) {
+    if (item.id === homeDocumentId || item.type === "book_home") home.push(item);
+    else if (item.type === "folder") folders.push(item);
+    else documents.push(item);
+  }
+
+  return { home, folders, documents };
+}
+
+function KnowledgeFolderBrowserSection({
+  title,
+  items,
+  documents,
+  childCountByParentId,
+  onSelect,
+  onDelete,
+  onMove,
+  t,
+}: {
+  title: string;
+  items: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+  childCountByParentId: Map<string, number>;
+  onSelect: (document: KnowledgeDocument) => void;
+  onDelete: (document: KnowledgeDocument) => void;
+  onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="min-w-0">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-3 px-0.5">
+        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {title}
+        </p>
+        <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+          {items.length}
+        </span>
+      </div>
+      <div className="overflow-hidden border-y border-border/35 bg-background">
+        <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_3rem_4.5rem] border-b border-border/30 px-1 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 md:grid">
+          <span>{t("notes.knowledgeDocuments")}</span>
+          <span className="text-right">
+            {t("notes.knowledgeUpdated", { defaultValue: "Updated" })}
+          </span>
+          <span className="text-right">{t("notes.knowledgeDocumentFolder")}</span>
+          <span />
+        </div>
+        {items.map((document) => (
+          <KnowledgeFolderBrowserRow
+            key={document.id}
+            document={document}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -4075,6 +4163,10 @@ function KnowledgeFolderOverview({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
+  const childSections = useMemo(
+    () => createKnowledgeFolderDisplaySections(orderedChildren),
+    [orderedChildren],
+  );
   const folderPathItems = useMemo(
     () => knowledgeDocumentPath(folder, documents, t),
     [folder, documents, t],
@@ -4155,31 +4247,27 @@ function KnowledgeFolderOverview({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <section>
-            <div className="overflow-hidden border-y border-border/35 bg-background">
-              <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_3rem_4.5rem] border-b border-border/30 px-1 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 md:grid">
-                <span>{t("notes.knowledgeDocuments")}</span>
-                <span className="text-right">
-                  {t("notes.knowledgeUpdated", { defaultValue: "Updated" })}
-                </span>
-                <span className="text-right">{t("notes.knowledgeDocumentFolder")}</span>
-                <span />
-              </div>
-              {orderedChildren.map((document) => (
-                <KnowledgeFolderBrowserRow
-                  key={document.id}
-                  document={document}
-                  documents={documents}
-                  childCountByParentId={childCountByParentId}
-                  onSelect={onSelect}
-                  onDelete={onDelete}
-                  onMove={onMove}
-                  t={t}
-                />
-              ))}
-            </div>
-          </section>
+        <div className="space-y-5">
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeFolderChildFolders")}
+            items={childSections.folders}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeFolderChildDocuments")}
+            items={childSections.documents}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            t={t}
+          />
         </div>
       )}
     </div>

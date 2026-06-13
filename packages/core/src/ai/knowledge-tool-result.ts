@@ -89,7 +89,7 @@ function asFailureDisplay(
     documentId: asString(result.documentId) || asString(result.fromDocumentId),
     reason,
     error: error || message || reason || "Tool execution failed",
-    documents: [],
+    documents: contextDocumentsFromResult(result),
   };
 }
 
@@ -105,7 +105,7 @@ function createFailureDisplay(
     documentId: result ? asString(result.documentId) || asString(result.fromDocumentId) : undefined,
     reason: result ? asString(result.reason) : undefined,
     error,
-    documents: [],
+    documents: result ? contextDocumentsFromResult(result) : [],
   };
 }
 
@@ -128,6 +128,35 @@ function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
 function asDocumentList(value: unknown): KnowledgeToolResultDocument[] {
   if (!Array.isArray(value)) return [];
   return value.map(asDocumentSummary).filter((item): item is KnowledgeToolResultDocument => !!item);
+}
+
+function contextDocumentsFromResult(result: Record<string, unknown>): KnowledgeToolResultDocument[] {
+  const directDocument = asDocumentSummary(result.document);
+  if (directDocument) return [directDocument];
+
+  const targetDocument = isRecord(result.target) ? asDocumentSummary(result.target) : null;
+  if (targetDocument) return [targetDocument];
+
+  const currentDocument = isRecord(result.current) ? asDocumentSummary(result.current) : null;
+  if (currentDocument) return [currentDocument];
+
+  const documentId = asString(result.documentId) || asString(result.fromDocumentId);
+  const path =
+    asString(result.path) ||
+    asString(result.targetPath) ||
+    (isRecord(result.target) ? asString(result.target.path) : undefined) ||
+    (isRecord(result.current) ? asString(result.current.path) : undefined);
+  const title = asString(result.title) || path;
+
+  return title
+    ? [
+        {
+          id: documentId,
+          title,
+          path,
+        },
+      ]
+    : [];
 }
 
 function compactMarkdownPreview(value: unknown): string | undefined {

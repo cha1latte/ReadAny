@@ -214,6 +214,54 @@ function formatKnowledgeChangedFields(
   ];
 }
 
+function KnowledgeToolResultDocumentRows({
+  documents,
+  styles,
+  max = 5,
+}: {
+  documents: KnowledgeToolResultDisplay["documents"];
+  styles: ReturnType<typeof makeToolStyles>;
+  max?: number;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {documents.slice(0, max).map((document) => (
+        <View
+          key={document.id ?? `${document.title}-${document.path}`}
+          style={styles.knowledgeResultItem}
+        >
+          <View style={styles.knowledgeResultItemHeader}>
+            <Text style={styles.knowledgeResultItemTitle} numberOfLines={1}>
+              {document.title}
+            </Text>
+            {!!document.type && (
+              <View style={styles.knowledgeResultTypeBadge}>
+                <Text style={styles.knowledgeResultTypeText} numberOfLines={1}>
+                  {t(`knowledgeToolResult.types.${document.type}`, {
+                    defaultValue: document.type,
+                  })}
+                </Text>
+              </View>
+            )}
+          </View>
+          {!!document.path && (
+            <Text style={styles.knowledgeResultPath} numberOfLines={1}>
+              {document.path}
+            </Text>
+          )}
+          {!!document.snippet && (
+            <Text style={styles.knowledgeResultSnippet} numberOfLines={3}>
+              {document.snippet}
+            </Text>
+          )}
+        </View>
+      ))}
+    </>
+  );
+}
+
 function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -294,22 +342,29 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
 
       <View style={s.knowledgeResultBody}>
         {display.kind === "failure" ? (
-          <View style={s.knowledgeResultFailureBody}>
-            <Text style={s.knowledgeResultFailureText}>
-              {display.error || t("knowledgeToolResult.failureUnknown", "工具调用失败")}
-            </Text>
-            {!!display.reason && (
-              <Text style={s.knowledgeResultFailureMeta} numberOfLines={2}>
-                {t("knowledgeToolResult.reason", { reason: display.reason })}
+          <>
+            <View style={s.knowledgeResultFailureBody}>
+              <Text style={s.knowledgeResultFailureText}>
+                {display.error || t("knowledgeToolResult.failureUnknown", "工具调用失败")}
               </Text>
-            )}
-            <Text style={s.knowledgeResultFailureHint}>
-              {t("knowledgeToolResult.failureSafeHint", "失败的工具不会写入知识库或修改文档。")}
-            </Text>
-          </View>
+              {!!display.reason && (
+                <Text style={s.knowledgeResultFailureMeta} numberOfLines={2}>
+                  {t("knowledgeToolResult.reason", { reason: display.reason })}
+                </Text>
+              )}
+              <Text style={s.knowledgeResultFailureHint}>
+                {t("knowledgeToolResult.failureSafeHint", "失败的工具不会写入知识库或修改文档。")}
+              </Text>
+            </View>
+            {display.documents.length > 0 ? (
+              <KnowledgeToolResultDocumentRows documents={display.documents} styles={s} max={3} />
+            ) : null}
+          </>
         ) : display.kind === "summary" ? (
           <>
-            {display.documentId ? (
+            {display.documents.length > 0 ? (
+              <KnowledgeToolResultDocumentRows documents={display.documents} styles={s} max={1} />
+            ) : display.documentId ? (
               <Text style={s.knowledgeResultPath} numberOfLines={2}>
                 {t("knowledgeToolResult.documentId", { id: display.documentId })}
               </Text>
@@ -330,37 +385,7 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             {t("knowledgeToolResult.empty", "没有匹配的知识文档")}
           </Text>
         ) : (
-          display.documents.slice(0, 5).map((document) => (
-            <View
-              key={document.id ?? `${document.title}-${document.path}`}
-              style={s.knowledgeResultItem}
-            >
-              <View style={s.knowledgeResultItemHeader}>
-                <Text style={s.knowledgeResultItemTitle} numberOfLines={1}>
-                  {document.title}
-                </Text>
-                {!!document.type && (
-                  <View style={s.knowledgeResultTypeBadge}>
-                    <Text style={s.knowledgeResultTypeText} numberOfLines={1}>
-                      {t(`knowledgeToolResult.types.${document.type}`, {
-                        defaultValue: document.type,
-                      })}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              {!!document.path && (
-                <Text style={s.knowledgeResultPath} numberOfLines={1}>
-                  {document.path}
-                </Text>
-              )}
-              {!!document.snippet && (
-                <Text style={s.knowledgeResultSnippet} numberOfLines={3}>
-                  {document.snippet}
-                </Text>
-              )}
-            </View>
-          ))
+          <KnowledgeToolResultDocumentRows documents={display.documents} styles={s} />
         )}
         {display.documents.length > 5 ? (
           <Text style={s.knowledgeResultMore}>

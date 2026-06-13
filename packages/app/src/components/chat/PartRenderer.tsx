@@ -271,6 +271,50 @@ function formatKnowledgeChangedFields(
   ];
 }
 
+function KnowledgeToolResultDocumentRows({
+  documents,
+  max = 5,
+}: {
+  documents: KnowledgeToolResultDisplay["documents"];
+  max?: number;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {documents.slice(0, max).map((document) => (
+        <div
+          key={document.id ?? `${document.title}-${document.path}`}
+          className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-foreground">{document.title}</div>
+              {document.path ? (
+                <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {document.path}
+                </div>
+              ) : null}
+            </div>
+            {document.type ? (
+              <span className="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {t(`knowledgeToolResult.types.${document.type}`, {
+                  defaultValue: document.type,
+                })}
+              </span>
+            ) : null}
+          </div>
+          {document.snippet ? (
+            <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+              {document.snippet}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
   const { t } = useTranslation();
   const toolLabel =
@@ -369,29 +413,38 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
 
       <div className="space-y-2 p-3">
         {display.kind === "failure" ? (
-          <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
-            <div className="font-semibold">
-              {display.error ||
-                t("knowledgeToolResult.failureUnknown", { defaultValue: "Tool execution failed" })}
-            </div>
-            {display.reason ? (
-              <div className="mt-1 text-destructive/85">
-                {t("knowledgeToolResult.reason", {
-                  reason: display.reason,
-                  defaultValue: `Reason: ${display.reason}`,
+          <>
+            <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
+              <div className="font-semibold">
+                {display.error ||
+                  t("knowledgeToolResult.failureUnknown", {
+                    defaultValue: "Tool execution failed",
+                  })}
+              </div>
+              {display.reason ? (
+                <div className="mt-1 text-destructive/85">
+                  {t("knowledgeToolResult.reason", {
+                    reason: display.reason,
+                    defaultValue: `Reason: ${display.reason}`,
+                  })}
+                </div>
+              ) : null}
+              <div className="mt-2 text-destructive/75">
+                {t("knowledgeToolResult.failureSafeHint", {
+                  defaultValue:
+                    "This failed tool call did not write to the knowledge base or change your documents.",
                 })}
               </div>
-            ) : null}
-            <div className="mt-2 text-destructive/75">
-              {t("knowledgeToolResult.failureSafeHint", {
-                defaultValue:
-                  "This failed tool call did not write to the knowledge base or change your documents.",
-              })}
             </div>
-          </div>
+            {display.documents.length > 0 ? (
+              <KnowledgeToolResultDocumentRows documents={display.documents} max={3} />
+            ) : null}
+          </>
         ) : display.kind === "summary" ? (
           <>
-            {display.documentId ? (
+            {display.documents.length > 0 ? (
+              <KnowledgeToolResultDocumentRows documents={display.documents} max={1} />
+            ) : display.documentId ? (
               <div className="break-all rounded border border-border bg-muted/25 p-2 text-xs text-muted-foreground">
                 {t("knowledgeToolResult.documentId", {
                   id: display.documentId,
@@ -418,37 +471,7 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             {t("knowledgeToolResult.empty", { defaultValue: "No matching knowledge documents." })}
           </p>
         ) : (
-          display.documents.slice(0, 5).map((document) => (
-            <div
-              key={document.id ?? `${document.title}-${document.path}`}
-              className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {document.title}
-                  </div>
-                  {document.path ? (
-                    <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {document.path}
-                    </div>
-                  ) : null}
-                </div>
-                {document.type ? (
-                  <span className="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                    {t(`knowledgeToolResult.types.${document.type}`, {
-                      defaultValue: document.type,
-                    })}
-                  </span>
-                ) : null}
-              </div>
-              {document.snippet ? (
-                <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-                  {document.snippet}
-                </p>
-              ) : null}
-            </div>
-          ))
+          <KnowledgeToolResultDocumentRows documents={display.documents} />
         )}
 
         {display.documents.length > 5 ? (

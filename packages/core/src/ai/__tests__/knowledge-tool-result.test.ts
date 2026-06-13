@@ -109,6 +109,38 @@ describe("knowledge tool result display", () => {
     });
   });
 
+  it("keeps knowledge document paths visible on tool failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
+      success: false,
+      status: "failed",
+      error: "Model request failed",
+      documentId: "doc-1",
+      path: "Knowledge base / Chapter Notes / Durable Memory",
+      document: {
+        id: "doc-1",
+        title: "Durable Memory",
+        type: "summary",
+        path: "Knowledge base / Chapter Notes / Durable Memory",
+      },
+    });
+
+    expect(display).toEqual({
+      kind: "failure",
+      toolName: "compressKnowledgeDocumentSummary",
+      status: "failed",
+      documentId: "doc-1",
+      error: "Model request failed",
+      documents: [
+        {
+          id: "doc-1",
+          title: "Durable Memory",
+          type: "summary",
+          path: "Knowledge base / Chapter Notes / Durable Memory",
+        },
+      ],
+    });
+  });
+
   it("parses JSON string failures from knowledge tools", () => {
     const display = getKnowledgeToolResultDisplay(
       "compressKnowledgeDocumentSummary",

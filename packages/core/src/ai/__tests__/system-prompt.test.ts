@@ -26,6 +26,23 @@ function makeBook(): Book {
 }
 
 describe("buildSystemPrompt citations", () => {
+  it("injects bounded annotation context when provided", () => {
+    const prompt = buildSystemPrompt({
+      book: makeBook(),
+      semanticContext: null,
+      enabledSkills: [],
+      isVectorized: false,
+      userLanguage: "en",
+      annotationContext:
+        "- [highlight] Learning without thought is labor lost.\n  id: hl-1\n  cfi: epubcfi(/6/4)",
+    });
+
+    expect(prompt).toContain("Annotation Context");
+    expect(prompt).toContain("id: hl-1");
+    expect(prompt).toContain("epubcfi(/6/4)");
+    expect(prompt).toContain("getAnnotations/getRecentHighlights");
+  });
+
   it("injects bounded knowledge-base context when provided", () => {
     const prompt = buildSystemPrompt({
       book: makeBook(),

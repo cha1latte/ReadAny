@@ -42,6 +42,39 @@ beforeEach(() => {
 });
 
 describe("streamReadingAgent tool registration", () => {
+  it("passes annotation context into the agent system prompt", async () => {
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          // no-op stream
+        },
+      })),
+    });
+
+    for await (const _event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: false,
+        annotationContext:
+          "- [highlight] Learning without thought is labor lost.\n  id: hl-1\n  cfi: epubcfi(/6/4)",
+        getAvailableTools,
+      },
+      "结合我的标注讲讲",
+    )) {
+      // drain stream
+    }
+
+    const call = createReactAgentMock.mock.calls[createReactAgentMock.mock.calls.length - 1]?.[0];
+
+    expect(call.prompt).toContain("Annotation Context");
+    expect(call.prompt).toContain("id: hl-1");
+    expect(call.prompt).toContain("epubcfi(/6/4)");
+  });
+
   it("passes knowledge context into the agent system prompt", async () => {
     createReactAgentMock.mockReturnValue({
       streamEvents: vi.fn(() => ({

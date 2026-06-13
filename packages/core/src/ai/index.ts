@@ -33,6 +33,7 @@ export type { EndpointTestResult } from "./test-endpoint";
 
 export { buildSystemPrompt } from "./system-prompt";
 export { buildKnowledgePromptContext, loadKnowledgePromptContext } from "./knowledge-context";
+export { buildAnnotationPromptContext, loadAnnotationPromptContext } from "./annotation-context";
 export { getToolResultError, isToolErrorResult } from "./tool-result";
 export type { ToolErrorResult } from "./tool-result";
 export { getKnowledgeToolResultDisplay } from "./knowledge-tool-result";

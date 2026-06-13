@@ -54,6 +54,7 @@ export interface ReadingAgentOptions {
   deepThinking?: boolean;
   spoilerFree?: boolean;
   memorySummary?: string;
+  annotationContext?: string;
   knowledgeContext?: string;
   /** Injected tool provider — returns available tools for the agent */
   getAvailableTools: (options: {
@@ -127,6 +128,7 @@ export async function* streamReadingAgent(
     deepThinking,
     spoilerFree,
     memorySummary,
+    annotationContext,
     knowledgeContext,
     getAvailableTools,
     signal,
@@ -169,6 +171,7 @@ export async function* streamReadingAgent(
       userLanguage: i18n.language || "en",
       spoilerFree,
       memorySummary,
+      annotationContext,
       knowledgeContext,
     });
 

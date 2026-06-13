@@ -19,6 +19,7 @@ interface PromptContext {
   userLanguage: string;
   spoilerFree?: boolean;
   memorySummary?: string;
+  annotationContext?: string;
   knowledgeContext?: string;
 }
 
@@ -28,6 +29,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     buildRoleSection(),
     buildBookContextSection(ctx.book),
     buildMemorySection(ctx.memorySummary),
+    buildAnnotationContextSection(ctx.annotationContext),
     buildKnowledgeContextSection(ctx.knowledgeContext),
     buildSemanticSection(ctx.semanticContext),
     buildToolsSection(ctx.enabledSkills, ctx.isVectorized, !!(ctx.book?.id || ctx.bookId)),
@@ -52,6 +54,11 @@ function buildMemorySection(memorySummary?: string): string {
 function buildKnowledgeContextSection(knowledgeContext?: string): string {
   if (!knowledgeContext?.trim()) return "";
   return ["## Knowledge Base Context", knowledgeContext.trim()].join("\n");
+}
+
+function buildAnnotationContextSection(annotationContext?: string): string {
+  if (!annotationContext?.trim()) return "";
+  return ["## Annotation Context", annotationContext.trim()].join("\n");
 }
 
 function buildRoleSection(): string {
@@ -258,6 +265,9 @@ function buildWorkflowSection(isVectorized: boolean, hasBookContext: boolean): s
   }
 
   steps.push("   - **getSurroundingContext**: for current page content");
+  steps.push(
+    "   - **getAnnotations/getRecentHighlights**: for the user's highlights, annotation notes, and saved reading reactions",
+  );
   steps.push(
     "   - **getBookKnowledge/searchKnowledgeBase/getKnowledgeDocument**: for the user's durable notes, reviews, summaries, and exact knowledge documents",
   );

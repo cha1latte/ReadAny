@@ -6,6 +6,7 @@ import i18n from "i18next";
  */
 import type { AIConfig, Book, SemanticContext, Skill, Thread } from "../types";
 import { streamReadingAgent } from "./agents/reading-agent";
+import { loadAnnotationPromptContext } from "./annotation-context";
 import { loadKnowledgePromptContext } from "./knowledge-context";
 import { processMessages } from "./message-pipeline";
 import { getToolResultError } from "./tool-result";
@@ -75,10 +76,16 @@ export class StreamingChat {
     const latestUserInput =
       [...options.thread.messages].reverse().find((message) => message.role === "user")?.content ??
       "";
-    const knowledgeContext = await loadKnowledgePromptContext({
-      bookId: effectiveBookId,
-      query: latestUserInput,
-    });
+    const [annotationContext, knowledgeContext] = await Promise.all([
+      loadAnnotationPromptContext({
+        bookId: effectiveBookId,
+        query: latestUserInput,
+      }),
+      loadKnowledgePromptContext({
+        bookId: effectiveBookId,
+        query: latestUserInput,
+      }),
+    ]);
 
     const { messages } = processMessages(
       options.thread,
@@ -90,6 +97,7 @@ export class StreamingChat {
         isVectorized: options.isVectorized,
         userLanguage: i18n.language || options.book?.meta.language || "en",
         memorySummary: options.thread.memorySummary,
+        annotationContext,
         knowledgeContext,
       },
       { slidingWindowSize: options.aiConfig.slidingWindowSize },
@@ -122,6 +130,7 @@ export class StreamingChat {
           deepThinking: options.deepThinking,
           spoilerFree: options.spoilerFree,
           memorySummary: options.thread.memorySummary,
+          annotationContext,
           knowledgeContext,
           getAvailableTools: options.getAvailableTools,
           signal,

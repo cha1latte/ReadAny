@@ -709,10 +709,28 @@ describe("getAnnotations tool", () => {
 
   it("should return highlights and notes", async () => {
     vi.mocked(getHighlights).mockResolvedValue([
-      { text: "Important text", note: "My note", chapterTitle: "Ch 1", color: "yellow" },
+      {
+        id: "hl-1",
+        text: "Important text",
+        note: "My note",
+        chapterTitle: "Ch 1",
+        cfi: "epubcfi(/6/4)",
+        color: "yellow",
+        createdAt: 1,
+        updatedAt: 2,
+      },
     ] as any);
     vi.mocked(getNotes).mockResolvedValue([
-      { title: "Note 1", content: "Note content", chapterTitle: "Ch 1" },
+      {
+        id: "note-1",
+        title: "Note 1",
+        content: "Note content",
+        chapterTitle: "Ch 1",
+        cfi: "epubcfi(/6/8)",
+        tags: ["idea"],
+        createdAt: 3,
+        updatedAt: 4,
+      },
     ] as any);
 
     const tools = getAvailableTools({ bookId: "book-1", isVectorized: true, enabledSkills: [] });
@@ -721,8 +739,19 @@ describe("getAnnotations tool", () => {
 
     expect(result.highlights).toHaveLength(1);
     expect(result.highlights[0].text).toBe("Important text");
+    expect(result.highlights[0]).toMatchObject({
+      id: "hl-1",
+      cfi: "epubcfi(/6/4)",
+      updatedAt: 2,
+    });
     expect(result.notes).toHaveLength(1);
     expect(result.notes[0].title).toBe("Note 1");
+    expect(result.notes[0]).toMatchObject({
+      id: "note-1",
+      cfi: "epubcfi(/6/8)",
+      tags: ["idea"],
+      updatedAt: 4,
+    });
   });
 
   it("should return only highlights when type is 'highlights'", async () => {

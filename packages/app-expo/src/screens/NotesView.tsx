@@ -2801,7 +2801,7 @@ function KnowledgeHomePanel({
                 {t("notes.knowledgeContext", "上下文")}
               </Text>
               <Text style={styles.knowledgeContextSheetSubtitle} numberOfLines={1}>
-                {title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                {knowledgeDocumentPathText(document, documents, t, title)}
               </Text>
             </View>
             <TouchableOpacity

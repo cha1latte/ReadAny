@@ -2679,8 +2679,11 @@ function KnowledgeHomePanel({
                 <p className="text-xs font-semibold text-foreground">
                   {t("notes.knowledgeContext")}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {t("notes.knowledgeRelations")} · {t("notes.knowledgeRecentExcerpts")}
+                <p
+                  className="mt-0.5 truncate text-[11px] text-muted-foreground"
+                  title={activePathLabel}
+                >
+                  {activePathLabel}
                 </p>
               </div>
               <button

@@ -1189,18 +1189,33 @@ export function NotesView({
 
       try {
         await updateKnowledgeDocument(document.id, { parentId: nextParentId });
-        const updatedDocument: KnowledgeDocument = {
-          ...document,
-          parentId: nextParentId,
-          updatedAt: Date.now(),
-        };
+        const isMovingActiveDocument = knowledgeHome?.id === document.id;
+        const updatedAt = Date.now();
+        const updatedDocument: KnowledgeDocument = isMovingActiveDocument
+          ? {
+              ...knowledgeHome,
+              title: nextTitle,
+              contentMd: knowledgeValue.contentMd,
+              contentJson: canonicalizeKnowledgeAttachmentImageSources(
+                knowledgeValue.contentJson,
+              ) as KnowledgeDocument["contentJson"],
+              excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+              tags: normalizeKnowledgeTags(knowledgeTags),
+              parentId: nextParentId,
+              updatedAt,
+            }
+          : {
+              ...document,
+              parentId: nextParentId,
+              updatedAt,
+            };
         setKnowledgeDocuments((documents) =>
           orderKnowledgeDocuments(
             documents.map((item) => (item.id === document.id ? updatedDocument : item)),
             documents.find((item) => item.type === "book_home")?.id,
           ),
         );
-        if (knowledgeHome?.id === document.id) {
+        if (isMovingActiveDocument) {
           setKnowledgeHome(updatedDocument);
         }
       } catch (error) {
@@ -1211,7 +1226,16 @@ export function NotesView({
         );
       }
     },
-    [knowledgeDocuments, knowledgeHome?.id, knowledgeTitle, saveActiveKnowledgeDocumentNow, t],
+    [
+      knowledgeDocuments,
+      knowledgeHome,
+      knowledgeTags,
+      knowledgeTitle,
+      knowledgeValue.contentJson,
+      knowledgeValue.contentMd,
+      saveActiveKnowledgeDocumentNow,
+      t,
+    ],
   );
 
   const handleRenameKnowledgeDocument = useCallback(

@@ -61,6 +61,13 @@ describe("knowledge tool result display", () => {
       status: "compressed",
       persisted: true,
       documentId: "doc-1",
+      path: "Knowledge base / Chapter Notes / Durable Memory",
+      document: {
+        id: "doc-1",
+        title: "Durable Memory",
+        type: "summary",
+        path: "Knowledge base / Chapter Notes / Durable Memory",
+      },
       reason: "stale",
       sourceChars: 12000,
       summaryMd: "## Summary\n\nA durable reading memory.",
@@ -75,7 +82,14 @@ describe("knowledge tool result display", () => {
       reason: "stale",
       sourceChars: 12000,
       summaryPreview: "Summary A durable reading memory.",
-      documents: [],
+      documents: [
+        {
+          id: "doc-1",
+          title: "Durable Memory",
+          type: "summary",
+          path: "Knowledge base / Chapter Notes / Durable Memory",
+        },
+      ],
     });
   });
 

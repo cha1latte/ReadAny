@@ -552,6 +552,10 @@ export function NotesPage() {
     () => knowledgeDocuments.map((document) => document.id),
     [knowledgeDocuments],
   );
+  const knowledgeFolderCount = useMemo(
+    () => knowledgeDocuments.filter((document) => document.type === "folder").length,
+    [knowledgeDocuments],
+  );
 
   useEffect(() => {
     if (activeTabId !== "notes") return;
@@ -1982,7 +1986,7 @@ export function NotesPage() {
                   )}
                   onClick={() => setDetailTab("knowledge")}
                 >
-                  <FileText className="h-3 w-3" />
+                  <ListTree className="h-3 w-3" />
                   {t("notes.knowledgeTab")}
                 </button>
                 <button
@@ -2016,10 +2020,10 @@ export function NotesPage() {
               {detailTab === "knowledge" ? (
                 <div className="flex flex-1 items-center justify-end gap-3 text-xs text-muted-foreground">
                   <span>
-                    {selectedBook.highlights.length} {t("notes.highlightsCount")}
+                    {knowledgeDocuments.length} {t("notes.knowledgeDocuments")}
                   </span>
                   <span>
-                    {selectedBook.notesCount} {t("notes.notesCount")}
+                    {knowledgeFolderCount} {t("notes.knowledgeDocumentFolder")}
                   </span>
                   <span className="flex items-center gap-1">
                     <Save className="h-3 w-3" />

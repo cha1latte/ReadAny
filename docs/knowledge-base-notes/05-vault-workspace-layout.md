@@ -227,6 +227,39 @@ accepted:
 If a feature cannot answer "where is this document in the vault?" and "am I
 editing the rendered document directly?", it is not ready to merge.
 
+### Workspace Information Architecture Gate
+
+The knowledge-base layout must be reviewed as an information architecture, not
+as a beautified note screen.
+
+Required screen states:
+
+| Active target | Desktop center | Mobile state | What must be visible |
+| --- | --- | --- | --- |
+| Vault root | Folder browser | Vault browser | Book vault path, root children, create-in-root actions. |
+| Folder | Folder browser | Vault browser inside folder | Folder path, child folders first, child documents second, create-in-folder actions. |
+| Document | WYSIWYG canvas | Focused editor | File path, editable title, rendered Tiptap body, quiet save/sync state. |
+| Search / AI result | Result rows | Result rows/sheet | Matching document title plus full vault path. |
+| Import / export | Preview rows | Review sheet | Destination path, source path, conflict state, and stable document ID when known. |
+
+This gate exists because a flat list can still store `parent_id`, but users will
+not build spatial memory from invisible hierarchy. The runtime must make the
+directory address obvious before the user edits, moves, links, exports, imports,
+or accepts an AI proposal.
+
+The default authoring surface is equally strict:
+
+- Users write in the rendered Tiptap document.
+- Markdown is a projection for interoperability, import/export, and debugging.
+- Title, body, source cards, AI cards, reviews, callouts, and custom cards are
+  document blocks or surrounding context, not a stack of unrelated form fields.
+- Autosave is the normal save model. Explicit save buttons may exist only for
+  recovery, conflict resolution, or batch import/export review.
+
+The first visible impression should be "I am inside a book vault and writing a
+document at this path." If it instead feels like a settings form, dashboard,
+card feed, or Markdown textarea, the implementation is off direction.
+
 ### Obsidian-Like Hierarchy Review
 
 The hierarchy must be reviewed as a real document address system, not as a

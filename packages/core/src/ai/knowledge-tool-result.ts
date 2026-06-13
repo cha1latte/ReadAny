@@ -178,6 +178,10 @@ export function getKnowledgeToolResultDisplay(
 
   if (toolName !== "compressKnowledgeDocumentSummary") return null;
 
+  const summaryDocument = asDocumentSummary(resultRecord.document);
+  const summaryPath = asString(resultRecord.path);
+  const summaryDocumentId = asString(resultRecord.documentId);
+
   return {
     kind: "summary",
     toolName,
@@ -185,8 +189,18 @@ export function getKnowledgeToolResultDisplay(
     persisted: asBoolean(resultRecord.persisted),
     reason: asString(resultRecord.reason),
     sourceChars: asNumber(resultRecord.sourceChars),
-    documentId: asString(resultRecord.documentId),
+    documentId: summaryDocumentId,
     summaryPreview: compactMarkdownPreview(resultRecord.summaryMd),
-    documents: [],
+    documents: summaryDocument
+      ? [summaryDocument]
+      : summaryPath || summaryDocumentId
+        ? [
+            {
+              id: summaryDocumentId,
+              title: summaryPath || summaryDocumentId || "Knowledge document",
+              path: summaryPath,
+            },
+          ]
+        : [],
   };
 }

@@ -25,6 +25,38 @@ export interface ReadAnyCardDefinition {
   markdownFallback: (attrs: ReadAnyCardAttrs, context: ReadAnyCardMarkdownContext) => string;
 }
 
+export type ReadAnyCardReadOnlyState = "supported" | "custom" | "unsupported" | "future";
+
+export interface ReadAnyCardReadOnlyMetadataItem {
+  key: "cardType" | "version" | "source" | "sourceId" | "cfi";
+  label: string;
+  value: string;
+}
+
+export interface ReadAnyCardReadOnlyModel {
+  attrs: ReadAnyCardAttrs;
+  cardType: string;
+  version: number;
+  title: string;
+  body: string;
+  state: ReadAnyCardReadOnlyState;
+  stateLabel?: string;
+  insertLabel?: string;
+  metadata: ReadAnyCardReadOnlyMetadataItem[];
+  sourceTitle?: string;
+  sourceId?: string;
+  cfi?: string;
+  isFallback: boolean;
+  isFutureVersion: boolean;
+  isCustomCard: boolean;
+  isKnownBuiltIn: boolean;
+}
+
+export interface CreateReadAnyCardReadOnlyModelOptions extends ReadAnyCardMarkdownContext {
+  cardTemplates?: KnowledgeCardTemplate[];
+  fallbackTitle?: string;
+}
+
 export interface ReadAnyCardTemplateSchema {
   cardType?: string;
   title?: string;
@@ -584,6 +616,78 @@ export function getReadAnyCardTemplateDescription(
   template: KnowledgeCardTemplate,
 ): string | undefined {
   return stringAttr(templateSchema(template).description);
+}
+
+export function createReadAnyCardReadOnlyModel(
+  attrs: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
+  options: CreateReadAnyCardReadOnlyModelOptions = { body: "" },
+): ReadAnyCardReadOnlyModel {
+  const normalizedAttrs = options.cardTemplates?.length
+    ? upgradeReadAnyCardAttrsWithTemplates(attrs, options.cardTemplates)
+    : normalizeReadAnyCardAttrs(attrs);
+  const cardType = normalizedAttrs.cardType || "custom";
+  const version = normalizedAttrs.version ?? 1;
+  const definition = getReadAnyCardDefinition(cardType);
+  const template = findTemplateForCardType(cardType, options.cardTemplates);
+  const isCustomCard = cardType.startsWith("custom:");
+  const isKnownBuiltIn = !!definition;
+  const isFutureVersion = !!definition && version > definition.version;
+  const isUnsupported = !definition && !isCustomCard;
+  const body = bodyFromAttrs(normalizedAttrs, options);
+  const insertLabel = template
+    ? getReadAnyCardTemplateInsertLabel(template)
+    : definition?.insertLabel;
+  const title =
+    normalizedAttrs.title ||
+    normalizedAttrs.sourceTitle ||
+    insertLabel ||
+    options.fallbackTitle ||
+    cardType;
+  const state: ReadAnyCardReadOnlyState = isFutureVersion
+    ? "future"
+    : isUnsupported
+      ? "unsupported"
+      : isCustomCard
+        ? "custom"
+        : "supported";
+  const stateLabel =
+    state === "future"
+      ? `v${version} newer`
+      : state === "unsupported"
+        ? "fallback"
+        : state === "custom"
+          ? `v${version}`
+          : undefined;
+  const metadata: ReadAnyCardReadOnlyMetadataItem[] = [
+    { key: "cardType", label: "Card", value: cardType },
+    { key: "version", label: "Version", value: `v${version}` },
+    normalizedAttrs.sourceTitle
+      ? { key: "source", label: "Source", value: normalizedAttrs.sourceTitle }
+      : undefined,
+    normalizedAttrs.sourceId
+      ? { key: "sourceId", label: "Source ID", value: normalizedAttrs.sourceId }
+      : undefined,
+    normalizedAttrs.cfi ? { key: "cfi", label: "CFI", value: normalizedAttrs.cfi } : undefined,
+  ].filter((item): item is ReadAnyCardReadOnlyMetadataItem => !!item);
+
+  return {
+    attrs: normalizedAttrs,
+    cardType,
+    version,
+    title,
+    body,
+    state,
+    stateLabel,
+    insertLabel,
+    metadata,
+    sourceTitle: normalizedAttrs.sourceTitle,
+    sourceId: normalizedAttrs.sourceId,
+    cfi: normalizedAttrs.cfi,
+    isFallback: isFutureVersion || isUnsupported,
+    isFutureVersion,
+    isCustomCard,
+    isKnownBuiltIn,
+  };
 }
 
 export function renderReadAnyCardMarkdownFallback(

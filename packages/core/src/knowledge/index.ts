@@ -109,6 +109,7 @@ export {
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
+  createReadAnyCardReadOnlyModel,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
@@ -120,9 +121,13 @@ export {
 } from "./card-registry";
 export type {
   ReadAnyCardAttrs,
+  CreateReadAnyCardReadOnlyModelOptions,
   CreateCustomReadAnyCardTemplateInput,
   ReadAnyCardDefinition,
   ReadAnyCardMarkdownContext,
+  ReadAnyCardReadOnlyMetadataItem,
+  ReadAnyCardReadOnlyModel,
+  ReadAnyCardReadOnlyState,
   ReadAnyCardTemplateSchema,
 } from "./card-registry";
 export {

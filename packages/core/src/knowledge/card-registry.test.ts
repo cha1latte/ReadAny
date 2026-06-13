@@ -3,6 +3,7 @@ import {
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
+  createReadAnyCardReadOnlyModel,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
@@ -42,6 +43,36 @@ describe("ReadAny card registry", () => {
   });
 
   it("keeps unknown cards readable with ReadAny metadata in the fallback", () => {
+    const model = createReadAnyCardReadOnlyModel({
+      cardType: "customMetric",
+      version: 3,
+      title: "Reading score",
+      text: "Focus: 92%",
+      sourceTitle: "Chapter 4",
+      cfi: "epubcfi(/6/4)",
+    });
+
+    expect(model).toMatchObject({
+      cardType: "customMetric",
+      version: 3,
+      title: "Reading score",
+      body: "Focus: 92%",
+      state: "unsupported",
+      stateLabel: "fallback",
+      isFallback: true,
+      isFutureVersion: false,
+      isCustomCard: false,
+      isKnownBuiltIn: false,
+      sourceTitle: "Chapter 4",
+      cfi: "epubcfi(/6/4)",
+    });
+    expect(model.metadata).toEqual([
+      { key: "cardType", label: "Card", value: "customMetric" },
+      { key: "version", label: "Version", value: "v3" },
+      { key: "source", label: "Source", value: "Chapter 4" },
+      { key: "cfi", label: "CFI", value: "epubcfi(/6/4)" },
+    ]);
+
     expect(
       renderReadAnyCardMarkdownFallback(
         {
@@ -66,6 +97,26 @@ describe("ReadAny card registry", () => {
   });
 
   it("does not silently pretend future built-in card versions are fully supported", () => {
+    expect(
+      createReadAnyCardReadOnlyModel({
+        cardType: "aiSummary",
+        version: 99,
+        title: "Future summary",
+        markdown: "Readable fallback body.",
+      }),
+    ).toMatchObject({
+      cardType: "aiSummary",
+      version: 99,
+      title: "Future summary",
+      body: "Readable fallback body.",
+      state: "future",
+      stateLabel: "v99 newer",
+      isFallback: true,
+      isFutureVersion: true,
+      isCustomCard: false,
+      isKnownBuiltIn: true,
+    });
+
     expect(
       renderReadAnyCardMarkdownFallback(
         {
@@ -256,6 +307,29 @@ describe("ReadAny card registry", () => {
       version: 1,
       title: "Reading Question",
       markdown: "Question:\nAnswer:",
+    });
+
+    expect(
+      createReadAnyCardReadOnlyModel(
+        {
+          cardType: "custom:template-reading-question",
+          version: 1,
+        },
+        {
+          body: "",
+          cardTemplates: [template],
+        },
+      ),
+    ).toMatchObject({
+      cardType: "custom:template-reading-question",
+      version: 1,
+      title: "Reading Question",
+      body: "Question:\nAnswer:",
+      state: "custom",
+      stateLabel: "v1",
+      insertLabel: "Reading Question",
+      isFallback: false,
+      isCustomCard: true,
     });
   });
 

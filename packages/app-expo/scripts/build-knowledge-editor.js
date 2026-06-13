@@ -22,6 +22,7 @@ async function buildKnowledgeEditor() {
     import TaskItem from "@tiptap/extension-task-item";
     import TaskList from "@tiptap/extension-task-list";
     import StarterKit from "@tiptap/starter-kit";
+    import { createReadAnyCardReadOnlyModel } from "@readany/core/knowledge";
 
     const EMPTY_DOC = { type: "doc", content: [] };
     let editor = null;
@@ -147,30 +148,11 @@ async function buildKnowledgeEditor() {
       element.style.height = Math.max(72, element.scrollHeight) + "px";
     };
 
-    const readAnyCardVersions = {
-      bookQuote: 1,
-      callout: 1,
-      bookMetadata: 1,
-      aiSummary: 1,
-      aiToolFailure: 1,
-      qa: 1,
-      review: 1,
-      mindmap: 1,
-      mermaid: 1,
-      relatedNotes: 1,
-    };
-
     const cardMetaText = (attrs = {}) => {
-      const cardType = attrs.cardType || "Card";
-      const version = Number.isFinite(Number(attrs.version)) ? Number(attrs.version) : 1;
-      const currentVersion = readAnyCardVersions[cardType];
-      const isFutureVersion = currentVersion && version > currentVersion;
-      const isCustomCard = String(cardType).startsWith("custom:");
-      const isFallbackCard = !currentVersion && !isCustomCard;
+      const model = createReadAnyCardReadOnlyModel(attrs, { body: "" });
       return [
-        cardType,
-        isFutureVersion || isFallbackCard || isCustomCard ? "v" + version : "",
-        isFutureVersion ? "newer" : isFallbackCard ? "fallback" : "",
+        model.cardType,
+        model.state === "supported" ? "" : model.stateLabel || "v" + model.version,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -216,10 +198,11 @@ async function buildKnowledgeEditor() {
         return ({ node, getPos }) => {
           let currentNode = node;
           const attrs = currentNode.attrs || {};
+          const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, { body: "" });
           const dom = document.createElement("div");
           dom.className = "readany-card";
           dom.contentEditable = "false";
-          dom.dataset.cardType = attrs.cardType || "callout";
+          dom.dataset.cardType = readOnlyModel.cardType;
 
           const icon = document.createElement("div");
           icon.className = "readany-card-icon";
@@ -237,13 +220,13 @@ async function buildKnowledgeEditor() {
           title.className = "readany-card-title";
           title.type = "text";
           title.value = attrs.title || "";
-          title.placeholder = attrs.cardType || "Card";
+          title.placeholder = readOnlyModel.title;
           title.addEventListener("input", () => {
             updateCardAttrs(currentNode, getPos, { title: title.value });
           });
           body.appendChild(title);
 
-          const text = attrs.markdown || attrs.text || "";
+          const text = readOnlyModel.body;
           const preview = document.createElement("textarea");
           preview.className = "readany-card-preview";
           preview.value = text;
@@ -260,12 +243,11 @@ async function buildKnowledgeEditor() {
           });
           body.appendChild(preview);
 
-          if (attrs.sourceTitle) {
-            const source = document.createElement("div");
-            source.className = "readany-card-source";
-            source.textContent = attrs.sourceTitle;
-            body.appendChild(source);
-          }
+          const source = document.createElement("div");
+          source.className = "readany-card-source";
+          source.style.display = readOnlyModel.sourceTitle ? "block" : "none";
+          source.textContent = readOnlyModel.sourceTitle || "";
+          body.appendChild(source);
 
           dom.appendChild(icon);
           dom.appendChild(body);
@@ -275,14 +257,17 @@ async function buildKnowledgeEditor() {
               if (nextNode.type.name !== "readanyCard") return false;
               currentNode = nextNode;
               const nextAttrs = nextNode.attrs || {};
-              dom.dataset.cardType = nextAttrs.cardType || "callout";
+              const nextModel = createReadAnyCardReadOnlyModel(nextAttrs, { body: "" });
+              dom.dataset.cardType = nextModel.cardType;
               meta.textContent = cardMetaText(nextAttrs);
               title.value = nextAttrs.title || "";
-              title.placeholder = nextAttrs.cardType || "Card";
-              const nextText = nextAttrs.markdown || nextAttrs.text || "";
+              title.placeholder = nextModel.title;
+              const nextText = nextModel.body;
               if (preview.value !== nextText) preview.value = nextText;
               preview.rows = Math.max(3, Math.min(8, String(nextText).split("\\n").length + 1));
               fitTextArea(preview);
+              source.style.display = nextModel.sourceTitle ? "block" : "none";
+              source.textContent = nextModel.sourceTitle || "";
               return true;
             },
           };
@@ -845,7 +830,7 @@ async function buildKnowledgeEditor() {
       target: "es2020",
       minify: true,
       write: false,
-      resolveExtensions: [".js", ".mjs"],
+      resolveExtensions: [".ts", ".tsx", ".js", ".mjs"],
     });
 
     const bundledJS = result.outputFiles[0].text;

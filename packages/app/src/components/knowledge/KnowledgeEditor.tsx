@@ -12,10 +12,10 @@ import {
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
+  createReadAnyCardReadOnlyModel,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
-  getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
@@ -1822,16 +1822,13 @@ function BlockInsertButton({
 function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
-  const cardType = attrs.cardType || "callout";
-  const definition = getReadAnyCardDefinition(cardType);
-  const version = Number.isFinite(Number(attrs.version)) ? Number(attrs.version) : 1;
-  const isFutureVersion = !!definition && version > definition.version;
-  const isCustomCard = cardType.startsWith("custom:");
-  const isFallbackCard = !definition && !isCustomCard;
+  const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, { body: "" });
+  const { cardType, version, isFutureVersion, isCustomCard } = readOnlyModel;
+  const isFallbackCard = readOnlyModel.state === "unsupported";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
   const title = attrs.title || "";
-  const body = attrs.markdown || attrs.text || "";
+  const body = readOnlyModel.body;
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const resizeBody = useCallback((element = bodyRef.current) => {
     if (!element) return;
@@ -1883,16 +1880,17 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
                 {isFutureVersion
                   ? t("notes.knowledgeCardNewerVersion", {
                       version,
-                      defaultValue: `v${version} newer`,
+                      defaultValue: readOnlyModel.stateLabel ?? `v${version} newer`,
                     })
                   : isFallbackCard
                     ? t("notes.knowledgeCardFallback", { defaultValue: "fallback" })
-                    : `v${version}`}
+                    : readOnlyModel.stateLabel ?? `v${version}`}
               </span>
             ) : null}
-            {attrs.sourceTitle ? (
+            {readOnlyModel.sourceTitle ? (
               <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                {t("notes.knowledgeCardSource", { defaultValue: "Source" })}: {attrs.sourceTitle}
+                {t("notes.knowledgeCardSource", { defaultValue: "Source" })}:{" "}
+                {readOnlyModel.sourceTitle}
               </span>
             ) : null}
           </div>

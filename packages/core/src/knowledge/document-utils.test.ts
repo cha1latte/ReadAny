@@ -5,6 +5,7 @@ import {
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
+  createKnowledgeFolderDisplaySections,
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
@@ -67,6 +68,33 @@ describe("knowledge document utilities", () => {
     const current = document({ id: "same", title: "Current", updatedAt: 10 });
 
     expect(orderKnowledgeDocuments([stale, current])).toEqual([current]);
+  });
+
+  it("partitions ordered folder children into home, folder, and document sections", () => {
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+    const folderA = document({ id: "folder-a", type: "folder", title: "A" });
+    const folderB = document({ id: "folder-b", type: "folder", title: "B" });
+    const review = document({ id: "review", type: "review", title: "Review" });
+    const note = document({ id: "note", title: "Note" });
+
+    expect(
+      createKnowledgeFolderDisplaySections([home, folderA, note, folderB, review], "home"),
+    ).toEqual({
+      home: [home],
+      folders: [folderA, folderB],
+      documents: [note, review],
+    });
+  });
+
+  it("keeps book home documents in the home section even without a home id", () => {
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+    const note = document({ id: "note", title: "Note" });
+
+    expect(createKnowledgeFolderDisplaySections([note, home])).toEqual({
+      home: [home],
+      folders: [],
+      documents: [note],
+    });
   });
 
   it("builds a stable document tree from parent ids", () => {

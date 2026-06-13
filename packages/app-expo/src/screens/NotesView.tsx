@@ -70,6 +70,7 @@ import {
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
+  createKnowledgeFolderDisplaySections,
   createKnowledgeSummarySourceFingerprint,
   extractKnowledgeDocumentOutline,
   flattenKnowledgeDocumentTree,
@@ -4029,23 +4030,6 @@ function KnowledgeFolderBrowserItem({
       </TouchableOpacity>
     </View>
   );
-}
-
-function createKnowledgeFolderDisplaySections(
-  orderedItems: KnowledgeDocument[],
-  homeDocumentId?: string,
-) {
-  const home: KnowledgeDocument[] = [];
-  const folders: KnowledgeDocument[] = [];
-  const documents: KnowledgeDocument[] = [];
-
-  for (const item of orderedItems) {
-    if (item.id === homeDocumentId || item.type === "book_home") home.push(item);
-    else if (item.type === "folder") folders.push(item);
-    else documents.push(item);
-  }
-
-  return { home, folders, documents };
 }
 
 function KnowledgeFolderBrowserGroup({

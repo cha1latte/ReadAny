@@ -59,6 +59,7 @@ export {
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
+  createKnowledgeFolderDisplaySections,
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
@@ -83,6 +84,7 @@ export {
 } from "./document-utils";
 export type {
   HighlightNoteProjection,
+  KnowledgeFolderDisplaySections,
   KnowledgeDocumentMoveTarget,
   KnowledgeDocumentMoveTargetOptions,
   KnowledgeDocumentOutlineItem,

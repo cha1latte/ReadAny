@@ -51,6 +51,12 @@ export interface KnowledgeDocumentMoveTarget {
   depth: number;
 }
 
+export interface KnowledgeFolderDisplaySections {
+  home: KnowledgeDocument[];
+  folders: KnowledgeDocument[];
+  documents: KnowledgeDocument[];
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -371,6 +377,23 @@ export function orderKnowledgeDocuments(
   return uniqueDocuments.sort((left, right) =>
     compareKnowledgeDocuments(left, right, homeDocumentId),
   );
+}
+
+export function createKnowledgeFolderDisplaySections(
+  orderedItems: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeFolderDisplaySections {
+  const home: KnowledgeDocument[] = [];
+  const folders: KnowledgeDocument[] = [];
+  const documents: KnowledgeDocument[] = [];
+
+  for (const item of orderedItems) {
+    if (item.id === homeDocumentId || item.type === "book_home") home.push(item);
+    else if (item.type === "folder") folders.push(item);
+    else documents.push(item);
+  }
+
+  return { home, folders, documents };
 }
 
 function compareKnowledgeDocuments(

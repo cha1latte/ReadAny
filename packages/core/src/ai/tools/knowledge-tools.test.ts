@@ -297,9 +297,7 @@ describe("knowledge tools", () => {
       type: "standalone_note",
       parentId: "folder-1",
     });
-    dbMocks.getKnowledgeDocuments
-      .mockResolvedValueOnce([nestedNote])
-      .mockResolvedValueOnce([folder, nestedNote]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, nestedNote]);
 
     const tool = createGetBookKnowledgeTool("book-1");
     const result = (await tool.execute({
@@ -311,15 +309,7 @@ describe("knowledge tools", () => {
       documents: Array<{ id: string; path: string; content?: string; snippet: string }>;
     };
 
-    expect(dbMocks.getKnowledgeDocuments).toHaveBeenNthCalledWith(1, {
-      bookId: "book-1",
-      type: "standalone_note",
-      limit: 8,
-    });
-    expect(dbMocks.getKnowledgeDocuments).toHaveBeenNthCalledWith(2, {
-      bookId: "book-1",
-      limit: 5000,
-    });
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(result.bookId).toBe("book-1");
     expect(result.documents[0]).toMatchObject({
       id: "doc-1",
@@ -329,6 +319,48 @@ describe("knowledge tools", () => {
       snippet: "Reading slowly helps memory.",
       childCount: 0,
     });
+  });
+
+  it("prioritizes book home and compact memories for current book knowledge", async () => {
+    const recentScratch = doc({
+      id: "scratch-1",
+      title: "Recent Scratch",
+      type: "standalone_note",
+      excerpt: "Tiny recent note.",
+      updatedAt: 9000,
+    });
+    const summary = doc({
+      id: "summary-1",
+      title: "Durable Summary",
+      type: "summary",
+      summaryMd: "Durable memory about the whole book.",
+      updatedAt: 2000,
+    });
+    const home = doc({
+      id: "home-1",
+      title: "Book Home",
+      type: "book_home",
+      contentMd: "Book-level workspace.",
+      updatedAt: 1000,
+    });
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Folder Only",
+      contentMd: "",
+      excerpt: undefined,
+      updatedAt: 10,
+    });
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([recentScratch, folder, summary, home]);
+
+    const tool = createGetBookKnowledgeTool("book-1");
+    const result = (await tool.execute({
+      reasoning: "Need high-level knowledge",
+      limit: 2,
+    })) as { documents: Array<{ id: string; summary?: string }> };
+
+    expect(result.documents.map((document) => document.id)).toEqual(["home-1", "summary-1"]);
+    expect(result.documents[1].summary).toBe("Durable memory about the whole book.");
   });
 
   it("returns direct children for folder knowledge results", async () => {
@@ -357,9 +389,7 @@ describe("knowledge tools", () => {
       tags: [],
       updatedAt: 4000,
     });
-    dbMocks.getKnowledgeDocuments
-      .mockResolvedValueOnce([folder])
-      .mockResolvedValueOnce([folder, nestedNote, nestedFolder]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, nestedNote, nestedFolder]);
 
     const tool = createGetBookKnowledgeTool("book-1");
     const result = (await tool.execute({

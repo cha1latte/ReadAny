@@ -11,6 +11,8 @@ import {
   searchKnowledgeDocuments,
 } from "../../db/database";
 import {
+  buildKnowledgeDocumentTree,
+  flattenKnowledgeDocumentTree,
   createKnowledgeDocumentSearchText,
   formatKnowledgeDocumentPath,
   orderKnowledgeDocuments,
@@ -258,6 +260,37 @@ function scoreDocument(
   return score;
 }
 
+function bookKnowledgePriority(document: KnowledgeDocument): number {
+  const typeScore: Record<KnowledgeDocumentType, number> = {
+    book_home: 7,
+    summary: 6,
+    review: 5,
+    standalone_note: 4,
+    imported_markdown: 3,
+    highlight_note: 2,
+    folder: 1,
+  };
+  return typeScore[document.type];
+}
+
+function bookKnowledgeSignal(document: KnowledgeDocument): number {
+  return (
+    (document.summaryMd?.trim() ? 12 : 0) +
+    (document.excerpt?.trim() ? 6 : 0) +
+    (document.contentMd?.trim() ? 3 : 0)
+  );
+}
+
+function sortBookKnowledgeDocuments(documents: KnowledgeDocument[]): KnowledgeDocument[] {
+  return [...documents].sort(
+    (left, right) =>
+      bookKnowledgePriority(right) - bookKnowledgePriority(left) ||
+      bookKnowledgeSignal(right) - bookKnowledgeSignal(left) ||
+      right.updatedAt - left.updatedAt ||
+      right.createdAt - left.createdAt,
+  );
+}
+
 function createDocumentPath(
   document: KnowledgeDocument,
   documentsById: Map<string, KnowledgeDocument>,
@@ -471,9 +504,19 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
       const type = normalizeType(args.type);
       const includeContent = args.includeContent === true;
       const limit = asPositiveLimit(args.limit, DEFAULT_RESULT_LIMIT);
-      const documents = await getKnowledgeDocuments({ bookId, type, limit });
       const pathContextDocuments = await getKnowledgeDocuments({ bookId, limit: 5000 });
-      const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
+      const documents =
+        type === "folder"
+          ? flattenKnowledgeDocumentTree(buildKnowledgeDocumentTree(pathContextDocuments).roots)
+              .map((node) => node.document)
+              .filter((document) => document.type === "folder")
+              .slice(0, limit)
+          : sortBookKnowledgeDocuments(
+              type
+                ? pathContextDocuments.filter((document) => document.type === type)
+                : pathContextDocuments.filter((document) => document.type !== "folder"),
+            ).slice(0, limit);
+      const documentsById = createDocumentMap(pathContextDocuments);
       const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       return {

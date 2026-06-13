@@ -278,8 +278,8 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     knowledgeVaultPathScroll: {
-      marginTop: 5,
-      maxHeight: 28,
+      marginTop: 4,
+      maxHeight: 24,
     },
     knowledgeVaultPathTrail: {
       flexDirection: "row",
@@ -291,7 +291,7 @@ export const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 2,
-      maxWidth: 220,
+      maxWidth: 240,
     },
     knowledgeVaultPathSlash: {
       fontSize: 11,
@@ -301,7 +301,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     knowledgeVaultPathChip: {
       maxWidth: 180,
-      minHeight: 26,
+      minHeight: 22,
       flexDirection: "row",
       alignItems: "center",
       gap: 0,
@@ -310,11 +310,13 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: "transparent",
       backgroundColor: "transparent",
       justifyContent: "flex-start",
-      paddingHorizontal: 2,
-      paddingVertical: 4,
+      paddingHorizontal: 1,
+      paddingVertical: 2,
     },
     knowledgeVaultPathChipActive: {
       backgroundColor: "transparent",
+      borderBottomWidth: 1,
+      borderBottomColor: withOpacity(colors.foreground, 0.36),
     },
     knowledgeVaultPathChipText: {
       flexShrink: 1,
@@ -884,7 +886,7 @@ export const makeStyles = (colors: ThemeColors) =>
       gap: 10,
       paddingHorizontal: 2,
       paddingTop: 1,
-      paddingBottom: 9,
+      paddingBottom: 8,
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
     },
@@ -931,7 +933,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderTopColor: withOpacity(colors.border, 0.72),
       borderLeftWidth: 0.5,
       borderLeftColor: withOpacity(colors.border, 0.58),
-      paddingTop: 5,
+      paddingTop: 4,
       paddingBottom: 3,
       paddingLeft: 2,
     },
@@ -957,8 +959,8 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeTreeNodeActive: {
       borderLeftWidth: 2,
       borderLeftColor: colors.primary,
-      borderColor: withOpacity(colors.primary, 0.2),
-      backgroundColor: withOpacity(colors.primary, 0.055),
+      borderColor: withOpacity(colors.primary, 0.18),
+      backgroundColor: withOpacity(colors.primary, 0.045),
     },
     knowledgeTreeNodeAncestor: {
       borderLeftWidth: 2,
@@ -1054,10 +1056,11 @@ export const makeStyles = (colors: ThemeColors) =>
       paddingLeft: 10,
       paddingTop: 2,
       paddingBottom: 10,
+      backgroundColor: withOpacity(colors.muted, 0.22),
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
       borderLeftWidth: 2,
-      borderLeftColor: withOpacity(colors.primary, 0.35),
+      borderLeftColor: withOpacity(colors.border, 0.85),
     },
     knowledgeFolderLead: {
       flexDirection: "row",
@@ -1182,7 +1185,7 @@ export const makeStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.medium,
     },
     knowledgeFolderItem: {
-      minHeight: 48,
+      minHeight: 50,
       flexDirection: "row",
       alignItems: "center",
       gap: 8,

@@ -2554,7 +2554,7 @@ function KnowledgeHomePanel({
           <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-7">
             <div
               className={cn(
-                "pb-5",
+                "pb-4",
                 isVaultRootOpen || isFolderDocument ? "w-full" : "mx-auto max-w-[880px]",
               )}
             >
@@ -2581,14 +2581,7 @@ function KnowledgeHomePanel({
                     label={t("notes.knowledgeDocumentTitle")}
                     placeholder={t("notes.knowledgeUntitledDocument")}
                   />
-                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <span>{knowledgeDocumentTypeLabel(document, t)}</span>
-                    <span className="text-border">/</span>
-                    <span className="truncate">{book.title}</span>
-                  </div>
-                  {!isFolderDocument ? (
-                    <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} />
-                  ) : null}
+                  <div className="mt-2 h-px w-16 bg-border/70" />
                 </>
               )}
             </div>
@@ -2650,18 +2643,20 @@ function KnowledgeHomePanel({
                 t={t}
               />
             ) : (
-              <KnowledgeEditor
-                tier="knowledge_doc"
-                surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
-                value={value}
-                onChange={onChange}
-                onPickLocalImage={() => onPickImageAttachment(document)}
-                placeholder={t("notes.knowledgePlaceholder")}
-                chrome="canvas"
-                outlineTarget={outlineTarget}
-                internalLinkTargets={internalLinkTargets}
-                contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:mx-auto [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:max-w-[880px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-2 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
-              />
+              <article className="mx-auto max-w-[880px]">
+                <KnowledgeEditor
+                  tier="knowledge_doc"
+                  surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
+                  value={value}
+                  onChange={onChange}
+                  onPickLocalImage={() => onPickImageAttachment(document)}
+                  placeholder={t("notes.knowledgePlaceholder")}
+                  chrome="canvas"
+                  outlineTarget={outlineTarget}
+                  internalLinkTargets={internalLinkTargets}
+                  contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-1 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
+                />
+              </article>
             )}
           </div>
         </section>
@@ -2719,6 +2714,18 @@ function KnowledgeHomePanel({
                 </div>
               </div>
             </div>
+
+            {!isVaultRootOpen && !isFolderDocument ? (
+              <div className="border-b border-border/35 bg-background/55 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-foreground">
+                    {t("notes.knowledgeTags")}
+                  </p>
+                </div>
+                <KnowledgeTagEditor tags={tags} onChange={onTagsChange} t={t} compact />
+              </div>
+            ) : null}
 
             {!isVaultRootOpen && !isFolderDocument ? (
               <KnowledgeDocumentOutlinePanel
@@ -2928,16 +2935,16 @@ function KnowledgeVaultRootOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-end justify-between gap-4 border-b border-border/30 pb-3">
-        <div className="min-w-0 border-l-2 border-primary/35 pl-3">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-primary">
+      <div className="mb-3 flex items-center justify-between gap-4 border-y border-border/35 bg-muted/[0.10] px-2 py-2.5">
+        <div className="min-w-0">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-muted-foreground">
             <FolderOpen className="h-3.5 w-3.5 shrink-0" />
             {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
           </p>
-          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+          <h3 className="mt-0.5 truncate text-base font-semibold leading-tight text-foreground">
             {t("notes.knowledgeFolderInside")}
           </h3>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
             / {items.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>
@@ -3366,10 +3373,12 @@ function KnowledgeTagEditor({
   tags,
   onChange,
   t,
+  compact = false,
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
+  compact?: boolean;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -3391,11 +3400,19 @@ function KnowledgeTagEditor({
   };
 
   return (
-    <div className="mt-3 flex max-w-2xl flex-wrap items-center gap-1.5">
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-1.5",
+        compact ? "max-w-none" : "mt-3 max-w-2xl",
+      )}
+    >
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group inline-flex h-7 items-center gap-1.5 rounded-md border border-border/45 bg-muted/30 px-2 text-xs text-foreground/90"
+          className={cn(
+            "group inline-flex items-center gap-1.5 rounded-sm border border-border/45 bg-muted/30 text-xs text-foreground/90",
+            compact ? "h-6 px-1.5" : "h-7 px-2",
+          )}
         >
           <span className="max-w-28 truncate">{tag}</span>
           <button
@@ -3408,7 +3425,12 @@ function KnowledgeTagEditor({
           </button>
         </span>
       ))}
-      <label className="inline-flex h-7 min-w-28 flex-1 items-center gap-1.5 rounded-md border border-dashed border-border/65 bg-transparent px-2 text-xs text-muted-foreground transition-colors focus-within:border-primary/45 focus-within:bg-background">
+      <label
+        className={cn(
+          "inline-flex min-w-28 flex-1 items-center gap-1.5 rounded-sm border border-dashed border-border/65 bg-transparent text-xs text-muted-foreground transition-colors focus-within:border-primary/45 focus-within:bg-background",
+          compact ? "h-6 px-1.5" : "h-7 px-2",
+        )}
+      >
         <Tag className="h-3 w-3 shrink-0" />
         <input
           value={draft}
@@ -4587,16 +4609,16 @@ function KnowledgeFolderOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-end justify-between gap-4 border-b border-border/30 pb-3">
-        <div className="min-w-0 border-l-2 border-primary/35 pl-3">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-primary">
+      <div className="mb-3 flex items-center justify-between gap-4 border-y border-border/35 bg-muted/[0.10] px-2 py-2.5">
+        <div className="min-w-0">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-muted-foreground">
             <FolderOpen className="h-3.5 w-3.5 shrink-0" />
             {folderPathLabel}
           </p>
-          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+          <h3 className="mt-0.5 truncate text-base font-semibold leading-tight text-foreground">
             {folder.title || t("notes.knowledgeUntitledDocument")}
           </h3>
-          <p className="mt-1 truncate text-xs text-muted-foreground" title={folderPathLabel}>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={folderPathLabel}>
             / {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>

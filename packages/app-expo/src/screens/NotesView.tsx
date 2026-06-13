@@ -2225,9 +2225,9 @@ function KnowledgeHomePanel({
       if (!targetDocument) return;
       setActionDocument(null);
       setRenameDocument(targetDocument);
-      setRenameDraft(targetDocument.title || t("notes.knowledgeUntitledDocument", "未命名文档"));
+      setRenameDraft(targetDocument.title.trim());
     },
-    [t],
+    [],
   );
 
   const handleMoveToTarget = useCallback(
@@ -2244,7 +2244,7 @@ function KnowledgeHomePanel({
     const nextTitle = renameDraft.trim();
     setRenameDocument(null);
     setRenameDraft("");
-    if (!nextTitle || nextTitle === renameDocument.title) return;
+    if (!nextTitle || nextTitle === renameDocument.title.trim()) return;
     onRenameDocument(renameDocument, nextTitle);
   }, [onRenameDocument, renameDocument, renameDraft]);
 
@@ -2551,7 +2551,7 @@ function KnowledgeHomePanel({
                 {actionDocument?.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
               </Text>
               <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
-                {actionDocument ? knowledgeDocumentTypeLabel(actionDocument, t) : ""}
+                {actionDocument ? knowledgeDocumentPathText(actionDocument, documents, t) : ""}
               </Text>
             </View>
             <TouchableOpacity
@@ -2601,6 +2601,59 @@ function KnowledgeHomePanel({
                 </Text>
                 <ChevronRightIcon size={14} color={colors.mutedForeground} />
               </TouchableOpacity>
+
+              {actionDocument.type === "folder" ? (
+                <>
+                  <TouchableOpacity
+                    activeOpacity={0.78}
+                    style={[styles.knowledgeMoveTarget, isCreatingDocument && { opacity: 0.55 }]}
+                    onPress={() => {
+                      const target = actionDocument;
+                      setActionDocument(null);
+                      onCreateDocument("folder", target.id);
+                    }}
+                    disabled={isCreatingDocument}
+                  >
+                    <View style={styles.knowledgeMoveTargetIcon}>
+                      <FolderPlusIcon size={15} color={colors.primary} />
+                    </View>
+                    <View style={styles.knowledgeMoveTargetTextBlock}>
+                      <Text style={styles.knowledgeMoveTargetTitle} numberOfLines={1}>
+                        {t("notes.knowledgeNewFolder", "新建文件夹")}
+                      </Text>
+                      <Text style={styles.knowledgeMoveTargetPath} numberOfLines={1}>
+                        {t("notes.knowledgeCreateIn", "创建于")} ·{" "}
+                        {knowledgeDocumentPathText(actionDocument, documents, t)}
+                      </Text>
+                    </View>
+                    <ChevronRightIcon size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.78}
+                    style={[styles.knowledgeMoveTarget, isCreatingDocument && { opacity: 0.55 }]}
+                    onPress={() => {
+                      const target = actionDocument;
+                      setActionDocument(null);
+                      onCreateDocument("standalone_note", target.id);
+                    }}
+                    disabled={isCreatingDocument}
+                  >
+                    <View style={styles.knowledgeMoveTargetIcon}>
+                      <ScrollTextIcon size={15} color={colors.primary} />
+                    </View>
+                    <View style={styles.knowledgeMoveTargetTextBlock}>
+                      <Text style={styles.knowledgeMoveTargetTitle} numberOfLines={1}>
+                        {t("notes.knowledgeNewNote", "新建笔记")}
+                      </Text>
+                      <Text style={styles.knowledgeMoveTargetPath} numberOfLines={1}>
+                        {t("notes.knowledgeCreateIn", "创建于")} ·{" "}
+                        {knowledgeDocumentPathText(actionDocument, documents, t)}
+                      </Text>
+                    </View>
+                    <ChevronRightIcon size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </>
+              ) : null}
 
               {canMoveActionDocument ? (
                 <TouchableOpacity

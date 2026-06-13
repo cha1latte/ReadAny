@@ -387,14 +387,51 @@ async function readKnowledgeVaultManifest(
   return JSON.parse(raw) as KnowledgeExportManifest;
 }
 
+async function collectKnowledgeVaultMarkdownPaths(rootPath: string): Promise<string[]> {
+  const { exists, readDir } = await import("@tauri-apps/plugin-fs");
+
+  const visit = async (relativeDir = ""): Promise<string[]> => {
+    const directoryPath = relativeDir ? await joinDesktopPath(rootPath, relativeDir) : rootPath;
+    if (!(await exists(directoryPath))) return [];
+
+    let entries: Awaited<ReturnType<typeof readDir>>;
+    try {
+      entries = await readDir(directoryPath);
+    } catch {
+      return [];
+    }
+
+    const paths: string[] = [];
+    for (const entry of entries) {
+      if (!entry.name) continue;
+      const relativePath = normalizeExportPath(
+        relativeDir ? `${relativeDir}/${entry.name}` : entry.name,
+      );
+      if (entry.isDirectory) {
+        if (entry.name === ".readany" || entry.name === ".git") continue;
+        paths.push(...(await visit(relativePath)));
+      } else if (entry.isFile && /\.md$/i.test(entry.name)) {
+        paths.push(relativePath);
+      }
+    }
+    return paths;
+  };
+
+  return uniqueExportPaths(await visit());
+}
+
 async function readExistingKnowledgeVaultFiles(
   rootPath: string,
   paths: string[],
+  options: { includeMarkdownFiles?: boolean } = {},
 ): Promise<KnowledgeExportObservedFile[]> {
   const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
   const existingFiles: KnowledgeExportObservedFile[] = [];
+  const pathsToRead = options.includeMarkdownFiles
+    ? uniqueExportPaths([...paths, ...(await collectKnowledgeVaultMarkdownPaths(rootPath))])
+    : uniqueExportPaths(paths);
 
-  for (const path of uniqueExportPaths(paths)) {
+  for (const path of pathsToRead) {
     const filePath = await joinDesktopPath(rootPath, path);
     if (!(await exists(filePath))) continue;
     try {
@@ -1840,6 +1877,7 @@ export function NotesPage() {
       const files = await readExistingKnowledgeVaultFiles(
         selected,
         Object.values(manifest.documents).map((entry) => entry.path),
+        { includeMarkdownFiles: true },
       );
       const liveDocument: KnowledgeDocument | null = knowledgeHome
         ? {

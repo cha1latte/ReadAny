@@ -645,6 +645,86 @@ Home note.
     ]);
   });
 
+  it("reconciles moved Obsidian files by stable ReadAny document id", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+    const fileName = documentFile.path.split("/").pop();
+    if (!fileName) throw new Error("Expected exported document file name");
+    const movedPath = documentFile.path.replace(fileName, `Moved/${fileName}`);
+    const movedContent = documentFile.content.replace(
+      "A durable idea.",
+      "A durable idea moved and edited in Obsidian.",
+    );
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: movedPath, content: movedContent }],
+    });
+
+    expect(plan.missing).toEqual([]);
+    expect(plan.conflicts).toEqual([]);
+    expect(plan.modified).toHaveLength(1);
+    expect(plan.modified[0]).toMatchObject({
+      documentId: "doc-1",
+      path: movedPath,
+      status: "modified",
+      previousHash: vault.manifest.documents["doc-1"].hash,
+      warnings: ["manifest_path_changed"],
+    });
+
+    const proposals = createKnowledgeVaultImportWriteProposals(plan);
+    expect(proposals).toEqual([
+      expect.objectContaining({
+        action: "update",
+        documentId: "doc-1",
+        message: `Imported changes from ${movedPath}. The knowledge document has not been changed.`,
+        patch: expect.objectContaining({
+          contentMd: expect.stringContaining("moved and edited in Obsidian"),
+        }),
+      }),
+    ]);
+  });
+
+  it("treats duplicate ReadAny frontmatter ids as vault import conflicts", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+    const duplicatePath = documentFile.path.replace(/\.md$/i, " Copy.md");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [
+        { path: documentFile.path, content: documentFile.content },
+        { path: duplicatePath, content: documentFile.content },
+      ],
+    });
+
+    expect(plan.modified).toEqual([]);
+    expect(plan.missing).toEqual([]);
+    expect(plan.conflicts).toEqual([
+      expect.objectContaining({
+        documentId: "doc-1",
+        path: documentFile.path,
+        status: "conflict",
+        warnings: ["multiple_files_with_same_document_id"],
+      }),
+    ]);
+    expect(createKnowledgeVaultImportWriteProposals(plan)).toEqual([]);
+  });
+
   it("resolves path-backed internal links to manifest document ids during vault import", () => {
     const exporter = new KnowledgeExporter();
     const source = knowledgeDocument({

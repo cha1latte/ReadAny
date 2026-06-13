@@ -537,10 +537,28 @@ function observedFileHash(file: KnowledgeExportObservedFile): string | undefined
   return undefined;
 }
 
+function createReadAnyFilesByDocumentId(
+  files: KnowledgeExportObservedFile[],
+): Map<string, KnowledgeExportObservedFile[]> {
+  const filesByDocumentId = new Map<string, KnowledgeExportObservedFile[]>();
+
+  for (const file of files) {
+    if (typeof file.content !== "string") continue;
+    const frontmatter = normalizeFrontmatter(extractFrontmatter(file.content).parsed);
+    if (frontmatter.type !== "readany-knowledge" || !frontmatter.id) continue;
+    const filesForDocument = filesByDocumentId.get(frontmatter.id) ?? [];
+    filesForDocument.push(file);
+    filesByDocumentId.set(frontmatter.id, filesForDocument);
+  }
+
+  return filesByDocumentId;
+}
+
 export function createKnowledgeVaultImportPlan(
   input: KnowledgeVaultImportPlanInput,
 ): KnowledgeVaultImportPlan {
   const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
+  const filesByDocumentId = createReadAnyFilesByDocumentId(input.files);
   const documentIdsByPath = createManifestDocumentIdsByPath(input.manifest);
   const currentHashesByPath = new Map(
     (input.currentFiles ?? [])
@@ -550,9 +568,44 @@ export function createKnowledgeVaultImportPlan(
   const entries: KnowledgeVaultImportEntry[] = [];
 
   for (const [documentId, manifestDocument] of Object.entries(input.manifest.documents)) {
-    const path = normalizePath(manifestDocument.path);
-    const file = filesByPath.get(path);
-    const currentHash = currentHashesByPath.get(path);
+    const manifestPath = normalizePath(manifestDocument.path);
+    let path = manifestPath;
+    let file = filesByPath.get(manifestPath);
+    let pathWarnings: string[] = [];
+    const relocatedFiles = (filesByDocumentId.get(documentId) ?? []).filter(
+      (candidate) => normalizePath(candidate.path) !== manifestPath,
+    );
+    const currentHash = currentHashesByPath.get(manifestPath);
+    if (file && relocatedFiles.length > 0) {
+      entries.push({
+        documentId,
+        path: manifestPath,
+        status: "conflict",
+        previousHash: manifestDocument.hash,
+        existingHash: observedFileHash(file),
+        currentHash,
+        warnings: ["multiple_files_with_same_document_id"],
+      });
+      continue;
+    }
+    if (!file) {
+      if (relocatedFiles.length > 1) {
+        entries.push({
+          documentId,
+          path: manifestPath,
+          status: "conflict",
+          previousHash: manifestDocument.hash,
+          currentHash,
+          warnings: ["multiple_files_with_same_document_id"],
+        });
+        continue;
+      }
+      if (relocatedFiles.length === 1) {
+        file = relocatedFiles[0];
+        path = normalizePath(file.path);
+        pathWarnings = ["manifest_path_changed"];
+      }
+    }
     const hasLocalChange = Boolean(currentHash && currentHash !== manifestDocument.hash);
 
     if (!file) {
@@ -576,7 +629,7 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: [],
+        warnings: pathWarnings,
       });
       continue;
     }
@@ -589,7 +642,7 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: ["remote_matches_current_local"],
+        warnings: [...pathWarnings, "remote_matches_current_local"],
       });
       continue;
     }
@@ -602,7 +655,7 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: ["local_and_remote_modified"],
+        warnings: [...pathWarnings, "local_and_remote_modified"],
       });
       continue;
     }
@@ -615,7 +668,7 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: ["modified_file_content_missing"],
+        warnings: [...pathWarnings, "modified_file_content_missing"],
       });
       continue;
     }
@@ -648,7 +701,7 @@ export function createKnowledgeVaultImportPlan(
       existingHash: createKnowledgeExportHash(file.content),
       currentHash,
       draft,
-      warnings,
+      warnings: [...pathWarnings, ...warnings],
     });
   }
 

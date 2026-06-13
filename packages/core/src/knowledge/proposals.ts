@@ -18,7 +18,10 @@ import type {
 } from "../types";
 import { eventBus } from "../utils/event-bus";
 import { generateId } from "../utils/generate-id";
-import { validateKnowledgeDocumentParent } from "./document-utils";
+import {
+  validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
+} from "./document-utils";
 
 export type KnowledgeProposalAction = "create" | "update" | "link";
 export type KnowledgeProposalConfirmationKind =
@@ -213,6 +216,10 @@ function createInvalidParentError(reason: string): Error {
   return new Error(`Invalid knowledge document parent: ${reason}`);
 }
 
+function createInvalidTitleError(reason: string): Error {
+  return new Error(`Invalid knowledge document title: ${reason}`);
+}
+
 function createInvalidLinkError(reason: string): Error {
   return new Error(`Invalid knowledge link: ${reason}`);
 }
@@ -242,31 +249,65 @@ async function assertCreateProposalParent(proposal: KnowledgeDocumentCreatePropo
   }
 }
 
+async function assertCreateProposalTitle(proposal: KnowledgeDocumentCreateProposal) {
+  const { bookId, parentId, id } = proposal.draft;
+  const title = proposal.draft.title ?? "";
+  const documents = await getKnowledgeDocuments({
+    ...(bookId ? { bookId } : {}),
+    limit: 5000,
+  });
+  const validation = validateKnowledgeDocumentSiblingTitle({
+    documentId: id,
+    bookId,
+    parentId,
+    title,
+    documents,
+  });
+  if (!validation.ok) throw createInvalidTitleError(validation.reason);
+}
+
 async function getValidatedUpdateDocument(
   proposal: KnowledgeDocumentUpdateProposal,
 ): Promise<KnowledgeDocument> {
   const document = await getKnowledgeDocument(proposal.documentId);
   if (!document) throw createInvalidParentError("missing_document");
 
-  if (!Object.prototype.hasOwnProperty.call(proposal.patch, "parentId")) return document;
+  const hasParentPatch = Object.prototype.hasOwnProperty.call(proposal.patch, "parentId");
+  const hasTitlePatch = Object.prototype.hasOwnProperty.call(proposal.patch, "title");
+  if (!hasParentPatch && !hasTitlePatch) return document;
 
   const documents = await getKnowledgeDocuments({
     ...(document.bookId ? { bookId: document.bookId } : {}),
     limit: 5000,
   });
-  const validation = validateKnowledgeDocumentParent(
-    proposal.documentId,
-    proposal.patch.parentId,
-    documents,
-  );
-  if (!validation.ok) throw createInvalidParentError(validation.reason ?? "invalid_parent");
+  if (hasParentPatch) {
+    const validation = validateKnowledgeDocumentParent(
+      proposal.documentId,
+      proposal.patch.parentId,
+      documents,
+    );
+    if (!validation.ok) throw createInvalidParentError(validation.reason ?? "invalid_parent");
 
-  if (!proposal.patch.parentId) return document;
-  const parent = documents.find((item) => item.id === proposal.patch.parentId);
-  if (!parent) throw createInvalidParentError("missing_parent");
-  if (!sameOptionalString(parent.bookId, document.bookId)) {
-    throw createInvalidParentError("book_mismatch");
+    if (proposal.patch.parentId) {
+      const parent = documents.find((item) => item.id === proposal.patch.parentId);
+      if (!parent) throw createInvalidParentError("missing_parent");
+      if (!sameOptionalString(parent.bookId, document.bookId)) {
+        throw createInvalidParentError("book_mismatch");
+      }
+    }
   }
+
+  const nextTitle = hasTitlePatch ? (proposal.patch.title ?? "").trim() : document.title;
+  const nextParentId = hasParentPatch ? proposal.patch.parentId : document.parentId;
+  const titleValidation = validateKnowledgeDocumentSiblingTitle({
+    documentId: document.id,
+    bookId: document.bookId,
+    parentId: nextParentId,
+    title: nextTitle,
+    documents,
+  });
+  if (!titleValidation.ok) throw createInvalidTitleError(titleValidation.reason);
+
   return document;
 }
 
@@ -504,6 +545,7 @@ export async function applyKnowledgeWriteProposal(
       }
     }
     await assertCreateProposalParent(proposal);
+    await assertCreateProposalTitle(proposal);
     const document = await createKnowledgeDocument(proposal.draft);
     emitKnowledgeChanged({
       action: "create",

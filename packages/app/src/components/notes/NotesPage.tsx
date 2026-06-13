@@ -74,6 +74,7 @@ import {
   resolveKnowledgeDocumentPath,
   syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
 } from "@readany/core/knowledge";
 import {
   type KnowledgeDocumentUpdateProposal,
@@ -196,6 +197,37 @@ function knowledgeDocumentCreateTitle(
   if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
   if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
   return t("notes.knowledgeNewNoteTitle", { count });
+}
+
+function sameKnowledgeParent(left?: string | null, right?: string | null): boolean {
+  return (left || undefined) === (right || undefined);
+}
+
+function createUniqueKnowledgeDocumentCreateTitle(input: {
+  type: CreatableKnowledgeDocumentType;
+  bookId?: string;
+  parentId?: string;
+  documents: readonly KnowledgeDocument[];
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): string {
+  const baseCount =
+    input.documents.filter(
+      (document) =>
+        document.type === input.type && sameKnowledgeParent(document.parentId, input.parentId),
+    ).length + 1;
+
+  for (let offset = 0; offset < 1000; offset += 1) {
+    const title = knowledgeDocumentCreateTitle(input.type, baseCount + offset, input.t);
+    const validation = validateKnowledgeDocumentSiblingTitle({
+      bookId: input.bookId,
+      parentId: input.parentId,
+      title,
+      documents: input.documents,
+    });
+    if (validation.ok) return title;
+  }
+
+  return knowledgeDocumentCreateTitle(input.type, baseCount, input.t);
 }
 
 function isEmptyTiptapDocument(content: KnowledgeDocument["contentJson"]): boolean {
@@ -746,6 +778,18 @@ export function NotesPage() {
     const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
       knowledgeValue.contentJson,
     ) as KnowledgeDocument["contentJson"];
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: knowledgeHome.id,
+      bookId: knowledgeHome.bookId,
+      parentId: knowledgeHome.parentId,
+      title: normalizedTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      setIsKnowledgeSaving(false);
+      toast.error(t("notes.knowledgeDocumentTitleDuplicate"));
+      return;
+    }
 
     const timeout = window.setTimeout(async () => {
       if (knowledgeSaveVersionRef.current !== saveVersion) return;
@@ -816,6 +860,7 @@ export function NotesPage() {
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,
+    knowledgeDocuments,
     knowledgeDocumentIds,
     currentKnowledgeFingerprint,
     savedKnowledgeFingerprint,
@@ -833,6 +878,18 @@ export function NotesPage() {
     const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
       knowledgeValue.contentJson,
     ) as KnowledgeDocument["contentJson"];
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: knowledgeHome.id,
+      bookId: knowledgeHome.bookId,
+      parentId: knowledgeHome.parentId,
+      title: normalizedTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      setIsKnowledgeSaving(false);
+      toast.error(t("notes.knowledgeDocumentTitleDuplicate"));
+      return false;
+    }
 
     setIsKnowledgeSaving(true);
     try {
@@ -1028,17 +1085,18 @@ export function NotesPage() {
 
     setIsKnowledgeDocumentCreating(true);
     try {
-      const count = Math.max(
-        1,
-        knowledgeDocuments.filter(
-          (document) => document.type === type && document.parentId === parentId,
-        ).length + 1,
-      );
+      const title = createUniqueKnowledgeDocumentCreateTitle({
+        type,
+        bookId: selectedKnowledgeBookId,
+        parentId,
+        documents: knowledgeDocuments,
+        t,
+      });
       const document = await createKnowledgeDocument({
         bookId: selectedKnowledgeBookId,
         parentId,
         type,
-        title: knowledgeDocumentCreateTitle(type, count, t),
+        title,
         contentJson: createEmptyKnowledgeValue().contentJson,
         contentMd: "",
         excerpt: undefined,
@@ -1148,12 +1206,25 @@ export function NotesPage() {
       }
       return;
     }
+    const nextParentId = parentId || undefined;
+    const nextTitle =
+      knowledgeHome?.id === document.id ? knowledgeTitle.trim() || document.title : document.title;
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: document.id,
+      bookId: document.bookId,
+      parentId: nextParentId,
+      title: nextTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      toast.error(t("notes.knowledgeDocumentTitleDuplicate"));
+      return;
+    }
 
     const saved = await saveActiveKnowledgeDocumentNow();
     if (!saved) return;
 
     try {
-      const nextParentId = parentId || undefined;
       await updateKnowledgeDocument(document.id, { parentId: nextParentId });
       const updatedDocument: KnowledgeDocument = {
         ...document,

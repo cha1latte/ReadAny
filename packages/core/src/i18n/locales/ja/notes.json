@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "一致するドキュメントはありません",
     "knowledgeDocumentCreated": "ナレッジドキュメントを作成しました",
     "knowledgeDocumentCreateFailed": "ナレッジドキュメントの作成に失敗しました",
+    "knowledgeDocumentTitleDuplicate": "このフォルダには同じ名前のドキュメントが既にあります",
     "knowledgeDeleteDocument": "ドキュメントを削除",
     "knowledgeDocumentDeleteConfirm": "「{{title}}」を削除しますか？この操作はほかの端末にも同期されます。",
     "knowledgeDocumentDeleteBlocked": "このドキュメントはホーム、ハイライト、または旧ノート由来のため、まだ直接削除できません",

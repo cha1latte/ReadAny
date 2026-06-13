@@ -28,6 +28,7 @@ describe("knowledge write proposals", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     eventBus.clear("knowledge:changed");
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
   });
 
   function document(overrides: Record<string, unknown> = {}) {
@@ -428,6 +429,127 @@ describe("knowledge write proposals", () => {
 
     await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
       "Invalid knowledge document parent: descendant_parent",
+    );
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects create proposals with duplicate sibling titles", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      draft: {
+        type: "standalone_note",
+        title: "Chapter Notes",
+        bookId: "book-1",
+        parentId: "folder-1",
+        contentMd: "Body",
+        contentJson: { type: "doc", content: [] },
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "folder-1", type: "folder", bookId: "book-1" }),
+    );
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({
+        id: "existing-note",
+        bookId: "book-1",
+        parentId: "folder-1",
+        title: "chapter notes",
+      }),
+    ]);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document title: duplicate_sibling_title",
+    );
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects update proposals that rename into a duplicate sibling title", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      patch: {
+        title: "Chapter Notes",
+      },
+      changedFields: ["title"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "doc-1", bookId: "book-1", parentId: "folder-1", title: "Draft" }),
+    );
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({ id: "doc-1", bookId: "book-1", parentId: "folder-1", title: "Draft" }),
+      document({
+        id: "existing-note",
+        bookId: "book-1",
+        parentId: "folder-1",
+        title: "chapter notes",
+      }),
+    ]);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document title: duplicate_sibling_title",
+    );
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects update proposals that move into a folder with the same document title", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      patch: {
+        parentId: "target-folder",
+      },
+      changedFields: ["parentId"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "doc-1", bookId: "book-1", parentId: "source-folder", title: "Quote Map" }),
+    );
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({
+        id: "source-folder",
+        type: "folder",
+        bookId: "book-1",
+        title: "Source",
+      }),
+      document({
+        id: "target-folder",
+        type: "folder",
+        bookId: "book-1",
+        title: "Target",
+      }),
+      document({
+        id: "doc-1",
+        bookId: "book-1",
+        parentId: "source-folder",
+        title: "Quote Map",
+      }),
+      document({
+        id: "target-copy",
+        bookId: "book-1",
+        parentId: "target-folder",
+        title: "quote map",
+      }),
+    ]);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document title: duplicate_sibling_title",
     );
     expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
   });

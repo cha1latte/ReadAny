@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "일치하는 문서가 없어요",
     "knowledgeDocumentCreated": "지식 문서를 만들었어요",
     "knowledgeDocumentCreateFailed": "지식 문서를 만들지 못했어요",
+    "knowledgeDocumentTitleDuplicate": "이 폴더에 같은 이름의 문서가 이미 있어요",
     "knowledgeDeleteDocument": "문서 삭제",
     "knowledgeDocumentDeleteConfirm": "\"{{title}}\" 문서를 삭제할까요? 이 작업은 다른 기기에도 동기화됩니다.",
     "knowledgeDocumentDeleteBlocked": "이 문서는 지식 홈, 하이라이트 또는 이전 노트에서 온 문서라 아직 직접 삭제할 수 없어요",

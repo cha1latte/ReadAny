@@ -51,6 +51,18 @@ export interface KnowledgeDocumentMoveTarget {
   depth: number;
 }
 
+export type KnowledgeDocumentSiblingTitleConflictReason =
+  | "empty_title"
+  | "duplicate_sibling_title";
+
+export type KnowledgeDocumentSiblingTitleValidation =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: KnowledgeDocumentSiblingTitleConflictReason;
+      duplicate?: KnowledgeDocument;
+    };
+
 export interface KnowledgeFolderDisplaySections {
   home: KnowledgeDocument[];
   folders: KnowledgeDocument[];
@@ -77,6 +89,14 @@ export interface LegacyNoteProjection extends HighlightNoteProjection {
 
 function compactText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeDocumentTitleForSiblingCompare(value: string): string {
+  return compactText(value).toLocaleLowerCase();
+}
+
+function sameOptionalValue(left: string | undefined, right: string | undefined): boolean {
+  return (left || undefined) === (right || undefined);
 }
 
 function truncateText(value: string, maxLength: number): string {
@@ -394,6 +414,32 @@ export function createKnowledgeFolderDisplaySections(
   }
 
   return { home, folders, documents };
+}
+
+export function validateKnowledgeDocumentSiblingTitle(input: {
+  documentId?: string;
+  bookId?: string;
+  parentId?: string;
+  title: string;
+  documents: readonly KnowledgeDocument[];
+}): KnowledgeDocumentSiblingTitleValidation {
+  const normalizedTitle = normalizeDocumentTitleForSiblingCompare(input.title);
+  if (!normalizedTitle) return { ok: false, reason: "empty_title" };
+
+  const duplicate = input.documents.find(
+    (document) =>
+      !document.deletedAt &&
+      document.id !== input.documentId &&
+      sameOptionalValue(document.bookId, input.bookId) &&
+      sameOptionalValue(document.parentId, input.parentId) &&
+      normalizeDocumentTitleForSiblingCompare(document.title) === normalizedTitle,
+  );
+
+  if (duplicate) {
+    return { ok: false, reason: "duplicate_sibling_title", duplicate };
+  }
+
+  return { ok: true };
 }
 
 function compareKnowledgeDocuments(

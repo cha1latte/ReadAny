@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "没有匹配的文档",
     "knowledgeDocumentCreated": "知识文档已创建",
     "knowledgeDocumentCreateFailed": "知识文档创建失败",
+    "knowledgeDocumentTitleDuplicate": "同一文件夹里已经有同名文档",
     "knowledgeDeleteDocument": "删除文档",
     "knowledgeDocumentDeleteConfirm": "删除“{{title}}”？此操作会同步到其他设备。",
     "knowledgeDocumentDeleteBlocked": "这个文档来自书籍主页、高亮或旧笔记，暂不支持直接删除",

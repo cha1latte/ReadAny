@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "No hay documentos coincidentes",
     "knowledgeDocumentCreated": "Documento de conocimiento creado",
     "knowledgeDocumentCreateFailed": "No se pudo crear el documento de conocimiento",
+    "knowledgeDocumentTitleDuplicate": "Ya existe un documento con este nombre en esta carpeta.",
     "knowledgeDeleteDocument": "Eliminar documento",
     "knowledgeDocumentDeleteConfirm": "¿Eliminar \"{{title}}\"? Se sincronizará con tus otros dispositivos.",
     "knowledgeDocumentDeleteBlocked": "Este documento viene de la página del libro, un subrayado o una nota antigua y aún no se puede eliminar directamente",

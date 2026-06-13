@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "Aucun document correspondant",
     "knowledgeDocumentCreated": "Document de savoir créé",
     "knowledgeDocumentCreateFailed": "Impossible de créer le document de savoir",
+    "knowledgeDocumentTitleDuplicate": "Un document portant ce nom existe déjà dans ce dossier.",
     "knowledgeDeleteDocument": "Supprimer le document",
     "knowledgeDocumentDeleteConfirm": "Supprimer « {{title}} » ? Cette action sera synchronisée sur vos autres appareils.",
     "knowledgeDocumentDeleteBlocked": "Ce document vient de la page du livre, d'un surlignage ou d'une ancienne note et ne peut pas encore être supprimé directement",

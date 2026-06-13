@@ -84,6 +84,7 @@ import {
   resolveKnowledgeDocumentPath,
   syncKnowledgeInternalDocumentLinks,
   validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
 } from "@readany/core/knowledge";
 import { applyKnowledgeWriteProposal } from "@readany/core/knowledge/proposals";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
@@ -187,6 +188,37 @@ function knowledgeDocumentCreateTitle(
   if (type === "review") return t("notes.knowledgeNewReviewTitle", { count });
   if (type === "summary") return t("notes.knowledgeNewSummaryTitle", { count });
   return t("notes.knowledgeNewNoteTitle", { count });
+}
+
+function sameKnowledgeParent(left?: string | null, right?: string | null): boolean {
+  return (left || undefined) === (right || undefined);
+}
+
+function createUniqueKnowledgeDocumentCreateTitle(input: {
+  type: CreatableKnowledgeDocumentType;
+  bookId?: string;
+  parentId?: string;
+  documents: readonly KnowledgeDocument[];
+  t: TFunction;
+}): string {
+  const baseCount =
+    input.documents.filter(
+      (document) =>
+        document.type === input.type && sameKnowledgeParent(document.parentId, input.parentId),
+    ).length + 1;
+
+  for (let offset = 0; offset < 1000; offset += 1) {
+    const title = knowledgeDocumentCreateTitle(input.type, baseCount + offset, input.t);
+    const validation = validateKnowledgeDocumentSiblingTitle({
+      bookId: input.bookId,
+      parentId: input.parentId,
+      title,
+      documents: input.documents,
+    });
+    if (validation.ok) return title;
+  }
+
+  return knowledgeDocumentCreateTitle(input.type, baseCount, input.t);
 }
 
 function isEmptyTiptapDocument(contentJson: KnowledgeDocument["contentJson"]): boolean {
@@ -625,6 +657,21 @@ export function NotesView({
     const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
       valueToSave.contentJson,
     ) as KnowledgeDocument["contentJson"];
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: knowledgeHome.id,
+      bookId: knowledgeHome.bookId,
+      parentId: knowledgeHome.parentId,
+      title: normalizedTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      setIsKnowledgeSaving(false);
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeDocumentTitleDuplicate", "同一文件夹里已经有同名文档"),
+      );
+      return;
+    }
 
     const timeout = setTimeout(async () => {
       if (knowledgeSaveVersionRef.current !== saveVersion) return;
@@ -693,6 +740,7 @@ export function NotesView({
   }, [
     knowledgeHome,
     knowledgeDocumentIds,
+    knowledgeDocuments,
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,
@@ -712,6 +760,21 @@ export function NotesView({
     const contentJsonForStorage = canonicalizeKnowledgeAttachmentImageSources(
       knowledgeValue.contentJson,
     ) as KnowledgeDocument["contentJson"];
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: knowledgeHome.id,
+      bookId: knowledgeHome.bookId,
+      parentId: knowledgeHome.parentId,
+      title: normalizedTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      setIsKnowledgeSaving(false);
+      Alert.alert(
+        t("common.error", "错误"),
+        t("notes.knowledgeDocumentTitleDuplicate", "同一文件夹里已经有同名文档"),
+      );
+      return false;
+    }
 
     setIsKnowledgeSaving(true);
     try {
@@ -778,6 +841,7 @@ export function NotesView({
   }, [
     knowledgeHome,
     knowledgeDocumentIds,
+    knowledgeDocuments,
     knowledgeTitle,
     knowledgeTags,
     knowledgeValue,
@@ -916,16 +980,17 @@ export function NotesView({
       setIsKnowledgeDocumentCreating(true);
       try {
         const emptyValue = createEmptyKnowledgeValue();
-        const count = Math.max(
-          1,
-          knowledgeDocuments.filter(
-            (document) => document.type === type && document.parentId === parentId,
-          ).length + 1,
-        );
+        const title = createUniqueKnowledgeDocumentCreateTitle({
+          type,
+          bookId: selectedKnowledgeBookId,
+          parentId,
+          documents: knowledgeDocuments,
+          t,
+        });
         const document = await createKnowledgeDocument({
           bookId: selectedKnowledgeBookId,
           type,
-          title: knowledgeDocumentCreateTitle(type, count, t),
+          title,
           contentJson: emptyValue.contentJson,
           contentMd: "",
           excerpt: undefined,
@@ -1072,12 +1137,30 @@ export function NotesView({
         }
         return;
       }
+      const nextParentId = parentId || undefined;
+      const nextTitle =
+        knowledgeHome?.id === document.id
+          ? knowledgeTitle.trim() || document.title
+          : document.title;
+      const titleValidation = validateKnowledgeDocumentSiblingTitle({
+        documentId: document.id,
+        bookId: document.bookId,
+        parentId: nextParentId,
+        title: nextTitle,
+        documents: knowledgeDocuments,
+      });
+      if (!titleValidation.ok) {
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentTitleDuplicate", "同一文件夹里已经有同名文档"),
+        );
+        return;
+      }
 
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
 
       try {
-        const nextParentId = parentId || undefined;
         await updateKnowledgeDocument(document.id, { parentId: nextParentId });
         const updatedDocument: KnowledgeDocument = {
           ...document,
@@ -1101,13 +1184,27 @@ export function NotesView({
         );
       }
     },
-    [knowledgeDocuments, knowledgeHome?.id, saveActiveKnowledgeDocumentNow, t],
+    [knowledgeDocuments, knowledgeHome?.id, knowledgeTitle, saveActiveKnowledgeDocumentNow, t],
   );
 
   const handleRenameKnowledgeDocument = useCallback(
     async (document: KnowledgeDocument, title: string) => {
       const normalizedTitle = title.trim();
       if (!normalizedTitle || normalizedTitle === document.title) return;
+      const titleValidation = validateKnowledgeDocumentSiblingTitle({
+        documentId: document.id,
+        bookId: document.bookId,
+        parentId: document.parentId,
+        title: normalizedTitle,
+        documents: knowledgeDocuments,
+      });
+      if (!titleValidation.ok) {
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentTitleDuplicate", "同一文件夹里已经有同名文档"),
+        );
+        return;
+      }
 
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
@@ -1145,7 +1242,14 @@ export function NotesView({
         );
       }
     },
-    [knowledgeHome?.id, knowledgeTags, knowledgeValue, saveActiveKnowledgeDocumentNow, t],
+    [
+      knowledgeDocuments,
+      knowledgeHome?.id,
+      knowledgeTags,
+      knowledgeValue,
+      saveActiveKnowledgeDocumentNow,
+      t,
+    ],
   );
 
   const handlePickKnowledgeImageAttachment = useCallback(

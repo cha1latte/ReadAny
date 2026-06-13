@@ -73,6 +73,7 @@ export {
   buildKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
   validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
   hasHighlightNoteContent,
   hasLegacyNoteContent,
   isGeneratedHighlightNoteDocument,
@@ -96,6 +97,8 @@ export type {
   KnowledgeDocumentSnapshot,
   KnowledgeDocumentParentValidation,
   KnowledgeDocumentParentValidationReason,
+  KnowledgeDocumentSiblingTitleConflictReason,
+  KnowledgeDocumentSiblingTitleValidation,
   LegacyNoteProjection,
 } from "./document-utils";
 export {

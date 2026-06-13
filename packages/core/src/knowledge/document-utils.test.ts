@@ -22,6 +22,7 @@ import {
   orderKnowledgeDocuments,
   resolveKnowledgeDocumentPath,
   validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
 } from "./document-utils";
 
 function document(overrides: Partial<KnowledgeDocument>): KnowledgeDocument {
@@ -296,6 +297,87 @@ describe("knowledge document utilities", () => {
       ok: false,
       reason: "book_home_locked",
     });
+  });
+
+  it("rejects empty knowledge document sibling titles", () => {
+    expect(
+      validateKnowledgeDocumentSiblingTitle({
+        title: "   ",
+        documents: [],
+      }),
+    ).toEqual({ ok: false, reason: "empty_title" });
+  });
+
+  it("rejects duplicate document titles in the same folder", () => {
+    const existing = document({
+      id: "existing",
+      bookId: "book-1",
+      parentId: "folder-1",
+      title: "Chapter Notes",
+    });
+
+    expect(
+      validateKnowledgeDocumentSiblingTitle({
+        bookId: "book-1",
+        parentId: "folder-1",
+        title: " chapter   notes ",
+        documents: [existing],
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "duplicate_sibling_title",
+      duplicate: existing,
+    });
+  });
+
+  it("allows the same document title in different folders or books", () => {
+    const sameTitleDifferentFolder = document({
+      id: "folder-copy",
+      bookId: "book-1",
+      parentId: "folder-2",
+      title: "Chapter Notes",
+    });
+    const sameTitleDifferentBook = document({
+      id: "book-copy",
+      bookId: "book-2",
+      parentId: "folder-1",
+      title: "Chapter Notes",
+    });
+
+    expect(
+      validateKnowledgeDocumentSiblingTitle({
+        bookId: "book-1",
+        parentId: "folder-1",
+        title: "Chapter Notes",
+        documents: [sameTitleDifferentFolder, sameTitleDifferentBook],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("allows keeping the current document title and ignores deleted duplicates", () => {
+    const current = document({
+      id: "current",
+      bookId: "book-1",
+      parentId: "folder-1",
+      title: "Chapter Notes",
+    });
+    const deleted = document({
+      id: "deleted",
+      bookId: "book-1",
+      parentId: "folder-1",
+      title: "Chapter Notes",
+      deletedAt: 123,
+    });
+
+    expect(
+      validateKnowledgeDocumentSiblingTitle({
+        documentId: "current",
+        bookId: "book-1",
+        parentId: "folder-1",
+        title: "Chapter Notes",
+        documents: [current, deleted],
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("extracts a heading outline from Tiptap JSON", () => {

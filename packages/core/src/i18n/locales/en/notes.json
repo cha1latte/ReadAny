@@ -188,6 +188,7 @@
     "knowledgeNoDocumentResults": "No matching documents",
     "knowledgeDocumentCreated": "Knowledge document created",
     "knowledgeDocumentCreateFailed": "Failed to create knowledge document",
+    "knowledgeDocumentTitleDuplicate": "A document with this name already exists in this folder.",
     "knowledgeDeleteDocument": "Delete document",
     "knowledgeDocumentDeleteConfirm": "Delete \"{{title}}\"? This will sync to your other devices.",
     "knowledgeDocumentDeleteBlocked": "This document comes from the book home, a highlight, or a legacy note and cannot be deleted directly yet",

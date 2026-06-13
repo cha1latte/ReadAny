@@ -2,6 +2,7 @@ export {
   isTiptapNode,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
+  renderKnowledgeJsonToReadOnlyHtml,
   renderKnowledgeJsonToMarkdown,
 } from "./editor-projection";
 export {
@@ -16,6 +17,7 @@ export type {
 } from "./internal-links";
 export type {
   MarkdownProjectionOptions,
+  ReadOnlyHtmlProjectionOptions,
   TiptapMark,
   TiptapNode,
 } from "./editor-projection";

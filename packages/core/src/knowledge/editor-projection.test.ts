@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   markdownToBasicTiptap,
   normalizeTiptapDocument,
+  renderKnowledgeJsonToReadOnlyHtml,
   renderKnowledgeJsonToMarkdown,
 } from "./editor-projection";
 
@@ -111,6 +112,112 @@ describe("editor projection", () => {
     expect(markdown).toBe(
       "> [!quote] Important Quote\n> Reading is thinking.\n> Source: Chapter 1",
     );
+  });
+
+  it("renders Tiptap JSON to static read-only HTML without exposing unsafe markup", () => {
+    const html = renderKnowledgeJsonToReadOnlyHtml({
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 2 },
+          content: [{ type: "text", text: "Chapter <Notes>" }],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Read " },
+            { type: "text", text: "deeply", marks: [{ type: "bold" }] },
+            { type: "text", text: " and ignore " },
+            {
+              type: "text",
+              text: "bad links",
+              marks: [{ type: "link", attrs: { href: "javascript:alert(1)" } }],
+            },
+            { type: "text", text: "." },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: "doc-1",
+                label: "Linked Note",
+              },
+            },
+            { type: "text", text: " " },
+            {
+              type: "readanySourceReference",
+              attrs: {
+                label: "Chapter 1",
+                cfi: "epubcfi(/6/2)",
+              },
+            },
+          ],
+        },
+        {
+          type: "image",
+          attrs: {
+            attachmentId: "att-1",
+            src: "asset://cover.png",
+            alt: "Cover",
+          },
+        },
+      ],
+    });
+
+    expect(html).toBe(
+      [
+        "<h2>Chapter &lt;Notes&gt;</h2>",
+        "<p>Read <strong>deeply</strong> and ignore bad links.</p>",
+        '<p><span class="readany-internal-link" data-document-id="doc-1" data-target="doc-1">Linked Note</span> <span class="readany-source-reference" data-cfi="epubcfi(/6/2)">Chapter 1</span></p>',
+        '<figure class="readany-image"><img src="readany-attachment://att-1" alt="Cover"><figcaption>Cover</figcaption></figure>',
+      ].join(""),
+    );
+    expect(html).not.toContain("javascript:");
+  });
+
+  it("renders unsupported and future ReadAny cards as safe static fallback cards", () => {
+    const html = renderKnowledgeJsonToReadOnlyHtml({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "customMetric",
+            version: 3,
+            title: "Reading score",
+            text: "Focus: 92%",
+            sourceTitle: "Chapter 4",
+            cfi: "epubcfi(/6/4)",
+            data: { private: "<json>" },
+          },
+        },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "aiSummary",
+            version: 99,
+            title: "Future summary",
+            markdown: "Readable fallback body.",
+          },
+        },
+      ],
+    });
+
+    expect(html).toContain('data-readany-card-type="customMetric"');
+    expect(html).toContain('data-readany-card-state="unsupported"');
+    expect(html).toContain("<h4>Reading score</h4>");
+    expect(html).toContain("<p>Focus: 92%</p>");
+    expect(html).toContain("<dt>Source</dt><dd>Chapter 4</dd>");
+    expect(html).toContain("<dt>CFI</dt><dd>epubcfi(/6/4)</dd>");
+    expect(html).toContain('data-readany-card-type="aiSummary"');
+    expect(html).toContain('data-readany-card-state="future"');
+    expect(html).toContain("v99 newer");
+    expect(html).not.toContain("private");
+    expect(html).not.toContain("&lt;json&gt;");
   });
 
   it("uses card registry fallbacks for built-in ReadAny card types", () => {

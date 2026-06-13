@@ -3,6 +3,7 @@ import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { createKnowledgeAttachmentUri, parseKnowledgeAttachmentUri } from "./attachments";
 import {
   type ReadAnyCardAttrs,
+  createReadAnyCardReadOnlyModel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
   upgradeReadAnyCardAttrs,
@@ -42,6 +43,11 @@ export interface MarkdownImportOptions {
   cardTemplates?: KnowledgeCardTemplate[];
 }
 
+export interface ReadOnlyHtmlProjectionOptions extends MarkdownProjectionOptions {
+  /** CSS class prefix for static read-only renderers. */
+  classPrefix?: string;
+}
+
 function isObject(value: JSONValue | unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -71,6 +77,25 @@ function normalizeTiptapNode(node: TiptapNode): TiptapNode {
 
 function escapeMarkdownText(text: string): string {
   return text.replace(/\u00a0/g, " ");
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHref(value: unknown): string {
+  const href = typeof value === "string" ? value.trim() : "";
+  if (!href || /^javascript:/i.test(href)) return "";
+  return href;
+}
+
+function className(options: ReadOnlyHtmlProjectionOptions, suffix: string): string {
+  return `${options.classPrefix ?? "readany"}-${suffix}`;
 }
 
 function applyMark(markdown: string, mark: TiptapMark): string {
@@ -294,6 +319,209 @@ export function renderKnowledgeJsonToMarkdown(
 ): string {
   const document = normalizeTiptapDocument(content);
   return renderBlock(document, 0, options).trim();
+}
+
+function applyHtmlMark(html: string, mark: TiptapMark): string {
+  if (!html) return html;
+
+  switch (mark.type) {
+    case "bold":
+    case "strong":
+      return `<strong>${html}</strong>`;
+    case "italic":
+    case "em":
+      return `<em>${html}</em>`;
+    case "strike":
+      return `<s>${html}</s>`;
+    case "code":
+      return `<code>${html}</code>`;
+    case "link": {
+      const href = safeHref(mark.attrs?.href);
+      return href ? `<a href="${escapeHtml(href)}" rel="noreferrer">${html}</a>` : html;
+    }
+    default:
+      return html;
+  }
+}
+
+function renderHtmlInternalLink(
+  node: TiptapNode,
+  options: ReadOnlyHtmlProjectionOptions,
+): string {
+  const documentId = typeof node.attrs?.documentId === "string" ? node.attrs.documentId.trim() : "";
+  const targetPath = typeof node.attrs?.targetPath === "string" ? node.attrs.targetPath.trim() : "";
+  const fallbackTarget = targetPath || documentId;
+  const target =
+    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ??
+    fallbackTarget;
+  const label =
+    typeof node.attrs?.label === "string"
+      ? node.attrs.label.trim()
+      : typeof node.attrs?.title === "string"
+        ? node.attrs.title.trim()
+        : target;
+  const attrs = [
+    `class="${className(options, "internal-link")}"`,
+    documentId ? `data-document-id="${escapeHtml(documentId)}"` : "",
+    target ? `data-target="${escapeHtml(target)}"` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return `<span ${attrs}>${escapeHtml(label || "Linked note")}</span>`;
+}
+
+function renderHtmlInline(node: TiptapNode, options: ReadOnlyHtmlProjectionOptions): string {
+  if (node.type === "text") {
+    return (node.marks ?? []).reduce(
+      (html, mark) => applyHtmlMark(html, mark),
+      escapeHtml(node.text ?? ""),
+    );
+  }
+
+  if (node.type === "hardBreak") return "<br>";
+  if (node.type === "readanyInternalLink") return renderHtmlInternalLink(node, options);
+  if (node.type === "readanySourceReference") {
+    const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");
+    const cfi = typeof node.attrs?.cfi === "string" ? node.attrs.cfi.trim() : "";
+    const attrs = [
+      `class="${className(options, "source-reference")}"`,
+      cfi ? `data-cfi="${escapeHtml(cfi)}"` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `<span ${attrs}>${escapeHtml(label)}</span>`;
+  }
+
+  return (node.content ?? []).map((child) => renderHtmlInline(child, options)).join("");
+}
+
+function renderPlainTextHtmlBlock(text: string, options: ReadOnlyHtmlProjectionOptions): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  if (lines.length <= 1) return `<p>${escapeHtml(text)}</p>`;
+  return `<pre class="${className(options, "card-pre")}">${escapeHtml(text)}</pre>`;
+}
+
+function renderReadAnyCardHtml(
+  node: TiptapNode,
+  options: ReadOnlyHtmlProjectionOptions,
+): string {
+  const model = createReadAnyCardReadOnlyModel(node.attrs ?? {}, {
+    body: (node.content ?? [])
+      .map((child) => renderBlock(child, 0, options))
+      .join("\n\n")
+      .trim(),
+    cardTemplates: options.cardTemplates,
+  });
+  const metaItems =
+    model.state === "supported"
+      ? model.metadata.filter((item) => item.key === "source" || item.key === "cfi")
+      : model.metadata;
+  const metadataHtml = metaItems.length
+    ? `<dl class="${className(options, "card-meta-list")}">${metaItems
+        .map(
+          (item) =>
+            `<div><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.value)}</dd></div>`,
+        )
+        .join("")}</dl>`
+    : "";
+  const stateLabel = model.stateLabel
+    ? `<span class="${className(options, "card-state")}">${escapeHtml(model.stateLabel)}</span>`
+    : "";
+  const bodyHtml = model.body
+    ? `<div class="${className(options, "card-body")}">${renderPlainTextHtmlBlock(
+        model.body,
+        options,
+      )}</div>`
+    : "";
+
+  return [
+    `<article class="${className(options, "card")} ${className(options, `card-${model.state}`)}" data-readany-card-type="${escapeHtml(model.cardType)}" data-readany-card-version="${escapeHtml(String(model.version))}" data-readany-card-state="${escapeHtml(model.state)}">`,
+    `<header class="${className(options, "card-header")}"><span class="${className(options, "card-type")}">${escapeHtml(model.cardType)}</span>${stateLabel}<h4>${escapeHtml(model.title)}</h4></header>`,
+    bodyHtml,
+    metadataHtml,
+    "</article>",
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+function renderHtmlListItem(node: TiptapNode, options: ReadOnlyHtmlProjectionOptions): string {
+  const rendered = (node.content ?? [])
+    .map((child) => renderHtmlBlock(child, options))
+    .filter(Boolean)
+    .join("");
+  return `<li>${rendered}</li>`;
+}
+
+function renderHtmlBlock(node: TiptapNode, options: ReadOnlyHtmlProjectionOptions): string {
+  switch (node.type) {
+    case "doc":
+      return (node.content ?? []).map((child) => renderHtmlBlock(child, options)).join("");
+    case "paragraph": {
+      const html = (node.content ?? []).map((child) => renderHtmlInline(child, options)).join("");
+      return html ? `<p>${html}</p>` : "";
+    }
+    case "heading": {
+      const level = Math.min(Math.max(Number(node.attrs?.level ?? 1), 1), 6);
+      const html = (node.content ?? []).map((child) => renderHtmlInline(child, options)).join("");
+      return html ? `<h${level}>${html}</h${level}>` : "";
+    }
+    case "blockquote": {
+      const html = (node.content ?? []).map((child) => renderHtmlBlock(child, options)).join("");
+      return html ? `<blockquote>${html}</blockquote>` : "";
+    }
+    case "bulletList":
+      return `<ul>${(node.content ?? []).map((child) => renderHtmlListItem(child, options)).join("")}</ul>`;
+    case "orderedList":
+      return `<ol>${(node.content ?? []).map((child) => renderHtmlListItem(child, options)).join("")}</ol>`;
+    case "taskList":
+      return `<ul data-type="taskList">${(node.content ?? [])
+        .map((child) => renderHtmlBlock(child, options))
+        .join("")}</ul>`;
+    case "taskItem": {
+      const checked = node.attrs?.checked === true;
+      const html = (node.content ?? []).map((child) => renderHtmlBlock(child, options)).join("");
+      return `<li data-type="taskItem" data-checked="${checked ? "true" : "false"}"><input type="checkbox" disabled${checked ? " checked" : ""}>${html}</li>`;
+    }
+    case "listItem":
+      return renderHtmlListItem(node, options);
+    case "codeBlock": {
+      const language = typeof node.attrs?.language === "string" ? node.attrs.language : "";
+      const code = (node.content ?? [])
+        .map((child) => child.text ?? renderInline(child, options))
+        .join("");
+      const classAttr = language ? ` class="language-${escapeHtml(language)}"` : "";
+      return `<pre><code${classAttr}>${escapeHtml(code)}</code></pre>`;
+    }
+    case "horizontalRule":
+      return "<hr>";
+    case "image": {
+      const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
+      const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
+      const title = typeof node.attrs?.title === "string" ? node.attrs.title : "";
+      const attachmentId =
+        typeof node.attrs?.attachmentId === "string" ? node.attrs.attachmentId : "";
+      const resolvedSrc =
+        options.resolveImageSrc?.(node.attrs ?? {}, src) ||
+        (attachmentId ? createKnowledgeAttachmentUri(attachmentId) : src);
+      if (!resolvedSrc) return "";
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+      const caption = alt ? `<figcaption>${escapeHtml(alt)}</figcaption>` : "";
+      return `<figure class="${className(options, "image")}"><img src="${escapeHtml(resolvedSrc)}" alt="${escapeHtml(alt)}"${titleAttr}>${caption}</figure>`;
+    }
+    case "readanyCard":
+      return renderReadAnyCardHtml(node, options);
+    default:
+      return (node.content ?? []).map((child) => renderHtmlBlock(child, options)).join("");
+  }
+}
+
+export function renderKnowledgeJsonToReadOnlyHtml(
+  content: JSONValue | null | undefined,
+  options: ReadOnlyHtmlProjectionOptions = {},
+): string {
+  const document = normalizeTiptapDocument(content);
+  return renderHtmlBlock(document, options).trim();
 }
 
 function textNode(text: string, marks?: TiptapMark[]): TiptapNode {

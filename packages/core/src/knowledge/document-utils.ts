@@ -40,6 +40,10 @@ export interface KnowledgeDocumentSearchTextOptions extends KnowledgeDocumentPat
   typeLabel?: string;
 }
 
+export interface KnowledgeDocumentTreeSearchOptions extends KnowledgeDocumentPathLabelOptions {
+  getTypeLabel?: (document: KnowledgeDocument) => string;
+}
+
 export interface KnowledgeDocumentMoveTargetOptions extends KnowledgeDocumentPathLabelOptions {
   rootTargetTitle?: string;
 }
@@ -625,6 +629,23 @@ export function createKnowledgeDocumentSearchText(
   ]
     .join(" ")
     .toLowerCase();
+}
+
+export function filterKnowledgeDocumentTreeNodesForSearch(
+  nodes: KnowledgeDocumentTreeNode[],
+  documents: KnowledgeDocument[],
+  query: string,
+  options: KnowledgeDocumentTreeSearchOptions = {},
+): KnowledgeDocumentTreeNode[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  return nodes.filter((node) =>
+    createKnowledgeDocumentSearchText(node.document, documents, {
+      ...options,
+      typeLabel: options.getTypeLabel?.(node.document),
+    }).includes(normalizedQuery),
+  );
 }
 
 export function createKnowledgeDocumentMoveTargets(

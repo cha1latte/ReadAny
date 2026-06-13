@@ -69,11 +69,11 @@ import {
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
   createKnowledgeDocumentMoveTargets,
-  createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createKnowledgeFolderDisplaySections,
   createKnowledgeSummarySourceFingerprint,
   extractKnowledgeDocumentOutline,
+  filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   ensureKnowledgeSourceLink,
@@ -3869,18 +3869,17 @@ function KnowledgeDocumentExplorer({
   }, [activeDocument, documents]);
 
   const visibleSearchNodes = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return [];
-
-    return flattenKnowledgeDocumentTree(tree.roots).filter((node) => {
-      const document = node.document;
-      return createKnowledgeDocumentSearchText(document, documents, {
+    return filterKnowledgeDocumentTreeNodesForSearch(
+      flattenKnowledgeDocumentTree(tree.roots),
+      documents,
+      query,
+      {
         rootTitle: t("notes.knowledgeVaultRoot", "知识库"),
         untitledTitle: t("notes.knowledgeUntitledDocument", "未命名文档"),
         orphanedParentTitle: t("notes.knowledgeOrphanedDocument", "孤立"),
-        typeLabel: knowledgeDocumentTypeLabel(document, t),
-      }).includes(normalizedQuery);
-    });
+        getTypeLabel: (document) => knowledgeDocumentTypeLabel(document, t),
+      },
+    );
   }, [documents, query, t, tree.roots]);
 
   const toggleFolder = useCallback((id: string) => {

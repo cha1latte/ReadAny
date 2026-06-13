@@ -16,6 +16,8 @@ import {
   extractHighlightNoteContentForLegacyField,
   extractKnowledgeDocumentOutline,
   extractLegacyNoteContentForLegacyField,
+  filterKnowledgeDocumentTreeNodesForSearch,
+  flattenKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
   isGeneratedHighlightNoteDocument,
   isGeneratedLegacyNoteDocument,
@@ -243,6 +245,40 @@ describe("knowledge document utilities", () => {
         orphanedParentTitle: "孤立文档",
       }),
     ).toContain("knowledge base / 孤立文档 / loose");
+  });
+
+  it("filters flattened tree nodes by nested vault path and content", () => {
+    const home = document({ id: "home", type: "book_home", title: "Book Home" });
+    const folder = document({ id: "folder", type: "folder", title: "Chapter Notes" });
+    const nestedFolder = document({
+      id: "themes",
+      type: "folder",
+      title: "Themes",
+      parentId: "folder",
+    });
+    const nested = document({
+      id: "nested",
+      title: "Question Log",
+      parentId: "themes",
+      contentMd: "Buried clue about pacing.",
+    });
+    const documents = [nested, nestedFolder, folder, home];
+    const tree = buildKnowledgeDocumentTree(documents, "home");
+    const flatNodes = flattenKnowledgeDocumentTree(tree.roots);
+
+    expect(filterKnowledgeDocumentTreeNodesForSearch(flatNodes, documents, "")).toEqual([]);
+    expect(
+      filterKnowledgeDocumentTreeNodesForSearch(
+        flatNodes,
+        documents,
+        "chapter notes / themes / question",
+      ).map((node) => node.document.id),
+    ).toEqual(["nested"]);
+    expect(
+      filterKnowledgeDocumentTreeNodesForSearch(flatNodes, documents, "buried clue").map(
+        (node) => node.document.id,
+      ),
+    ).toEqual(["nested"]);
   });
 
   it("creates move targets with full paths for duplicate folder names", () => {

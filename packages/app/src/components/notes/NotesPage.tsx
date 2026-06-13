@@ -61,11 +61,11 @@ import {
   canonicalizeKnowledgeAttachmentImageSources,
   collectKnowledgeDocumentSubtree,
   createKnowledgeDocumentMoveTargets,
-  createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createKnowledgeFolderDisplaySections,
   createKnowledgeSummarySourceFingerprint,
   extractKnowledgeDocumentOutline,
+  filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
   ensureKnowledgeSourceLink,
@@ -4206,15 +4206,12 @@ function KnowledgeDocumentExplorer({
     [documents],
   );
   const visibleSearchNodes = useMemo(() => {
-    if (!normalizedQuery) return [];
-    return flatNodes.filter((node) =>
-      createKnowledgeDocumentSearchText(node.document, documents, {
-        rootTitle: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
-        untitledTitle: t("notes.knowledgeUntitledDocument"),
-        orphanedParentTitle: t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" }),
-        typeLabel: knowledgeDocumentTypeLabel(node.document, t),
-      }).includes(normalizedQuery),
-    );
+    return filterKnowledgeDocumentTreeNodesForSearch(flatNodes, documents, normalizedQuery, {
+      rootTitle: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+      untitledTitle: t("notes.knowledgeUntitledDocument"),
+      orphanedParentTitle: t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" }),
+      getTypeLabel: (document) => knowledgeDocumentTypeLabel(document, t),
+    });
   }, [documents, flatNodes, normalizedQuery, t]);
 
   useEffect(() => {

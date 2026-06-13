@@ -22,6 +22,7 @@ import {
   normalizeTiptapDocument,
   READANY_ATTACHMENT_URI_PREFIX,
   renderKnowledgeJsonToMarkdown,
+  updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { cn, generateId } from "@readany/core/utils";
@@ -59,6 +60,7 @@ import {
   Minus,
   Network,
   OctagonX,
+  Pencil,
   Plus,
   Quote,
   Redo2,
@@ -396,6 +398,7 @@ export function KnowledgeEditor({
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const [isTemplateFormOpen, setIsTemplateFormOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
   const [templateMarkdown, setTemplateMarkdown] = useState("");
@@ -778,7 +781,31 @@ export function KnowledgeEditor({
     },
     [canInsertCard, editor],
   );
-  const createAndInsertTemplate = useCallback(async () => {
+
+  const resetTemplateForm = useCallback(() => {
+    setEditingTemplateId(null);
+    setTemplateName("");
+    setTemplateDescription("");
+    setTemplateMarkdown("");
+    setTemplateSaveError(null);
+  }, []);
+
+  const openNewTemplateForm = useCallback(() => {
+    resetTemplateForm();
+    setIsTemplateFormOpen(true);
+  }, [resetTemplateForm]);
+
+  const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
+    const attrs = createReadAnyCardAttrsFromTemplate(template);
+    setEditingTemplateId(template.id);
+    setTemplateName(getReadAnyCardTemplateInsertLabel(template));
+    setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
+    setTemplateMarkdown(attrs.markdown ?? attrs.text ?? "");
+    setTemplateSaveError(null);
+    setIsTemplateFormOpen(true);
+  }, []);
+
+  const saveTemplate = useCallback(async () => {
     if (!editor || !canUse("readAnyCards") || isSavingTemplate) return;
     const name = templateName.trim();
     if (!name) return;
@@ -786,45 +813,74 @@ export function KnowledgeEditor({
     setIsSavingTemplate(true);
     setTemplateSaveError(null);
     try {
-      const template = createCustomReadAnyCardTemplate({
-        id: `card-template-${generateId()}`,
-        name,
-        description: templateDescription,
-        markdown: templateMarkdown,
-      });
+      const editingTemplate = editingTemplateId
+        ? cardTemplates.find((template) => template.id === editingTemplateId)
+        : null;
+      if (editingTemplateId && !editingTemplate) {
+        throw new Error(
+          t("notes.knowledgeCustomCardMissing", {
+            defaultValue: "This custom card template no longer exists.",
+          }),
+        );
+      }
+      const template = editingTemplate
+        ? updateCustomReadAnyCardTemplate({
+            template: editingTemplate,
+            name,
+            description: templateDescription,
+            markdown: templateMarkdown,
+          })
+        : createCustomReadAnyCardTemplate({
+            id: `card-template-${generateId()}`,
+            name,
+            description: templateDescription,
+            markdown: templateMarkdown,
+          });
+
       await upsertKnowledgeCardTemplate(template);
       setCardTemplates((current) =>
         [...current.filter((item) => item.id !== template.id), template].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
       );
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: "readanyCard",
-          attrs: createReadAnyCardAttrsFromTemplate(template),
-        })
-        .run();
-      setTemplateName("");
-      setTemplateDescription("");
-      setTemplateMarkdown("");
+      if (!editingTemplate) {
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "readanyCard",
+            attrs: createReadAnyCardAttrsFromTemplate(template),
+          })
+          .run();
+        setIsInsertOpen(false);
+        setIsBlockInsertOpen(false);
+      }
+      resetTemplateForm();
       setIsTemplateFormOpen(false);
-      setIsInsertOpen(false);
-      setIsBlockInsertOpen(false);
     } catch (error) {
-      console.warn("[KnowledgeEditor] Failed to create card template:", error);
+      console.warn("[KnowledgeEditor] Failed to save card template:", error);
       setTemplateSaveError(
         error instanceof Error
           ? error.message
           : t("notes.knowledgeCustomCardCreateFailed", {
-              defaultValue: "Failed to create custom card.",
+              defaultValue: "Failed to save custom card.",
             }),
       );
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [canUse, editor, isSavingTemplate, t, templateDescription, templateMarkdown, templateName]);
+  }, [
+    canUse,
+    cardTemplates,
+    editingTemplateId,
+    editor,
+    isSavingTemplate,
+    resetTemplateForm,
+    t,
+    templateDescription,
+    templateMarkdown,
+    templateName,
+  ]);
   const disableTemplate = useCallback(
     async (template: KnowledgeCardTemplate) => {
       const confirmed = window.confirm(
@@ -838,6 +894,10 @@ export function KnowledgeEditor({
       try {
         await disableKnowledgeCardTemplate(template.id);
         setCardTemplates((current) => current.filter((item) => item.id !== template.id));
+        if (editingTemplateId === template.id) {
+          resetTemplateForm();
+          setIsTemplateFormOpen(false);
+        }
       } catch (error) {
         console.warn("[KnowledgeEditor] Failed to disable card template:", error);
         setTemplateSaveError(
@@ -849,7 +909,7 @@ export function KnowledgeEditor({
         );
       }
     },
-    [t],
+    [editingTemplateId, resetTemplateForm, t],
   );
 
   if (!editor) return null;
@@ -1414,22 +1474,40 @@ export function KnowledgeEditor({
                           </span>
                         </button>
                         {card.template ? (
-                          <button
-                            type="button"
-                            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover/card:opacity-100 focus:opacity-100"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void disableTemplate(card.template!);
-                            }}
-                            aria-label={t("notes.knowledgeCustomCardDisable", {
-                              defaultValue: "Remove custom card",
-                            })}
-                            title={t("notes.knowledgeCustomCardDisable", {
-                              defaultValue: "Remove custom card",
-                            })}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="mr-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
+                            <button
+                              type="button"
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openTemplateEditForm(card.template!);
+                              }}
+                              aria-label={t("notes.knowledgeCustomCardEdit", {
+                                defaultValue: "Edit custom card",
+                              })}
+                              title={t("notes.knowledgeCustomCardEdit", {
+                                defaultValue: "Edit custom card",
+                              })}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void disableTemplate(card.template!);
+                              }}
+                              aria-label={t("notes.knowledgeCustomCardDisable", {
+                                defaultValue: "Remove custom card",
+                              })}
+                              title={t("notes.knowledgeCustomCardDisable", {
+                                defaultValue: "Remove custom card",
+                              })}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                     );
@@ -1442,9 +1520,30 @@ export function KnowledgeEditor({
                           className="space-y-2 rounded-md bg-muted/25 p-2"
                           onSubmit={(event) => {
                             event.preventDefault();
-                            void createAndInsertTemplate();
+                            void saveTemplate();
                           }}
                         >
+                          <div className="rounded-md border border-border/45 bg-background/70 px-2.5 py-2">
+                            <p className="text-xs font-semibold text-foreground">
+                              {editingTemplateId
+                                ? t("notes.knowledgeCustomCardEdit", {
+                                    defaultValue: "Edit custom card",
+                                  })
+                                : t("notes.knowledgeCustomCardNew", {
+                                    defaultValue: "New custom card",
+                                  })}
+                            </p>
+                            <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                              {editingTemplateId
+                                ? t("notes.knowledgeCustomCardEditHint", {
+                                    defaultValue:
+                                      "Updates future insertions. Cards already in documents stay unchanged.",
+                                  })
+                                : t("notes.knowledgeCustomCardNewHint", {
+                                    defaultValue: "Create a reusable structure that syncs.",
+                                  })}
+                            </p>
+                          </div>
                           <div className="space-y-1">
                             <label
                               htmlFor="knowledge-custom-card-name"
@@ -1516,8 +1615,8 @@ export function KnowledgeEditor({
                               type="button"
                               className="h-7 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                               onClick={() => {
+                                resetTemplateForm();
                                 setIsTemplateFormOpen(false);
-                                setTemplateSaveError(null);
                               }}
                             >
                               {t("common.cancel")}
@@ -1529,9 +1628,13 @@ export function KnowledgeEditor({
                             >
                               {isSavingTemplate
                                 ? t("common.saving", { defaultValue: "Saving..." })
-                                : t("notes.knowledgeCustomCardCreate", {
-                                    defaultValue: "Create card",
-                                  })}
+                                : editingTemplateId
+                                  ? t("notes.knowledgeCustomCardSave", {
+                                      defaultValue: "Save card",
+                                    })
+                                  : t("notes.knowledgeCustomCardCreate", {
+                                      defaultValue: "Create card",
+                                    })}
                             </button>
                           </div>
                         </form>
@@ -1539,7 +1642,7 @@ export function KnowledgeEditor({
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-popover-foreground transition-colors hover:bg-muted"
-                          onClick={() => setIsTemplateFormOpen(true)}
+                          onClick={openNewTemplateForm}
                         >
                           <Sparkles className="h-3.5 w-3.5 text-primary" />
                           <span className="min-w-0">

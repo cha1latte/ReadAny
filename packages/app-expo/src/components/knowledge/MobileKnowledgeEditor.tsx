@@ -3,6 +3,7 @@ import {
   BookOpenIcon,
   BrainIcon,
   CodeIcon,
+  EditIcon,
   HashIcon,
   Heading1Icon,
   Heading2Icon,
@@ -56,6 +57,7 @@ import {
   normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
   saveKnowledgeEditorDraft,
+  updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
 import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
@@ -357,6 +359,7 @@ export function MobileKnowledgeEditor({
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const [isTemplateFormOpen, setIsTemplateFormOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
   const [templateMarkdown, setTemplateMarkdown] = useState("");
@@ -875,7 +878,31 @@ export function MobileKnowledgeEditor({
     },
     [canInsertCard, runCommand],
   );
-  const createAndInsertTemplate = useCallback(async () => {
+
+  const resetTemplateForm = useCallback(() => {
+    setEditingTemplateId(null);
+    setTemplateName("");
+    setTemplateDescription("");
+    setTemplateMarkdown("");
+    setTemplateSaveError(null);
+  }, []);
+
+  const openNewTemplateForm = useCallback(() => {
+    resetTemplateForm();
+    setIsTemplateFormOpen(true);
+  }, [resetTemplateForm]);
+
+  const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
+    const attrs = createReadAnyCardAttrsFromTemplate(template);
+    setEditingTemplateId(template.id);
+    setTemplateName(getReadAnyCardTemplateInsertLabel(template));
+    setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
+    setTemplateMarkdown((attrs.markdown ?? attrs.text ?? "") as string);
+    setTemplateSaveError(null);
+    setIsTemplateFormOpen(true);
+  }, []);
+
+  const saveTemplate = useCallback(async () => {
     if (!canUse("readAnyCards") || isSavingTemplate) return;
     const name = templateName.trim();
     if (!name) return;
@@ -883,41 +910,58 @@ export function MobileKnowledgeEditor({
     setIsSavingTemplate(true);
     setTemplateSaveError(null);
     try {
-      const template = createCustomReadAnyCardTemplate({
-        id: `card-template-${generateId()}`,
-        name,
-        description: templateDescription,
-        markdown: templateMarkdown,
-      });
+      const editingTemplate = editingTemplateId
+        ? cardTemplates.find((template) => template.id === editingTemplateId)
+        : null;
+      if (editingTemplateId && !editingTemplate) {
+        throw new Error(t("notes.knowledgeCustomCardMissing", "这个自定义卡片模板已经不存在"));
+      }
+      const template = editingTemplate
+        ? updateCustomReadAnyCardTemplate({
+            template: editingTemplate,
+            name,
+            description: templateDescription,
+            markdown: templateMarkdown,
+          })
+        : createCustomReadAnyCardTemplate({
+            id: `card-template-${generateId()}`,
+            name,
+            description: templateDescription,
+            markdown: templateMarkdown,
+          });
+
       await upsertKnowledgeCardTemplate(template);
       setCardTemplates((current) =>
         [...current.filter((item) => item.id !== template.id), template].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
       );
-      runCommand(
-        "insertCard",
-        createReadAnyCardAttrsFromTemplate(template) as Record<string, unknown>,
-      );
-      setTemplateName("");
-      setTemplateDescription("");
-      setTemplateMarkdown("");
+      if (!editingTemplate) {
+        runCommand(
+          "insertCard",
+          createReadAnyCardAttrsFromTemplate(template) as Record<string, unknown>,
+        );
+        setShowCardMenu(false);
+        setShowBlockInsertMenu(false);
+      }
+      resetTemplateForm();
       setIsTemplateFormOpen(false);
-      setShowCardMenu(false);
-      setShowBlockInsertMenu(false);
     } catch (error) {
-      console.warn("[MobileKnowledgeEditor] Failed to create card template:", error);
+      console.warn("[MobileKnowledgeEditor] Failed to save card template:", error);
       setTemplateSaveError(
         error instanceof Error
           ? error.message
-          : t("notes.knowledgeCustomCardCreateFailed", "创建自定义卡片失败"),
+          : t("notes.knowledgeCustomCardCreateFailed", "保存自定义卡片失败"),
       );
     } finally {
       setIsSavingTemplate(false);
     }
   }, [
     canUse,
+    cardTemplates,
+    editingTemplateId,
     isSavingTemplate,
+    resetTemplateForm,
     runCommand,
     t,
     templateDescription,
@@ -945,6 +989,10 @@ export function MobileKnowledgeEditor({
                   setCardTemplates((current) =>
                     current.filter((item) => item.id !== template.id),
                   );
+                  if (editingTemplateId === template.id) {
+                    resetTemplateForm();
+                    setIsTemplateFormOpen(false);
+                  }
                 } catch (error) {
                   console.warn("[MobileKnowledgeEditor] Failed to disable card template:", error);
                   setTemplateSaveError(
@@ -959,7 +1007,7 @@ export function MobileKnowledgeEditor({
         ],
       );
     },
-    [t],
+    [editingTemplateId, resetTemplateForm, t],
   );
 
   const handleFallbackChange = useCallback(
@@ -1960,17 +2008,30 @@ export function MobileKnowledgeEditor({
                         </View>
                       </TouchableOpacity>
                       {card.template ? (
-                        <TouchableOpacity
-                          style={styles.cardTemplateRemoveButton}
-                          activeOpacity={0.72}
-                          onPress={() => disableTemplate(card.template!)}
-                          accessibilityLabel={t(
-                            "notes.knowledgeCustomCardDisable",
-                            "移除自定义卡片",
-                          )}
-                        >
-                          <Trash2Icon size={15} color={colors.destructive} />
-                        </TouchableOpacity>
+                        <View style={styles.cardTemplateActions}>
+                          <TouchableOpacity
+                            style={styles.cardTemplateEditButton}
+                            activeOpacity={0.72}
+                            onPress={() => openTemplateEditForm(card.template!)}
+                            accessibilityLabel={t(
+                              "notes.knowledgeCustomCardEdit",
+                              "编辑自定义卡片",
+                            )}
+                          >
+                            <EditIcon size={15} color={colors.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.cardTemplateRemoveButton}
+                            activeOpacity={0.72}
+                            onPress={() => disableTemplate(card.template!)}
+                            accessibilityLabel={t(
+                              "notes.knowledgeCustomCardDisable",
+                              "移除自定义卡片",
+                            )}
+                          >
+                            <Trash2Icon size={15} color={colors.destructive} />
+                          </TouchableOpacity>
+                        </View>
                       ) : null}
                     </View>
                   );
@@ -1979,6 +2040,24 @@ export function MobileKnowledgeEditor({
                   <View style={styles.cardTemplateSection}>
                     {isTemplateFormOpen ? (
                       <View style={styles.cardTemplateForm}>
+                        <View style={styles.cardTemplateFormHeader}>
+                          <Text style={styles.cardTemplateFormTitle}>
+                            {editingTemplateId
+                              ? t("notes.knowledgeCustomCardEdit", "编辑自定义卡片")
+                              : t("notes.knowledgeCustomCardNew", "新建自定义卡片")}
+                          </Text>
+                          <Text style={styles.cardTemplateFormHint}>
+                            {editingTemplateId
+                              ? t(
+                                  "notes.knowledgeCustomCardEditHint",
+                                  "只影响之后插入的卡片，文档里已有的卡片保持不变。",
+                                )
+                              : t(
+                                  "notes.knowledgeCustomCardNewHint",
+                                  "创建一个可同步复用的结构。",
+                                )}
+                          </Text>
+                        </View>
                         <Text style={styles.cardTemplateLabel}>
                           {t("notes.knowledgeCustomCardName", "卡片名称")}
                         </Text>
@@ -2030,8 +2109,8 @@ export function MobileKnowledgeEditor({
                           <TouchableOpacity
                             style={styles.linkGhostButton}
                             onPress={() => {
+                              resetTemplateForm();
                               setIsTemplateFormOpen(false);
-                              setTemplateSaveError(null);
                             }}
                             activeOpacity={0.75}
                           >
@@ -2042,14 +2121,16 @@ export function MobileKnowledgeEditor({
                               styles.linkPrimaryButton,
                               (!templateName.trim() || isSavingTemplate) && styles.disabledButton,
                             ]}
-                            onPress={createAndInsertTemplate}
+                            onPress={saveTemplate}
                             activeOpacity={0.82}
                             disabled={!templateName.trim() || isSavingTemplate}
                           >
                             <Text style={styles.linkPrimaryText}>
                               {isSavingTemplate
                                 ? t("common.saving", "保存中...")
-                                : t("notes.knowledgeCustomCardCreate", "创建卡片")}
+                                : editingTemplateId
+                                  ? t("notes.knowledgeCustomCardSave", "保存卡片")
+                                  : t("notes.knowledgeCustomCardCreate", "创建卡片")}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -2058,7 +2139,7 @@ export function MobileKnowledgeEditor({
                       <TouchableOpacity
                         style={[styles.cardOption, styles.customCardOption]}
                         activeOpacity={0.78}
-                        onPress={() => setIsTemplateFormOpen(true)}
+                        onPress={openNewTemplateForm}
                       >
                         <View style={styles.cardOptionIcon}>
                           <SparklesIcon size={18} color={colors.primary} />
@@ -2600,6 +2681,25 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       backgroundColor: withOpacity(colors.muted, 0.28),
       padding: 10,
     },
+    cardTemplateFormHeader: {
+      gap: 3,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.75),
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.background, 0.74),
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    cardTemplateFormTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateFormHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 17,
+    },
     cardTemplateLabel: {
       color: colors.mutedForeground,
       fontSize: fontSize.xs,
@@ -2661,6 +2761,19 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.mutedForeground,
       fontSize: fontSize.xs,
       lineHeight: 17,
+    },
+    cardTemplateActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    cardTemplateEditButton: {
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.primary, 0.09),
     },
     cardTemplateRemoveButton: {
       width: 34,

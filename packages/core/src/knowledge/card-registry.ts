@@ -46,6 +46,14 @@ export interface CreateCustomReadAnyCardTemplateInput {
   now?: number;
 }
 
+export interface UpdateCustomReadAnyCardTemplateInput {
+  template: KnowledgeCardTemplate;
+  name: string;
+  description?: string;
+  markdown?: string;
+  now?: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -445,6 +453,41 @@ export function createCustomReadAnyCardTemplate({
     builtIn: false,
     enabled: true,
     createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function updateCustomReadAnyCardTemplate({
+  template,
+  name,
+  description,
+  markdown,
+  now = Date.now(),
+}: UpdateCustomReadAnyCardTemplateInput): KnowledgeCardTemplate {
+  if (template.builtIn) {
+    throw new Error("Built-in card templates cannot be edited.");
+  }
+
+  const trimmedName = name.trim();
+  const title = trimmedName || template.name || "Custom card";
+  const existingSchema = (templateSchema(template) as Record<string, JSONValue>) ?? {};
+  const schemaJson: Record<string, JSONValue> = {
+    ...existingSchema,
+    cardType: `custom:${template.id}`,
+    insertLabel: title,
+    title,
+    markdown: markdown?.trim() ?? "",
+  };
+  const trimmedDescription = description?.trim();
+  if (trimmedDescription) schemaJson.description = trimmedDescription;
+  else delete schemaJson.description;
+
+  return {
+    ...template,
+    name: title,
+    version: Math.max(1, Math.floor(template.version || 1)) + 1,
+    schemaJson,
+    builtIn: false,
     updatedAt: now,
   };
 }

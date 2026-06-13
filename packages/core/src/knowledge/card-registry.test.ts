@@ -8,6 +8,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
+  updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
 } from "./card-registry";
 
@@ -255,5 +256,76 @@ describe("ReadAny card registry", () => {
       title: "Reading Question",
       markdown: "Question:\nAnswer:",
     });
+  });
+
+  it("updates custom card templates without changing their stable card type", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-reading-question",
+      name: "Reading Question",
+      description: "Track a question and answer.",
+      markdown: "Question:\nAnswer:",
+      now: 123,
+    });
+
+    const updated = updateCustomReadAnyCardTemplate({
+      template: {
+        ...template,
+        schemaJson: {
+          ...(template.schemaJson as Record<string, unknown>),
+          attrs: {
+            data: { tone: "short" },
+          },
+        },
+      },
+      name: "Reading Prompt",
+      description: "",
+      markdown: "Prompt:\nResponse:",
+      now: 456,
+    });
+
+    expect(updated).toMatchObject({
+      id: "template-reading-question",
+      name: "Reading Prompt",
+      version: 2,
+      builtIn: false,
+      enabled: true,
+      createdAt: 123,
+      updatedAt: 456,
+      schemaJson: {
+        cardType: "custom:template-reading-question",
+        insertLabel: "Reading Prompt",
+        title: "Reading Prompt",
+        markdown: "Prompt:\nResponse:",
+        attrs: {
+          data: { tone: "short" },
+        },
+      },
+    });
+    expect((updated.schemaJson as Record<string, unknown>).description).toBeUndefined();
+    expect(createReadAnyCardAttrsFromTemplate(updated)).toEqual({
+      cardType: "custom:template-reading-question",
+      version: 2,
+      title: "Reading Prompt",
+      markdown: "Prompt:\nResponse:",
+      data: { tone: "short" },
+    });
+  });
+
+  it("rejects edits to built-in card templates", () => {
+    expect(() =>
+      updateCustomReadAnyCardTemplate({
+        template: {
+          id: "callout",
+          name: "Callout",
+          version: 1,
+          schemaJson: {},
+          builtIn: true,
+          enabled: true,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        name: "Edited",
+      }),
+    ).toThrow("Built-in card templates cannot be edited.");
   });
 });

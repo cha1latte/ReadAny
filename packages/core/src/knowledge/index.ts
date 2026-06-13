@@ -114,6 +114,7 @@ export {
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
+  updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
 } from "./card-registry";
 export type {

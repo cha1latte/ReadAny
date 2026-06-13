@@ -631,6 +631,16 @@ export function createKnowledgeDocumentSearchText(
     .toLowerCase();
 }
 
+function knowledgeSearchQueryMatchesText(searchText: string, normalizedQuery: string): boolean {
+  if (searchText.includes(normalizedQuery)) return true;
+
+  const tokens = normalizedQuery
+    .split(/[\s/\\>]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  return tokens.length > 1 && tokens.every((token) => searchText.includes(token));
+}
+
 export function filterKnowledgeDocumentTreeNodesForSearch(
   nodes: KnowledgeDocumentTreeNode[],
   documents: KnowledgeDocument[],
@@ -641,10 +651,13 @@ export function filterKnowledgeDocumentTreeNodesForSearch(
   if (!normalizedQuery) return [];
 
   return nodes.filter((node) =>
-    createKnowledgeDocumentSearchText(node.document, documents, {
-      ...options,
-      typeLabel: options.getTypeLabel?.(node.document),
-    }).includes(normalizedQuery),
+    knowledgeSearchQueryMatchesText(
+      createKnowledgeDocumentSearchText(node.document, documents, {
+        ...options,
+        typeLabel: options.getTypeLabel?.(node.document),
+      }),
+      normalizedQuery,
+    ),
   );
 }
 

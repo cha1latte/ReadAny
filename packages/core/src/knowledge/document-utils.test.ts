@@ -275,6 +275,13 @@ describe("knowledge document utilities", () => {
       ).map((node) => node.document.id),
     ).toEqual(["nested"]);
     expect(
+      filterKnowledgeDocumentTreeNodesForSearch(
+        flatNodes,
+        documents,
+        "chapter notes themes question",
+      ).map((node) => node.document.id),
+    ).toEqual(["nested"]);
+    expect(
       filterKnowledgeDocumentTreeNodesForSearch(flatNodes, documents, "buried clue").map(
         (node) => node.document.id,
       ),

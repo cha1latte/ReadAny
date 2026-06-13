@@ -128,7 +128,7 @@ describe("knowledge vault path fidelity", () => {
     const searchMatches = filterKnowledgeDocumentTreeNodesForSearch(
       flattenedNodes,
       afterMove,
-      "chapter notes / themes / question",
+      "chapter notes themes question",
     );
     expect(searchMatches.map((node) => node.document.id)).toEqual([movedNote.id]);
 

@@ -608,6 +608,31 @@ function KnowledgeProposalCard({
         preview.action === "link" ? "知识关联" : "知识文档",
       );
   const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
+  const previewContent = preview.contentPreview
+    ? preview.contentPreview.length > 520
+      ? `${preview.contentPreview.slice(0, 520)}...`
+      : preview.contentPreview
+    : "";
+  const previewMarkdownStyles = useMemo(
+    () => ({
+      body: s.proposalPreviewMarkdownBody,
+      paragraph: s.proposalPreviewMarkdownParagraph,
+      heading1: s.proposalPreviewMarkdownHeading,
+      heading2: s.proposalPreviewMarkdownHeading,
+      heading3: s.proposalPreviewMarkdownHeading,
+      strong: s.proposalPreviewMarkdownStrong,
+      em: s.proposalPreviewMarkdownEm,
+      link: s.proposalPreviewMarkdownLink,
+      blockquote: s.proposalPreviewMarkdownQuote,
+      bullet_list: s.proposalPreviewMarkdownList,
+      ordered_list: s.proposalPreviewMarkdownList,
+      list_item: s.proposalPreviewMarkdownListItem,
+      code_inline: s.proposalPreviewMarkdownCode,
+      code_block: s.proposalPreviewMarkdownCodeBlock,
+      fence: s.proposalPreviewMarkdownCodeBlock,
+    }),
+    [s],
+  );
 
   return (
     <View style={s.proposalCard}>
@@ -686,11 +711,9 @@ function KnowledgeProposalCard({
             <Text style={s.proposalMetaLabel}>
               {t("knowledgeProposal.contentPreview", "内容预览")}
             </Text>
-            <Text style={s.proposalPreviewText} numberOfLines={6}>
-              {preview.contentPreview.length > 520
-                ? `${preview.contentPreview.slice(0, 520)}...`
-                : preview.contentPreview}
-            </Text>
+            <View style={s.proposalPreviewBox}>
+              <MarkdownRenderer content={previewContent} styleOverrides={previewMarkdownStyles} />
+            </View>
           </View>
         ) : null}
 
@@ -1173,15 +1196,76 @@ const makeToolStyles = (colors: ThemeColors) =>
     proposalPreviewBlock: {
       gap: 5,
     },
-    proposalPreviewText: {
+    proposalPreviewBox: {
       borderWidth: 0.5,
       borderColor: colors.border,
       backgroundColor: withOpacity(colors.muted, 0.45),
       borderRadius: radius.sm,
       padding: 8,
+      maxHeight: 158,
+      overflow: "hidden",
+    },
+    proposalPreviewMarkdownBody: {
       fontSize: fs.xs,
       lineHeight: 17,
       color: colors.foreground,
+    },
+    proposalPreviewMarkdownParagraph: {
+      marginTop: 0,
+      marginBottom: 6,
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: colors.foreground,
+    },
+    proposalPreviewMarkdownHeading: {
+      marginTop: 0,
+      marginBottom: 6,
+      fontSize: fs.sm,
+      lineHeight: 18,
+      color: colors.foreground,
+      fontWeight: fw.semibold,
+    },
+    proposalPreviewMarkdownStrong: {
+      fontWeight: fw.bold,
+    },
+    proposalPreviewMarkdownEm: {
+      fontStyle: "italic",
+    },
+    proposalPreviewMarkdownLink: {
+      color: colors.primary,
+      textDecorationLine: "none",
+    },
+    proposalPreviewMarkdownQuote: {
+      borderLeftWidth: 2,
+      borderLeftColor: withOpacity(colors.primary, 0.35),
+      marginVertical: 4,
+      paddingLeft: 8,
+    },
+    proposalPreviewMarkdownList: {
+      marginVertical: 3,
+    },
+    proposalPreviewMarkdownListItem: {
+      marginBottom: 3,
+      flexDirection: "row",
+    },
+    proposalPreviewMarkdownCode: {
+      borderRadius: radius.sm,
+      backgroundColor: colors.muted,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      color: colors.foreground,
+      fontFamily: "Menlo",
+      fontSize: fs.xs,
+    },
+    proposalPreviewMarkdownCodeBlock: {
+      borderRadius: radius.sm,
+      backgroundColor: colors.muted,
+      padding: 8,
+      color: colors.foreground,
+      fontFamily: "Menlo",
+      fontSize: fs.xs,
+      lineHeight: 16,
+      marginVertical: 4,
     },
     proposalApplyButton: {
       alignSelf: "flex-end",

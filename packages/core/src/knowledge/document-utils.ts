@@ -36,6 +36,10 @@ export interface KnowledgeDocumentPathLabelOptions {
   separator?: string;
 }
 
+export interface KnowledgeDocumentSearchTextOptions extends KnowledgeDocumentPathLabelOptions {
+  typeLabel?: string;
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -509,6 +513,27 @@ export function formatKnowledgeDocumentPath(
   }
 
   return [rootTitle, ...segments].filter(Boolean).join(separator);
+}
+
+export function createKnowledgeDocumentSearchText(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  options: KnowledgeDocumentSearchTextOptions = {},
+): string {
+  return [
+    formatKnowledgeDocumentPath(document, documents, {
+      ...options,
+      includeOrphanedParent: options.includeOrphanedParent ?? true,
+    }),
+    document.title,
+    options.typeLabel ?? document.type,
+    document.excerpt ?? "",
+    document.summaryMd ?? "",
+    document.contentMd,
+    ...document.tags,
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 export type KnowledgeDocumentParentValidationReason =

@@ -5,6 +5,7 @@ import {
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
+  createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
@@ -145,6 +146,36 @@ describe("knowledge document utilities", () => {
         untitledTitle: "未命名文档",
       }),
     ).toBe("知识库 / Ideas / 未命名文档");
+  });
+
+  it("includes vault paths and orphan context in document search text", () => {
+    const folder = document({ id: "folder", type: "folder", title: "Chapter Notes" });
+    const nested = document({
+      id: "nested",
+      title: "Question Log",
+      parentId: "folder",
+      contentMd: "A note about pacing.",
+      tags: ["trail"],
+    });
+    const orphan = document({
+      id: "orphan",
+      title: "Loose",
+      parentId: "missing",
+      excerpt: "Recovered after sync",
+    });
+
+    expect(
+      createKnowledgeDocumentSearchText(nested, [folder, nested], {
+        rootTitle: "知识库",
+        typeLabel: "文档",
+      }),
+    ).toContain("知识库 / chapter notes / question log");
+    expect(createKnowledgeDocumentSearchText(nested, [folder, nested])).toContain("trail");
+    expect(
+      createKnowledgeDocumentSearchText(orphan, [orphan], {
+        orphanedParentTitle: "孤立文档",
+      }),
+    ).toContain("knowledge base / 孤立文档 / loose");
   });
 
   it("validates document parent moves", () => {

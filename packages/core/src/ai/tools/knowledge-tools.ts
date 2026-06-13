@@ -11,6 +11,7 @@ import {
   searchKnowledgeDocuments,
 } from "../../db/database";
 import {
+  createKnowledgeDocumentSearchText,
   formatKnowledgeDocumentPath,
   orderKnowledgeDocuments,
   validateKnowledgeDocumentParent,
@@ -228,17 +229,23 @@ function createSnippet(document: KnowledgeDocument, query: string): string {
   return `${prefix}${source.slice(start, end)}${suffix}`;
 }
 
-function scoreDocument(document: KnowledgeDocument, query: string): number {
+function scoreDocument(
+  document: KnowledgeDocument,
+  query: string,
+  documentsById = createDocumentMap([document]),
+): number {
   if (!query) return 1;
 
   let score = 0;
   const title = document.title.toLowerCase();
+  const path = createDocumentPath(document, documentsById).toLowerCase();
   const excerpt = (document.excerpt || "").toLowerCase();
   const summary = (document.summaryMd || "").toLowerCase();
   const content = document.contentMd.toLowerCase();
   const tags = document.tags.join(" ").toLowerCase();
 
   if (title.includes(query)) score += 8;
+  if (path.includes(query)) score += 6;
   if (tags.includes(query)) score += 5;
   if (excerpt.includes(query)) score += 3;
   if (summary.includes(query)) score += 2;
@@ -350,7 +357,8 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
       },
       query: {
         type: "string",
-        description: "Keyword or phrase to search for in titles, tags, excerpts, and content",
+        description:
+          "Keyword or phrase to search for in titles, vault paths, tags, excerpts, and content",
       },
       bookId: {
         type: "string",
@@ -383,9 +391,25 @@ export function createSearchKnowledgeBaseTool(): ToolDefinition {
       });
       const documentsById = createDocumentMap([...pathContextDocuments, ...documents]);
       const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
+      const pathMatchedDocuments = query
+        ? pathContextDocuments.filter((document) => {
+            if (type && document.type !== type) return false;
+            return createKnowledgeDocumentSearchText(document, [...documentsById.values()], {
+              rootTitle: KNOWLEDGE_ROOT_TITLE,
+              untitledTitle: UNTITLED_DOCUMENT_TITLE,
+              orphanedParentTitle: ORPHANED_PARENT_TITLE,
+              includeOrphanedParent: true,
+            }).includes(query);
+          })
+        : [];
+      const candidateDocuments = Array.from(
+        new Map(
+          [...documents, ...pathMatchedDocuments].map((document) => [document.id, document]),
+        ).values(),
+      );
 
-      const scored = documents
-        .map((document) => ({ document, score: scoreDocument(document, query) }))
+      const scored = candidateDocuments
+        .map((document) => ({ document, score: scoreDocument(document, query, documentsById) }))
         .filter((item) => item.score > 0)
         .sort((a, b) => b.score - a.score || b.document.updatedAt - a.document.updatedAt);
 

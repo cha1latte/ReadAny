@@ -58,6 +58,7 @@ import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
+  createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
   extractKnowledgeDocumentOutline,
@@ -3561,21 +3562,6 @@ function KnowledgePathInline({
   );
 }
 
-function knowledgeDocumentSearchText(
-  document: KnowledgeDocument,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  return [
-    document.title,
-    knowledgeDocumentTypeLabel(document, t),
-    document.excerpt ?? "",
-    document.contentMd,
-    ...document.tags,
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
 function KnowledgeDocumentExplorer({
   documents,
   activeDocumentId,
@@ -3676,9 +3662,14 @@ function KnowledgeDocumentExplorer({
   const visibleSearchNodes = useMemo(() => {
     if (!normalizedQuery) return [];
     return flatNodes.filter((node) =>
-      knowledgeDocumentSearchText(node.document, t).includes(normalizedQuery),
+      createKnowledgeDocumentSearchText(node.document, documents, {
+        rootTitle: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+        untitledTitle: t("notes.knowledgeUntitledDocument"),
+        orphanedParentTitle: t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" }),
+        typeLabel: knowledgeDocumentTypeLabel(node.document, t),
+      }).includes(normalizedQuery),
     );
-  }, [flatNodes, normalizedQuery, t]);
+  }, [documents, flatNodes, normalizedQuery, t]);
 
   useEffect(() => {
     setExpandedFolderIds((current) => {

@@ -200,6 +200,61 @@ describe("knowledge tools", () => {
     });
   });
 
+  it("finds documents by vault folder path when database search misses the path", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Chapter Notes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const child = doc({
+      id: "doc-child",
+      type: "standalone_note",
+      title: "Opening Question",
+      parentId: "folder-1",
+      contentMd: "Why does the argument begin this way?",
+      excerpt: "Opening question.",
+      tags: [],
+    });
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, child]);
+
+    const tool = createSearchKnowledgeBaseTool();
+    const result = (await tool.execute({
+      reasoning: "Find notes under a folder",
+      query: "chapter notes",
+      bookId: "book-1",
+      type: "standalone_note",
+    })) as {
+      total: number;
+      documents: Array<{ id: string; path: string }>;
+    };
+
+    expect(result.total).toBe(1);
+    expect(result.documents).toEqual([
+      {
+        id: "doc-child",
+        bookId: "book-1",
+        parentId: "folder-1",
+        parentTitle: "Chapter Notes",
+        path: "Knowledge base / Chapter Notes / Opening Question",
+        type: "standalone_note",
+        isFolder: false,
+        title: "Opening Question",
+        tags: [],
+        excerpt: "Opening question.",
+        summary: undefined,
+        snippet: "Opening question.",
+        childCount: 0,
+        children: [],
+        updatedAt: 2000,
+        content: undefined,
+      },
+    ]);
+  });
+
   it("marks orphaned knowledge paths in search results", async () => {
     const orphan = doc({
       id: "doc-orphan",

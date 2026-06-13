@@ -16,6 +16,7 @@ describe("knowledge editor profile", () => {
     expect(hasKnowledgeEditorFeature(profile, "blockquote")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "heading1")).toBe(false);
     expect(hasKnowledgeEditorFeature(profile, "horizontalRule")).toBe(false);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(false);
     expect(hasKnowledgeEditorFeature(profile, "readAnyCards")).toBe(false);
   });
 
@@ -25,6 +26,7 @@ describe("knowledge editor profile", () => {
     expect(hasKnowledgeEditorFeature(profile, "heading1")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "horizontalRule")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "taskList")).toBe(true);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "image")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "sourceReference")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "readAnyCards")).toBe(true);
@@ -36,6 +38,7 @@ describe("knowledge editor profile", () => {
 
     expect(hasKnowledgeEditorFeature(profile, "heading1")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "horizontalRule")).toBe(true);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "image")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "quoteCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "readAnyCards")).toBe(false);
@@ -61,6 +64,7 @@ describe("knowledge editor profile", () => {
     expect(hasKnowledgeEditorFeature(profile, "heading2")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "sourceReference")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "quoteCard")).toBe(true);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(false);
     expect(hasKnowledgeEditorFeature(profile, "image")).toBe(false);
     expect(hasKnowledgeEditorFeature(profile, "metadataCard")).toBe(false);
   });
@@ -71,6 +75,7 @@ describe("knowledge editor profile", () => {
     expect(profile.tier).toBe("knowledge_doc");
     expect(hasKnowledgeEditorFeature(profile, "metadataCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "highlightCollectionCard")).toBe(true);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "diagramCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "relatedNotesCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "table")).toBe(false);
@@ -92,6 +97,7 @@ describe("knowledge editor profile", () => {
     expect(profile.tier).toBe("publishable_doc");
     expect(hasKnowledgeEditorFeature(profile, "heading1")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "sourceReference")).toBe(true);
+    expect(hasKnowledgeEditorFeature(profile, "codeBlock")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "calloutCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "quoteCard")).toBe(true);
     expect(hasKnowledgeEditorFeature(profile, "readAnyCards")).toBe(false);

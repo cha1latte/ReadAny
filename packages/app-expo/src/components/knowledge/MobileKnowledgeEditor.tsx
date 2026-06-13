@@ -1178,6 +1178,7 @@ export function MobileKnowledgeEditor({
     canUse("bulletList") ||
     canUse("taskList") ||
     canUse("blockquote") ||
+    canUse("codeBlock") ||
     canUse("horizontalRule") ||
     canUse("image") ||
     allowedCards.length > 0;
@@ -1473,6 +1474,18 @@ export function MobileKnowledgeEditor({
                   styles={styles}
                   onPress={() => {
                     runCommand("blockquote");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("codeBlock") ? (
+                <BlockSheetOption
+                  icon={<CodeIcon size={18} color={colors.primary} />}
+                  title={t("editor.codeBlock", "代码块")}
+                  hint={t("notes.knowledgeInsertCodeBlockHint", "记录代码、提示词或结构化片段")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("codeBlock");
                     setShowBlockInsertMenu(false);
                   }}
                 />

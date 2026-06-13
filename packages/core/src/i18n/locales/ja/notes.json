@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "次に読む作業を記録する",
     "knowledgeInsertQuoteHint": "考えや引用を目立たせる",
     "knowledgeInsertDividerHint": "セクションを区切る",
+    "knowledgeInsertCodeBlockHint": "コード、プロンプト、構造化した断片を記録する",
     "knowledgeInsertImageHint": "同期される画像添付を追加する",
     "knowledgeInsertImage": "画像を挿入",
     "knowledgeInsertInternalLink": "内部リンクを挿入",

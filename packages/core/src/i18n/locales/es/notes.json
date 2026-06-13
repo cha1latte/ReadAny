@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "Registrar tareas de lectura posteriores",
     "knowledgeInsertQuoteHint": "Destacar una idea o una cita",
     "knowledgeInsertDividerHint": "Separar dos secciones",
+    "knowledgeInsertCodeBlockHint": "Capturar código, prompts o fragmentos estructurados",
     "knowledgeInsertImageHint": "Añadir una imagen adjunta sincronizada",
     "knowledgeInsertImage": "Insertar imagen",
     "knowledgeInsertInternalLink": "Insertar enlace interno",

@@ -794,6 +794,7 @@ export function KnowledgeEditor({
     canUse("bulletList") ||
     canUse("taskList") ||
     canUse("blockquote") ||
+    canUse("codeBlock") ||
     canUse("horizontalRule") ||
     canUse("image") ||
     allowedCards.length > 0;
@@ -882,6 +883,19 @@ export function KnowledgeEditor({
                       })}
                       onClick={() => {
                         editor.chain().focus().toggleBlockquote().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("codeBlock") ? (
+                    <BlockInsertButton
+                      icon={<Code className="h-3.5 w-3.5" />}
+                      title={t("editor.codeBlock")}
+                      hint={t("notes.knowledgeInsertCodeBlockHint", {
+                        defaultValue: "Capture code, prompts, or structured snippets",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleCodeBlock().run();
                         setIsBlockInsertOpen(false);
                       }}
                     />

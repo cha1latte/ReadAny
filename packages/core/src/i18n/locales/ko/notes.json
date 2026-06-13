@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "후속 읽기 작업 기록",
     "knowledgeInsertQuoteHint": "생각이나 인용 강조",
     "knowledgeInsertDividerHint": "섹션 구분",
+    "knowledgeInsertCodeBlockHint": "코드, 프롬프트 또는 구조화된 조각 기록",
     "knowledgeInsertImageHint": "동기화되는 이미지 첨부 추가",
     "knowledgeInsertImage": "이미지 삽입",
     "knowledgeInsertInternalLink": "내부 링크 삽입",

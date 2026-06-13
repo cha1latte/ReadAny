@@ -120,6 +120,7 @@
     "italic": "기울임 (Ctrl+I)",
     "strikethrough": "취소선",
     "inlineCode": "인라인 코드",
+    "codeBlock": "코드 블록",
     "link": "링크",
     "bulletList": "글머리 목록",
     "orderedList": "번호 목록",

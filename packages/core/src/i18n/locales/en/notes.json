@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "Track follow-up reading work",
     "knowledgeInsertQuoteHint": "Set off an idea or cited passage",
     "knowledgeInsertDividerHint": "Separate two sections",
+    "knowledgeInsertCodeBlockHint": "Capture code, prompts, or structured snippets",
     "knowledgeInsertImageHint": "Add a synced image attachment",
     "knowledgeInsertImage": "Insert image",
     "knowledgeInsertInternalLink": "Insert internal link",

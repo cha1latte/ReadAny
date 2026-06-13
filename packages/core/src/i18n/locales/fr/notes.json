@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "Suivre les prochaines lectures",
     "knowledgeInsertQuoteHint": "Mettre en avant une idée ou une citation",
     "knowledgeInsertDividerHint": "Séparer deux sections",
+    "knowledgeInsertCodeBlockHint": "Capturer du code, des prompts ou des extraits structurés",
     "knowledgeInsertImageHint": "Ajouter une image synchronisée",
     "knowledgeInsertImage": "Insérer une image",
     "knowledgeInsertInternalLink": "Insérer un lien interne",

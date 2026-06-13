@@ -647,6 +647,9 @@ async function buildKnowledgeEditor() {
         case "blockquote":
           chain.toggleBlockquote().run();
           break;
+        case "codeBlock":
+          chain.toggleCodeBlock().run();
+          break;
         case "horizontalRule":
           chain.setHorizontalRule().run();
           break;

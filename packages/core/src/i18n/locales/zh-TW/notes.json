@@ -252,6 +252,7 @@
     "knowledgeInsertTaskHint": "記錄後續閱讀動作",
     "knowledgeInsertQuoteHint": "突出想法或引文",
     "knowledgeInsertDividerHint": "分隔兩個段落",
+    "knowledgeInsertCodeBlockHint": "記錄程式碼、提示詞或結構化片段",
     "knowledgeInsertImageHint": "新增可同步的圖片附件",
     "knowledgeInsertImage": "插入圖片",
     "knowledgeInsertInternalLink": "插入內部連結",

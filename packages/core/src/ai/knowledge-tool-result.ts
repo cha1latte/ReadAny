@@ -1,3 +1,6 @@
+import type { ReadAnyCardAttrs } from "../knowledge/card-registry";
+import { renderReadAnyCardMarkdownFallback } from "../knowledge/card-registry";
+
 export type KnowledgeToolResultKind =
   | "search"
   | "document"
@@ -28,6 +31,8 @@ export interface KnowledgeToolResultDisplay {
   sourceChars?: number;
   documentId?: string;
   summaryPreview?: string;
+  failureCardAttrs?: ReadAnyCardAttrs;
+  failureCardMarkdown?: string;
   documents: KnowledgeToolResultDocument[];
 }
 
@@ -103,7 +108,7 @@ function asFailureDisplay(
   const success = asBoolean(result.success);
   if (success !== false && !error) return null;
 
-  return {
+  return withFailureCard({
     kind: "failure",
     toolName,
     status: asString(result.status),
@@ -112,7 +117,7 @@ function asFailureDisplay(
     error: error || message || reason || "Tool execution failed",
     safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
     documents: contextDocumentsFromResult(result),
-  };
+  });
 }
 
 function createFailureDisplay(
@@ -120,7 +125,7 @@ function createFailureDisplay(
   error: string,
   result?: Record<string, unknown>,
 ): KnowledgeToolResultDisplay {
-  return {
+  return withFailureCard({
     kind: "failure",
     toolName,
     status: result ? asString(result.status) : undefined,
@@ -129,6 +134,51 @@ function createFailureDisplay(
     error,
     safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
     documents: result ? contextDocumentsFromResult(result) : [],
+  });
+}
+
+function createFailureCardAttrs(display: KnowledgeToolResultDisplay): ReadAnyCardAttrs {
+  const primaryDocument = display.documents[0];
+  const markdown = [
+    display.toolName ? `Tool: ${display.toolName}` : undefined,
+    display.status ? `Status: ${display.status}` : undefined,
+    display.error ? `Error: ${display.error}` : undefined,
+    display.reason ? `Reason: ${display.reason}` : undefined,
+    display.documentId ? `Document: ${display.documentId}` : undefined,
+    primaryDocument?.path ? `Path: ${primaryDocument.path}` : undefined,
+    display.safeNoWriteHint,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    cardType: "aiToolFailure",
+    version: 1,
+    title: display.toolName || "AI/tool failure",
+    markdown,
+    text: markdown,
+    sourceId: display.documentId,
+    sourceTitle: primaryDocument?.path || primaryDocument?.title,
+    data: {
+      toolName: display.toolName,
+      status: display.status,
+      error: display.error,
+      reason: display.reason,
+      documentId: display.documentId,
+      safeNoWriteHint: display.safeNoWriteHint,
+      documents: display.documents,
+    },
+  };
+}
+
+function withFailureCard(display: KnowledgeToolResultDisplay): KnowledgeToolResultDisplay {
+  const failureCardAttrs = createFailureCardAttrs(display);
+  return {
+    ...display,
+    failureCardAttrs,
+    failureCardMarkdown: renderReadAnyCardMarkdownFallback(failureCardAttrs, {
+      body: failureCardAttrs.markdown || "",
+    }),
   };
 }
 

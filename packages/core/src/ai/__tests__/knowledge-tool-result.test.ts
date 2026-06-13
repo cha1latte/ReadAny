@@ -154,7 +154,7 @@ describe("knowledge tool result display", () => {
       documentId: "missing-doc",
     });
 
-    expect(display).toEqual({
+    expect(display).toMatchObject({
       kind: "failure",
       toolName: "proposeKnowledgeDocumentUpdate",
       documentId: "missing-doc",
@@ -162,6 +162,15 @@ describe("knowledge tool result display", () => {
       safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
+    expect(display?.failureCardAttrs).toMatchObject({
+      cardType: "aiToolFailure",
+      title: "proposeKnowledgeDocumentUpdate",
+      sourceId: "missing-doc",
+      markdown:
+        "Tool: proposeKnowledgeDocumentUpdate\nError: Knowledge document not found\nDocument: missing-doc\nNo knowledge document or link was saved or changed by this failed tool call.",
+    });
+    expect(display?.failureCardMarkdown).toContain("> [!failure] proposeKnowledgeDocumentUpdate");
+    expect(display?.failureCardMarkdown).toContain("> Error: Knowledge document not found");
   });
 
   it("keeps knowledge document paths visible on tool failure cards", () => {
@@ -179,7 +188,7 @@ describe("knowledge tool result display", () => {
       },
     });
 
-    expect(display).toEqual({
+    expect(display).toMatchObject({
       kind: "failure",
       toolName: "compressKnowledgeDocumentSummary",
       status: "failed",
@@ -195,6 +204,14 @@ describe("knowledge tool result display", () => {
         },
       ],
     });
+    expect(display?.failureCardAttrs).toMatchObject({
+      cardType: "aiToolFailure",
+      sourceId: "doc-1",
+      sourceTitle: "Knowledge base / Chapter Notes / Durable Memory",
+    });
+    expect(display?.failureCardMarkdown).toContain(
+      "> Path: Knowledge base / Chapter Notes / Durable Memory",
+    );
   });
 
   it("parses JSON string failures from knowledge tools", () => {
@@ -208,7 +225,7 @@ describe("knowledge tool result display", () => {
       }),
     );
 
-    expect(display).toEqual({
+    expect(display).toMatchObject({
       kind: "failure",
       toolName: "compressKnowledgeDocumentSummary",
       status: "failed",
@@ -217,6 +234,7 @@ describe("knowledge tool result display", () => {
       safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
+    expect(display?.failureCardMarkdown).toContain("> Reason: model_error");
   });
 
   it("turns direct tool-call errors into knowledge failure cards", () => {
@@ -224,13 +242,14 @@ describe("knowledge tool result display", () => {
       error: "Tool searchKnowledgeBase is not available",
     });
 
-    expect(display).toEqual({
+    expect(display).toMatchObject({
       kind: "failure",
       toolName: "searchKnowledgeBase",
       error: "Tool searchKnowledgeBase is not available",
       safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
+    expect(display?.failureCardMarkdown).toContain("> [!failure] searchKnowledgeBase");
   });
 
   it("keeps direct knowledge errors visible even when the raw result is malformed", () => {
@@ -238,13 +257,14 @@ describe("knowledge tool result display", () => {
       error: new Error("Bridge message failed"),
     });
 
-    expect(display).toEqual({
+    expect(display).toMatchObject({
       kind: "failure",
       toolName: "getBookKnowledge",
       error: "Bridge message failed",
       safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
+    expect(display?.failureCardAttrs?.cardType).toBe("aiToolFailure");
   });
 
   it("lets successful knowledge proposals use the proposal card renderer", () => {

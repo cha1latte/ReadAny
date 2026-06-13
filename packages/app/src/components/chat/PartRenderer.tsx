@@ -4,7 +4,12 @@
  */
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getKnowledgeToolResultDisplay, getToolResultError } from "@readany/core/ai";
+import {
+  getKnowledgeToolResultDisplay,
+  getToolResultError,
+  maybeCompressKnowledgeDocumentsById,
+} from "@readany/core/ai";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
@@ -21,7 +26,7 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
-import { cn } from "@readany/core/utils";
+import { cn, providerRequiresApiKey } from "@readany/core/utils";
 import {
   Brain,
   CheckCircle,
@@ -43,6 +48,19 @@ const TEXT_RENDER_THROTTLE_MS = 100;
 const LazyMindmapView = lazy(() =>
   import("@/components/common/MindmapView").then((m) => ({ default: m.MindmapView })),
 );
+
+function queueKnowledgeProposalSummaryMaintenance(documentId: string | undefined): void {
+  if (!documentId) return;
+
+  const { aiConfig } = useSettingsStore.getState();
+  const endpoint = aiConfig.endpoints.find((item) => item.id === aiConfig.activeEndpointId);
+  const needsKey = endpoint ? providerRequiresApiKey(endpoint.provider) : true;
+  if (!endpoint || (needsKey && !endpoint.apiKey) || !aiConfig.activeModel) return;
+
+  void maybeCompressKnowledgeDocumentsById([documentId], aiConfig).catch((error) => {
+    console.warn("[KnowledgeProposal] Background summary maintenance failed:", error);
+  });
+}
 
 function useThrottledText(text: string): string {
   const [throttledText, setThrottledText] = useState(text);
@@ -540,7 +558,10 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
     if (!proposal || proposalApplyState !== "idle") return;
     setProposalApplyState("applying");
     try {
-      await applyKnowledgeWriteProposal(proposal);
+      const result = await applyKnowledgeWriteProposal(proposal);
+      if (proposal.action !== "link") {
+        queueKnowledgeProposalSummaryMaintenance(result.documentId);
+      }
       setProposalApplyState("applied");
       toast.success(t("knowledgeProposal.applySuccess"));
     } catch (error) {

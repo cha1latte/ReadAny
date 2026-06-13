@@ -7,6 +7,7 @@ const llmMocks = vi.hoisted(() => ({
   createChatModel: vi.fn(),
 }));
 const dbMocks = vi.hoisted(() => ({
+  getKnowledgeDocument: vi.fn(),
   updateKnowledgeDocumentSummary: vi.fn(),
 }));
 
@@ -15,9 +16,11 @@ vi.mock("../llm-provider", () => ({
 }));
 vi.mock("../../db/database", () => dbMocks);
 
-const { maybeCompressAndPersistKnowledgeSummary, maybeCompressKnowledgeSummary } = await import(
-  "../knowledge-memory"
-);
+const {
+  maybeCompressAndPersistKnowledgeSummary,
+  maybeCompressKnowledgeDocumentsById,
+  maybeCompressKnowledgeSummary,
+} = await import("../knowledge-memory");
 
 function aiConfig(): AIConfig {
   return {
@@ -175,5 +178,59 @@ describe("knowledge memory compression", () => {
     expect(result.status).toBe("failed");
     expect(result.persisted).toBe(false);
     expect(result.error).toBe("database locked");
+  });
+
+  it("maintains summaries for unique document ids", async () => {
+    dbMocks.getKnowledgeDocument.mockImplementation(async (id: string) =>
+      id === "doc-1" ? document({ id, contentMd: longMarkdown(), updatedAt: 200 }) : null,
+    );
+
+    const results = await maybeCompressKnowledgeDocumentsById(
+      ["doc-1", "doc-1", "", "missing"],
+      aiConfig(),
+      { minSourceChars: 200 },
+    );
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        documentId: "doc-1",
+        status: "compressed",
+        persisted: true,
+        reason: "missing_summary",
+      }),
+      expect.objectContaining({
+        documentId: "missing",
+        status: "missing",
+        persisted: false,
+      }),
+    ]);
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledTimes(2);
+    expect(dbMocks.updateKnowledgeDocumentSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues maintaining later documents when one lookup fails", async () => {
+    dbMocks.getKnowledgeDocument.mockImplementation(async (id: string) => {
+      if (id === "bad") throw new Error("database busy");
+      return document({ id, contentMd: "Short." });
+    });
+
+    const results = await maybeCompressKnowledgeDocumentsById(["bad", "doc-2"], aiConfig(), {
+      minSourceChars: 200,
+    });
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        documentId: "bad",
+        status: "failed",
+        persisted: false,
+        error: "database busy",
+      }),
+      expect.objectContaining({
+        documentId: "doc-2",
+        status: "skipped",
+        persisted: false,
+        reason: "below_threshold",
+      }),
+    ]);
   });
 });

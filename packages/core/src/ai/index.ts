@@ -11,12 +11,15 @@ export type { LLMOptions } from "./llm-provider";
 export { processMessages } from "./message-pipeline";
 export type { ProcessedMessage } from "./message-pipeline";
 export {
+  maybeCompressKnowledgeDocumentsById,
   maybeCompressAndPersistKnowledgeSummary,
   maybeCompressKnowledgeSummary,
 } from "./knowledge-memory";
 export type {
   KnowledgeSummaryCompressionResult,
   KnowledgeSummaryCompressionStatus,
+  KnowledgeSummaryMaintenanceResult,
+  KnowledgeSummaryMaintenanceStatus,
   PersistedKnowledgeSummaryCompressionResult,
 } from "./knowledge-memory";
 

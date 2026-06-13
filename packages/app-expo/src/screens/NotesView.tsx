@@ -39,7 +39,10 @@ import { useAnnotationStore, useLibraryStore, useSettingsStore } from "@/stores"
 import { useColors, useTheme } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { maybeCompressAndPersistKnowledgeSummary } from "@readany/core/ai";
+import {
+  maybeCompressAndPersistKnowledgeSummary,
+  maybeCompressKnowledgeDocumentsById,
+} from "@readany/core/ai";
 import {
   type HighlightWithBook,
   type KnowledgeBacklink,
@@ -1363,6 +1366,19 @@ export function NotesView({
     [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
+  const queueKnowledgeSummaryMaintenance = useCallback((documentIds: string[]) => {
+    const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
+    if (uniqueDocumentIds.length === 0) return;
+
+    void (async () => {
+      const resolvedAIConfig = await resolveActiveAIConfig(useSettingsStore.getState());
+      if (!resolvedAIConfig) return;
+      await maybeCompressKnowledgeDocumentsById(uniqueDocumentIds, resolvedAIConfig);
+    })().catch((error) => {
+      console.warn("[Notes] Background knowledge summary maintenance failed:", error);
+    });
+  }, []);
+
   const handleCompressKnowledgeSummary = useCallback(async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1752,9 +1768,13 @@ export function NotesView({
     try {
       const importedDocumentIds: string[] = [];
       const preferredDocumentIds: string[] = [];
+      const summaryDocumentIds: string[] = [];
       for (const item of knowledgeMarkdownImportReview.items) {
         const result = await applyKnowledgeWriteProposal(item.proposal);
         if (result.documentId) importedDocumentIds.push(result.documentId);
+        if (result.documentId) {
+          summaryDocumentIds.push(result.documentId);
+        }
         if (item.proposal.action === "create" && item.proposal.draft.type !== "folder") {
           if (result.documentId) preferredDocumentIds.push(result.documentId);
         }
@@ -1762,6 +1782,7 @@ export function NotesView({
       await refreshSelectedKnowledgeDocuments(
         preferredDocumentIds[0] ?? importedDocumentIds[0] ?? knowledgeHome?.id,
       );
+      queueKnowledgeSummaryMaintenance(summaryDocumentIds);
       setKnowledgeMarkdownImportReview(null);
       Alert.alert(
         t("common.success", "成功"),
@@ -1782,6 +1803,7 @@ export function NotesView({
     isKnowledgeMarkdownImportApplying,
     knowledgeHome?.id,
     knowledgeMarkdownImportReview,
+    queueKnowledgeSummaryMaintenance,
     refreshSelectedKnowledgeDocuments,
     saveActiveKnowledgeDocumentNow,
     t,

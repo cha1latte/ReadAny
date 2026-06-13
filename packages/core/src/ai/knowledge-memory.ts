@@ -8,7 +8,7 @@ import {
   createKnowledgeSummaryCompressionState,
   prepareKnowledgeSummaryCompression,
 } from "../knowledge";
-import { updateKnowledgeDocumentSummary } from "../db/database";
+import { getKnowledgeDocument, updateKnowledgeDocumentSummary } from "../db/database";
 import type { AIConfig } from "../types";
 import { createChatModel } from "./llm-provider";
 
@@ -25,6 +25,18 @@ export interface KnowledgeSummaryCompressionResult {
 export interface PersistedKnowledgeSummaryCompressionResult
   extends KnowledgeSummaryCompressionResult {
   persisted: boolean;
+}
+
+export type KnowledgeSummaryMaintenanceStatus =
+  | KnowledgeSummaryCompressionStatus
+  | "missing";
+
+export interface KnowledgeSummaryMaintenanceResult {
+  documentId: string;
+  status: KnowledgeSummaryMaintenanceStatus;
+  persisted: boolean;
+  reason?: KnowledgeSummaryCompressionPlan["reason"];
+  error?: string;
 }
 
 function responseContentToText(content: unknown): string {
@@ -120,4 +132,46 @@ export async function maybeCompressAndPersistKnowledgeSummary(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export async function maybeCompressKnowledgeDocumentsById(
+  documentIds: readonly string[],
+  aiConfig: AIConfig,
+  options: KnowledgeSummaryCompressionOptions = {},
+): Promise<KnowledgeSummaryMaintenanceResult[]> {
+  const uniqueDocumentIds = [...new Set(documentIds.map((id) => id.trim()).filter(Boolean))];
+  const results: KnowledgeSummaryMaintenanceResult[] = [];
+
+  for (const documentId of uniqueDocumentIds) {
+    try {
+      const document = await getKnowledgeDocument(documentId);
+      if (!document) {
+        results.push({
+          documentId,
+          status: "missing",
+          persisted: false,
+          error: "Knowledge document not found",
+        });
+        continue;
+      }
+
+      const result = await maybeCompressAndPersistKnowledgeSummary(document, aiConfig, options);
+      results.push({
+        documentId,
+        status: result.status,
+        persisted: result.persisted,
+        reason: result.plan.reason,
+        error: result.error,
+      });
+    } catch (error) {
+      results.push({
+        documentId,
+        status: "failed",
+        persisted: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return results;
 }

@@ -40,7 +40,10 @@ import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { maybeCompressAndPersistKnowledgeSummary } from "@readany/core/ai";
+import {
+  maybeCompressAndPersistKnowledgeSummary,
+  maybeCompressKnowledgeDocumentsById,
+} from "@readany/core/ai";
 import {
   type ExportFormat,
   type KnowledgeExportFile,
@@ -1446,6 +1449,25 @@ export function NotesPage() {
     [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
+  const getKnowledgeSummaryAIConfig = () => {
+    const endpoint = aiConfig.endpoints.find((item) => item.id === aiConfig.activeEndpointId);
+    const needsKey = endpoint ? providerRequiresApiKey(endpoint.provider) : true;
+    if (!endpoint || (needsKey && !endpoint.apiKey) || !aiConfig.activeModel) return null;
+    return aiConfig;
+  };
+
+  const queueKnowledgeSummaryMaintenance = (documentIds: string[]) => {
+    const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
+    if (uniqueDocumentIds.length === 0) return;
+
+    const config = getKnowledgeSummaryAIConfig();
+    if (!config) return;
+
+    void maybeCompressKnowledgeDocumentsById(uniqueDocumentIds, config).catch((error) => {
+      console.warn("[Notes] Background knowledge summary maintenance failed:", error);
+    });
+  };
+
   const handleCompressKnowledgeSummary = async () => {
     if (!knowledgeHome || isKnowledgeSummaryCompressing) return;
 
@@ -1826,9 +1848,13 @@ export function NotesPage() {
     try {
       const importedDocumentIds: string[] = [];
       const preferredDocumentIds: string[] = [];
+      const summaryDocumentIds: string[] = [];
       for (const item of knowledgeMarkdownImportReview.items) {
         const result = await applyKnowledgeWriteProposal(item.proposal);
         if (result.documentId) importedDocumentIds.push(result.documentId);
+        if (result.documentId) {
+          summaryDocumentIds.push(result.documentId);
+        }
         if (item.proposal.action === "create" && item.proposal.draft.type !== "folder") {
           if (result.documentId) preferredDocumentIds.push(result.documentId);
         }
@@ -1836,6 +1862,7 @@ export function NotesPage() {
       await refreshSelectedKnowledgeDocuments(
         preferredDocumentIds[0] ?? importedDocumentIds[0] ?? knowledgeHome?.id,
       );
+      queueKnowledgeSummaryMaintenance(summaryDocumentIds);
       toast.success(t("notes.knowledgeMarkdownImportApplied"), {
         description: t("notes.knowledgeMarkdownImportAppliedDetail", {
           count: knowledgeMarkdownImportReview.items.length,
@@ -1961,10 +1988,15 @@ export function NotesPage() {
 
     setIsKnowledgeVaultImportApplying(true);
     try {
+      const summaryDocumentIds: string[] = [];
       for (const proposal of knowledgeVaultImportReview.proposals) {
-        await applyKnowledgeWriteProposal(proposal);
+        const result = await applyKnowledgeWriteProposal(proposal);
+        if (result.documentId) {
+          summaryDocumentIds.push(result.documentId);
+        }
       }
       await refreshSelectedKnowledgeDocuments(knowledgeHome?.id);
+      queueKnowledgeSummaryMaintenance(summaryDocumentIds);
       toast.success(t("notes.knowledgeVaultImportApplied"), {
         description: t("notes.knowledgeVaultImportAppliedDetail", {
           count: knowledgeVaultImportReview.proposals.length,

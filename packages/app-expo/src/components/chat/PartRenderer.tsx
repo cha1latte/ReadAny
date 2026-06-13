@@ -2,9 +2,15 @@ import { MermaidView } from "@/components/common/MermaidView";
 import { MindmapView } from "@/components/common/MindmapView";
 import { BrainIcon, CheckIcon, ChevronDownIcon, OctagonXIcon, XIcon } from "@/components/ui/Icon";
 import { useThrottledValue } from "@/hooks";
+import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
+import { useSettingsStore } from "@/stores";
 import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
-import { getKnowledgeToolResultDisplay, getToolResultError } from "@readany/core/ai";
+import {
+  getKnowledgeToolResultDisplay,
+  getToolResultError,
+  maybeCompressKnowledgeDocumentsById,
+} from "@readany/core/ai";
 import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
@@ -39,6 +45,18 @@ interface PartProps {
   part: Part;
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
+}
+
+function queueKnowledgeProposalSummaryMaintenance(documentId: string | undefined): void {
+  if (!documentId) return;
+
+  void (async () => {
+    const resolvedAIConfig = await resolveActiveAIConfig(useSettingsStore.getState());
+    if (!resolvedAIConfig) return;
+    await maybeCompressKnowledgeDocumentsById([documentId], resolvedAIConfig);
+  })().catch((error) => {
+    console.warn("[KnowledgeProposal] Background summary maintenance failed:", error);
+  });
 }
 
 export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
@@ -429,7 +447,10 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
     if (!proposal || proposalApplyState !== "idle") return;
     setProposalApplyState("applying");
     try {
-      await applyKnowledgeWriteProposal(proposal);
+      const result = await applyKnowledgeWriteProposal(proposal);
+      if (proposal.action !== "link") {
+        queueKnowledgeProposalSummaryMaintenance(result.documentId);
+      }
       setProposalApplyState("applied");
     } catch (error) {
       setProposalApplyState("idle");

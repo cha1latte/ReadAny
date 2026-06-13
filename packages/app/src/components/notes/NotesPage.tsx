@@ -3182,14 +3182,16 @@ function KnowledgeFolderBrowserRow({
   const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
   const childCount = childCountByParentId.get(document.id) ?? 0;
   const updatedLabel = formatKnowledgeDocumentUpdatedDate(document);
-  const pathLabel = knowledgeDocumentPath(document, documents, t)
-    .slice(1)
+  const parentPathLabel = knowledgeDocumentPath(document, documents, t)
+    .slice(0, -1)
     .map((item) => item.title)
     .join(" / ");
   const meta = isFolder
     ? t("notes.knowledgeFolderChildCount", { count: childCount })
     : document.excerpt;
-  const metaParts = [knowledgeDocumentTypeLabel(document, t), pathLabel, meta].filter(Boolean);
+  const metaParts = [knowledgeDocumentTypeLabel(document, t), parentPathLabel, meta].filter(
+    Boolean,
+  );
   const canDelete =
     canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
@@ -3241,7 +3243,7 @@ function KnowledgeFolderBrowserRow({
             />
             <span
               className="mt-0.5 block truncate text-[11px] text-muted-foreground"
-              title={pathLabel}
+              title={parentPathLabel}
             >
               {metaParts.join(" · ")}
             </span>
@@ -3273,7 +3275,7 @@ function KnowledgeFolderBrowserRow({
             </span>
             <span
               className="mt-0.5 block truncate text-[11px] text-muted-foreground"
-              title={pathLabel}
+              title={parentPathLabel}
             >
               {metaParts.join(" · ")}
             </span>

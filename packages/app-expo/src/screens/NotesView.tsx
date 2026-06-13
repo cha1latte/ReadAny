@@ -4159,10 +4159,10 @@ function KnowledgeFolderBrowserItem({
   const isHome = item.type === "book_home";
   const childCount = childCountByParentId.get(item.id) ?? 0;
   const updatedLabel = formatKnowledgeDocumentUpdatedDate(item);
-  const pathLabel = knowledgeDocumentPathText(item, documents, t);
+  const parentPathLabel = knowledgeDocumentParentPathText(item, documents, t);
   const meta = [
     knowledgeDocumentTypeLabel(item, t),
-    pathLabel,
+    parentPathLabel,
     updatedLabel,
     isFolder ? t("notes.knowledgeFolderChildCount", { count: childCount }) : item.excerpt,
   ]

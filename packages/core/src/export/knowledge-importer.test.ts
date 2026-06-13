@@ -307,6 +307,114 @@ Why does this matter?
     });
   });
 
+  it("reuses existing destination folders when importing Markdown path hierarchy", () => {
+    const existingIdeasFolder = knowledgeDocument({
+      id: "folder-ideas",
+      bookId: "book-1",
+      parentId: "folder-current",
+      type: "folder",
+      title: "Ideas",
+    });
+
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      defaultParentId: "folder-current",
+      currentDocuments: [existingIdeasFolder],
+      files: [
+        {
+          path: "/Users/me/Vault/Ideas/Slow Reading.md",
+          relativePath: "Ideas/Slow Reading.md",
+          content: "# Slow Reading\n\nRead slowly.",
+        },
+        {
+          path: "/Users/me/Vault/Ideas/Themes/Attention.md",
+          relativePath: "Ideas/Themes/Attention.md",
+          content: "# Attention\n\nNotice what repeats.",
+        },
+      ],
+    });
+
+    expect(plan.folderItems.map((item) => item.relativePath)).toEqual(["Ideas/Themes"]);
+    const [themesFolder] = plan.folderItems;
+    if (themesFolder.proposal.action !== "create") {
+      throw new Error("Expected folder create proposal");
+    }
+    expect(themesFolder.proposal).toMatchObject({
+      action: "create",
+      targetPath: "Ideas/Themes",
+      draft: {
+        type: "folder",
+        title: "Themes",
+        parentId: "folder-ideas",
+        bookId: "book-1",
+      },
+    });
+
+    const [slowReadingDocument, attentionDocument] = plan.documentItems;
+    if (
+      slowReadingDocument.proposal.action !== "create" ||
+      attentionDocument.proposal.action !== "create"
+    ) {
+      throw new Error("Expected document create proposals");
+    }
+    expect(slowReadingDocument.proposal.draft.parentId).toBe("folder-ideas");
+    expect(attentionDocument.proposal.draft.parentId).toBe(themesFolder.proposal.draft.id);
+  });
+
+  it("warns when imported Markdown would duplicate a sibling document title", () => {
+    const existingIdeasFolder = knowledgeDocument({
+      id: "folder-ideas",
+      bookId: "book-1",
+      parentId: "folder-current",
+      type: "folder",
+      title: "Ideas",
+    });
+    const existingDocument = knowledgeDocument({
+      id: "doc-existing",
+      bookId: "book-1",
+      parentId: "folder-ideas",
+      type: "standalone_note",
+      title: "Slow Reading",
+    });
+
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      defaultParentId: "folder-current",
+      currentDocuments: [existingIdeasFolder, existingDocument],
+      files: [
+        {
+          path: "/Users/me/Vault/Ideas/Slow Reading.md",
+          relativePath: "Ideas/Slow Reading.md",
+          content: "# Slow Reading\n\nRead slowly.",
+        },
+      ],
+    });
+
+    expect(plan.folderItems).toEqual([]);
+    expect(plan.documentItems[0].warnings).toContain("duplicate_sibling_title");
+  });
+
+  it("warns when a Markdown import batch contains duplicate sibling titles", () => {
+    const plan = createKnowledgeMarkdownImportPlan({
+      bookId: "book-1",
+      files: [
+        {
+          path: "/Users/me/Vault/Ideas/Slow Reading.md",
+          relativePath: "Ideas/Slow Reading.md",
+          content: "# Slow Reading\n\nFirst copy.",
+        },
+        {
+          path: "/Users/me/Vault/Ideas/slow   reading.md",
+          relativePath: "Ideas/slow   reading.md",
+          content: "# slow   reading\n\nSecond copy.",
+        },
+      ],
+    });
+
+    expect(plan.documentItems[0].warnings).not.toContain("duplicate_sibling_title");
+    expect(plan.documentItems[1].warnings).toContain("duplicate_sibling_title");
+  });
+
   it("derives relative import paths from the shared file directory", () => {
     const plan = createKnowledgeMarkdownImportPlan({
       bookId: "book-1",

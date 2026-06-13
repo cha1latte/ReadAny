@@ -4,7 +4,12 @@ import type {
   KnowledgeDocumentCreateProposal,
   KnowledgeDocumentUpdateProposal,
 } from "../knowledge/proposals";
-import type { JSONValue, KnowledgeDocumentType, KnowledgeSourceKind } from "../types";
+import type {
+  JSONValue,
+  KnowledgeDocument,
+  KnowledgeDocumentType,
+  KnowledgeSourceKind,
+} from "../types";
 import {
   type KnowledgeExportManifest,
   type KnowledgeExportObservedFile,
@@ -28,6 +33,7 @@ export interface KnowledgeMarkdownImportPlanInput {
   defaultParentId?: string;
   bookId?: string;
   preservePathHierarchy?: boolean;
+  currentDocuments?: KnowledgeDocument[];
 }
 
 export interface KnowledgeImportFrontmatter {
@@ -394,6 +400,20 @@ function sanitizeImportPathSegment(segment: string): string {
     .trim()
     .replace(/[\\/]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function normalizeImportSiblingTitle(value: string | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+}
+
+function importSiblingKey(input: {
+  bookId?: string;
+  parentId?: string;
+  title?: string;
+}): string {
+  return [input.bookId ?? "", input.parentId ?? "", normalizeImportSiblingTitle(input.title)].join(
+    "\u0000",
+  );
 }
 
 function folderIdForImportPath({
@@ -778,6 +798,24 @@ export function createKnowledgeMarkdownImportPlan(
   input: KnowledgeMarkdownImportPlanInput,
 ): KnowledgeMarkdownImportPlan {
   const preservePathHierarchy = input.preservePathHierarchy ?? true;
+  const existingFolderIdBySiblingKey = new Map<string, string>();
+  const siblingDocumentIdByTitleKey = new Map<string, string>();
+
+  for (const document of input.currentDocuments ?? []) {
+    if (document.deletedAt) continue;
+    const key = importSiblingKey({
+      bookId: document.bookId,
+      parentId: document.parentId,
+      title: document.title,
+    });
+    if (normalizeImportSiblingTitle(document.title) && !siblingDocumentIdByTitleKey.has(key)) {
+      siblingDocumentIdByTitleKey.set(key, document.id);
+    }
+    if (document.type === "folder" && !existingFolderIdBySiblingKey.has(key)) {
+      existingFolderIdBySiblingKey.set(key, document.id);
+    }
+  }
+
   const commonParts = commonDirectoryParts(
     input.files
       .map((file) => file.relativePath ?? file.path ?? "")
@@ -807,8 +845,11 @@ export function createKnowledgeMarkdownImportPlan(
       for (const segment of directorySegments) {
         pathSegments.push(segment);
         const relativeDirPath = pathSegments.join("/");
-        const folderId = folderIdForImportPath({ bookId, baseParentId, relativeDirPath });
-        if (!folderItemsById.has(folderId)) {
+        const titleKey = importSiblingKey({ bookId, parentId, title: segment });
+        const existingFolderId = existingFolderIdBySiblingKey.get(titleKey);
+        const folderId =
+          existingFolderId ?? folderIdForImportPath({ bookId, baseParentId, relativeDirPath });
+        if (!existingFolderId && !folderItemsById.has(folderId)) {
           const proposal = createKnowledgeImportFolderProposal({
             id: folderId,
             title: segment,
@@ -822,6 +863,8 @@ export function createKnowledgeMarkdownImportPlan(
             proposal,
             warnings: ["created_folder_from_import_path"],
           });
+          existingFolderIdBySiblingKey.set(titleKey, folderId);
+          siblingDocumentIdByTitleKey.set(titleKey, folderId);
         }
         parentId = folderId;
       }
@@ -837,11 +880,25 @@ export function createKnowledgeMarkdownImportPlan(
     if (proposal.action === "create" || proposal.action === "update") {
       proposal.targetPath = relativePath;
     }
+    const warnings = [...imported.warnings];
+    if (proposal.action === "create") {
+      const titleKey = importSiblingKey({
+        bookId: proposal.draft.bookId,
+        parentId: proposal.draft.parentId,
+        title: proposal.draft.title,
+      });
+      const existingDocumentId = siblingDocumentIdByTitleKey.get(titleKey);
+      if (existingDocumentId && existingDocumentId !== proposal.draft.id) {
+        warnings.push("duplicate_sibling_title");
+      } else if (normalizeImportSiblingTitle(proposal.draft.title)) {
+        siblingDocumentIdByTitleKey.set(titleKey, proposal.draft.id ?? `${relativePath}\u0000doc`);
+      }
+    }
     documentItems.push({
       path: file.path ?? relativePath,
       relativePath,
       proposal,
-      warnings: imported.warnings,
+      warnings,
     });
   }
 

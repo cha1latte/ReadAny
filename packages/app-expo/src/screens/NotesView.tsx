@@ -173,6 +173,19 @@ function mobileFileName(path: string): string {
   }
 }
 
+function knowledgeMarkdownImportWarningLabel(warning: string, t: TFunction): string {
+  if (warning === "frontmatter_not_readany") {
+    return t("notes.knowledgeMarkdownImportWarningFrontmatterNotReadAny", "普通 Markdown");
+  }
+  if (warning === "created_folder_from_import_path") {
+    return t("notes.knowledgeMarkdownImportWarningCreatedFolder", "将创建路径文件夹");
+  }
+  if (warning === "duplicate_sibling_title") {
+    return t("notes.knowledgeMarkdownImportWarningDuplicateTitle", "目标文件夹已有同名文档");
+  }
+  return t("notes.knowledgeMarkdownImportWarningFallback", { warning });
+}
+
 function canDeleteKnowledgeDocument(document: KnowledgeDocument): boolean {
   if (document.type === "book_home") return false;
   if (document.sourceKind === "highlight" || document.sourceKind === "note") return false;
@@ -1523,6 +1536,7 @@ export function NotesView({
       const plan = createKnowledgeMarkdownImportPlan({
         bookId: selectedKnowledgeBookId,
         defaultParentId,
+        currentDocuments: knowledgeDocuments,
         files: await Promise.all(
           paths.map(async (path) => ({
             path,
@@ -1556,6 +1570,7 @@ export function NotesView({
     isKnowledgeMarkdownImportApplying,
     isKnowledgeMarkdownImporting,
     isKnowledgeVaultRootOpen,
+    knowledgeDocuments,
     knowledgeHome?.id,
     knowledgeHome?.parentId,
     knowledgeHome?.type,
@@ -3485,10 +3500,15 @@ function KnowledgeMarkdownImportReviewSheet({
                     {tags.length > 4 ? (
                       <Text style={styles.knowledgeImportTag}>+{tags.length - 4}</Text>
                     ) : null}
-                    {item.warnings.length > 0 ? (
+                    {item.warnings.slice(0, 3).map((warning) => (
+                      <Text key={warning} style={styles.knowledgeImportWarning}>
+                        {knowledgeMarkdownImportWarningLabel(warning, t)}
+                      </Text>
+                    ))}
+                    {item.warnings.length > 3 ? (
                       <Text style={styles.knowledgeImportWarning}>
                         {t("notes.knowledgeMarkdownImportWarningCount", {
-                          count: item.warnings.length,
+                          count: item.warnings.length - 3,
                         })}
                       </Text>
                     ) : null}

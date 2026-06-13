@@ -344,6 +344,22 @@ function desktopFileName(path: string): string {
   return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? path;
 }
 
+function knowledgeMarkdownImportWarningLabel(
+  warning: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (warning === "frontmatter_not_readany") {
+    return t("notes.knowledgeMarkdownImportWarningFrontmatterNotReadAny");
+  }
+  if (warning === "created_folder_from_import_path") {
+    return t("notes.knowledgeMarkdownImportWarningCreatedFolder");
+  }
+  if (warning === "duplicate_sibling_title") {
+    return t("notes.knowledgeMarkdownImportWarningDuplicateTitle");
+  }
+  return t("notes.knowledgeMarkdownImportWarningFallback", { warning });
+}
+
 async function joinDesktopPath(rootPath: string, relativePath: string): Promise<string> {
   const { join } = await import("@tauri-apps/api/path");
   const parts = normalizeExportPath(relativePath).split("/").filter(Boolean);
@@ -1572,6 +1588,7 @@ export function NotesPage() {
       const plan = createKnowledgeMarkdownImportPlan({
         bookId: selectedKnowledgeBookId,
         defaultParentId,
+        currentDocuments: knowledgeDocuments,
         files: await Promise.all(
           paths.map(async (path) => ({
             path,
@@ -4529,10 +4546,18 @@ function KnowledgeMarkdownImportReviewCard({
                       +{tags.length - 5}
                     </span>
                   ) : null}
-                  {item.warnings.length > 0 ? (
+                  {item.warnings.slice(0, 3).map((warning) => (
+                    <span
+                      key={warning}
+                      className="rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                    >
+                      {knowledgeMarkdownImportWarningLabel(warning, t)}
+                    </span>
+                  ))}
+                  {item.warnings.length > 3 ? (
                     <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                       {t("notes.knowledgeMarkdownImportWarningCount", {
-                        count: item.warnings.length,
+                        count: item.warnings.length - 3,
                       })}
                     </span>
                   ) : null}

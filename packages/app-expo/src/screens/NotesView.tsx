@@ -5,6 +5,7 @@ import {
   type MobileKnowledgeEditorValue,
   type MobileKnowledgeImageInsertAttrs,
   type MobileKnowledgeInternalLinkTarget,
+  type MobileKnowledgeSourceReferenceRequest,
 } from "@/components/knowledge/MobileKnowledgeEditor";
 import {
   BookOpenIcon,
@@ -75,6 +76,7 @@ import {
   extractKnowledgeDocumentOutline,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  ensureKnowledgeSourceLink,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
@@ -372,6 +374,8 @@ export function NotesView({
   const [knowledgeValue, setKnowledgeValue] = useState<MobileKnowledgeEditorValue>(() =>
     createEmptyKnowledgeValue(),
   );
+  const [knowledgeSourceReferenceRequest, setKnowledgeSourceReferenceRequest] =
+    useState<MobileKnowledgeSourceReferenceRequest | null>(null);
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(() =>
     knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
@@ -387,6 +391,7 @@ export function NotesView({
   const [knowledgeMarkdownImportReview, setKnowledgeMarkdownImportReview] =
     useState<KnowledgeMarkdownImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
+  const knowledgeSourceReferenceRequestIdRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
@@ -567,6 +572,7 @@ export function NotesView({
         setKnowledgeTitle("");
         setKnowledgeTags([]);
         setKnowledgeValue(emptyValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         setKnowledgeLinks([]);
@@ -603,6 +609,7 @@ export function NotesView({
         setKnowledgeTitle(activeDocument.title);
         setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
         setKnowledgeValue(nextValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(
           knowledgeDocumentFingerprint(activeDocument.title, nextValue, activeDocument.tags),
         );
@@ -881,6 +888,7 @@ export function NotesView({
       setKnowledgeTitle(document.title);
       setKnowledgeTags(normalizeKnowledgeTags(document.tags));
       setKnowledgeValue(nextValue);
+      setKnowledgeSourceReferenceRequest(null);
       setSavedKnowledgeFingerprint(
         knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
       );
@@ -895,6 +903,7 @@ export function NotesView({
     if (!saved) return;
     setSelectedKnowledgeDocumentId(null);
     setIsKnowledgeVaultRootOpen(true);
+    setKnowledgeSourceReferenceRequest(null);
   }, [isKnowledgeVaultRootOpen, saveActiveKnowledgeDocumentNow]);
 
   const refreshSelectedKnowledgeDocuments = useCallback(
@@ -934,6 +943,7 @@ export function NotesView({
         setKnowledgeTitle("");
         setKnowledgeTags([]);
         setKnowledgeValue(emptyValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         return;
@@ -946,6 +956,7 @@ export function NotesView({
       setKnowledgeTitle(nextActiveDocument.title);
       setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
       setKnowledgeValue(nextValue);
+      setKnowledgeSourceReferenceRequest(null);
       setSavedKnowledgeFingerprint(
         knowledgeDocumentFingerprint(nextActiveDocument.title, nextValue, nextActiveDocument.tags),
       );
@@ -1025,6 +1036,7 @@ export function NotesView({
         setKnowledgeTitle(document.title);
         setKnowledgeTags([]);
         setKnowledgeValue(nextValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
       } catch (error) {
         console.error("[Notes] Failed to create knowledge document:", error);
@@ -1101,6 +1113,7 @@ export function NotesView({
                       setKnowledgeTitle(nextDocument.title);
                       setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
                       setKnowledgeValue(nextValue);
+                      setKnowledgeSourceReferenceRequest(null);
                       setSavedKnowledgeFingerprint(
                         knowledgeDocumentFingerprint(
                           nextDocument.title,
@@ -1116,6 +1129,7 @@ export function NotesView({
                       setKnowledgeTitle("");
                       setKnowledgeTags([]);
                       setKnowledgeValue(emptyValue);
+                      setKnowledgeSourceReferenceRequest(null);
                       setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
                     }
                     setIsKnowledgeSaving(false);
@@ -1280,6 +1294,44 @@ export function NotesView({
       }
     },
     [t],
+  );
+
+  const handleInsertKnowledgeSourceReference = useCallback(
+    async (highlight: HighlightWithBook) => {
+      if (!knowledgeHome || isKnowledgeVaultRootOpen || knowledgeHome.type === "folder") {
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeSourceReferenceUnavailable", "请先打开一个知识文档"),
+        );
+        return;
+      }
+
+      const label = highlight.chapterTitle?.trim() || t("notes.knowledgeSourceHighlight", "高亮");
+      try {
+        await ensureKnowledgeSourceLink({
+          documentId: knowledgeHome.id,
+          toKind: "highlight",
+          toId: highlight.id,
+          label,
+          cfi: highlight.cfi,
+        });
+        setKnowledgeLinks(await getKnowledgeLinks(knowledgeHome.id));
+        knowledgeSourceReferenceRequestIdRef.current += 1;
+        setKnowledgeSourceReferenceRequest({
+          requestId: knowledgeSourceReferenceRequestIdRef.current,
+          label,
+          sourceTitle: label,
+          cfi: highlight.cfi,
+        });
+      } catch (error) {
+        console.error("[Notes] Failed to insert knowledge source reference:", error);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeSourceReferenceInsertFailed", "来源引用插入失败"),
+        );
+      }
+    },
+    [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
   const handleCompressKnowledgeSummary = useCallback(async () => {
@@ -1794,6 +1846,7 @@ export function NotesView({
             title={knowledgeTitle}
             tags={knowledgeTags}
             value={knowledgeValue}
+            sourceReferenceRequest={knowledgeSourceReferenceRequest}
             links={knowledgeLinks}
             backlinks={knowledgeBacklinks}
             isRelationsLoading={isKnowledgeRelationsLoading}
@@ -1813,6 +1866,7 @@ export function NotesView({
             onRenameDocument={handleRenameKnowledgeDocument}
             onCompressSummary={handleCompressKnowledgeSummary}
             onPickImageAttachment={handlePickKnowledgeImageAttachment}
+            onInsertSourceReference={handleInsertKnowledgeSourceReference}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
             t={t}
             styles={s}
@@ -2039,6 +2093,7 @@ function KnowledgeHomePanel({
   title,
   tags,
   value,
+  sourceReferenceRequest,
   links,
   backlinks,
   isRelationsLoading,
@@ -2057,6 +2112,7 @@ function KnowledgeHomePanel({
   onMoveDocument,
   onRenameDocument,
   onCompressSummary,
+  onInsertSourceReference,
   onPickImageAttachment,
   onOpenBook,
   t,
@@ -2078,6 +2134,7 @@ function KnowledgeHomePanel({
   title: string;
   tags: string[];
   value: MobileKnowledgeEditorValue;
+  sourceReferenceRequest: MobileKnowledgeSourceReferenceRequest | null;
   links: KnowledgeLink[];
   backlinks: KnowledgeBacklink[];
   isRelationsLoading: boolean;
@@ -2096,6 +2153,7 @@ function KnowledgeHomePanel({
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onRenameDocument: (document: KnowledgeDocument, title: string) => void;
   onCompressSummary: () => void;
+  onInsertSourceReference: (highlight: HighlightWithBook) => void;
   onPickImageAttachment: (
     document: KnowledgeDocument,
   ) => Promise<MobileKnowledgeImageInsertAttrs | null>;
@@ -2460,6 +2518,7 @@ function KnowledgeHomePanel({
               isSaved={isSaved}
               outlineTarget={outlineTarget}
               internalLinkTargets={internalLinkTargets}
+              sourceReferenceRequest={sourceReferenceRequest}
               placeholder={t(
                 "notes.knowledgePlaceholder",
                 "记录这本书的摘要、问题、想法和长期知识...",
@@ -2876,21 +2935,40 @@ function KnowledgeHomePanel({
               ) : (
                 <View style={styles.knowledgeSourceList}>
                   {recentHighlights.map((highlight) => (
-                    <TouchableOpacity
-                      key={highlight.id}
-                      style={styles.knowledgeSourceItem}
-                      activeOpacity={0.75}
-                      onPress={() => handleOpenBookFromContext(highlight.cfi)}
-                    >
-                      <Text style={styles.knowledgeSourceText} numberOfLines={3}>
-                        "{highlight.text}"
-                      </Text>
-                      {!!highlight.chapterTitle && (
-                        <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
-                          {highlight.chapterTitle}
+                    <View key={highlight.id} style={styles.knowledgeSourceItem}>
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() => handleOpenBookFromContext(highlight.cfi)}
+                      >
+                        <Text style={styles.knowledgeSourceText} numberOfLines={3}>
+                          "{highlight.text}"
                         </Text>
-                      )}
-                    </TouchableOpacity>
+                        {!!highlight.chapterTitle && (
+                          <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
+                            {highlight.chapterTitle}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                      <View style={styles.knowledgeSourceActionRow}>
+                        <TouchableOpacity
+                          activeOpacity={0.76}
+                          style={styles.knowledgeSourceAction}
+                          onPress={() => {
+                            onInsertSourceReference(highlight);
+                            setIsContextSheetVisible(false);
+                          }}
+                          accessibilityLabel={t(
+                            "notes.knowledgeInsertSourceReference",
+                            "插入引用",
+                          )}
+                        >
+                          <BookOpenIcon size={13} color={colors.primary} />
+                          <Text style={styles.knowledgeSourceActionText}>
+                            {t("notes.knowledgeInsertSourceReference", "插入引用")}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   ))}
                 </View>
               )}

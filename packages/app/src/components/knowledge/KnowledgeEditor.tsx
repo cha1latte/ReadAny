@@ -103,6 +103,13 @@ export interface KnowledgeInternalLinkTarget {
   typeLabel?: string;
 }
 
+export interface KnowledgeSourceReferenceRequest {
+  requestId: number;
+  label: string;
+  sourceTitle?: string;
+  cfi?: string;
+}
+
 interface KnowledgeEditorProps {
   value: KnowledgeEditorValue;
   onChange: (value: KnowledgeEditorValue) => void;
@@ -116,6 +123,7 @@ interface KnowledgeEditorProps {
   onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
   outlineTarget?: KnowledgeEditorOutlineTarget | null;
   internalLinkTargets?: KnowledgeInternalLinkTarget[];
+  sourceReferenceRequest?: KnowledgeSourceReferenceRequest | null;
 }
 
 const cardIconMap = {
@@ -370,6 +378,7 @@ export function KnowledgeEditor({
   onPickLocalImage,
   outlineTarget,
   internalLinkTargets = [],
+  sourceReferenceRequest,
 }: KnowledgeEditorProps) {
   const { t } = useTranslation();
   const [isInsertOpen, setIsInsertOpen] = useState(false);
@@ -586,6 +595,27 @@ export function KnowledgeEditor({
       { duration: 900, easing: "ease-out" },
     );
   }, [editor, outlineTarget]);
+
+  useEffect(() => {
+    if (!editor || !sourceReferenceRequest || !canUse("sourceReference")) return;
+    const label = sourceReferenceRequest.label.trim();
+    if (!label) return;
+    editor
+      .chain()
+      .focus()
+      .insertContent([
+        {
+          type: "readanySourceReference",
+          attrs: {
+            label,
+            sourceTitle: sourceReferenceRequest.sourceTitle?.trim() || label,
+            cfi: sourceReferenceRequest.cfi?.trim() || null,
+          },
+        },
+        { type: "text", text: " " },
+      ])
+      .run();
+  }, [canUse, editor, sourceReferenceRequest]);
 
   const hasFloatingInlineTools =
     canUse("bold") ||

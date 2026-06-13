@@ -1478,6 +1478,28 @@ export const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
+    knowledgeSourceActionRow: {
+      marginTop: 9,
+      paddingTop: 8,
+      borderTopWidth: 0.5,
+      borderTopColor: colors.border,
+      alignItems: "flex-end",
+    },
+    knowledgeSourceAction: {
+      minHeight: 30,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      borderRadius: radius.sm,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      backgroundColor: withOpacity(colors.primary, 0.08),
+    },
+    knowledgeSourceActionText: {
+      fontSize: fontSize.xs,
+      color: colors.primary,
+      fontWeight: fontWeight.semibold,
+    },
     knowledgeSourceText: { fontSize: fontSize.sm, lineHeight: 20, color: colors.foreground },
     knowledgeSourceChapter: {
       marginTop: 6,

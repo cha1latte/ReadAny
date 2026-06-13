@@ -113,6 +113,13 @@ export interface MobileKnowledgeImageInsertAttrs {
   fileName?: string;
 }
 
+export interface MobileKnowledgeSourceReferenceRequest {
+  requestId: number;
+  label: string;
+  sourceTitle?: string;
+  cfi?: string;
+}
+
 interface MobileKnowledgeEditorProps {
   documentId?: string;
   value: MobileKnowledgeEditorValue;
@@ -125,6 +132,7 @@ interface MobileKnowledgeEditorProps {
   isSaved?: boolean;
   outlineTarget?: MobileKnowledgeEditorOutlineTarget | null;
   internalLinkTargets?: MobileKnowledgeInternalLinkTarget[];
+  sourceReferenceRequest?: MobileKnowledgeSourceReferenceRequest | null;
   onPickLocalImage?: () => Promise<MobileKnowledgeImageInsertAttrs | null>;
 }
 
@@ -283,6 +291,7 @@ export function MobileKnowledgeEditor({
   isSaved,
   outlineTarget,
   internalLinkTargets = [],
+  sourceReferenceRequest,
   onPickLocalImage,
 }: MobileKnowledgeEditorProps) {
   const { t } = useTranslation();
@@ -643,6 +652,21 @@ export function MobileKnowledgeEditor({
       attrs: { index: outlineTarget.index },
     });
   }, [injectCommand, isBridgeReady, isEditorReady, outlineTarget, useMarkdownFallback]);
+
+  useEffect(() => {
+    if (!sourceReferenceRequest || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;
+    const label = sourceReferenceRequest.label.trim();
+    if (!label) return;
+    injectCommand({
+      type: "runCommand",
+      command: "insertSourceReference",
+      attrs: {
+        label,
+        sourceTitle: sourceReferenceRequest.sourceTitle?.trim() || label,
+        cfi: sourceReferenceRequest.cfi?.trim() || null,
+      },
+    });
+  }, [injectCommand, isBridgeReady, isEditorReady, sourceReferenceRequest, useMarkdownFallback]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

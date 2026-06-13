@@ -702,6 +702,38 @@ async function buildKnowledgeEditor() {
           }
           break;
         }
+        case "insertSourceReference": {
+          const sourceAttrs = attrs && typeof attrs === "object" ? attrs : {};
+          const label =
+            typeof sourceAttrs.label === "string" && sourceAttrs.label.trim()
+              ? sourceAttrs.label.trim()
+              : typeof sourceAttrs.sourceTitle === "string" && sourceAttrs.sourceTitle.trim()
+                ? sourceAttrs.sourceTitle.trim()
+                : "";
+          if (label) {
+            chain
+              .insertContent([
+                {
+                  type: "readanySourceReference",
+                  attrs: {
+                    label,
+                    sourceTitle:
+                      typeof sourceAttrs.sourceTitle === "string" &&
+                      sourceAttrs.sourceTitle.trim()
+                        ? sourceAttrs.sourceTitle.trim()
+                        : label,
+                    cfi:
+                      typeof sourceAttrs.cfi === "string" && sourceAttrs.cfi.trim()
+                        ? sourceAttrs.cfi.trim()
+                        : null,
+                  },
+                },
+                { type: "text", text: " " },
+              ])
+              .run();
+          }
+          break;
+        }
         case "insertCard": {
           const cardAttrs = attrs && typeof attrs === "object" ? attrs : {};
           chain

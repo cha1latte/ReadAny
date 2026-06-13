@@ -4,6 +4,7 @@ import {
   type KnowledgeEditorValue,
   type KnowledgeImageInsertAttrs,
   type KnowledgeInternalLinkTarget,
+  type KnowledgeSourceReferenceRequest,
 } from "@/components/knowledge/KnowledgeEditor";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ import {
   extractKnowledgeDocumentOutline,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  ensureKnowledgeSourceLink,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
   orderKnowledgeDocuments,
@@ -556,6 +558,8 @@ export function NotesPage() {
   const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
   const [knowledgeValue, setKnowledgeValue] =
     useState<KnowledgeEditorValue>(createEmptyKnowledgeValue);
+  const [knowledgeSourceReferenceRequest, setKnowledgeSourceReferenceRequest] =
+    useState<KnowledgeSourceReferenceRequest | null>(null);
   const [savedKnowledgeFingerprint, setSavedKnowledgeFingerprint] = useState(
     knowledgeDocumentFingerprint("", createEmptyKnowledgeValue()),
   );
@@ -578,6 +582,7 @@ export function NotesPage() {
   const [knowledgeVaultImportReview, setKnowledgeVaultImportReview] =
     useState<KnowledgeVaultImportReview | null>(null);
   const knowledgeSaveVersionRef = useRef(0);
+  const knowledgeSourceReferenceRequestIdRef = useRef(0);
   const currentKnowledgeFingerprint = useMemo(
     () => knowledgeDocumentFingerprint(knowledgeTitle, knowledgeValue, knowledgeTags),
     [knowledgeTitle, knowledgeTags, knowledgeValue],
@@ -730,6 +735,7 @@ export function NotesPage() {
         setKnowledgeTags([]);
         const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeValue(emptyValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         setKnowledgeLinks([]);
@@ -766,6 +772,7 @@ export function NotesPage() {
         setKnowledgeTitle(activeDocument.title);
         setKnowledgeTags(normalizeKnowledgeTags(activeDocument.tags));
         setKnowledgeValue(nextValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(
           knowledgeDocumentFingerprint(activeDocument.title, nextValue, activeDocument.tags),
         );
@@ -1026,6 +1033,7 @@ export function NotesPage() {
     setKnowledgeTitle(document.title);
     setKnowledgeTags(normalizeKnowledgeTags(document.tags));
     setKnowledgeValue(nextValue);
+    setKnowledgeSourceReferenceRequest(null);
     setSavedKnowledgeFingerprint(
       knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
     );
@@ -1038,6 +1046,7 @@ export function NotesPage() {
     if (!saved) return;
     setSelectedKnowledgeDocumentId(null);
     setIsKnowledgeVaultRootOpen(true);
+    setKnowledgeSourceReferenceRequest(null);
   };
 
   const refreshSelectedKnowledgeDocuments = useCallback(
@@ -1077,6 +1086,7 @@ export function NotesPage() {
         setKnowledgeTags([]);
         const emptyValue = createEmptyKnowledgeValue();
         setKnowledgeValue(emptyValue);
+        setKnowledgeSourceReferenceRequest(null);
         setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         setIsKnowledgeSaving(false);
         return;
@@ -1089,6 +1099,7 @@ export function NotesPage() {
       setKnowledgeTitle(nextActiveDocument.title);
       setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
       setKnowledgeValue(nextValue);
+      setKnowledgeSourceReferenceRequest(null);
       setSavedKnowledgeFingerprint(
         knowledgeDocumentFingerprint(nextActiveDocument.title, nextValue, nextActiveDocument.tags),
       );
@@ -1171,6 +1182,7 @@ export function NotesPage() {
       setKnowledgeTitle(document.title);
       setKnowledgeTags([]);
       setKnowledgeValue(nextValue);
+      setKnowledgeSourceReferenceRequest(null);
       setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint(document.title, nextValue, []));
       toast.success(t("notes.knowledgeDocumentCreated"));
     } catch (error) {
@@ -1224,6 +1236,7 @@ export function NotesPage() {
           setKnowledgeTitle(nextDocument.title);
           setKnowledgeTags(normalizeKnowledgeTags(nextDocument.tags));
           setKnowledgeValue(nextValue);
+          setKnowledgeSourceReferenceRequest(null);
           setSavedKnowledgeFingerprint(
             knowledgeDocumentFingerprint(nextDocument.title, nextValue, nextDocument.tags),
           );
@@ -1235,6 +1248,7 @@ export function NotesPage() {
           setKnowledgeTags([]);
           const emptyValue = createEmptyKnowledgeValue();
           setKnowledgeValue(emptyValue);
+          setKnowledgeSourceReferenceRequest(null);
           setSavedKnowledgeFingerprint(knowledgeDocumentFingerprint("", emptyValue));
         }
         setIsKnowledgeSaving(false);
@@ -1366,6 +1380,39 @@ export function NotesPage() {
       }
     },
     [t],
+  );
+
+  const handleInsertKnowledgeSourceReference = useCallback(
+    async (highlight: HighlightWithBook) => {
+      if (!knowledgeHome || isKnowledgeVaultRootOpen || knowledgeHome.type === "folder") {
+        toast.error(t("notes.knowledgeSourceReferenceUnavailable"));
+        return;
+      }
+
+      const label = highlight.chapterTitle?.trim() || t("notes.knowledgeSourceHighlight");
+      try {
+        await ensureKnowledgeSourceLink({
+          documentId: knowledgeHome.id,
+          toKind: "highlight",
+          toId: highlight.id,
+          label,
+          cfi: highlight.cfi,
+        });
+        setKnowledgeLinks(await getKnowledgeLinks(knowledgeHome.id));
+        knowledgeSourceReferenceRequestIdRef.current += 1;
+        setKnowledgeSourceReferenceRequest({
+          requestId: knowledgeSourceReferenceRequestIdRef.current,
+          label,
+          sourceTitle: label,
+          cfi: highlight.cfi,
+        });
+        toast.success(t("notes.knowledgeSourceReferenceInserted"));
+      } catch (error) {
+        console.error("[Notes] Failed to insert knowledge source reference:", error);
+        toast.error(t("notes.knowledgeSourceReferenceInsertFailed"));
+      }
+    },
+    [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
   const handleCompressKnowledgeSummary = async () => {
@@ -2171,6 +2218,7 @@ export function NotesPage() {
                 title={knowledgeTitle}
                 tags={knowledgeTags}
                 value={knowledgeValue}
+                sourceReferenceRequest={knowledgeSourceReferenceRequest}
                 links={knowledgeLinks}
                 backlinks={knowledgeBacklinks}
                 isRelationsLoading={isKnowledgeRelationsLoading}
@@ -2189,6 +2237,7 @@ export function NotesPage() {
                 onMoveDocument={handleMoveKnowledgeDocument}
                 onRenameDocument={handleRenameKnowledgeDocument}
                 onPickImageAttachment={handlePickKnowledgeImageAttachment}
+                onInsertSourceReference={handleInsertKnowledgeSourceReference}
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
                 onImportMarkdown={handleKnowledgeMarkdownImport}
@@ -2294,6 +2343,7 @@ interface KnowledgeHomePanelProps {
   title: string;
   tags: string[];
   value: KnowledgeEditorValue;
+  sourceReferenceRequest: KnowledgeSourceReferenceRequest | null;
   links: KnowledgeLink[];
   backlinks: KnowledgeBacklink[];
   isRelationsLoading: boolean;
@@ -2312,6 +2362,7 @@ interface KnowledgeHomePanelProps {
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onRenameDocument: (document: KnowledgeDocument, title: string) => void;
   onPickImageAttachment: (document: KnowledgeDocument) => Promise<KnowledgeImageInsertAttrs | null>;
+  onInsertSourceReference: (highlight: HighlightWithBook) => void;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
   onImportMarkdown: () => void;
@@ -2344,6 +2395,7 @@ function KnowledgeHomePanel({
   title,
   tags,
   value,
+  sourceReferenceRequest,
   links,
   backlinks,
   isRelationsLoading,
@@ -2362,6 +2414,7 @@ function KnowledgeHomePanel({
   onMoveDocument,
   onRenameDocument,
   onPickImageAttachment,
+  onInsertSourceReference,
   onCompressSummary,
   onExport,
   onImportMarkdown,
@@ -2654,6 +2707,7 @@ function KnowledgeHomePanel({
                   chrome="canvas"
                   outlineTarget={outlineTarget}
                   internalLinkTargets={internalLinkTargets}
+                  sourceReferenceRequest={sourceReferenceRequest}
                   contentClassName="max-h-none min-h-[680px] px-0 pb-14 [&_.ProseMirror]:min-h-[660px] [&_.ProseMirror]:bg-transparent [&_.ProseMirror]:px-0 [&_.ProseMirror]:pb-10 [&_.ProseMirror]:pt-1 [&_.ProseMirror]:text-[15px] [&_.ProseMirror_p]:text-[15px] [&_.ProseMirror_p]:leading-7"
                 />
               </article>
@@ -2777,23 +2831,43 @@ function KnowledgeHomePanel({
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {recentHighlights.map((highlight) => (
-                    <button
-                      key={highlight.id}
-                      type="button"
-                      className="w-full rounded-md border border-border/40 bg-background px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
-                      onClick={() => onOpenBook(highlight.cfi)}
-                    >
-                      <p className="line-clamp-3 text-xs leading-relaxed text-foreground/90">
-                        "{highlight.text}"
-                      </p>
-                      {highlight.chapterTitle && (
-                        <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                          {highlight.chapterTitle}
-                        </p>
-                      )}
-                    </button>
-                  ))}
+                  {recentHighlights.map((highlight) => {
+                    const canInsertReference = !isVaultRootOpen && !isFolderDocument;
+                    return (
+                      <div
+                        key={highlight.id}
+                        className="rounded-md border border-border/40 bg-background px-2.5 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                      >
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => onOpenBook(highlight.cfi)}
+                        >
+                          <p className="line-clamp-3 text-xs leading-relaxed text-foreground/90">
+                            "{highlight.text}"
+                          </p>
+                          {highlight.chapterTitle && (
+                            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                              {highlight.chapterTitle}
+                            </p>
+                          )}
+                        </button>
+                        {canInsertReference ? (
+                          <div className="mt-2 flex justify-end border-t border-border/30 pt-1.5">
+                            <button
+                              type="button"
+                              className="inline-flex h-6 items-center gap-1 rounded-sm px-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
+                              onClick={() => onInsertSourceReference(highlight)}
+                              aria-label={t("notes.knowledgeInsertSourceReference")}
+                            >
+                              <BookOpen className="h-3 w-3" />
+                              {t("notes.knowledgeInsertSourceReference")}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -686,19 +686,38 @@ export function KnowledgeEditor({
     }
   }, [editor, hasFloatingInlineTools, readOnly]);
 
+  const syncCardControlsEditable = useCallback(() => {
+    const shell = editorShellRef.current;
+    if (!shell) return;
+    shell
+      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-readany-card-control]")
+      .forEach((control) => {
+        control.readOnly = readOnly;
+        control.tabIndex = readOnly ? -1 : 0;
+        control.setAttribute("aria-readonly", readOnly ? "true" : "false");
+      });
+  }, [readOnly]);
+
   useEffect(() => {
     if (!editor) return;
 
     editor.on("selectionUpdate", updateFloatingToolbarPosition);
     editor.on("transaction", updateFloatingToolbarPosition);
+    editor.on("transaction", syncCardControlsEditable);
     window.addEventListener("resize", updateFloatingToolbarPosition);
+    syncCardControlsEditable();
 
     return () => {
       editor.off("selectionUpdate", updateFloatingToolbarPosition);
       editor.off("transaction", updateFloatingToolbarPosition);
+      editor.off("transaction", syncCardControlsEditable);
       window.removeEventListener("resize", updateFloatingToolbarPosition);
     };
-  }, [editor, updateFloatingToolbarPosition]);
+  }, [editor, syncCardControlsEditable, updateFloatingToolbarPosition]);
+
+  useEffect(() => {
+    syncCardControlsEditable();
+  }, [syncCardControlsEditable]);
 
   const setLink = useCallback(() => {
     if (!editor || readOnly || !canUse("link")) return;
@@ -1937,6 +1956,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewP
                 defaultValue: "Card title",
               })}
               placeholder={fallbackTitle}
+              data-readany-card-control="title"
               readOnly={!isEditable}
               aria-readonly={!isEditable}
               tabIndex={isEditable ? 0 : -1}
@@ -1963,6 +1983,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewP
               defaultValue: "Write directly inside this card...",
             })}
             rows={3}
+            data-readany-card-control="body"
             readOnly={!isEditable}
             aria-readonly={!isEditable}
             tabIndex={isEditable ? 0 : -1}

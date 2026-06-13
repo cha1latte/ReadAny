@@ -116,6 +116,7 @@ export interface KnowledgeSourceReferenceRequest {
   requestId: number;
   label: string;
   sourceTitle?: string;
+  sourceId?: string;
   cfi?: string;
 }
 
@@ -250,6 +251,7 @@ const ReadAnySourceReferenceExtension = Node.create({
     return {
       label: { default: null },
       sourceTitle: { default: null },
+      sourceId: { default: null },
       cfi: { default: null },
     };
   },
@@ -263,7 +265,8 @@ const ReadAnySourceReferenceExtension = Node.create({
     return [
       "span",
       mergeAttributes(HTMLAttributes, {
-        "data-readany-source-reference": HTMLAttributes.cfi || label,
+        "data-readany-source-reference": HTMLAttributes.cfi || HTMLAttributes.sourceId || label,
+        ...(HTMLAttributes.sourceId ? { "data-readany-source-id": HTMLAttributes.sourceId } : {}),
         class: "readany-source-reference",
       }),
       label,
@@ -662,6 +665,7 @@ export function KnowledgeEditor({
           attrs: {
             label,
             sourceTitle: sourceReferenceRequest.sourceTitle?.trim() || label,
+            sourceId: sourceReferenceRequest.sourceId?.trim() || null,
             cfi: sourceReferenceRequest.cfi?.trim() || null,
           },
         },
@@ -2092,7 +2096,8 @@ function ReadAnySourceReferenceView({ node, selected }: NodeViewProps) {
           : "border-border/60 bg-muted/55 text-muted-foreground",
       )}
       contentEditable={false}
-      data-readany-source-reference={node.attrs.cfi || label}
+      data-readany-source-reference={node.attrs.cfi || node.attrs.sourceId || label}
+      data-readany-source-id={node.attrs.sourceId || undefined}
       title={label}
     >
       <BookOpen className="h-3 w-3 shrink-0" />

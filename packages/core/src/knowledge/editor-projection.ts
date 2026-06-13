@@ -169,7 +169,10 @@ function renderInline(node: TiptapNode, options: MarkdownProjectionOptions): str
   if (node.type === "readanySourceReference") {
     const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");
     const cfi = String(node.attrs?.cfi ?? "");
-    return cfi ? `[${label}](readany://cfi/${encodeURIComponent(cfi)})` : label;
+    const sourceId = String(node.attrs?.sourceId ?? "");
+    if (cfi) return `[${label}](readany://cfi/${encodeURIComponent(cfi)})`;
+    if (sourceId) return `[${label}](readany://source/${encodeURIComponent(sourceId)})`;
+    return label;
   }
 
   return (node.content ?? []).map((child) => renderInline(child, options)).join("");
@@ -240,17 +243,33 @@ export function createReadAnyCardTiptapContent(
   const title = model.title.trim();
   const body = model.body.trim();
   const source = model.sourceTitle?.trim();
-  const markdown = [
-    title ? `### ${title}` : "",
-    body,
-    source ? `*Source: ${source}*` : "",
-  ]
+  const markdown = [title ? `### ${title}` : "", body]
     .filter(Boolean)
     .join("\n\n");
   const document = markdownToBasicTiptap(markdown || model.cardType, {
     cardTemplates: options.cardTemplates,
   });
-  return document.content?.length ? document.content : [{ type: "paragraph" }];
+  const content = document.content?.length ? document.content : [{ type: "paragraph" }];
+
+  if (source || model.sourceId || model.cfi) {
+    content.push({
+      type: "paragraph",
+      content: [
+        textNode("Source: "),
+        {
+          type: "readanySourceReference",
+          attrs: {
+            label: source || model.sourceId || model.cfi || "Source reference",
+            ...(source ? { sourceTitle: source } : {}),
+            ...(model.sourceId ? { sourceId: model.sourceId } : {}),
+            ...(model.cfi ? { cfi: model.cfi } : {}),
+          },
+        },
+      ],
+    });
+  }
+
+  return content;
 }
 
 function renderListItem(
@@ -420,9 +439,11 @@ function renderHtmlInline(node: TiptapNode, options: ReadOnlyHtmlProjectionOptio
   if (node.type === "readanySourceReference") {
     const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");
     const cfi = typeof node.attrs?.cfi === "string" ? node.attrs.cfi.trim() : "";
+    const sourceId = typeof node.attrs?.sourceId === "string" ? node.attrs.sourceId.trim() : "";
     const attrs = [
       `class="${className(options, "source-reference")}"`,
       cfi ? `data-cfi="${escapeHtml(cfi)}"` : "",
+      sourceId ? `data-source-id="${escapeHtml(sourceId)}"` : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -577,6 +598,17 @@ function linkNode(label: string, href: string): TiptapNode {
       attrs: {
         label,
         cfi: decodeURIComponent(href.slice("readany://cfi/".length)),
+      },
+    };
+  }
+
+  if (href.startsWith("readany://source/")) {
+    return {
+      type: "readanySourceReference",
+      attrs: {
+        label,
+        sourceTitle: label,
+        sourceId: decodeURIComponent(href.slice("readany://source/".length)),
       },
     };
   }

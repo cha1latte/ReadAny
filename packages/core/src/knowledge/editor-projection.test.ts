@@ -422,6 +422,8 @@ describe("editor projection", () => {
         title: "AI summary",
         markdown: "The chapter connects memory and ritual.",
         sourceTitle: "Chapter 4",
+        sourceId: "doc-4",
+        cfi: "epubcfi(/6/4)",
       }),
     ).toEqual([
       {
@@ -436,14 +438,48 @@ describe("editor projection", () => {
       {
         type: "paragraph",
         content: [
+          { type: "text", text: "Source: " },
           {
-            type: "text",
-            marks: [{ type: "italic" }],
-            text: "Source: Chapter 4",
+            type: "readanySourceReference",
+            attrs: {
+              label: "Chapter 4",
+              sourceTitle: "Chapter 4",
+              sourceId: "doc-4",
+              cfi: "epubcfi(/6/4)",
+            },
           },
         ],
       },
     ]);
+  });
+
+  it("round-trips editable source references with document source ids", () => {
+    const content = createReadAnyCardTiptapContent({
+      cardType: "aiSummary",
+      version: 1,
+      title: "Document-linked summary",
+      markdown: "A concise synthesis.",
+      sourceTitle: "Book Home",
+      sourceId: "doc-home",
+    });
+
+    const markdown = renderKnowledgeJsonToMarkdown({ type: "doc", content });
+
+    expect(markdown).toContain("Source: [Book Home](readany://source/doc-home)");
+    expect(markdownToBasicTiptap(markdown).content?.at(-1)).toEqual({
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Source: " },
+        {
+          type: "readanySourceReference",
+          attrs: {
+            label: "Book Home",
+            sourceTitle: "Book Home",
+            sourceId: "doc-home",
+          },
+        },
+      ],
+    });
   });
 
   it("exports upgraded card metadata for round-tripping", () => {

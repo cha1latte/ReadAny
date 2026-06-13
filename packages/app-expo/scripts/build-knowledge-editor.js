@@ -409,6 +409,7 @@ async function buildKnowledgeEditor() {
         return {
           label: { default: null },
           sourceTitle: { default: null },
+          sourceId: { default: null },
           cfi: { default: null },
         };
       },
@@ -422,7 +423,10 @@ async function buildKnowledgeEditor() {
         return [
           "span",
           mergeAttributes(HTMLAttributes, {
-            "data-readany-source-reference": HTMLAttributes.cfi || label,
+            "data-readany-source-reference": HTMLAttributes.cfi || HTMLAttributes.sourceId || label,
+            ...(HTMLAttributes.sourceId
+              ? { "data-readany-source-id": HTMLAttributes.sourceId }
+              : {}),
             class: "readany-source-reference",
           }),
           label,
@@ -437,7 +441,9 @@ async function buildKnowledgeEditor() {
           const update = (nextNode) => {
             const attrs = nextNode.attrs || {};
             const label = attrs.label || attrs.sourceTitle || "Source reference";
-            span.dataset.readanySourceReference = attrs.cfi || label;
+            span.dataset.readanySourceReference = attrs.cfi || attrs.sourceId || label;
+            if (attrs.sourceId) span.dataset.readanySourceId = attrs.sourceId;
+            else delete span.dataset.readanySourceId;
             span.textContent = label;
           };
           update(node);
@@ -781,6 +787,10 @@ async function buildKnowledgeEditor() {
                       sourceAttrs.sourceTitle.trim()
                         ? sourceAttrs.sourceTitle.trim()
                         : label,
+                    sourceId:
+                      typeof sourceAttrs.sourceId === "string" && sourceAttrs.sourceId.trim()
+                        ? sourceAttrs.sourceId.trim()
+                        : null,
                     cfi:
                       typeof sourceAttrs.cfi === "string" && sourceAttrs.cfi.trim()
                         ? sourceAttrs.cfi.trim()

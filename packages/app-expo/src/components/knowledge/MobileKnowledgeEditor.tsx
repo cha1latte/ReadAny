@@ -128,6 +128,7 @@ export interface MobileKnowledgeSourceReferenceRequest {
   requestId: number;
   label: string;
   sourceTitle?: string;
+  sourceId?: string;
   cfi?: string;
 }
 
@@ -719,6 +720,7 @@ export function MobileKnowledgeEditor({
       attrs: {
         label,
         sourceTitle: sourceReferenceRequest.sourceTitle?.trim() || label,
+        sourceId: sourceReferenceRequest.sourceId?.trim() || null,
         cfi: sourceReferenceRequest.cfi?.trim() || null,
       },
     });

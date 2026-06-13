@@ -22,6 +22,7 @@ import {
   validateKnowledgeDocumentParent,
   validateKnowledgeDocumentSiblingTitle,
 } from "./document-utils";
+import { renderKnowledgeJsonToReadOnlyHtml } from "./editor-projection";
 
 export type KnowledgeProposalAction = "create" | "update" | "link";
 export type KnowledgeProposalConfirmationKind =
@@ -111,6 +112,7 @@ export interface KnowledgeWriteProposalPreview {
   linkType?: KnowledgeLinkTargetKind;
   tags: string[];
   contentPreview: string;
+  contentPreviewHtml?: string;
   changedFields: string[];
   currentPath?: string;
   targetPath?: string;
@@ -477,12 +479,14 @@ export function createKnowledgeWriteProposalPreview(
 ): KnowledgeWriteProposalPreview {
   if (proposal.action === "create") {
     const contentPreview = proposal.draft.excerpt || proposal.draft.contentMd || "";
+    const contentPreviewHtml = renderKnowledgeJsonToReadOnlyHtml(proposal.draft.contentJson);
     return {
       action: proposal.action,
       title: proposal.draft.title ?? "",
       documentType: proposal.draft.type,
       tags: proposal.draft.tags ?? [],
       contentPreview,
+      ...(contentPreviewHtml ? { contentPreviewHtml } : {}),
       changedFields: [],
       targetPath: proposal.targetPath,
       visiblePath: proposal.targetPath,
@@ -493,6 +497,10 @@ export function createKnowledgeWriteProposalPreview(
   if (proposal.action === "update") {
     const contentPreview =
       proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
+    const contentPreviewHtml =
+      proposal.patch.contentJson || proposal.patch.contentMd
+        ? renderKnowledgeJsonToReadOnlyHtml(proposal.patch.contentJson)
+        : "";
     const currentPath = proposal.current?.path;
     const targetPath = proposal.targetPath;
 
@@ -502,6 +510,7 @@ export function createKnowledgeWriteProposalPreview(
       documentType: proposal.current?.type,
       tags: proposal.patch.tags ?? proposal.current?.tags ?? [],
       contentPreview,
+      ...(contentPreviewHtml ? { contentPreviewHtml } : {}),
       changedFields: proposal.changedFields,
       currentPath,
       targetPath,

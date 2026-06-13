@@ -793,16 +793,42 @@ function KnowledgeProposalCard({
           </div>
         )}
 
-        {preview.contentPreview && (
+        {(preview.contentPreview || preview.contentPreviewHtml) && (
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               {t("knowledgeProposal.contentPreview")}
             </div>
-            <div className="max-h-28 overflow-auto rounded border border-border bg-muted/30 p-2 text-xs leading-relaxed text-foreground">
-              {preview.contentPreview.length > 520
-                ? `${preview.contentPreview.slice(0, 520)}...`
-                : preview.contentPreview}
-            </div>
+            {preview.contentPreviewHtml ? (
+              <div
+                className={cn(
+                  "max-h-40 overflow-auto rounded border border-border bg-muted/25 p-2.5 text-xs leading-relaxed text-foreground",
+                  "[&_a]:text-primary [&_a]:no-underline",
+                  "[&_blockquote]:border-l-2 [&_blockquote]:border-primary/35 [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground",
+                  "[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5",
+                  "[&_figure]:my-2 [&_figcaption]:mt-1 [&_figcaption]:text-center [&_figcaption]:text-[11px] [&_figcaption]:text-muted-foreground",
+                  "[&_h1]:mb-1 [&_h1]:text-sm [&_h1]:font-semibold",
+                  "[&_h2]:mb-1 [&_h2]:text-sm [&_h2]:font-semibold",
+                  "[&_h3]:mb-1 [&_h3]:text-xs [&_h3]:font-semibold",
+                  "[&_img]:max-h-40 [&_img]:rounded [&_img]:border [&_img]:border-border",
+                  "[&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1 [&_ul]:list-disc",
+                  "[&_.readany-card]:my-2 [&_.readany-card]:rounded-md [&_.readany-card]:border [&_.readany-card]:border-border [&_.readany-card]:bg-background [&_.readany-card]:p-2",
+                  "[&_.readany-card-header]:mb-1.5 [&_.readany-card-header]:space-y-1",
+                  "[&_.readany-card-type]:mr-1.5 [&_.readany-card-type]:rounded [&_.readany-card-type]:bg-muted [&_.readany-card-type]:px-1.5 [&_.readany-card-type]:py-0.5 [&_.readany-card-type]:font-mono [&_.readany-card-type]:text-[10px] [&_.readany-card-type]:text-muted-foreground",
+                  "[&_.readany-card-state]:rounded [&_.readany-card-state]:bg-amber-500/10 [&_.readany-card-state]:px-1.5 [&_.readany-card-state]:py-0.5 [&_.readany-card-state]:text-[10px] [&_.readany-card-state]:text-amber-700 dark:[&_.readany-card-state]:text-amber-300",
+                  "[&_.readany-card_h4]:m-0 [&_.readany-card_h4]:text-xs [&_.readany-card_h4]:font-semibold",
+                  "[&_.readany-card-meta-list]:mt-2 [&_.readany-card-meta-list]:grid [&_.readany-card-meta-list]:gap-1",
+                  "[&_.readany-card-meta-list_div]:flex [&_.readany-card-meta-list_div]:gap-2",
+                  "[&_.readany-card-meta-list_dt]:text-muted-foreground [&_.readany-card-meta-list_dd]:m-0 [&_.readany-card-meta-list_dd]:font-mono",
+                )}
+                dangerouslySetInnerHTML={{ __html: preview.contentPreviewHtml }}
+              />
+            ) : (
+              <div className="max-h-28 overflow-auto rounded border border-border bg-muted/30 p-2 text-xs leading-relaxed text-foreground">
+                {preview.contentPreview.length > 520
+                  ? `${preview.contentPreview.slice(0, 520)}...`
+                  : preview.contentPreview}
+              </div>
+            )}
           </div>
         )}
 

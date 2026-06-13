@@ -92,6 +92,71 @@ describe("knowledge write proposals", () => {
     });
   });
 
+  it("creates safe rich read-only previews for document proposals", () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      targetPath: "Knowledge base / Reviews / Rich Preview",
+      draft: {
+        id: "proposal-doc-rich",
+        type: "review",
+        title: "Rich Preview",
+        tags: ["review"],
+        contentMd: "Rich preview body.",
+        contentJson: {
+          type: "doc",
+          content: [
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Review <Draft>" }],
+            },
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "This is " },
+                { type: "text", text: "important", marks: [{ type: "bold" }] },
+                { type: "text", text: " and " },
+                {
+                  type: "text",
+                  text: "unsafe",
+                  marks: [{ type: "link", attrs: { href: "javascript:alert(1)" } }],
+                },
+                { type: "text", text: "." },
+              ],
+            },
+            {
+              type: "readanyCard",
+              attrs: {
+                cardType: "customMetric",
+                version: 2,
+                title: "Reading score",
+                text: "Focus: 92%",
+                data: { private: "<json>" },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal);
+    expect(preview.contentPreview).toBe("Rich preview body.");
+    expect(preview.contentPreviewHtml).toContain("<h2>Review &lt;Draft&gt;</h2>");
+    expect(preview.contentPreviewHtml).toContain(
+      "<p>This is <strong>important</strong> and unsafe.</p>",
+    );
+    expect(preview.contentPreviewHtml).toContain('data-readany-card-state="unsupported"');
+    expect(preview.contentPreviewHtml).toContain("<h4>Reading score</h4>");
+    expect(preview.contentPreviewHtml).not.toContain("javascript:");
+    expect(preview.contentPreviewHtml).not.toContain("private");
+  });
+
   it("rejects ordinary tool results and malformed proposal payloads", () => {
     expect(getKnowledgeWriteProposal({ success: true, documents: [] })).toBeNull();
     expect(

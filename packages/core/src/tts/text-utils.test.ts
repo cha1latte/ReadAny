@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanText, isTTSFootnoteMarker } from "./text-utils";
+import { cleanText, isTTSFootnoteMarker, shouldSkipTTSNode } from "./text-utils";
 
 describe("TTS text utils", () => {
   it("removes numeric footnote markers from narration text", () => {
@@ -19,5 +19,16 @@ describe("TTS text utils", () => {
     expect(isTTSFootnoteMarker("［23］")).toBe(true);
     expect(isTTSFootnoteMarker("（四）")).toBe(true);
     expect(isTTSFootnoteMarker("正文[十二]")).toBe(false);
+  });
+
+  it("skips ReadAny note tooltip text", () => {
+    const tooltipChild = {
+      closest: (selector: string) =>
+        selector.includes(".foliate-note-tooltip") && selector.includes("[data-readany-tts-skip]")
+          ? {}
+          : null,
+    } as unknown as Element;
+
+    expect(shouldSkipTTSNode(tooltipChild)).toBe(true);
   });
 });

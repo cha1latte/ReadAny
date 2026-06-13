@@ -15,6 +15,9 @@ const TTS_SKIPPED_ELEMENT_SELECTOR = [
   "rp",
   "sup",
   ".readany-translation",
+  ".foliate-note-tooltip",
+  "#foliate-note-shared-tooltip",
+  "[data-readany-tts-skip]",
   '[role="doc-noteref"]',
   '[role="doc-footnote"]',
   '[epub\\:type~="noteref"]',
@@ -25,8 +28,8 @@ const TTS_SKIPPED_ELEMENT_SELECTOR = [
   'a[href^="#footnote"]',
   'a[href*="footnote"]',
   'a[href*="note"]',
-  'a.noteref',
-  'a.footnote',
+  "a.noteref",
+  "a.footnote",
   ".noteref",
   ".footnote",
   ".footnote-ref",
@@ -48,10 +51,7 @@ export function shouldSkipTTSNode(element: Element | null | undefined): boolean 
 
 /** Clean text for TTS: remove footnote references and extra whitespace. */
 export function cleanText(text: string): string {
-  return text
-    .replace(FOOTNOTE_MARKER_PATTERN, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return text.replace(FOOTNOTE_MARKER_PATTERN, "").replace(/\s+/g, " ").trim();
 }
 
 /** Count characters (CJK = 2 units, others = 1) */

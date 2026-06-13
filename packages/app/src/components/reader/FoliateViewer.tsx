@@ -3417,6 +3417,7 @@ function ensureNoteTooltipSystem(doc: Document) {
   const tooltip = doc.createElement("div");
   tooltip.className = "foliate-note-tooltip";
   tooltip.id = "foliate-note-shared-tooltip";
+  tooltip.setAttribute("data-readany-tts-skip", "true");
   const content = doc.createElement("div");
   content.className = "note-content";
   tooltip.appendChild(content);

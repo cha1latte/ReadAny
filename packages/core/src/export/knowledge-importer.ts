@@ -6,6 +6,7 @@ import type {
 } from "../knowledge/proposals";
 import type {
   JSONValue,
+  KnowledgeCardTemplate,
   KnowledgeDocument,
   KnowledgeDocumentType,
   KnowledgeSourceKind,
@@ -23,6 +24,7 @@ export interface KnowledgeMarkdownImportInput {
   defaultType?: KnowledgeDocumentType;
   defaultParentId?: string;
   bookId?: string;
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export type KnowledgeMarkdownImportPlanFile = KnowledgeMarkdownImportInput;
@@ -34,6 +36,7 @@ export interface KnowledgeMarkdownImportPlanInput {
   bookId?: string;
   preservePathHierarchy?: boolean;
   currentDocuments?: KnowledgeDocument[];
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export interface KnowledgeImportFrontmatter {
@@ -106,6 +109,7 @@ export interface KnowledgeVaultImportPlanInput {
   manifest: KnowledgeExportManifest;
   files: KnowledgeExportObservedFile[];
   currentFiles?: KnowledgeExportObservedFile[];
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export interface KnowledgeImportProposalOptions {
@@ -499,7 +503,9 @@ export function parseKnowledgeMarkdownDocument(
     isReadAnyExport ? stripGeneratedReadAnySections(frontmatter.body) : frontmatter.body.trim(),
     title,
   );
-  const contentJson = markdownToBasicTiptap(contentMd) as unknown as JSONValue;
+  const contentJson = markdownToBasicTiptap(contentMd, {
+    cardTemplates: input.cardTemplates,
+  }) as unknown as JSONValue;
   const sourceId = metadata.sourceId ?? input.path;
   const sourceKind = metadata.sourceKind ?? (input.path ? "obsidian" : "external");
   const bookId = input.bookId ?? metadata.bookId;
@@ -678,6 +684,7 @@ export function createKnowledgeVaultImportPlan(
       content: file.content,
       defaultType: manifestDocument.type,
       bookId: manifestDocument.bookId,
+      cardTemplates: input.cardTemplates,
     });
     draft.draft.contentJson = resolveInternalLinkTargetPaths(
       draft.draft.contentJson ?? ({ type: "doc", content: [] } as unknown as JSONValue),
@@ -887,6 +894,7 @@ export function createKnowledgeMarkdownImportPlan(
       bookId,
       defaultType: file.defaultType ?? input.defaultType,
       defaultParentId: baseParentId,
+      cardTemplates: input.cardTemplates,
     });
 
     if (preservePathHierarchy && shouldPreserveImportHierarchy(imported)) {

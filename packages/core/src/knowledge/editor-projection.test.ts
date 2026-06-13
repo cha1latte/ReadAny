@@ -461,6 +461,58 @@ describe("editor projection", () => {
     });
   });
 
+  it("migrates imported custom card metadata with synced templates", () => {
+    const json = markdownToBasicTiptap(
+      [
+        ':::readany-card type="custom:template-reading-question" version="1" title="My prompt" data="%7B%22layout%22%3A%7B%22density%22%3A%22detailed%22%7D%7D"',
+        "Question: What changed?",
+        ":::",
+      ].join("\n"),
+      {
+        cardTemplates: [
+          {
+            id: "template-reading-question",
+            name: "Reading Prompt",
+            version: 4,
+            schemaJson: {
+              cardType: "custom:template-reading-question",
+              title: "Reading Prompt",
+              markdown: "Prompt:\nResponse:",
+              attrs: {
+                data: {
+                  kind: "prompt",
+                  layout: {
+                    tone: "short",
+                    density: "compact",
+                  },
+                },
+              },
+            },
+            builtIn: false,
+            enabled: true,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      },
+    );
+
+    expect(json.content?.[0]?.attrs).toEqual({
+      cardType: "custom:template-reading-question",
+      version: 4,
+      title: "My prompt",
+      markdown: "Question: What changed?",
+      text: "Question: What changed?",
+      data: {
+        kind: "prompt",
+        layout: {
+          tone: "short",
+          density: "detailed",
+        },
+      },
+    });
+  });
+
   it("imports basic Markdown blocks into Tiptap JSON", () => {
     const json = markdownToBasicTiptap(
       ["# Title", "Paragraph", "> Quote", "- A\n- B", "1. One\n2. Two", "---"].join("\n\n"),

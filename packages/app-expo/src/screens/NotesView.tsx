@@ -50,6 +50,7 @@ import {
   ensureNoteKnowledgeDocuments,
   getKnowledgeAttachments,
   getKnowledgeBacklinks,
+  getKnowledgeCardTemplates,
   getKnowledgeDocument,
   getKnowledgeDocuments,
   getKnowledgeLinks,
@@ -317,9 +318,10 @@ async function collectBookKnowledgeExportInput(
   const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
   const mergedDocuments = orderKnowledgeDocuments(Array.from(documentMap.values()), homeDocumentId);
 
-  const [linksByDocument, attachmentsByDocument] = await Promise.all([
+  const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
+    getKnowledgeCardTemplates(),
   ]);
 
   return {
@@ -327,6 +329,7 @@ async function collectBookKnowledgeExportInput(
     books: [book],
     links: linksByDocument.flat(),
     attachments: attachmentsByDocument.flat(),
+    cardTemplates,
   };
 }
 
@@ -1688,16 +1691,21 @@ export function NotesView({
         : knowledgeHome?.type === "folder"
           ? knowledgeHome.id
           : knowledgeHome?.parentId;
-      const plan = createKnowledgeMarkdownImportPlan({
-        bookId: selectedKnowledgeBookId,
-        defaultParentId,
-        currentDocuments: knowledgeDocuments,
-        files: await Promise.all(
+      const [files, cardTemplates] = await Promise.all([
+        Promise.all(
           paths.map(async (path) => ({
             path,
             content: await platform.readTextFile(path),
           })),
         ),
+        getKnowledgeCardTemplates(),
+      ]);
+      const plan = createKnowledgeMarkdownImportPlan({
+        bookId: selectedKnowledgeBookId,
+        defaultParentId,
+        currentDocuments: knowledgeDocuments,
+        files,
+        cardTemplates,
       });
       const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
         path: item.path,

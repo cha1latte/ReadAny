@@ -1012,7 +1012,9 @@ export function MobileKnowledgeEditor({
 
   const handleFallbackChange = useCallback(
     (markdown: string) => {
-      const contentJson = markdownToBasicTiptap(markdown) as unknown as JSONValue;
+      const contentJson = markdownToBasicTiptap(markdown, {
+        cardTemplates,
+      }) as unknown as JSONValue;
       const nextValue = {
         contentJson,
         contentMd: markdown,
@@ -1021,7 +1023,7 @@ export function MobileKnowledgeEditor({
       scheduleDraftSave(nextValue);
       onChange(nextValue);
     },
-    [onChange, scheduleDraftSave],
+    [cardTemplates, onChange, scheduleDraftSave],
   );
 
   const toolbarGroupCandidates: ({ key: string; node: React.ReactNode } | null)[] = [

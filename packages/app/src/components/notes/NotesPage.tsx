@@ -1776,16 +1776,21 @@ export function NotesPage() {
         : knowledgeHome?.type === "folder"
           ? knowledgeHome.id
           : knowledgeHome?.parentId;
-      const plan = createKnowledgeMarkdownImportPlan({
-        bookId: selectedKnowledgeBookId,
-        defaultParentId,
-        currentDocuments: knowledgeDocuments,
-        files: await Promise.all(
+      const [files, cardTemplates] = await Promise.all([
+        Promise.all(
           paths.map(async (path) => ({
             path,
             content: await readTextFile(path),
           })),
         ),
+        getKnowledgeCardTemplates(),
+      ]);
+      const plan = createKnowledgeMarkdownImportPlan({
+        bookId: selectedKnowledgeBookId,
+        defaultParentId,
+        currentDocuments: knowledgeDocuments,
+        files,
+        cardTemplates,
       });
       const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
         path: item.path,
@@ -1895,17 +1900,23 @@ export function NotesPage() {
             updatedAt: Date.now(),
           }
         : null;
-      const currentFiles = liveDocument
-        ? knowledgeExporter.buildVaultPackage(
-            await collectKnowledgeVaultInput(liveDocument, books),
-            {
-              format: "obsidian",
-              rootDir: "",
-              previousManifest: manifest,
-            },
-          ).files
+      const currentInput = liveDocument
+        ? await collectKnowledgeVaultInput(liveDocument, books)
+        : null;
+      const cardTemplates = currentInput?.cardTemplates ?? (await getKnowledgeCardTemplates());
+      const currentFiles = currentInput
+        ? knowledgeExporter.buildVaultPackage(currentInput, {
+            format: "obsidian",
+            rootDir: "",
+            previousManifest: manifest,
+          }).files
         : [];
-      const plan = createKnowledgeVaultImportPlan({ manifest, files, currentFiles });
+      const plan = createKnowledgeVaultImportPlan({
+        manifest,
+        files,
+        currentFiles,
+        cardTemplates,
+      });
       const proposals = createKnowledgeVaultImportWriteProposals(plan);
 
       if (

@@ -230,6 +230,63 @@ Why does this matter?
     });
   });
 
+  it("migrates imported ReadAny custom cards with current synced templates", () => {
+    const plan = createKnowledgeMarkdownImportPlan({
+      files: [
+        {
+          path: "Vault/Prompt.md",
+          content: [
+            "# Prompt",
+            "",
+            ':::readany-card type="custom:template-reading-question" version="1" title="My prompt"',
+            "Question: What changed?",
+            ":::",
+          ].join("\n"),
+        },
+      ],
+      cardTemplates: [
+        {
+          id: "template-reading-question",
+          name: "Reading Prompt",
+          version: 3,
+          schemaJson: {
+            cardType: "custom:template-reading-question",
+            title: "Reading Prompt",
+            markdown: "Prompt:\nResponse:",
+            attrs: {
+              data: { kind: "prompt" },
+            },
+          },
+          builtIn: false,
+          enabled: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    });
+
+    const proposal = plan.documentItems[0]?.proposal;
+    if (!proposal || proposal.action !== "create") {
+      throw new Error("Expected document create proposal");
+    }
+
+    expect(proposal.draft.contentJson).toMatchObject({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 3,
+            title: "My prompt",
+            markdown: "Question: What changed?",
+            data: { kind: "prompt" },
+          },
+        },
+      ],
+    });
+  });
+
   it("creates folder proposals for ordinary Markdown path hierarchy", () => {
     const plan = createKnowledgeMarkdownImportPlan({
       bookId: "book-1",
@@ -643,6 +700,81 @@ Home note.
         changedFields: expect.arrayContaining(["contentMd", "contentJson", "excerpt", "tags"]),
       }),
     ]);
+  });
+
+  it("migrates custom cards while reconciling modified vault files", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [
+          knowledgeDocument({
+            bookId: undefined,
+            sourceKind: undefined,
+            contentJson: {
+              type: "doc",
+              content: [
+                {
+                  type: "readanyCard",
+                  attrs: {
+                    cardType: "custom:template-reading-question",
+                    version: 1,
+                    title: "My prompt",
+                    markdown: "Question: What changed?",
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      { exportedAt: 1700000200000, includeReadAnyCardMetadata: true },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+    const editedContent = documentFile.content.replace(
+      "Question: What changed?",
+      "Question: What changed in Obsidian?",
+    );
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: editedContent }],
+      cardTemplates: [
+        {
+          id: "template-reading-question",
+          name: "Reading Prompt",
+          version: 3,
+          schemaJson: {
+            cardType: "custom:template-reading-question",
+            title: "Reading Prompt",
+            markdown: "Prompt:\nResponse:",
+            attrs: {
+              data: { kind: "prompt" },
+            },
+          },
+          builtIn: false,
+          enabled: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    });
+
+    expect(plan.modified[0]?.draft?.draft.contentJson).toMatchObject({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 3,
+            title: "My prompt",
+            markdown: "Question: What changed in Obsidian?",
+            data: { kind: "prompt" },
+          },
+        },
+      ],
+    });
   });
 
   it("reconciles moved Obsidian files by stable ReadAny document id", () => {

@@ -37,6 +37,11 @@ export interface MarkdownProjectionOptions {
   cardTemplates?: KnowledgeCardTemplate[];
 }
 
+export interface MarkdownImportOptions {
+  /** Synced custom card templates used to upgrade imported custom card attrs safely. */
+  cardTemplates?: KnowledgeCardTemplate[];
+}
+
 function isObject(value: JSONValue | unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -503,7 +508,10 @@ function parseReadAnyCardMetadata(rawAttrs: string): ReadAnyCardAttrs {
   return attrs;
 }
 
-export function markdownToBasicTiptap(markdown: string): TiptapNode {
+export function markdownToBasicTiptap(
+  markdown: string,
+  options: MarkdownImportOptions = {},
+): TiptapNode {
   const blocks = splitMarkdownBlocks(markdown);
 
   const content = blocks.map<TiptapNode>((block) => {
@@ -513,10 +521,17 @@ export function markdownToBasicTiptap(markdown: string): TiptapNode {
       const body = readAnyCard[2].trim();
       return {
         type: "readanyCard",
-        attrs: upgradeReadAnyCardAttrs({
-          ...attrs,
-          markdown: body,
-        }) as Record<string, unknown>,
+        attrs: (
+          options.cardTemplates?.length
+            ? upgradeReadAnyCardAttrsWithTemplates(
+                { ...attrs, markdown: body },
+                options.cardTemplates,
+              )
+            : upgradeReadAnyCardAttrs({
+                ...attrs,
+                markdown: body,
+              })
+        ) as Record<string, unknown>,
       };
     }
 

@@ -492,6 +492,21 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.md,
       backgroundColor: colors.muted,
     },
+    knowledgeRenameBody: {
+      gap: 12,
+      paddingTop: 12,
+    },
+    knowledgeRenameInput: {
+      minHeight: 42,
+      borderRadius: radius.md,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+    },
     knowledgeImportSheet: {
       position: "absolute",
       left: 10,

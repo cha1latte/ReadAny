@@ -12,6 +12,7 @@ import {
   CheckCheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  EditIcon,
   FolderIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -107,9 +108,12 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -1099,6 +1103,50 @@ export function NotesView({
     [knowledgeDocuments, knowledgeHome?.id, saveActiveKnowledgeDocumentNow, t],
   );
 
+  const handleRenameKnowledgeDocument = useCallback(
+    async (document: KnowledgeDocument, title: string) => {
+      const normalizedTitle = title.trim();
+      if (!normalizedTitle || normalizedTitle === document.title) return;
+
+      const saved = await saveActiveKnowledgeDocumentNow();
+      if (!saved) return;
+
+      try {
+        await updateKnowledgeDocument(document.id, { title: normalizedTitle });
+        const updatedAt = Date.now();
+        setKnowledgeDocuments((documents) =>
+          orderKnowledgeDocuments(
+            documents.map((item) =>
+              item.id === document.id ? { ...item, title: normalizedTitle, updatedAt } : item,
+            ),
+            documents.find((item) => item.type === "book_home")?.id,
+          ),
+        );
+
+        if (knowledgeHome?.id === document.id) {
+          setKnowledgeHome((current) =>
+            current ? { ...current, title: normalizedTitle, updatedAt } : current,
+          );
+          setKnowledgeTitle(normalizedTitle);
+          setSavedKnowledgeFingerprint(
+            knowledgeDocumentFingerprint(
+              normalizedTitle,
+              knowledgeValue,
+              normalizeKnowledgeTags(knowledgeTags),
+            ),
+          );
+        }
+      } catch (error) {
+        console.error("[Notes] Failed to rename knowledge document:", error);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeDocumentRenameFailed", "知识文档重命名失败"),
+        );
+      }
+    },
+    [knowledgeHome?.id, knowledgeTags, knowledgeValue, saveActiveKnowledgeDocumentNow, t],
+  );
+
   const handlePickKnowledgeImageAttachment = useCallback(
     async (document: KnowledgeDocument): Promise<MobileKnowledgeImageInsertAttrs | null> => {
       try {
@@ -1642,6 +1690,7 @@ export function NotesView({
             onCreateDocument={handleCreateKnowledgeDocument}
             onDeleteDocument={handleDeleteKnowledgeDocument}
             onMoveDocument={handleMoveKnowledgeDocument}
+            onRenameDocument={handleRenameKnowledgeDocument}
             onCompressSummary={handleCompressKnowledgeSummary}
             onPickImageAttachment={handlePickKnowledgeImageAttachment}
             onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, cfi)}
@@ -1886,6 +1935,7 @@ function KnowledgeHomePanel({
   onCreateDocument,
   onDeleteDocument,
   onMoveDocument,
+  onRenameDocument,
   onCompressSummary,
   onPickImageAttachment,
   onOpenBook,
@@ -1924,6 +1974,7 @@ function KnowledgeHomePanel({
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRenameDocument: (document: KnowledgeDocument, title: string) => void;
   onCompressSummary: () => void;
   onPickImageAttachment: (
     document: KnowledgeDocument,
@@ -1997,6 +2048,8 @@ function KnowledgeHomePanel({
   const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
   const [actionDocument, setActionDocument] = useState<KnowledgeDocument | null>(null);
   const [moveDocument, setMoveDocument] = useState<KnowledgeDocument | null>(null);
+  const [renameDocument, setRenameDocument] = useState<KnowledgeDocument | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const childCountByParentId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of documents) {
@@ -2047,6 +2100,16 @@ function KnowledgeHomePanel({
     [getMoveTargets],
   );
 
+  const showRenameSheet = useCallback(
+    (targetDocument?: KnowledgeDocument | null) => {
+      if (!targetDocument) return;
+      setActionDocument(null);
+      setRenameDocument(targetDocument);
+      setRenameDraft(targetDocument.title || t("notes.knowledgeUntitledDocument", "未命名文档"));
+    },
+    [t],
+  );
+
   const handleMoveToTarget = useCallback(
     (targetId?: string) => {
       if (!moveDocument) return;
@@ -2055,6 +2118,15 @@ function KnowledgeHomePanel({
     },
     [moveDocument, onMoveDocument],
   );
+
+  const handleSubmitRename = useCallback(() => {
+    if (!renameDocument) return;
+    const nextTitle = renameDraft.trim();
+    setRenameDocument(null);
+    setRenameDraft("");
+    if (!nextTitle || nextTitle === renameDocument.title) return;
+    onRenameDocument(renameDocument, nextTitle);
+  }, [onRenameDocument, renameDocument, renameDraft]);
 
   const handleSelectKnowledgeDocument = useCallback(
     (nextDocument: KnowledgeDocument) => {
@@ -2396,6 +2468,20 @@ function KnowledgeHomePanel({
                 <ChevronRightIcon size={14} color={colors.mutedForeground} />
               </TouchableOpacity>
 
+              <TouchableOpacity
+                activeOpacity={0.78}
+                style={styles.knowledgeMoveTarget}
+                onPress={() => showRenameSheet(actionDocument)}
+              >
+                <View style={styles.knowledgeMoveTargetIcon}>
+                  <EditIcon size={15} color={colors.primary} />
+                </View>
+                <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
+                  {t("common.rename", "重命名")}
+                </Text>
+                <ChevronRightIcon size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+
               {canMoveActionDocument ? (
                 <TouchableOpacity
                   activeOpacity={0.78}
@@ -2436,6 +2522,93 @@ function KnowledgeHomePanel({
             </View>
           ) : null}
         </View>
+      </Modal>
+      <Modal
+        visible={!!renameDocument}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setRenameDocument(null);
+          setRenameDraft("");
+        }}
+      >
+        <Pressable
+          style={styles.knowledgeMoveSheetBackdrop}
+          onPress={() => {
+            setRenameDocument(null);
+            setRenameDraft("");
+          }}
+        />
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={StyleSheet.absoluteFill}
+        >
+          <View style={styles.knowledgeMoveSheet}>
+            <View style={styles.knowledgeMoveSheetHeader}>
+              <View style={styles.knowledgeMoveSheetTitleBlock}>
+                <Text style={styles.knowledgeMoveSheetTitle}>
+                  {t("common.rename", "重命名")}
+                </Text>
+                <Text style={styles.knowledgeMoveSheetSubtitle} numberOfLines={1}>
+                  {renameDocument ? knowledgeDocumentPathText(renameDocument, documents, t) : ""}
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.76}
+                style={styles.knowledgeMoveSheetClose}
+                onPress={() => {
+                  setRenameDocument(null);
+                  setRenameDraft("");
+                }}
+                accessibilityLabel={t("common.cancel", "取消")}
+              >
+                <XIcon size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.knowledgeRenameBody}>
+              <TextInput
+                value={renameDraft}
+                onChangeText={setRenameDraft}
+                placeholder={t("notes.knowledgeUntitledDocument", "未命名文档")}
+                placeholderTextColor={colors.mutedForeground}
+                style={styles.knowledgeRenameInput}
+                autoFocus
+                selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSubmitRename}
+              />
+              <View style={styles.knowledgeImportFooterActions}>
+                <TouchableOpacity
+                  activeOpacity={0.78}
+                  style={styles.knowledgeImportSecondaryButton}
+                  onPress={() => {
+                    setRenameDocument(null);
+                    setRenameDraft("");
+                  }}
+                >
+                  <Text style={styles.knowledgeImportSecondaryButtonText}>
+                    {t("common.cancel", "取消")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  style={[
+                    styles.knowledgeImportPrimaryButton,
+                    !renameDraft.trim() && styles.knowledgeImportButtonDisabled,
+                  ]}
+                  onPress={handleSubmitRename}
+                  disabled={!renameDraft.trim()}
+                >
+                  <Text style={styles.knowledgeImportPrimaryButtonText}>
+                    {t("common.save", "保存")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
       <Modal
         visible={isContextSheetVisible}
@@ -4043,6 +4216,14 @@ function KnowledgeFolderOverview({
           accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
         >
           <PlusIcon size={15} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.78}
+          style={styles.knowledgeFolderIconAction}
+          onPress={() => onOpenActions(folder)}
+          accessibilityLabel={t("notes.knowledgeDocumentActions", "文档操作")}
+        >
+          <MoreVerticalIcon size={15} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 

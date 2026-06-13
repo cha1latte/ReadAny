@@ -3258,15 +3258,33 @@ function KnowledgeRelationsCard({
       ) : (
         <View style={styles.knowledgeSourceList}>
           {sourceLinks.map((link) => {
-            const target = knowledgeLinkTargetLabel(link, highlights, t);
-            const canOpen = !!target.cfi || link.toKind === "book";
+            const targetDocument =
+              link.toKind === "document" ? documentById.get(link.toId) : undefined;
+            const target = targetDocument
+              ? {
+                  title:
+                    link.label ||
+                    targetDocument.title ||
+                    t("notes.knowledgeUntitledDocument", "未命名文档"),
+                  detail: knowledgeDocumentPathText(targetDocument, documents, t),
+                  cfi: undefined,
+                }
+              : knowledgeLinkTargetLabel(link, highlights, t);
+            const canOpenDocument = !!targetDocument;
+            const canOpenBook = !canOpenDocument && (!!target.cfi || link.toKind === "book");
             return (
               <TouchableOpacity
                 key={link.id}
                 style={styles.knowledgeSourceItem}
-                activeOpacity={canOpen ? 0.75 : 1}
-                disabled={!canOpen}
-                onPress={() => onOpenBook(target.cfi)}
+                activeOpacity={canOpenDocument || canOpenBook ? 0.75 : 1}
+                disabled={!canOpenDocument && !canOpenBook}
+                onPress={() => {
+                  if (targetDocument) {
+                    onSelectDocument(targetDocument);
+                    return;
+                  }
+                  onOpenBook(target.cfi);
+                }}
               >
                 <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
                   {target.title}

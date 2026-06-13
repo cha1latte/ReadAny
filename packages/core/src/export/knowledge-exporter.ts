@@ -1,4 +1,5 @@
 import { createKnowledgeAttachmentUri } from "../knowledge/attachments";
+import { collectKnowledgeDocumentSubtree } from "../knowledge/document-utils";
 import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
 import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
 
@@ -95,6 +96,32 @@ export interface KnowledgeVaultPackage {
   files: KnowledgeExportFile[];
   manifest: KnowledgeExportManifest;
   conflicts: KnowledgeExportConflict[];
+}
+
+export function scopeKnowledgeExportInputToDocumentSubtree(
+  input: KnowledgeExportInput,
+  rootDocument: KnowledgeDocument,
+): KnowledgeExportInput {
+  const homeDocumentId = input.documents.find((document) => document.type === "book_home")?.id;
+  const documents = collectKnowledgeDocumentSubtree(
+    rootDocument.id,
+    input.documents,
+    homeDocumentId,
+  );
+  const documentIds = new Set(documents.map((document) => document.id));
+
+  return {
+    ...input,
+    documents,
+    links: input.links?.filter(
+      (link) =>
+        documentIds.has(link.fromDocumentId) &&
+        (link.toKind !== "document" || documentIds.has(link.toId)),
+    ),
+    attachments: input.attachments?.filter(
+      (attachment) => !!attachment.documentId && documentIds.has(attachment.documentId),
+    ),
+  };
 }
 
 interface ExportContext {

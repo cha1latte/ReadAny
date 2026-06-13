@@ -62,6 +62,7 @@ import {
   type KnowledgeImportWriteProposal,
   createKnowledgeMarkdownImportPlan,
   knowledgeExporter,
+  scopeKnowledgeExportInputToDocumentSubtree,
 } from "@readany/core/export";
 import {
   type KnowledgeDocumentOutlineItem,
@@ -386,6 +387,7 @@ export function NotesView({
   const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
   const [isKnowledgeSummaryCompressing, setIsKnowledgeSummaryCompressing] = useState(false);
   const [isKnowledgeDocumentCreating, setIsKnowledgeDocumentCreating] = useState(false);
+  const [isKnowledgeFolderExporting, setIsKnowledgeFolderExporting] = useState(false);
   const [isKnowledgeMarkdownImporting, setIsKnowledgeMarkdownImporting] = useState(false);
   const [isKnowledgeMarkdownImportApplying, setIsKnowledgeMarkdownImportApplying] = useState(false);
   const [knowledgeMarkdownImportReview, setKnowledgeMarkdownImportReview] =
@@ -1572,6 +1574,83 @@ export function NotesView({
     [selectedBook, knowledgeHome, knowledgeTitle, knowledgeTags, knowledgeValue, books, t],
   );
 
+  const handleKnowledgeFolderExport = useCallback(
+    async (folder: KnowledgeDocument) => {
+      if (
+        !selectedBook ||
+        !knowledgeHome ||
+        folder.type !== "folder" ||
+        isKnowledgeFolderExporting
+      )
+        return;
+
+      const book = books.find((b) => b.id === selectedBook.bookId);
+      if (!book) return;
+
+      setIsKnowledgeFolderExporting(true);
+      try {
+        const saved = await saveActiveKnowledgeDocumentNow();
+        if (!saved) return;
+
+        const exporter = new AnnotationExporter();
+        const liveDocument: KnowledgeDocument = {
+          ...knowledgeHome,
+          title: knowledgeTitle.trim() || knowledgeHome.title,
+          contentMd: knowledgeValue.contentMd,
+          contentJson: knowledgeValue.contentJson,
+          excerpt: createKnowledgeExcerpt(knowledgeValue.contentMd),
+          tags: normalizeKnowledgeTags(knowledgeTags),
+          updatedAt: Date.now(),
+        };
+        const input = await collectBookKnowledgeExportInput(
+          selectedBook.bookId,
+          liveDocument,
+          book,
+        );
+        const scopedInput = scopeKnowledgeExportInputToDocumentSubtree(input, folder);
+
+        if (scopedInput.documents.length === 0) {
+          Alert.alert(
+            t("common.error", "错误"),
+            t("notes.knowledgeVaultScopedExportEmpty", "这个文件夹下没有可导出的知识文档"),
+          );
+          return;
+        }
+
+        const title = `${
+          folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")
+        } Knowledge`;
+        const file = knowledgeExporter.exportBundle(scopedInput, {
+          format: "obsidian",
+          rootDir: "ReadAny",
+          title,
+        });
+        const filename = file.path.split("/").filter(Boolean).pop() || `${title}.md`;
+        await exporter.downloadAsFile(file.content, filename, "obsidian");
+      } catch (err) {
+        console.error("[Notes] Knowledge folder export failed:", err);
+        Alert.alert(
+          t("common.error", "错误"),
+          t("notes.knowledgeVaultExportFailed", "知识库文件夹导出失败"),
+        );
+      } finally {
+        setIsKnowledgeFolderExporting(false);
+      }
+    },
+    [
+      books,
+      isKnowledgeFolderExporting,
+      knowledgeHome,
+      knowledgeTags,
+      knowledgeTitle,
+      knowledgeValue.contentJson,
+      knowledgeValue.contentMd,
+      saveActiveKnowledgeDocumentNow,
+      selectedBook,
+      t,
+    ],
+  );
+
   const handleKnowledgeMarkdownImport = useCallback(async () => {
     setShowExportMenu(false);
     if (
@@ -1879,6 +1958,7 @@ export function NotesView({
             isSaved={currentKnowledgeFingerprint === savedKnowledgeFingerprint}
             isSaving={isKnowledgeSaving}
             isSummaryCompressing={isKnowledgeSummaryCompressing}
+            isFolderExporting={isKnowledgeFolderExporting}
             onTitleChange={setKnowledgeTitle}
             onTagsChange={setKnowledgeTags}
             onChange={setKnowledgeValue}
@@ -1888,6 +1968,7 @@ export function NotesView({
             onDeleteDocument={handleDeleteKnowledgeDocument}
             onMoveDocument={handleMoveKnowledgeDocument}
             onRenameDocument={handleRenameKnowledgeDocument}
+            onExportFolder={handleKnowledgeFolderExport}
             onCompressSummary={handleCompressKnowledgeSummary}
             onPickImageAttachment={handlePickKnowledgeImageAttachment}
             onInsertSourceReference={handleInsertKnowledgeSourceReference}
@@ -2126,6 +2207,7 @@ function KnowledgeHomePanel({
   isSaved,
   isSaving,
   isSummaryCompressing,
+  isFolderExporting,
   onTitleChange,
   onTagsChange,
   onChange,
@@ -2135,6 +2217,7 @@ function KnowledgeHomePanel({
   onDeleteDocument,
   onMoveDocument,
   onRenameDocument,
+  onExportFolder,
   onCompressSummary,
   onInsertSourceReference,
   onPickImageAttachment,
@@ -2167,6 +2250,7 @@ function KnowledgeHomePanel({
   isSaved: boolean;
   isSaving: boolean;
   isSummaryCompressing: boolean;
+  isFolderExporting: boolean;
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
@@ -2176,6 +2260,7 @@ function KnowledgeHomePanel({
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
   onRenameDocument: (document: KnowledgeDocument, title: string) => void;
+  onExportFolder: (document: KnowledgeDocument) => void;
   onCompressSummary: () => void;
   onInsertSourceReference: (highlight: HighlightWithBook) => void;
   onPickImageAttachment: (
@@ -2730,6 +2815,35 @@ function KnowledgeHomePanel({
                       </Text>
                       <Text style={styles.knowledgeMoveTargetPath} numberOfLines={1}>
                         {t("notes.knowledgeCreateIn", "创建于")} ·{" "}
+                        {knowledgeDocumentPathText(actionDocument, documents, t)}
+                      </Text>
+                    </View>
+                    <ChevronRightIcon size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.78}
+                    style={[styles.knowledgeMoveTarget, isFolderExporting && { opacity: 0.55 }]}
+                    onPress={() => {
+                      const target = actionDocument;
+                      setActionDocument(null);
+                      onExportFolder(target);
+                    }}
+                    disabled={isFolderExporting}
+                  >
+                    <View style={styles.knowledgeMoveTargetIcon}>
+                      {isFolderExporting ? (
+                        <LoaderIcon size={15} color={colors.primary} />
+                      ) : (
+                        <ShareIcon size={15} color={colors.primary} />
+                      )}
+                    </View>
+                    <View style={styles.knowledgeMoveTargetTextBlock}>
+                      <Text style={styles.knowledgeMoveTargetTitle} numberOfLines={1}>
+                        {isFolderExporting
+                          ? t("notes.knowledgeVaultExporting", "导出中...")
+                          : t("notes.knowledgeExportCurrentFolder", "导出此文件夹")}
+                      </Text>
+                      <Text style={styles.knowledgeMoveTargetPath} numberOfLines={1}>
                         {knowledgeDocumentPathText(actionDocument, documents, t)}
                       </Text>
                     </View>

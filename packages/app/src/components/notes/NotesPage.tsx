@@ -53,13 +53,13 @@ import {
   createKnowledgeVaultImportPlan,
   createKnowledgeVaultImportWriteProposals,
   knowledgeExporter,
+  scopeKnowledgeExportInputToDocumentSubtree,
 } from "@readany/core/export";
 import {
   type KnowledgeDocumentOutlineItem,
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
-  collectKnowledgeDocumentSubtree,
   createKnowledgeDocumentMoveTargets,
   createKnowledgeExcerpt,
   createKnowledgeFolderDisplaySections,
@@ -446,32 +446,6 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
     books,
     links: linksByDocument.flat(),
     attachments: attachmentsByDocument.flat(),
-  };
-}
-
-function scopeKnowledgeVaultInputToDocumentSubtree(
-  input: Awaited<ReturnType<typeof collectKnowledgeVaultInput>>,
-  rootDocument: KnowledgeDocument,
-) {
-  const homeDocumentId = input.documents.find((document) => document.type === "book_home")?.id;
-  const documents = collectKnowledgeDocumentSubtree(
-    rootDocument.id,
-    input.documents,
-    homeDocumentId,
-  );
-  const documentIds = new Set(documents.map((document) => document.id));
-
-  return {
-    ...input,
-    documents,
-    links: input.links.filter(
-      (link) =>
-        documentIds.has(link.fromDocumentId) &&
-        (link.toKind !== "document" || documentIds.has(link.toId)),
-    ),
-    attachments: input.attachments.filter(
-      (attachment) => !!attachment.documentId && documentIds.has(attachment.documentId),
-    ),
   };
 }
 
@@ -1634,7 +1608,7 @@ export function NotesPage() {
       };
       const collectedInput = await collectKnowledgeVaultInput(liveDocument, books);
       const input = scopeDocument
-        ? scopeKnowledgeVaultInputToDocumentSubtree(collectedInput, scopeDocument)
+        ? scopeKnowledgeExportInputToDocumentSubtree(collectedInput, scopeDocument)
         : collectedInput;
       if (scopeDocument && input.documents.length === 0) {
         toast.error(t("notes.knowledgeVaultScopedExportEmpty"));

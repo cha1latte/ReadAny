@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
-import { KnowledgeExporter, createKnowledgeExportHash } from "./knowledge-exporter";
+import {
+  KnowledgeExporter,
+  createKnowledgeExportHash,
+  scopeKnowledgeExportInputToDocumentSubtree,
+} from "./knowledge-exporter";
 
 const baseBook: Book = {
   id: "book-1",
@@ -143,6 +147,124 @@ describe("KnowledgeExporter", () => {
       parentId: "folder-2",
       path: "Books/The Book A Study/Reading Trail/Themes/Question Log.md",
     });
+  });
+
+  it("scopes export input to a folder subtree with matching links and attachments", () => {
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      type: "folder",
+      title: "Ideas",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+    });
+    const child = knowledgeDocument({
+      id: "child-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "Why does this matter?",
+    });
+    const nested = knowledgeDocument({
+      id: "nested-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Theme Map",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "Attention and memory.",
+    });
+    const sibling = knowledgeDocument({
+      id: "sibling-1",
+      type: "standalone_note",
+      title: "Outside",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "This should not be exported.",
+    });
+    const scoped = scopeKnowledgeExportInputToDocumentSubtree(
+      {
+        books: [baseBook],
+        documents: [knowledgeDocument(), folder, child, nested, sibling],
+        links: [
+          {
+            id: "inside-link",
+            fromDocumentId: "child-1",
+            toKind: "document",
+            toId: "nested-1",
+            relation: "references",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          {
+            id: "outside-document-link",
+            fromDocumentId: "child-1",
+            toKind: "document",
+            toId: "sibling-1",
+            relation: "references",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          {
+            id: "source-link",
+            fromDocumentId: "child-1",
+            toKind: "highlight",
+            toId: "highlight-1",
+            relation: "source",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          {
+            id: "sibling-link",
+            fromDocumentId: "sibling-1",
+            toKind: "highlight",
+            toId: "highlight-2",
+            relation: "source",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ] satisfies KnowledgeLink[],
+        attachments: [
+          {
+            id: "child-attachment",
+            documentId: "child-1",
+            kind: "image",
+            fileName: "diagram.png",
+            localPath: "attachments/diagram.png",
+            size: 10,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          {
+            id: "sibling-attachment",
+            documentId: "sibling-1",
+            kind: "image",
+            fileName: "outside.png",
+            localPath: "attachments/outside.png",
+            size: 10,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ] satisfies KnowledgeAttachment[],
+      },
+      folder,
+    );
+
+    expect(scoped.documents.map((document) => document.id)).toEqual([
+      "folder-1",
+      "child-1",
+      "nested-1",
+    ]);
+    expect(scoped.links?.map((link) => link.id)).toEqual(["inside-link", "source-link"]);
+    expect(scoped.attachments?.map((attachment) => attachment.id)).toEqual(["child-attachment"]);
+
+    const bundle = new KnowledgeExporter().exportBundle(scoped, {
+      format: "obsidian",
+      rootDir: "ReadAny",
+      title: "Ideas Export",
+    });
+    expect(bundle.content).toContain(
+      "_Source: `ReadAny/Books/The Book A Study/Ideas/Question Log.md`_",
+    );
+    expect(bundle.content).not.toContain("Outside");
   });
 
   it("renders links and attachments into readable Markdown sections", () => {

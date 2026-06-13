@@ -1847,9 +1847,10 @@ function BlockInsertButton({
   );
 }
 
-function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
+function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
+  const isEditable = editor.isEditable;
   const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, { body: "" });
   const { cardType, version, isFutureVersion, isCustomCard } = readOnlyModel;
   const isFallbackCard = readOnlyModel.state === "unsupported";
@@ -1870,9 +1871,11 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
   }, [body, resizeBody]);
 
   const updateTitle = (nextTitle: string) => {
+    if (!isEditable) return;
     updateAttributes({ title: nextTitle });
   };
   const updateBody = (nextBody: string) => {
+    if (!isEditable) return;
     updateAttributes({ markdown: nextBody, text: nextBody });
   };
 
@@ -1880,7 +1883,8 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
     <NodeViewWrapper
       className={cn(
         "not-prose my-5 rounded-md border border-l-2 bg-background/80 shadow-sm transition-all duration-200",
-        selected
+        !isEditable && "bg-muted/15",
+        selected && isEditable
           ? "border-primary/45 border-l-primary ring-2 ring-primary/10"
           : "border-border/55 border-l-primary/40 hover:border-border hover:border-l-primary/70",
       )}
@@ -1933,7 +1937,13 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
                 defaultValue: "Card title",
               })}
               placeholder={fallbackTitle}
-              className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold leading-6 text-foreground outline-none placeholder:text-muted-foreground/70 focus:text-primary"
+              readOnly={!isEditable}
+              aria-readonly={!isEditable}
+              tabIndex={isEditable ? 0 : -1}
+              className={cn(
+                "min-w-0 flex-1 bg-transparent text-[15px] font-semibold leading-6 text-foreground outline-none placeholder:text-muted-foreground/70",
+                isEditable ? "focus:text-primary" : "cursor-default",
+              )}
             />
           </div>
           <textarea
@@ -1953,7 +1963,13 @@ function ReadAnyCardView({ node, selected, updateAttributes }: NodeViewProps) {
               defaultValue: "Write directly inside this card...",
             })}
             rows={3}
-            className="mt-1.5 block min-h-[72px] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-2.5 py-2 text-[13px] leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/20 focus:bg-muted/20"
+            readOnly={!isEditable}
+            aria-readonly={!isEditable}
+            tabIndex={isEditable ? 0 : -1}
+            className={cn(
+              "mt-1.5 block min-h-[72px] w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-2.5 py-2 text-[13px] leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground/60",
+              isEditable ? "focus:border-primary/20 focus:bg-muted/20" : "cursor-default",
+            )}
           />
         </div>
       </div>

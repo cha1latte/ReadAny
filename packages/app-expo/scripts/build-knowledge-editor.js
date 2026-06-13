@@ -132,8 +132,21 @@ async function buildKnowledgeEditor() {
       scheduleHeight();
     };
 
+    const syncEditableControls = () => {
+      if (!editor) return;
+      const editable = editor.isEditable;
+      document.documentElement.classList.toggle("readany-editor-readonly", !editable);
+      document
+        .querySelectorAll(".readany-card-title, .readany-card-preview")
+        .forEach((element) => {
+          element.readOnly = !editable;
+          element.tabIndex = editable ? 0 : -1;
+          element.setAttribute("aria-readonly", editable ? "false" : "true");
+        });
+    };
+
     const updateCardAttrs = (node, getPos, attrs) => {
-      if (!editor || typeof getPos !== "function") return;
+      if (!editor || !editor.isEditable || typeof getPos !== "function") return;
       const pos = getPos();
       if (typeof pos !== "number") return;
       const nextAttrs = { ...(node.attrs || {}), ...attrs };
@@ -221,7 +234,10 @@ async function buildKnowledgeEditor() {
           title.type = "text";
           title.value = attrs.title || "";
           title.placeholder = readOnlyModel.title;
+          title.readOnly = editor?.isEditable === false;
+          title.tabIndex = editor?.isEditable === false ? -1 : 0;
           title.addEventListener("input", () => {
+            if (!editor?.isEditable) return;
             updateCardAttrs(currentNode, getPos, { title: title.value });
           });
           body.appendChild(title);
@@ -232,8 +248,11 @@ async function buildKnowledgeEditor() {
           preview.value = text;
           preview.placeholder = cardBodyPlaceholder;
           preview.rows = Math.max(3, Math.min(8, String(text).split("\\n").length + 1));
+          preview.readOnly = editor?.isEditable === false;
+          preview.tabIndex = editor?.isEditable === false ? -1 : 0;
           requestAnimationFrame(() => fitTextArea(preview));
           preview.addEventListener("input", () => {
+            if (!editor?.isEditable) return;
             preview.rows = Math.max(3, Math.min(8, preview.value.split("\\n").length + 1));
             fitTextArea(preview);
             updateCardAttrs(currentNode, getPos, {
@@ -262,9 +281,13 @@ async function buildKnowledgeEditor() {
               meta.textContent = cardMetaText(nextAttrs);
               title.value = nextAttrs.title || "";
               title.placeholder = nextModel.title;
+              title.readOnly = editor?.isEditable === false;
+              title.tabIndex = editor?.isEditable === false ? -1 : 0;
               const nextText = nextModel.body;
               if (preview.value !== nextText) preview.value = nextText;
               preview.rows = Math.max(3, Math.min(8, String(nextText).split("\\n").length + 1));
+              preview.readOnly = editor?.isEditable === false;
+              preview.tabIndex = editor?.isEditable === false ? -1 : 0;
               fitTextArea(preview);
               source.style.display = nextModel.sourceTitle ? "block" : "none";
               source.textContent = nextModel.sourceTitle || "";
@@ -552,12 +575,16 @@ async function buildKnowledgeEditor() {
         },
         onCreate: () => {
           post({ type: "ready" });
+          syncEditableControls();
           postSelection();
           scheduleHeight();
         },
         onUpdate: () => postContent(),
         onSelectionUpdate: () => postSelection(),
-        onTransaction: () => scheduleHeight(),
+        onTransaction: () => {
+          syncEditableControls();
+          scheduleHeight();
+        },
         onFocus: () => post({ type: "focusChanged", focused: true }),
         onBlur: () => {
           postContentNow();
@@ -589,6 +616,12 @@ async function buildKnowledgeEditor() {
 
     const runCommand = (command, attrs = {}) => {
       if (!editor) return;
+      const readOnlyAllowedCommands = new Set(["focus", "blur", "scrollToOutline"]);
+      if (!editor.isEditable && !readOnlyAllowedCommands.has(command)) {
+        postSelection();
+        scheduleHeight();
+        return;
+      }
       const chain = editor.chain().focus();
       switch (command) {
         case "undo":
@@ -777,6 +810,9 @@ async function buildKnowledgeEditor() {
             break;
           case "setEditable":
             editor?.setEditable(message.editable !== false);
+            syncEditableControls();
+            postSelection();
+            scheduleHeight();
             break;
           case "focus":
             runCommand("focus", { position: message.position });

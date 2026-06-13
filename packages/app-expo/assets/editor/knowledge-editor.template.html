@@ -366,6 +366,16 @@
         color: var(--foreground);
       }
 
+      .readany-editor-readonly .readany-card-title,
+      .readany-editor-readonly .readany-card-preview {
+        cursor: default;
+      }
+
+      .readany-editor-readonly .readany-card-preview:focus {
+        border-color: transparent;
+        background: transparent;
+      }
+
       .readany-card-preview::placeholder {
         color: var(--muted-foreground);
       }

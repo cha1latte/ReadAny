@@ -1,7 +1,13 @@
 import { createKnowledgeAttachmentUri } from "../knowledge/attachments";
 import { collectKnowledgeDocumentSubtree } from "../knowledge/document-utils";
 import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
-import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
+import type {
+  Book,
+  KnowledgeAttachment,
+  KnowledgeCardTemplate,
+  KnowledgeDocument,
+  KnowledgeLink,
+} from "../types";
 
 export type KnowledgeExportFormat = "markdown" | "obsidian";
 
@@ -17,6 +23,7 @@ export interface KnowledgeExportInput {
   books?: Book[];
   links?: KnowledgeLink[];
   attachments?: KnowledgeAttachment[];
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export interface KnowledgeExportOptions {
@@ -131,6 +138,7 @@ interface ExportContext {
   linksByDocumentId: Map<string, KnowledgeLink[]>;
   attachmentsByDocumentId: Map<string, KnowledgeAttachment[]>;
   attachmentExportPathsById: Map<string, string>;
+  cardTemplates: KnowledgeCardTemplate[];
 }
 
 type ResolvedKnowledgeExportOptions = Required<KnowledgeExportOptions>;
@@ -243,6 +251,7 @@ function createContext(
     linksByDocumentId,
     attachmentsByDocumentId,
     attachmentExportPathsById,
+    cardTemplates: input.cardTemplates ?? [],
   };
 }
 
@@ -255,6 +264,7 @@ function documentBody(
   return (
     renderKnowledgeJsonToMarkdown(document.contentJson, {
       includeReadAnyCardMetadata: options.includeReadAnyCardMetadata,
+      cardTemplates: context.cardTemplates,
       resolveImageSrc: (attrs, fallbackSrc) => {
         if (!documentFilePath) return undefined;
         const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId : "";

@@ -10,6 +10,7 @@ import {
   renderReadAnyCardMarkdownFallback,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
+  upgradeReadAnyCardAttrsWithTemplates,
 } from "./card-registry";
 
 describe("ReadAny card registry", () => {
@@ -309,6 +310,77 @@ describe("ReadAny card registry", () => {
       markdown: "Prompt:\nResponse:",
       data: { tone: "short" },
     });
+  });
+
+  it("migrates custom card attrs to newer synced templates without overwriting user content", () => {
+    const template = updateCustomReadAnyCardTemplate({
+      template: {
+        ...createCustomReadAnyCardTemplate({
+          id: "template-reading-question",
+          name: "Reading Question",
+          markdown: "Question:\nAnswer:",
+          now: 123,
+        }),
+        schemaJson: {
+          cardType: "custom:template-reading-question",
+          title: "Reading Question",
+          markdown: "Question:\nAnswer:",
+          attrs: {
+            data: {
+              kind: "prompt",
+              layout: {
+                tone: "short",
+                density: "compact",
+              },
+            },
+          },
+        },
+      },
+      name: "Reading Prompt",
+      markdown: "Prompt:\nResponse:",
+      now: 456,
+    });
+
+    const migrated = upgradeReadAnyCardAttrsWithTemplates(
+      {
+        cardType: "custom:template-reading-question",
+        version: 1,
+        title: "My own prompt",
+        markdown: "Question: What changed?\nAnswer: The ending.",
+        data: {
+          layout: {
+            density: "detailed",
+          },
+        },
+      },
+      [template],
+    );
+
+    expect(migrated).toEqual({
+      cardType: "custom:template-reading-question",
+      version: 2,
+      title: "My own prompt",
+      markdown: "Question: What changed?\nAnswer: The ending.",
+      text: "Question: What changed?\nAnswer: The ending.",
+      data: {
+        kind: "prompt",
+        layout: {
+          tone: "short",
+          density: "detailed",
+        },
+      },
+    });
+
+    expect(
+      upgradeReadAnyCardAttrsWithTemplates(
+        {
+          cardType: "custom:template-reading-question",
+          version: 1,
+          data: "legacy-data",
+        },
+        [template],
+      ).data,
+    ).toBe("legacy-data");
   });
 
   it("rejects edits to built-in card templates", () => {

@@ -184,6 +184,36 @@ function dataRecord(attrs: ReadAnyCardAttrs): Record<string, unknown> {
   return isRecord(attrs.data) ? attrs.data : {};
 }
 
+function mergeRecordDefaults(defaults: unknown, value: unknown): unknown {
+  if (!isRecord(defaults)) return value === undefined ? defaults : value;
+  if (!isRecord(value)) return value === undefined ? { ...defaults } : value;
+
+  const merged: Record<string, unknown> = { ...defaults };
+  for (const [key, nextValue] of Object.entries(value)) {
+    const defaultValue = defaults[key];
+    merged[key] =
+      isRecord(defaultValue) && isRecord(nextValue)
+        ? mergeRecordDefaults(defaultValue, nextValue)
+        : nextValue;
+  }
+  return merged;
+}
+
+function customTemplateCardType(template: KnowledgeCardTemplate): string {
+  const schema = templateSchema(template);
+  return stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
+}
+
+function findTemplateForCardType(
+  cardType: string | undefined,
+  templates: KnowledgeCardTemplate[] | undefined,
+): KnowledgeCardTemplate | undefined {
+  if (!cardType || !templates?.length) return undefined;
+  return templates.find(
+    (template) => !template.builtIn && customTemplateCardType(template) === cardType,
+  );
+}
+
 function ensureMarkdown(attrs: ReadAnyCardAttrs, markdown: string | undefined): ReadAnyCardAttrs {
   if (!markdown || attrs.markdown || attrs.text) return attrs;
   return { ...attrs, markdown, text: markdown };
@@ -272,6 +302,36 @@ export function normalizeReadAnyCardAttrs(
   input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
 ): ReadAnyCardAttrs {
   return upgradeReadAnyCardAttrs(input);
+}
+
+export function upgradeReadAnyCardAttrsWithTemplates(
+  input: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
+  templates: KnowledgeCardTemplate[] | undefined,
+): ReadAnyCardAttrs {
+  const attrs = upgradeReadAnyCardAttrs(input);
+  const template = findTemplateForCardType(attrs.cardType, templates);
+  if (!template) return attrs;
+
+  const defaults = createReadAnyCardAttrsFromTemplate(template);
+  const version = Math.max(numberAttr(attrs.version) ?? 1, numberAttr(defaults.version) ?? 1);
+  const mergedData =
+    defaults.data === undefined && attrs.data === undefined
+      ? undefined
+      : mergeRecordDefaults(defaults.data, attrs.data);
+  const mergedAttrs: ReadAnyCardAttrs = {
+    ...defaults,
+    ...attrs,
+    version,
+    title: attrs.title ?? defaults.title,
+    markdown: attrs.markdown ?? attrs.text ?? defaults.markdown,
+    text: attrs.text ?? attrs.markdown ?? defaults.text,
+    sourceTitle: attrs.sourceTitle ?? defaults.sourceTitle,
+    sourceId: attrs.sourceId ?? defaults.sourceId,
+    cfi: attrs.cfi ?? defaults.cfi,
+  };
+  if (mergedData !== undefined) mergedAttrs.data = mergedData;
+
+  return normalizeReadAnyCardAttrs(mergedAttrs);
 }
 
 export const builtInReadAnyCards: ReadAnyCardDefinition[] = [

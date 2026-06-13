@@ -28,6 +28,7 @@ import {
   getBook as getBookRecord,
   getKnowledgeAttachments,
   getKnowledgeBacklinks,
+  getKnowledgeCardTemplates,
   getKnowledgeDocument,
   getKnowledgeDocuments,
   getKnowledgeLinks,
@@ -473,9 +474,10 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
   documentMap.set(liveDocument.id, liveDocument);
   const mergedDocuments = Array.from(documentMap.values());
 
-  const [linksByDocument, attachmentsByDocument] = await Promise.all([
+  const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
+    getKnowledgeCardTemplates(),
   ]);
 
   return {
@@ -483,6 +485,7 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
     books,
     links: linksByDocument.flat(),
     attachments: attachmentsByDocument.flat(),
+    cardTemplates,
   };
 }
 
@@ -497,9 +500,10 @@ async function collectBookKnowledgeExportInput(
   const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
   const mergedDocuments = orderKnowledgeDocuments(Array.from(documentMap.values()), homeDocumentId);
 
-  const [linksByDocument, attachmentsByDocument] = await Promise.all([
+  const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
+    getKnowledgeCardTemplates(),
   ]);
 
   return {
@@ -507,6 +511,7 @@ async function collectBookKnowledgeExportInput(
     books: [book],
     links: linksByDocument.flat(),
     attachments: attachmentsByDocument.flat(),
+    cardTemplates,
   };
 }
 

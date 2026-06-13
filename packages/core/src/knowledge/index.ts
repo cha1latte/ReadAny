@@ -116,6 +116,7 @@ export {
   renderReadAnyCardMarkdownFallback,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
+  upgradeReadAnyCardAttrsWithTemplates,
 } from "./card-registry";
 export type {
   ReadAnyCardAttrs,

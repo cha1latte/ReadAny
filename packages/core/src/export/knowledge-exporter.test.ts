@@ -521,6 +521,59 @@ describe("KnowledgeExporter", () => {
     expect(file.content).not.toContain("type: readany-knowledge");
   });
 
+  it("migrates custom card metadata with synced templates during export", () => {
+    const exporter = new KnowledgeExporter();
+    const [file] = exporter.export(
+      {
+        documents: [
+          knowledgeDocument({
+            bookId: undefined,
+            contentJson: {
+              type: "doc",
+              content: [
+                {
+                  type: "readanyCard",
+                  attrs: {
+                    cardType: "custom:template-reading-question",
+                    version: 1,
+                    title: "My prompt",
+                    markdown: "Question: What changed?",
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+        cardTemplates: [
+          {
+            id: "template-reading-question",
+            name: "Reading Prompt",
+            version: 4,
+            schemaJson: {
+              cardType: "custom:template-reading-question",
+              title: "Reading Prompt",
+              markdown: "Prompt:\nResponse:",
+              attrs: {
+                data: { kind: "prompt" },
+              },
+            },
+            builtIn: false,
+            enabled: true,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      },
+      { format: "markdown", includeReadAnyCardMetadata: true },
+    );
+
+    expect(file.content).toContain(
+      ':::readany-card type="custom:template-reading-question" version="4" title="My prompt" data="%7B%22kind%22%3A%22prompt%22%7D"',
+    );
+    expect(file.content).toContain("Question: What changed?");
+    expect(file.content).not.toContain("Prompt:\\nResponse:");
+  });
+
   it("exports multiple documents as a single shareable knowledge bundle", () => {
     const exporter = new KnowledgeExporter();
     const bundle = exporter.exportBundle(

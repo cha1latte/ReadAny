@@ -275,6 +275,51 @@ describe("editor projection", () => {
     );
   });
 
+  it("uses synced custom card templates to migrate exported card metadata safely", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: {
+              cardType: "custom:template-reading-question",
+              version: 1,
+              title: "My reading prompt",
+              markdown: "Question: What changed?",
+            },
+          },
+        ],
+      },
+      {
+        includeReadAnyCardMetadata: true,
+        cardTemplates: [
+          {
+            id: "template-reading-question",
+            name: "Reading Prompt",
+            version: 3,
+            schemaJson: {
+              cardType: "custom:template-reading-question",
+              title: "Reading Prompt",
+              markdown: "Prompt:\nResponse:",
+              attrs: {
+                data: { kind: "prompt" },
+              },
+            },
+            builtIn: false,
+            enabled: true,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      },
+    );
+
+    expect(markdown).toBe(
+      ':::readany-card type="custom:template-reading-question" version="3" title="My reading prompt" data="%7B%22kind%22%3A%22prompt%22%7D"\nQuestion: What changed?\n:::',
+    );
+  });
+
   it("preserves normalized legacy card metadata when requested", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {

@@ -1,4 +1,4 @@
-import type { JSONValue } from "../types";
+import type { JSONValue, KnowledgeCardTemplate } from "../types";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { createKnowledgeAttachmentUri, parseKnowledgeAttachmentUri } from "./attachments";
 import {
@@ -6,6 +6,7 @@ import {
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
   upgradeReadAnyCardAttrs,
+  upgradeReadAnyCardAttrsWithTemplates,
 } from "./card-registry";
 export type { ReadAnyCardAttrs } from "./card-registry";
 
@@ -32,6 +33,8 @@ export interface MarkdownProjectionOptions {
     attrs: Record<string, unknown>,
     fallbackTarget: string,
   ) => string | undefined;
+  /** Synced custom card templates used to upgrade exported custom card attrs safely. */
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 function isObject(value: JSONValue | unknown): value is Record<string, unknown> {
@@ -137,7 +140,9 @@ function prefixLines(text: string, prefix: string): string {
 }
 
 function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions): string {
-  const attrs = normalizeReadAnyCardAttrs(node.attrs ?? {});
+  const attrs = options.cardTemplates?.length
+    ? upgradeReadAnyCardAttrsWithTemplates(node.attrs ?? {}, options.cardTemplates)
+    : normalizeReadAnyCardAttrs(node.attrs ?? {});
   const cardType = attrs.cardType || "custom";
   const body =
     attrs.markdown ||

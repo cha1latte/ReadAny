@@ -534,6 +534,17 @@ export function flattenKnowledgeDocumentTree(
   return nodes.flatMap((node) => [node, ...flattenKnowledgeDocumentTree(node.children)]);
 }
 
+export function collectKnowledgeDocumentSubtree(
+  rootDocumentId: string,
+  documents: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeDocument[] {
+  const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+  const rootNode = tree.nodesById.get(rootDocumentId);
+  if (!rootNode) return [];
+  return flattenKnowledgeDocumentTree([rootNode]).map((node) => node.document);
+}
+
 export function resolveKnowledgeDocumentPath(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],

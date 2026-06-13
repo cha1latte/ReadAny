@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KnowledgeDocument } from "../types";
 import {
   buildKnowledgeDocumentTree,
+  collectKnowledgeDocumentSubtree,
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
@@ -125,6 +126,42 @@ describe("knowledge document utilities", () => {
 
     expect(tree.roots.map((node) => node.document.id).sort()).toEqual(["left", "right"]);
     expect(tree.roots.flatMap((node) => node.children)).toEqual([]);
+  });
+
+  it("collects a stable folder subtree without unrelated sibling documents", () => {
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+    const folder = document({ id: "folder", type: "folder", title: "Ideas" });
+    const childFolder = document({
+      id: "child-folder",
+      type: "folder",
+      title: "Scenes",
+      parentId: "folder",
+    });
+    const childNote = document({ id: "child-note", title: "Child note", parentId: "folder" });
+    const nestedNote = document({
+      id: "nested-note",
+      title: "Nested note",
+      parentId: "child-folder",
+    });
+    const sibling = document({ id: "sibling", title: "Sibling note" });
+
+    expect(
+      collectKnowledgeDocumentSubtree(
+        "folder",
+        [sibling, nestedNote, childNote, childFolder, folder, home],
+        "home",
+      ).map((item) => item.id),
+    ).toEqual(["folder", "child-folder", "nested-note", "child-note"]);
+  });
+
+  it("returns an empty subtree for missing or cyclic roots", () => {
+    const left = document({ id: "left", parentId: "right" });
+    const right = document({ id: "right", parentId: "left" });
+
+    expect(collectKnowledgeDocumentSubtree("missing", [left, right])).toEqual([]);
+    expect(collectKnowledgeDocumentSubtree("left", [left, right]).map((item) => item.id)).toEqual([
+      "left",
+    ]);
   });
 
   it("resolves a stable vault path from parent ids", () => {

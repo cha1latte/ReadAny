@@ -63,6 +63,7 @@ export {
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
+  collectKnowledgeDocumentSubtree,
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,

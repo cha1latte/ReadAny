@@ -58,6 +58,7 @@ import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
+  collectKnowledgeDocumentSubtree,
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
@@ -366,14 +367,21 @@ async function joinDesktopPath(rootPath: string, relativePath: string): Promise<
   return join(rootPath, ...parts);
 }
 
+function knowledgeVaultManifestPath(scopeDocument?: KnowledgeDocument | null): string {
+  if (!scopeDocument) return ".readany/manifest.json";
+  const safeDocumentId = scopeDocument.id.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `.readany/scopes/${safeDocumentId}.json`;
+}
+
 async function readKnowledgeVaultManifest(
   rootPath: string,
+  manifestPath = ".readany/manifest.json",
 ): Promise<KnowledgeExportManifest | undefined> {
   const { exists, readTextFile } = await import("@tauri-apps/plugin-fs");
-  const manifestPath = await joinDesktopPath(rootPath, ".readany/manifest.json");
-  if (!(await exists(manifestPath))) return undefined;
+  const resolvedManifestPath = await joinDesktopPath(rootPath, manifestPath);
+  if (!(await exists(resolvedManifestPath))) return undefined;
 
-  const raw = await readTextFile(manifestPath);
+  const raw = await readTextFile(resolvedManifestPath);
   return JSON.parse(raw) as KnowledgeExportManifest;
 }
 
@@ -436,6 +444,32 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
     books,
     links: linksByDocument.flat(),
     attachments: attachmentsByDocument.flat(),
+  };
+}
+
+function scopeKnowledgeVaultInputToDocumentSubtree(
+  input: Awaited<ReturnType<typeof collectKnowledgeVaultInput>>,
+  rootDocument: KnowledgeDocument,
+) {
+  const homeDocumentId = input.documents.find((document) => document.type === "book_home")?.id;
+  const documents = collectKnowledgeDocumentSubtree(
+    rootDocument.id,
+    input.documents,
+    homeDocumentId,
+  );
+  const documentIds = new Set(documents.map((document) => document.id));
+
+  return {
+    ...input,
+    documents,
+    links: input.links.filter(
+      (link) =>
+        documentIds.has(link.fromDocumentId) &&
+        (link.toKind !== "document" || documentIds.has(link.toId)),
+    ),
+    attachments: input.attachments.filter(
+      (attachment) => !!attachment.documentId && documentIds.has(attachment.documentId),
+    ),
   };
 }
 
@@ -1506,7 +1540,7 @@ export function NotesPage() {
     }
   };
 
-  const handleKnowledgeVaultExport = async () => {
+  const handleKnowledgeVaultExport = async (scopeDocument?: KnowledgeDocument | null) => {
     if (!selectedBook || !knowledgeHome || isKnowledgeVaultExporting) return;
 
     setIsKnowledgeVaultExporting(true);
@@ -1519,7 +1553,11 @@ export function NotesPage() {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: t("notes.knowledgeVaultSelectFolder"),
+        title: scopeDocument
+          ? t("notes.knowledgeVaultSelectScopedFolder", {
+              title: scopeDocument.title || t("notes.knowledgeUntitledDocument"),
+            })
+          : t("notes.knowledgeVaultSelectFolder"),
       });
       if (!selected || Array.isArray(selected)) return;
 
@@ -1532,11 +1570,19 @@ export function NotesPage() {
         tags: normalizeKnowledgeTags(knowledgeTags),
         updatedAt: Date.now(),
       };
-      const input = await collectKnowledgeVaultInput(liveDocument, books);
+      const collectedInput = await collectKnowledgeVaultInput(liveDocument, books);
+      const input = scopeDocument
+        ? scopeKnowledgeVaultInputToDocumentSubtree(collectedInput, scopeDocument)
+        : collectedInput;
+      if (scopeDocument && input.documents.length === 0) {
+        toast.error(t("notes.knowledgeVaultScopedExportEmpty"));
+        return;
+      }
+      const manifestPath = knowledgeVaultManifestPath(scopeDocument);
 
       let previousManifest: KnowledgeExportManifest | undefined;
       try {
-        previousManifest = await readKnowledgeVaultManifest(selected);
+        previousManifest = await readKnowledgeVaultManifest(selected, manifestPath);
       } catch (error) {
         toast.error(t("notes.knowledgeVaultManifestInvalid"));
         console.error("[Notes] Failed to read knowledge vault manifest:", error);
@@ -1547,6 +1593,7 @@ export function NotesPage() {
         format: "obsidian",
         rootDir: "",
         previousManifest,
+        manifestPath,
       });
       const existingFiles = await readExistingKnowledgeVaultFiles(
         selected,
@@ -1574,6 +1621,7 @@ export function NotesPage() {
         rootDir: "",
         previousManifest,
         existingFiles,
+        manifestPath,
       });
 
       if (vaultPackage.conflicts.length > 0) {
@@ -1587,11 +1635,21 @@ export function NotesPage() {
       }
 
       await writeKnowledgeVaultFiles(selected, vaultPackage.files);
-      toast.success(t("notes.knowledgeVaultExportSuccess"), {
-        description: t("notes.knowledgeVaultExportSuccessDetail", {
-          count: vaultPackage.files.length,
-        }),
-      });
+      toast.success(
+        scopeDocument
+          ? t("notes.knowledgeVaultScopedExportSuccess")
+          : t("notes.knowledgeVaultExportSuccess"),
+        {
+          description: scopeDocument
+            ? t("notes.knowledgeVaultScopedExportSuccessDetail", {
+                count: vaultPackage.files.length,
+                title: scopeDocument.title || t("notes.knowledgeUntitledDocument"),
+              })
+            : t("notes.knowledgeVaultExportSuccessDetail", {
+                count: vaultPackage.files.length,
+              }),
+        },
+      );
     } catch (error) {
       toast.error(t("notes.knowledgeVaultExportFailed"));
       console.error("[Notes] Knowledge vault export failed:", error);
@@ -2135,6 +2193,7 @@ export function NotesPage() {
                 onExport={handleKnowledgeExport}
                 onImportMarkdown={handleKnowledgeMarkdownImport}
                 onExportVault={handleKnowledgeVaultExport}
+                onExportVaultScope={handleKnowledgeVaultExport}
                 onImportVault={handleKnowledgeVaultImport}
                 onOpenBook={(cfi) => handleOpenBook(selectedBook.bookId, selectedBook.title, cfi)}
                 isMarkdownImporting={isKnowledgeMarkdownImporting}
@@ -2257,6 +2316,7 @@ interface KnowledgeHomePanelProps {
   onExport: (format: KnowledgeExportFormat) => void;
   onImportMarkdown: () => void;
   onExportVault: () => void;
+  onExportVaultScope: (document: KnowledgeDocument) => void;
   onImportVault: () => void;
   onOpenBook: (cfi?: string) => void;
   isMarkdownImporting: boolean;
@@ -2306,6 +2366,7 @@ function KnowledgeHomePanel({
   onExport,
   onImportMarkdown,
   onExportVault,
+  onExportVaultScope,
   onImportVault,
   onOpenBook,
   isMarkdownImporting,
@@ -2584,6 +2645,8 @@ function KnowledgeHomePanel({
                 onDelete={onDeleteDocument}
                 onMove={onMoveDocument}
                 onRename={onRenameDocument}
+                onExport={onExportVaultScope}
+                isExporting={isVaultExporting}
                 t={t}
               />
             ) : (
@@ -4474,22 +4537,26 @@ function KnowledgeFolderOverview({
   items,
   documents,
   isCreating,
+  isExporting,
   onSelect,
   onCreate,
   onDelete,
   onMove,
   onRename,
+  onExport,
   t,
 }: {
   folder: KnowledgeDocument;
   items: KnowledgeDocument[];
   documents: KnowledgeDocument[];
   isCreating: boolean;
+  isExporting: boolean;
   onSelect: (document: KnowledgeDocument) => void;
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
   onRename: (document: KnowledgeDocument, title: string) => void;
+  onExport: (document: KnowledgeDocument) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
@@ -4536,6 +4603,18 @@ function KnowledgeFolderOverview({
           >
             <Folder className="mr-2 h-3.5 w-3.5" />
             {t("notes.knowledgeNewFolder")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isExporting}
+            onClick={() => onExport(folder)}
+          >
+            <FolderUp className="mr-2 h-3.5 w-3.5" />
+            {isExporting
+              ? t("notes.knowledgeVaultExporting")
+              : t("notes.knowledgeExportCurrentFolder")}
           </Button>
           <Button
             type="button"
@@ -5090,7 +5169,7 @@ function KnowledgeExportMenu({
             ? t("notes.knowledgeMarkdownImporting")
             : t("notes.knowledgeImportMarkdown")}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={onExportVault} disabled={isVaultExporting}>
+        <DropdownMenuItem onClick={() => onExportVault()} disabled={isVaultExporting}>
           <FolderUp className="mr-2 h-4 w-4" />
           {isVaultExporting ? t("notes.knowledgeVaultExporting") : t("notes.knowledgeExportVault")}
         </DropdownMenuItem>

@@ -27,6 +27,11 @@ export interface MarkdownProjectionOptions {
   includeReadAnyCardMetadata?: boolean;
   /** Resolve image targets for exports, attachments, and platform-specific rendering. */
   resolveImageSrc?: (attrs: Record<string, unknown>, fallbackSrc: string) => string | undefined;
+  /** Resolve internal document links for exports that need path-backed targets. */
+  resolveInternalLinkTarget?: (
+    attrs: Record<string, unknown>,
+    fallbackTarget: string,
+  ) => string | undefined;
 }
 
 function isObject(value: JSONValue | unknown): value is Record<string, unknown> {
@@ -83,10 +88,13 @@ function applyMark(markdown: string, mark: TiptapMark): string {
   }
 }
 
-function renderInternalLink(node: TiptapNode): string {
+function renderInternalLink(node: TiptapNode, options: MarkdownProjectionOptions): string {
   const documentId = typeof node.attrs?.documentId === "string" ? node.attrs.documentId.trim() : "";
   const targetPath = typeof node.attrs?.targetPath === "string" ? node.attrs.targetPath.trim() : "";
-  const target = targetPath || documentId;
+  const fallbackTarget = targetPath || documentId;
+  const target =
+    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ??
+    fallbackTarget;
   const label =
     typeof node.attrs?.label === "string"
       ? node.attrs.label.trim()
@@ -100,7 +108,7 @@ function renderInternalLink(node: TiptapNode): string {
   return "";
 }
 
-function renderInline(node: TiptapNode): string {
+function renderInline(node: TiptapNode, options: MarkdownProjectionOptions): string {
   if (node.type === "text") {
     return (node.marks ?? []).reduce(
       (markdown, mark) => applyMark(markdown, mark),
@@ -110,7 +118,7 @@ function renderInline(node: TiptapNode): string {
 
   if (node.type === "hardBreak") return "  \n";
   if (node.type === "readanyInternalLink") {
-    return renderInternalLink(node);
+    return renderInternalLink(node, options);
   }
   if (node.type === "readanySourceReference") {
     const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");
@@ -118,7 +126,7 @@ function renderInline(node: TiptapNode): string {
     return cfi ? `[${label}](readany://cfi/${encodeURIComponent(cfi)})` : label;
   }
 
-  return (node.content ?? []).map(renderInline).join("");
+  return (node.content ?? []).map((child) => renderInline(child, options)).join("");
 }
 
 function prefixLines(text: string, prefix: string): string {
@@ -203,10 +211,10 @@ function renderBlock(
         .filter(Boolean)
         .join("\n\n");
     case "paragraph":
-      return (node.content ?? []).map(renderInline).join("").trim();
+      return (node.content ?? []).map((child) => renderInline(child, options)).join("").trim();
     case "heading": {
       const level = Math.min(Math.max(Number(node.attrs?.level ?? 1), 1), 6);
-      const text = (node.content ?? []).map(renderInline).join("").trim();
+      const text = (node.content ?? []).map((child) => renderInline(child, options)).join("").trim();
       return `${"#".repeat(level)} ${text}`.trimEnd();
     }
     case "blockquote": {
@@ -243,7 +251,9 @@ function renderBlock(
         .join("\n");
     case "codeBlock": {
       const language = typeof node.attrs?.language === "string" ? node.attrs.language : "";
-      const code = (node.content ?? []).map((child) => child.text ?? renderInline(child)).join("");
+      const code = (node.content ?? [])
+        .map((child) => child.text ?? renderInline(child, options))
+        .join("");
       return `\`\`\`${language}\n${code}\n\`\`\``;
     }
     case "horizontalRule":

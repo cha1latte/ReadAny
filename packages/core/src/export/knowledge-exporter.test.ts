@@ -279,6 +279,83 @@ describe("KnowledgeExporter", () => {
     );
   });
 
+  it("renders inline internal links with vault paths in exported document bodies", () => {
+    const exporter = new KnowledgeExporter();
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Trail",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const firstNote = knowledgeDocument({
+      id: "note-1",
+      parentId: "folder-1",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "One question.",
+    });
+    const nestedFolder = knowledgeDocument({
+      id: "folder-2",
+      parentId: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const nestedNote = knowledgeDocument({
+      id: "note-2",
+      parentId: "folder-2",
+      type: "standalone_note",
+      title: "Question Log",
+      contentJson: { type: "doc", content: [] },
+      contentMd: "A same-name note can live in a different folder.",
+    });
+    const home = knowledgeDocument({
+      contentJson: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "Compare " },
+              {
+                type: "readanyInternalLink",
+                attrs: {
+                  documentId: "note-1",
+                  label: "Question Log",
+                  title: "Question Log",
+                },
+              },
+              { type: "text", text: " and " },
+              {
+                type: "readanyInternalLink",
+                attrs: {
+                  documentId: "note-2",
+                  label: "Deep question",
+                  title: "Question Log",
+                },
+              },
+              { type: "text", text: "." },
+            ],
+          },
+        ],
+      },
+    });
+    const vault = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [home, folder, firstNote, nestedFolder, nestedNote],
+    });
+    const homeFile = vault.files.find((file) => file.path === "Books/The Book A Study/README.md");
+
+    expect(homeFile?.content).toContain(
+      "Compare [[Books/The Book A Study/Reading Trail/Question Log|Question Log]] and [[Books/The Book A Study/Reading Trail/Themes/Question Log|Deep question]].",
+    );
+  });
+
   it("skips deleted documents by default and disambiguates duplicate paths", () => {
     const exporter = new KnowledgeExporter();
     const files = exporter.export({

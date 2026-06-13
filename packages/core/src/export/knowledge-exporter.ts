@@ -236,6 +236,12 @@ function documentBody(
         if (exportedPath) return relativeMarkdownPath(documentFilePath, exportedPath);
         return fallbackSrc || createKnowledgeAttachmentUri(attachmentId);
       },
+      resolveInternalLinkTarget: (attrs, fallbackTarget) => {
+        const documentId = typeof attrs.documentId === "string" ? attrs.documentId.trim() : "";
+        if (!documentId) return fallbackTarget;
+        const exportedPath = context.documentExportPathsById.get(documentId);
+        return exportedPath ? stripMarkdownExtension(exportedPath) : fallbackTarget;
+      },
     }) ||
     document.contentMd ||
     ""

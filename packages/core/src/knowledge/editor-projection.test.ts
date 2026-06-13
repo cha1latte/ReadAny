@@ -575,6 +575,39 @@ describe("editor projection", () => {
     expect(markdown).toBe("Compare [[Books/The Book/Reading Trail/Question Log|Question Log]].");
   });
 
+  it("lets export callers resolve internal link ids to path-backed targets", () => {
+    const markdown = renderKnowledgeJsonToMarkdown(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "Compare " },
+              {
+                type: "readanyInternalLink",
+                attrs: {
+                  documentId: "doc-1",
+                  label: "Question Log",
+                  title: "Question Log",
+                },
+              },
+              { type: "text", text: "." },
+            ],
+          },
+        ],
+      },
+      {
+        resolveInternalLinkTarget: (_attrs, fallbackTarget) =>
+          fallbackTarget === "doc-1"
+            ? "Books/The Book/Reading Trail/Question Log"
+            : fallbackTarget,
+      },
+    );
+
+    expect(markdown).toBe("Compare [[Books/The Book/Reading Trail/Question Log|Question Log]].");
+  });
+
   it("imports stable ReadAny internal links without losing document ids", () => {
     const stableDocumentId = "23a0aef7-4188-4f5c-a955-cad6c1d3bb3f";
     const json = markdownToBasicTiptap(`Reference [[${stableDocumentId}]] and [[Loose idea]].`);

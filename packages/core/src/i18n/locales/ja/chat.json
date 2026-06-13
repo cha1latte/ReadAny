@@ -101,6 +101,7 @@
     "fallbackSearch": "元ファイルをスキャン中",
     "fallbackChapterContext": "章の内容を読み取り中",
     "searchKnowledgeBase": "ナレッジベースを検索中",
+    "getKnowledgeDocument": "ナレッジ文書を読み取り中",
     "getBookKnowledge": "この本のナレッジを読み取り中",
     "compressKnowledgeDocumentSummary": "ナレッジメモリを更新中",
     "proposeKnowledgeDocumentCreate": "ナレッジ文書を下書き中",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "ナレッジ検索結果",
+    "documentTitle": "ナレッジ文書を読み取りました",
     "bookKnowledgeTitle": "この本のナレッジを読み取りました",
     "summaryTitle": "ナレッジメモリを更新しました",
     "failureTitle": "{{tool}} の呼び出しに失敗しました",

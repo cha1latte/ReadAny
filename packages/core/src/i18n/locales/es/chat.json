@@ -101,6 +101,7 @@
     "fallbackSearch": "Escaneando archivo original",
     "fallbackChapterContext": "Leyendo contenido del capítulo",
     "searchKnowledgeBase": "Buscando en la base de conocimiento",
+    "getKnowledgeDocument": "Leyendo documento de conocimiento",
     "getBookKnowledge": "Leyendo conocimiento del libro",
     "compressKnowledgeDocumentSummary": "Actualizando memoria de conocimiento",
     "proposeKnowledgeDocumentCreate": "Redactando documento de conocimiento",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "Resultados de la base de conocimiento",
+    "documentTitle": "Documento de conocimiento leído",
     "bookKnowledgeTitle": "Conocimiento del libro leído",
     "summaryTitle": "Memoria de conocimiento actualizada",
     "failureTitle": "{{tool}} falló",

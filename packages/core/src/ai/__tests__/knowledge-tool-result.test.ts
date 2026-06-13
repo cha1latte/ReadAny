@@ -55,6 +55,39 @@ describe("knowledge tool result display", () => {
     expect(display?.documents[0]?.snippet).toBe("Compact memory");
   });
 
+  it("summarizes exact knowledge document reads", () => {
+    const display = getKnowledgeToolResultDisplay("getKnowledgeDocument", {
+      success: true,
+      bookId: "book-1",
+      documentId: "doc-1",
+      path: "Knowledge base / Chapter Notes / Theme Map",
+      document: {
+        id: "doc-1",
+        title: "Theme Map",
+        type: "standalone_note",
+        path: "Knowledge base / Chapter Notes / Theme Map",
+        snippet: "A durable map of the chapter themes.",
+      },
+    });
+
+    expect(display).toEqual({
+      kind: "document",
+      toolName: "getKnowledgeDocument",
+      total: 1,
+      bookId: "book-1",
+      documentId: "doc-1",
+      documents: [
+        {
+          id: "doc-1",
+          title: "Theme Map",
+          type: "standalone_note",
+          path: "Knowledge base / Chapter Notes / Theme Map",
+          snippet: "A durable map of the chapter themes.",
+        },
+      ],
+    });
+  });
+
   it("summarizes compact-memory updates", () => {
     const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
       success: true,

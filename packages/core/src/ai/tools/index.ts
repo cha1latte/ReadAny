@@ -8,8 +8,8 @@
  * - Annotation Tools: getAnnotations, addCitation
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
- * - Knowledge Tools: searchKnowledgeBase, getBookKnowledge, proposeKnowledgeDocumentCreate,
- *   proposeKnowledgeDocumentUpdate, proposeKnowledgeDocumentTagsUpdate,
+ * - Knowledge Tools: searchKnowledgeBase, getKnowledgeDocument, getBookKnowledge,
+ *   proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, proposeKnowledgeDocumentTagsUpdate,
  *   compressKnowledgeDocumentSummary
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap
@@ -33,6 +33,7 @@ import {
 import {
   createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
+  createGetKnowledgeDocumentTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentTagsUpdateTool,
   createProposeKnowledgeDocumentUpdateTool,
@@ -66,6 +67,7 @@ function getGeneralTools(options: { aiConfig?: AIConfig } = {}): ToolDefinition[
     createSearchAllHighlightsTool(),
     createSearchAllNotesTool(),
     createSearchKnowledgeBaseTool(),
+    createGetKnowledgeDocumentTool(),
     createProposeKnowledgeDocumentCreateTool(),
     createProposeKnowledgeDocumentUpdateTool(),
     createProposeKnowledgeDocumentTagsUpdateTool(),

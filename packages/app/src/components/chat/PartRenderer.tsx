@@ -227,6 +227,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   fallbackSearch: "toolLabels.fallbackSearch",
   fallbackChapterContext: "toolLabels.fallbackChapterContext",
   searchKnowledgeBase: "toolLabels.searchKnowledgeBase",
+  getKnowledgeDocument: "toolLabels.getKnowledgeDocument",
   getBookKnowledge: "toolLabels.getBookKnowledge",
   proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
@@ -329,6 +330,8 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
         })
       : display.kind === "search"
         ? t("knowledgeToolResult.searchTitle", { defaultValue: "Knowledge search results" })
+        : display.kind === "document"
+          ? t("knowledgeToolResult.documentTitle", { defaultValue: "Knowledge document read" })
         : display.kind === "bookKnowledge"
           ? t("knowledgeToolResult.bookKnowledgeTitle", { defaultValue: "Book knowledge read" })
           : t("knowledgeToolResult.summaryTitle", { defaultValue: "Knowledge memory updated" });

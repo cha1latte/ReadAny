@@ -170,6 +170,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   fallbackSearch: "toolLabels.fallbackSearch",
   fallbackChapterContext: "toolLabels.fallbackChapterContext",
   searchKnowledgeBase: "toolLabels.searchKnowledgeBase",
+  getKnowledgeDocument: "toolLabels.getKnowledgeDocument",
   getBookKnowledge: "toolLabels.getBookKnowledge",
   proposeKnowledgeDocumentCreate: "toolLabels.proposeKnowledgeDocumentCreate",
   proposeKnowledgeDocumentUpdate: "toolLabels.proposeKnowledgeDocumentUpdate",
@@ -277,6 +278,8 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
         })
       : display.kind === "search"
         ? t("knowledgeToolResult.searchTitle", "知识库检索结果")
+        : display.kind === "document"
+          ? t("knowledgeToolResult.documentTitle", "已读取知识文档")
         : display.kind === "bookKnowledge"
           ? t("knowledgeToolResult.bookKnowledgeTitle", "已读取本书知识")
           : t("knowledgeToolResult.summaryTitle", "知识记忆已更新");

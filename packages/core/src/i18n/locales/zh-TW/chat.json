@@ -101,6 +101,7 @@
     "fallbackSearch": "掃描原始檔案",
     "fallbackChapterContext": "讀取章節內容",
     "searchKnowledgeBase": "搜尋知識庫",
+    "getKnowledgeDocument": "讀取知識文件",
     "getBookKnowledge": "讀取本書知識",
     "compressKnowledgeDocumentSummary": "更新知識記憶",
     "proposeKnowledgeDocumentCreate": "草擬知識文件",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "知識庫搜尋結果",
+    "documentTitle": "已讀取知識文件",
     "bookKnowledgeTitle": "已讀取本書知識",
     "summaryTitle": "知識記憶已更新",
     "failureTitle": "{{tool}} 呼叫失敗",

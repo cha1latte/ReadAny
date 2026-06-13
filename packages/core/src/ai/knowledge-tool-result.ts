@@ -1,4 +1,9 @@
-export type KnowledgeToolResultKind = "search" | "bookKnowledge" | "summary" | "failure";
+export type KnowledgeToolResultKind =
+  | "search"
+  | "document"
+  | "bookKnowledge"
+  | "summary"
+  | "failure";
 
 export interface KnowledgeToolResultDocument {
   id?: string;
@@ -31,6 +36,7 @@ export interface KnowledgeToolResultDisplayOptions {
 
 const KNOWLEDGE_TOOL_NAMES = new Set([
   "searchKnowledgeBase",
+  "getKnowledgeDocument",
   "getBookKnowledge",
   "compressKnowledgeDocumentSummary",
   "proposeKnowledgeDocumentCreate",
@@ -192,6 +198,17 @@ export function getKnowledgeToolResultDisplay(
       total: asNumber(resultRecord.total),
       showing: asNumber(resultRecord.showing),
       documents: asDocumentList(resultRecord.documents),
+    };
+  }
+
+  if (toolName === "getKnowledgeDocument") {
+    return {
+      kind: "document",
+      toolName,
+      total: 1,
+      bookId: asString(resultRecord.bookId),
+      documentId: asString(resultRecord.documentId),
+      documents: contextDocumentsFromResult(resultRecord),
     };
   }
 

@@ -101,6 +101,7 @@
     "fallbackSearch": "扫描原始文件",
     "fallbackChapterContext": "读取章节内容",
     "searchKnowledgeBase": "搜索知识库",
+    "getKnowledgeDocument": "读取知识文档",
     "getBookKnowledge": "读取本书知识",
     "compressKnowledgeDocumentSummary": "更新知识记忆",
     "proposeKnowledgeDocumentCreate": "草拟知识文档",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "知识库检索结果",
+    "documentTitle": "已读取知识文档",
     "bookKnowledgeTitle": "已读取本书知识",
     "summaryTitle": "知识记忆已更新",
     "failureTitle": "{{tool}} 调用失败",

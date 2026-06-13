@@ -103,6 +103,9 @@ function buildToolsSection(
     "- **searchKnowledgeBase**: Search durable ReadAny knowledge documents, book home pages, reviews, summaries, and standalone notes (params: reasoning, query, bookId, type, limit)",
   );
   tools.push(
+    "- **getKnowledgeDocument**: Read one exact knowledge document by stable document id, including its vault path, children, summary, and optional full Markdown content. Use after searchKnowledgeBase before quoting or drafting updates for a specific document (params: reasoning, documentId, includeContent)",
+  );
+  tools.push(
     "- **proposeKnowledgeDocumentCreate**: Draft a new knowledge document for user confirmation only; it does NOT save anything. Use parentId to place it inside a vault folder when appropriate (params: reasoning, title, contentMd, type, bookId, parentId, tags)",
   );
   tools.push(
@@ -249,7 +252,7 @@ function buildWorkflowSection(isVectorized: boolean, hasBookContext: boolean): s
 
   steps.push("   - **getSurroundingContext**: for current page content");
   steps.push(
-    "   - **getBookKnowledge/searchKnowledgeBase**: for the user's durable notes, reviews, summaries, and book home pages",
+    "   - **getBookKnowledge/searchKnowledgeBase/getKnowledgeDocument**: for the user's durable notes, reviews, summaries, and exact knowledge documents",
   );
 
   steps.push("3. **Register citations before answering** — If your answer uses book content:");

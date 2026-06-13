@@ -101,6 +101,7 @@
     "fallbackSearch": "Analyse du fichier original",
     "fallbackChapterContext": "Lecture du contenu du chapitre",
     "searchKnowledgeBase": "Recherche dans la base de connaissances",
+    "getKnowledgeDocument": "Lecture du document de connaissance",
     "getBookKnowledge": "Lecture des connaissances du livre",
     "compressKnowledgeDocumentSummary": "Mise à jour de la mémoire de connaissance",
     "proposeKnowledgeDocumentCreate": "Brouillon de document de connaissance",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "Résultats de la base de connaissances",
+    "documentTitle": "Document de connaissance lu",
     "bookKnowledgeTitle": "Connaissances du livre lues",
     "summaryTitle": "Mémoire de connaissance mise à jour",
     "failureTitle": "Échec de {{tool}}",

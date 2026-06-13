@@ -487,6 +487,66 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
   };
 }
 
+export function createGetKnowledgeDocumentTool(): ToolDefinition {
+  return {
+    name: "getKnowledgeDocument",
+    description:
+      "Read one exact ReadAny knowledge document by stable document id after searchKnowledgeBase or another tool surfaces it. Use this before quoting or updating a specific knowledge document so the answer sees the current title, path, children, tags, summary, and optional full Markdown content.",
+    parameters: {
+      reasoning: {
+        type: "string",
+        description: "Brief explanation of why this exact knowledge document is needed",
+        required: true,
+      },
+      documentId: {
+        type: "string",
+        description: "Stable ReadAny knowledge document id to read",
+        required: true,
+      },
+      includeContent: {
+        type: "boolean",
+        description: "Return full Markdown content instead of only snippets and excerpts",
+      },
+    },
+    execute: async (args) => {
+      const documentId = String(args.documentId ?? "").trim();
+      if (!documentId) return { success: false, error: "documentId is required" };
+
+      const document = await getKnowledgeDocument(documentId);
+      if (!document) {
+        return {
+          success: false,
+          error: "Knowledge document not found",
+          documentId,
+        };
+      }
+
+      const includeContent = args.includeContent === true;
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(document.bookId ? { bookId: document.bookId } : {}),
+        limit: 5000,
+      });
+      const documentsById = createDocumentMap([...pathContextDocuments, document]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
+      const summary = documentSummary(
+        document,
+        "",
+        includeContent,
+        documentsById,
+        childrenByParentId,
+      );
+
+      return {
+        success: true,
+        documentId,
+        bookId: document.bookId,
+        path: summary.path,
+        document: summary,
+      };
+    },
+  };
+}
+
 export function createCompressKnowledgeDocumentSummaryTool(aiConfig: AIConfig): ToolDefinition {
   return {
     name: "compressKnowledgeDocumentSummary",

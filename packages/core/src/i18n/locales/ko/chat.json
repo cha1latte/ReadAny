@@ -101,6 +101,7 @@
     "fallbackSearch": "원본 파일 스캔 중",
     "fallbackChapterContext": "챕터 내용 읽는 중",
     "searchKnowledgeBase": "지식 베이스 검색 중",
+    "getKnowledgeDocument": "지식 문서 읽는 중",
     "getBookKnowledge": "이 책의 지식 읽는 중",
     "compressKnowledgeDocumentSummary": "지식 메모리 업데이트 중",
     "proposeKnowledgeDocumentCreate": "지식 문서 초안 작성 중",
@@ -110,6 +111,7 @@
   },
   "knowledgeToolResult": {
     "searchTitle": "지식 베이스 검색 결과",
+    "documentTitle": "지식 문서를 읽었어요",
     "bookKnowledgeTitle": "이 책의 지식을 읽었어요",
     "summaryTitle": "지식 메모리를 업데이트했어요",
     "failureTitle": "{{tool}} 호출 실패",

@@ -16,6 +16,7 @@ vi.mock("../knowledge-memory", () => knowledgeMemoryMocks);
 const {
   createCompressKnowledgeDocumentSummaryTool,
   createGetBookKnowledgeTool,
+  createGetKnowledgeDocumentTool,
   createProposeKnowledgeDocumentCreateTool,
   createProposeKnowledgeDocumentTagsUpdateTool,
   createProposeKnowledgeDocumentUpdateTool,
@@ -392,6 +393,92 @@ describe("knowledge tools", () => {
         },
       ],
     });
+  });
+
+  it("reads one exact knowledge document by stable id with path context", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Reading Journal",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const child = doc({
+      id: "doc-1",
+      type: "standalone_note",
+      title: "Chapter 1",
+      parentId: "folder-1",
+      contentMd: "Full durable note content.",
+      excerpt: "Durable note.",
+      tags: ["theme"],
+    });
+    const nested = doc({
+      id: "doc-child",
+      type: "summary",
+      title: "Nested summary",
+      parentId: "doc-1",
+      updatedAt: 3000,
+    });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(child);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, child, nested]);
+
+    const tool = createGetKnowledgeDocumentTool();
+    const result = (await tool.execute({
+      reasoning: "Need the exact document before updating it",
+      documentId: "doc-1",
+      includeContent: true,
+    })) as {
+      success: boolean;
+      documentId: string;
+      bookId: string;
+      path: string;
+      document: {
+        id: string;
+        path: string;
+        content?: string;
+        childCount: number;
+        children: Array<{ id: string; path: string }>;
+      };
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-1");
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
+    expect(result).toMatchObject({
+      success: true,
+      documentId: "doc-1",
+      bookId: "book-1",
+      path: "Knowledge base / Reading Journal / Chapter 1",
+      document: {
+        id: "doc-1",
+        path: "Knowledge base / Reading Journal / Chapter 1",
+        content: "Full durable note content.",
+        childCount: 1,
+        children: [
+          {
+            id: "doc-child",
+            path: "Knowledge base / Reading Journal / Chapter 1 / Nested summary",
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns a safe failure when an exact knowledge document is missing", async () => {
+    dbMocks.getKnowledgeDocument.mockResolvedValue(null);
+
+    const tool = createGetKnowledgeDocumentTool();
+    const result = await tool.execute({
+      reasoning: "Need the exact document",
+      documentId: "missing-doc",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Knowledge document not found",
+      documentId: "missing-doc",
+    });
+    expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
   });
 
   it("compresses and persists derived knowledge summaries without changing content", async () => {

@@ -3605,7 +3605,7 @@ function KnowledgeRelationsPanel({
                   ? {
                       title:
                         link.label || targetDocument.title || t("notes.knowledgeUntitledDocument"),
-                      detail: knowledgeDocumentTypeLabel(targetDocument, t),
+                      detail: knowledgeDocumentPathLabel(targetDocument, documents, t),
                       cfi: undefined,
                     }
                   : knowledgeLinkTargetLabel(link, highlights, t);
@@ -3669,8 +3669,8 @@ function KnowledgeRelationsPanel({
                   <p className="truncate text-xs font-medium text-foreground">
                     {fromDocument.title || t("notes.knowledgeUntitledDocument")}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {knowledgeDocumentTypeLabel(fromDocument, t)}
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {knowledgeDocumentPathLabel(fromDocument, documents, t)}
                   </p>
                   {fromDocument.excerpt ? (
                     <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -3832,6 +3832,17 @@ function knowledgeDocumentPath(
           : item.title.trim() || t("notes.knowledgeUntitledDocument"),
     })),
   ];
+}
+
+function knowledgeDocumentPathLabel(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+  activeTitle?: string,
+): string {
+  return knowledgeDocumentPath(document, documents, t, activeTitle)
+    .map((item) => item.title)
+    .join(" / ");
 }
 
 function KnowledgeDocumentBreadcrumbs({

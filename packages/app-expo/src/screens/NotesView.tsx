@@ -3232,7 +3232,7 @@ function KnowledgeRelationsCard({
                     link.label ||
                     targetDocument.title ||
                     t("notes.knowledgeUntitledDocument", "未命名文档"),
-                  detail: knowledgeDocumentTypeLabel(targetDocument, t),
+                  detail: knowledgeDocumentPathText(targetDocument, documents, t),
                   cfi: undefined,
                 }
               : knowledgeLinkTargetLabel(link, highlights, t);
@@ -3282,10 +3282,10 @@ function KnowledgeRelationsCard({
               onPress={() => onSelectDocument(fromDocument)}
             >
               <Text style={styles.knowledgeSourceChapter} numberOfLines={1}>
-                {knowledgeDocumentTypeLabel(fromDocument, t)}
+                {fromDocument.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
               </Text>
               <Text style={styles.knowledgeSourceText} numberOfLines={2}>
-                {fromDocument.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+                {knowledgeDocumentPathText(fromDocument, documents, t)}
               </Text>
               {!!fromDocument.excerpt && (
                 <Text style={styles.knowledgeSourceChapter} numberOfLines={2}>

@@ -1,4 +1,5 @@
 export {
+  createReadAnyCardTiptapContent,
   isTiptapNode,
   markdownToBasicTiptap,
   normalizeTiptapDocument,

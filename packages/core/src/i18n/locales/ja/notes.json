@@ -284,6 +284,7 @@
     "knowledgeCardTitleLabel": "カードタイトル",
     "knowledgeCardBodyLabel": "カード本文",
     "knowledgeCardBodyPlaceholder": "このカードに直接書き込む...",
+    "knowledgeCardConvertToText": "通常の本文に変換",
     "knowledgeCustomCardNew": "新しいカスタムカード",
     "knowledgeCustomCardNewHint": "同期できる再利用可能な構造を作成します。",
     "knowledgeCustomCardName": "カード名",

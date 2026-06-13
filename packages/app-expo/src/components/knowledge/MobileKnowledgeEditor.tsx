@@ -207,6 +207,7 @@ type EditorCommand =
       theme: EditorTheme;
       placeholder?: string;
       cardBodyPlaceholder?: string;
+      cardConvertToTextLabel?: string;
       imageUnavailableTitle?: string;
       imageUnavailableHint?: string;
       readOnly?: boolean;
@@ -646,6 +647,7 @@ export function MobileKnowledgeEditor({
       contentJson: current.contentJson,
       placeholder,
       cardBodyPlaceholder: t("notes.knowledgeCardBodyPlaceholder", "直接在卡片里书写..."),
+      cardConvertToTextLabel: t("notes.knowledgeCardConvertToText", "转成普通正文"),
       imageUnavailableTitle: t(
         "notes.knowledgeAttachmentUnavailable",
         "图片附件暂时无法在这台设备显示。",

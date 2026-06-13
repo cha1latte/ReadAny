@@ -284,6 +284,7 @@
     "knowledgeCardTitleLabel": "Titre de la carte",
     "knowledgeCardBodyLabel": "Corps de la carte",
     "knowledgeCardBodyPlaceholder": "Écrivez directement dans cette carte...",
+    "knowledgeCardConvertToText": "Convertir en texte normal",
     "knowledgeCustomCardNew": "Nouvelle carte personnalisée",
     "knowledgeCustomCardNewHint": "Créez une structure réutilisable qui se synchronise.",
     "knowledgeCustomCardName": "Nom de la carte",

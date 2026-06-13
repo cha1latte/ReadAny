@@ -284,6 +284,7 @@
     "knowledgeCardTitleLabel": "카드 제목",
     "knowledgeCardBodyLabel": "카드 본문",
     "knowledgeCardBodyPlaceholder": "이 카드 안에 바로 작성하세요...",
+    "knowledgeCardConvertToText": "일반 본문으로 변환",
     "knowledgeCustomCardNew": "새 사용자 지정 카드",
     "knowledgeCustomCardNewHint": "동기화되는 재사용 구조를 만듭니다.",
     "knowledgeCustomCardName": "카드 이름",

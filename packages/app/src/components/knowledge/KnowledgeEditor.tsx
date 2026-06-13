@@ -13,6 +13,7 @@ import {
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
+  createReadAnyCardTiptapContent,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
@@ -46,6 +47,7 @@ import {
   Brain,
   Code,
   FileQuestion,
+  FileText,
   Heading1,
   Heading2,
   Heading3,
@@ -1886,7 +1888,7 @@ function BlockInsertButton({
   );
 }
 
-function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewProps) {
+function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
   const isEditable = editor.isEditable;
@@ -1916,6 +1918,19 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewP
   const updateBody = (nextBody: string) => {
     if (!isEditable) return;
     updateAttributes({ markdown: nextBody, text: nextBody });
+  };
+  const convertToBlocks = () => {
+    if (!isEditable || typeof getPos !== "function") return;
+    const position = getPos();
+    if (typeof position !== "number") return;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(
+        { from: position, to: position + node.nodeSize },
+        createReadAnyCardTiptapContent(attrs),
+      )
+      .run();
   };
 
   return (
@@ -1963,6 +1978,25 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes }: NodeViewP
                 {t("notes.knowledgeCardSource", { defaultValue: "Source" })}:{" "}
                 {readOnlyModel.sourceTitle}
               </span>
+            ) : null}
+            {isEditable ? (
+              <button
+                type="button"
+                className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+                aria-label={t("notes.knowledgeCardConvertToText", {
+                  defaultValue: "Convert card to normal text",
+                })}
+                title={t("notes.knowledgeCardConvertToText", {
+                  defaultValue: "Convert card to normal text",
+                })}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  convertToBlocks();
+                }}
+              >
+                <FileText className="h-3.5 w-3.5" />
+              </button>
             ) : null}
           </div>
           <div className="flex items-center gap-2">

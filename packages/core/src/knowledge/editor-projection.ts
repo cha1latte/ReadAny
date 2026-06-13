@@ -229,6 +229,30 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
   return [`:::readany-card ${attrText}`, body, ":::"].filter(Boolean).join("\n");
 }
 
+export function createReadAnyCardTiptapContent(
+  attrs: ReadAnyCardAttrs | Record<string, unknown>,
+  options: NormalizeTiptapDocumentOptions = {},
+): TiptapNode[] {
+  const model = createReadAnyCardReadOnlyModel(attrs, {
+    body: "",
+    cardTemplates: options.cardTemplates,
+  });
+  const title = model.title.trim();
+  const body = model.body.trim();
+  const source = model.sourceTitle?.trim();
+  const markdown = [
+    title ? `### ${title}` : "",
+    body,
+    source ? `*Source: ${source}*` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const document = markdownToBasicTiptap(markdown || model.cardType, {
+    cardTemplates: options.cardTemplates,
+  });
+  return document.content?.length ? document.content : [{ type: "paragraph" }];
+}
+
 function renderListItem(
   node: TiptapNode,
   index: number,

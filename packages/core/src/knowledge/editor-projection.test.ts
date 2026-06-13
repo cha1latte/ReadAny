@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createReadAnyCardTiptapContent,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
   renderKnowledgeJsonToReadOnlyHtml,
@@ -411,6 +412,38 @@ describe("editor projection", () => {
       ],
     });
     expect((content.content[1] as { attrs: { version: number } }).attrs.version).toBe(1);
+  });
+
+  it("converts ReadAny cards into normal editable Tiptap content", () => {
+    expect(
+      createReadAnyCardTiptapContent({
+        cardType: "aiSummary",
+        version: 1,
+        title: "AI summary",
+        markdown: "The chapter connects memory and ritual.",
+        sourceTitle: "Chapter 4",
+      }),
+    ).toEqual([
+      {
+        type: "heading",
+        attrs: { level: 3 },
+        content: [{ type: "text", text: "AI summary" }],
+      },
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "The chapter connects memory and ritual." }],
+      },
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            marks: [{ type: "italic" }],
+            text: "Source: Chapter 4",
+          },
+        ],
+      },
+    ]);
   });
 
   it("exports upgraded card metadata for round-tripping", () => {

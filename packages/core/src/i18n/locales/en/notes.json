@@ -284,6 +284,7 @@
     "knowledgeCardTitleLabel": "Card title",
     "knowledgeCardBodyLabel": "Card body",
     "knowledgeCardBodyPlaceholder": "Write directly inside this card...",
+    "knowledgeCardConvertToText": "Convert to normal text",
     "knowledgeCustomCardNew": "New custom card",
     "knowledgeCustomCardNewHint": "Create a reusable structure that syncs.",
     "knowledgeCustomCardName": "Card name",

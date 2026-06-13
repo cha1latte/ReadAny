@@ -284,6 +284,7 @@
     "knowledgeCardTitleLabel": "卡片標題",
     "knowledgeCardBodyLabel": "卡片正文",
     "knowledgeCardBodyPlaceholder": "直接在卡片裡書寫...",
+    "knowledgeCardConvertToText": "轉成普通正文",
     "knowledgeCustomCardNew": "新增自訂卡片",
     "knowledgeCustomCardNewHint": "建立一個可同步重複使用的結構。",
     "knowledgeCustomCardName": "卡片名稱",

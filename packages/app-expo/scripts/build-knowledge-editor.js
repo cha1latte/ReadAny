@@ -22,7 +22,7 @@ async function buildKnowledgeEditor() {
     import TaskItem from "@tiptap/extension-task-item";
     import TaskList from "@tiptap/extension-task-list";
     import StarterKit from "@tiptap/starter-kit";
-    import { createReadAnyCardReadOnlyModel } from "@readany/core/knowledge";
+    import { createReadAnyCardReadOnlyModel, createReadAnyCardTiptapContent } from "@readany/core/knowledge";
 
     const EMPTY_DOC = { type: "doc", content: [] };
     let editor = null;
@@ -30,6 +30,7 @@ async function buildKnowledgeEditor() {
     let pendingInit = null;
     let changeTimer = null;
     let cardBodyPlaceholder = "Write inside this card...";
+    let cardConvertToTextLabel = "Convert card to normal text";
     let imageUnavailableTitle = "Image attachment is not available on this device yet.";
     let imageUnavailableHint = "Sync again or keep the original device online to restore it.";
 
@@ -143,6 +144,11 @@ async function buildKnowledgeEditor() {
           element.tabIndex = editable ? 0 : -1;
           element.setAttribute("aria-readonly", editable ? "false" : "true");
         });
+      document.querySelectorAll(".readany-card-convert").forEach((element) => {
+        element.disabled = !editable;
+        element.tabIndex = editable ? 0 : -1;
+        element.setAttribute("aria-hidden", editable ? "false" : "true");
+      });
     };
 
     const updateCardAttrs = (node, getPos, attrs) => {
@@ -224,10 +230,39 @@ async function buildKnowledgeEditor() {
           const body = document.createElement("div");
           body.className = "readany-card-body";
 
+          const header = document.createElement("div");
+          header.className = "readany-card-header";
+
           const meta = document.createElement("div");
           meta.className = "readany-card-meta";
           meta.textContent = cardMetaText(attrs);
-          body.appendChild(meta);
+          header.appendChild(meta);
+
+          const convertButton = document.createElement("button");
+          convertButton.className = "readany-card-convert";
+          convertButton.type = "button";
+          convertButton.textContent = "Aa";
+          convertButton.title = cardConvertToTextLabel;
+          convertButton.setAttribute("aria-label", cardConvertToTextLabel);
+          convertButton.disabled = editor?.isEditable === false;
+          convertButton.tabIndex = editor?.isEditable === false ? -1 : 0;
+          convertButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!editor?.isEditable || typeof getPos !== "function") return;
+            const pos = getPos();
+            if (typeof pos !== "number") return;
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(
+                { from: pos, to: pos + currentNode.nodeSize },
+                createReadAnyCardTiptapContent(currentNode.attrs || {}),
+              )
+              .run();
+          });
+          header.appendChild(convertButton);
+          body.appendChild(header);
 
           const title = document.createElement("input");
           title.className = "readany-card-title";
@@ -283,6 +318,8 @@ async function buildKnowledgeEditor() {
               title.placeholder = nextModel.title;
               title.readOnly = editor?.isEditable === false;
               title.tabIndex = editor?.isEditable === false ? -1 : 0;
+              convertButton.disabled = editor?.isEditable === false;
+              convertButton.tabIndex = editor?.isEditable === false ? -1 : 0;
               const nextText = nextModel.body;
               if (preview.value !== nextText) preview.value = nextText;
               preview.rows = Math.max(3, Math.min(8, String(nextText).split("\\n").length + 1));
@@ -532,6 +569,10 @@ async function buildKnowledgeEditor() {
         typeof payload.cardBodyPlaceholder === "string" && payload.cardBodyPlaceholder
           ? payload.cardBodyPlaceholder
           : "Write inside this card...";
+      cardConvertToTextLabel =
+        typeof payload.cardConvertToTextLabel === "string" && payload.cardConvertToTextLabel
+          ? payload.cardConvertToTextLabel
+          : "Convert card to normal text";
       imageUnavailableTitle =
         typeof payload.imageUnavailableTitle === "string" && payload.imageUnavailableTitle
           ? payload.imageUnavailableTitle

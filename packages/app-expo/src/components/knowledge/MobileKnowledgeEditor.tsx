@@ -134,6 +134,7 @@ interface MobileKnowledgeEditorProps {
   onChange: (value: MobileKnowledgeEditorValue) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  readOnly?: boolean;
   layout?: "embedded" | "document";
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
@@ -210,6 +211,7 @@ type EditorCommand =
   | { type: "setContent"; contentJson: JSONValue }
   | { type: "focus"; position?: "start" | "end" }
   | { type: "blur" }
+  | { type: "setEditable"; editable: boolean }
   | { type: "setTheme"; theme: EditorTheme }
   | { type: "requestContent"; requestId: string }
   | { type: "runCommand"; command: string; attrs?: Record<string, unknown> };
@@ -294,6 +296,7 @@ export function MobileKnowledgeEditor({
   onChange,
   placeholder,
   autoFocus = false,
+  readOnly = false,
   layout = "embedded",
   tier = "knowledge_doc",
   surface,
@@ -499,7 +502,10 @@ export function MobileKnowledgeEditor({
 
   useEffect(() => {
     let mounted = true;
-    if (!draftKey) return;
+    if (!draftKey || readOnly) {
+      setPendingDraft(null);
+      return;
+    }
 
     const initialFingerprint = baseFingerprintRef.current;
     const loadDraft = async () => {
@@ -516,7 +522,7 @@ export function MobileKnowledgeEditor({
     return () => {
       mounted = false;
     };
-  }, [draftKey]);
+  }, [draftKey, readOnly]);
 
   useEffect(() => {
     if (!draftKey || !isSaved) return;
@@ -577,7 +583,7 @@ export function MobileKnowledgeEditor({
 
   const scheduleDraftSave = useCallback(
     (nextValue: MobileKnowledgeEditorValue) => {
-      if (!draftKey) return;
+      if (readOnly || !draftKey) return;
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
 
       const nextFingerprint = fingerprintJson(nextValue.contentJson);
@@ -599,7 +605,7 @@ export function MobileKnowledgeEditor({
           });
       }, DRAFT_SAVE_DELAY_MS);
     },
-    [draftKey],
+    [draftKey, readOnly],
   );
 
   const retryEditor = useCallback(() => {
@@ -636,18 +642,32 @@ export function MobileKnowledgeEditor({
         "notes.knowledgeAttachmentUnavailableHint",
         "重新同步，或让原设备保持在线后再试。",
       ),
-      readOnly: false,
+      readOnly,
       theme,
     });
-    if (autoFocus) {
+    if (autoFocus && !readOnly) {
       injectCommand({ type: "focus", position: "end" });
     }
-  }, [autoFocus, injectCommand, placeholder, t, theme]);
+  }, [autoFocus, injectCommand, placeholder, readOnly, t, theme]);
 
   useEffect(() => {
     if (!isBridgeReady) return;
     injectCommand({ type: "setTheme", theme });
   }, [injectCommand, isBridgeReady, theme]);
+
+  useEffect(() => {
+    if (!isBridgeReady || !isEditorReady) return;
+    injectCommand({ type: "setEditable", editable: !readOnly });
+    if (readOnly) {
+      injectCommand({ type: "blur" });
+      setShowBlockInsertMenu(false);
+      setShowCardMenu(false);
+      setShowImageModal(false);
+      setShowInternalLinkModal(false);
+      setShowLinkModal(false);
+      setIsTemplateFormOpen(false);
+    }
+  }, [injectCommand, isBridgeReady, isEditorReady, readOnly]);
 
   useEffect(() => {
     if (!isBridgeReady || !isEditorReady) return;
@@ -666,7 +686,15 @@ export function MobileKnowledgeEditor({
   }, [injectCommand, isBridgeReady, isEditorReady, outlineTarget, useMarkdownFallback]);
 
   useEffect(() => {
-    if (!sourceReferenceRequest || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;
+    if (
+      readOnly ||
+      !sourceReferenceRequest ||
+      !isBridgeReady ||
+      !isEditorReady ||
+      useMarkdownFallback
+    ) {
+      return;
+    }
     if (handledSourceReferenceRequestIdRef.current === sourceReferenceRequest.requestId) return;
     const label = sourceReferenceRequest.label.trim();
     if (!label) return;
@@ -680,7 +708,14 @@ export function MobileKnowledgeEditor({
         cfi: sourceReferenceRequest.cfi?.trim() || null,
       },
     });
-  }, [injectCommand, isBridgeReady, isEditorReady, sourceReferenceRequest, useMarkdownFallback]);
+  }, [
+    injectCommand,
+    isBridgeReady,
+    isEditorReady,
+    readOnly,
+    sourceReferenceRequest,
+    useMarkdownFallback,
+  ]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -728,6 +763,7 @@ export function MobileKnowledgeEditor({
           });
           break;
         case "contentChanged": {
+          if (readOnly) return;
           if (!isJsonValue(message.contentJson)) {
             console.error("[MobileKnowledgeEditor] Invalid contentChanged payload:", message);
             setEditorIssue({
@@ -765,18 +801,19 @@ export function MobileKnowledgeEditor({
           break;
       }
     },
-    [onChange, scheduleDraftSave, sendInit, t],
+    [onChange, readOnly, scheduleDraftSave, sendInit, t],
   );
 
   const runCommand = useCallback(
     (command: string, attrs?: Record<string, unknown>) => {
+      if (readOnly) return;
       injectCommand({ type: "runCommand", command, attrs });
     },
-    [injectCommand],
+    [injectCommand, readOnly],
   );
 
   const restorePendingDraft = useCallback(() => {
-    if (!pendingDraft) return;
+    if (readOnly || !pendingDraft) return;
     const nextValue = normalizeMobileKnowledgeEditorValue(pendingDraft.value);
     setPendingDraft(null);
     const nextFingerprint = fingerprintJson(nextValue.contentJson);
@@ -787,7 +824,7 @@ export function MobileKnowledgeEditor({
       localFingerprintRef.current = nextFingerprint;
       injectCommand({ type: "setContent", contentJson: nextValue.contentJson });
     }
-  }, [injectCommand, isBridgeReady, isEditorReady, onChange, pendingDraft]);
+  }, [injectCommand, isBridgeReady, isEditorReady, onChange, pendingDraft, readOnly]);
 
   const discardPendingDraft = useCallback(() => {
     if (!draftKey) return;
@@ -797,10 +834,10 @@ export function MobileKnowledgeEditor({
   }, [draftKey]);
 
   const openLinkModal = useCallback(() => {
-    if (!canUse("link")) return;
+    if (readOnly || !canUse("link")) return;
     setLinkUrl(selection.linkHref ?? "");
     setShowLinkModal(true);
-  }, [canUse, selection.linkHref]);
+  }, [canUse, readOnly, selection.linkHref]);
 
   const applyLink = useCallback(() => {
     const href = linkUrl.trim();
@@ -811,7 +848,7 @@ export function MobileKnowledgeEditor({
 
   const insertInternalLink = useCallback(
     (target?: MobileKnowledgeInternalLinkTarget) => {
-      if (!canUse("internalLink")) return;
+      if (readOnly || !canUse("internalLink")) return;
       const label = (target?.title ?? internalLinkQuery).trim();
       if (!label) return;
       runCommand("insertInternalLink", {
@@ -823,16 +860,16 @@ export function MobileKnowledgeEditor({
       setShowInternalLinkModal(false);
       setInternalLinkQuery("");
     },
-    [canUse, internalLinkQuery, runCommand],
+    [canUse, internalLinkQuery, readOnly, runCommand],
   );
 
   const openImageModal = useCallback(() => {
-    if (!canUse("image")) return;
+    if (readOnly || !canUse("image")) return;
     setImageUrl("");
     setImageAlt("");
     setShowBlockInsertMenu(false);
     setShowImageModal(true);
-  }, [canUse]);
+  }, [canUse, readOnly]);
 
   const insertImageAttrs = useCallback(
     (attrs: MobileKnowledgeImageInsertAttrs) => {
@@ -859,7 +896,7 @@ export function MobileKnowledgeEditor({
   }, [imageAlt, imageUrl, insertImageAttrs]);
 
   const pickLocalImage = useCallback(async () => {
-    if (!onPickLocalImage || isPickingLocalImage) return;
+    if (readOnly || !onPickLocalImage || isPickingLocalImage) return;
     setIsPickingLocalImage(true);
     try {
       const attrs = await onPickLocalImage();
@@ -867,7 +904,7 @@ export function MobileKnowledgeEditor({
     } finally {
       setIsPickingLocalImage(false);
     }
-  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage]);
+  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage, readOnly]);
 
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
@@ -888,11 +925,13 @@ export function MobileKnowledgeEditor({
   }, []);
 
   const openNewTemplateForm = useCallback(() => {
+    if (readOnly) return;
     resetTemplateForm();
     setIsTemplateFormOpen(true);
-  }, [resetTemplateForm]);
+  }, [readOnly, resetTemplateForm]);
 
   const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
+    if (readOnly) return;
     const attrs = createReadAnyCardAttrsFromTemplate(template);
     setEditingTemplateId(template.id);
     setTemplateName(getReadAnyCardTemplateInsertLabel(template));
@@ -900,10 +939,10 @@ export function MobileKnowledgeEditor({
     setTemplateMarkdown((attrs.markdown ?? attrs.text ?? "") as string);
     setTemplateSaveError(null);
     setIsTemplateFormOpen(true);
-  }, []);
+  }, [readOnly]);
 
   const saveTemplate = useCallback(async () => {
-    if (!canUse("readAnyCards") || isSavingTemplate) return;
+    if (readOnly || !canUse("readAnyCards") || isSavingTemplate) return;
     const name = templateName.trim();
     if (!name) return;
 
@@ -961,6 +1000,7 @@ export function MobileKnowledgeEditor({
     cardTemplates,
     editingTemplateId,
     isSavingTemplate,
+    readOnly,
     resetTemplateForm,
     runCommand,
     t,
@@ -970,6 +1010,7 @@ export function MobileKnowledgeEditor({
   ]);
   const disableTemplate = useCallback(
     (template: KnowledgeCardTemplate) => {
+      if (readOnly) return;
       Alert.alert(
         t("notes.knowledgeCustomCardDisable", "移除自定义卡片"),
         t(
@@ -1007,11 +1048,12 @@ export function MobileKnowledgeEditor({
         ],
       );
     },
-    [editingTemplateId, resetTemplateForm, t],
+    [editingTemplateId, readOnly, resetTemplateForm, t],
   );
 
   const handleFallbackChange = useCallback(
     (markdown: string) => {
+      if (readOnly) return;
       const contentJson = markdownToBasicTiptap(markdown, {
         cardTemplates,
       }) as unknown as JSONValue;
@@ -1023,7 +1065,7 @@ export function MobileKnowledgeEditor({
       scheduleDraftSave(nextValue);
       onChange(nextValue);
     },
-    [cardTemplates, onChange, scheduleDraftSave],
+    [cardTemplates, onChange, readOnly, scheduleDraftSave],
   );
 
   const toolbarGroupCandidates: ({ key: string; node: React.ReactNode } | null)[] = [
@@ -1291,9 +1333,11 @@ export function MobileKnowledgeEditor({
           }
         : null,
   ];
-  const toolbarGroups = toolbarGroupCandidates.filter(
-    (group): group is { key: string; node: React.ReactNode } => group !== null,
-  );
+  const toolbarGroups = readOnly
+    ? []
+    : toolbarGroupCandidates.filter(
+        (group): group is { key: string; node: React.ReactNode } => group !== null,
+      );
   const hasBlockInsertItems =
     canUse("heading1") ||
     canUse("heading2") ||
@@ -1308,7 +1352,7 @@ export function MobileKnowledgeEditor({
   if (useMarkdownFallback) {
     return (
       <View style={[styles.fallbackWrap, isDocumentLayout && styles.fallbackWrapDocument]}>
-        {pendingDraft ? (
+        {!readOnly && pendingDraft ? (
           <View style={styles.draftBanner}>
             <View style={styles.draftBannerTextBlock}>
               <Text style={styles.draftBannerTitle}>
@@ -1343,47 +1387,61 @@ export function MobileKnowledgeEditor({
         {editorIssue ? (
           <EditorIssueBanner issue={editorIssue} fallbackActive styles={styles} />
         ) : null}
-        <RichTextEditor
-          tier={tier}
-          surface={surface}
-          initialContent={value.contentMd}
-          onChange={handleFallbackChange}
-          placeholder={placeholder}
-          autoFocus={autoFocus}
-        />
+        {readOnly ? (
+          <ScrollView
+            style={styles.readOnlyFallback}
+            contentContainerStyle={styles.readOnlyFallbackContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.readOnlyFallbackText}>
+              {normalizedValue.plainText || normalizedValue.contentMd}
+            </Text>
+          </ScrollView>
+        ) : (
+          <RichTextEditor
+            tier={tier}
+            surface={surface}
+            initialContent={value.contentMd}
+            onChange={handleFallbackChange}
+            placeholder={placeholder}
+            autoFocus={autoFocus}
+          />
+        )}
       </View>
     );
   }
 
   return (
     <View style={[styles.container, isDocumentLayout && styles.documentContainer]}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.toolbar}
-        contentContainerStyle={styles.toolbarContent}
-      >
-        {hasBlockInsertItems ? (
-          <>
-            <ToolbarButton
-              onPress={() => setShowBlockInsertMenu(true)}
-              disabled={!isEditorReady}
-              styles={styles}
-            >
-              <PlusIcon size={15} color={colors.primary} />
-            </ToolbarButton>
-            <ToolbarDivider styles={styles} />
-          </>
-        ) : null}
-        {toolbarGroups.map((group, index) => (
-          <Fragment key={group.key}>
-            {index > 0 ? <ToolbarDivider styles={styles} /> : null}
-            {group.node}
-          </Fragment>
-        ))}
-      </ScrollView>
+      {toolbarGroups.length > 0 || (!readOnly && hasBlockInsertItems) ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.toolbar}
+          contentContainerStyle={styles.toolbarContent}
+        >
+          {!readOnly && hasBlockInsertItems ? (
+            <>
+              <ToolbarButton
+                onPress={() => setShowBlockInsertMenu(true)}
+                disabled={!isEditorReady}
+                styles={styles}
+              >
+                <PlusIcon size={15} color={colors.primary} />
+              </ToolbarButton>
+              <ToolbarDivider styles={styles} />
+            </>
+          ) : null}
+          {toolbarGroups.map((group, index) => (
+            <Fragment key={group.key}>
+              {index > 0 ? <ToolbarDivider styles={styles} /> : null}
+              {group.node}
+            </Fragment>
+          ))}
+        </ScrollView>
+      ) : null}
 
-      {pendingDraft ? (
+      {!readOnly && pendingDraft ? (
         <View style={styles.draftBanner}>
           <View style={styles.draftBannerTextBlock}>
             <Text style={styles.draftBannerTitle}>
@@ -2289,6 +2347,23 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     fallbackWrapDocument: {
       flex: 1,
       minHeight: 0,
+    },
+    readOnlyFallback: {
+      flex: 1,
+      minHeight: MIN_EDITOR_HEIGHT,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+      backgroundColor: colors.background,
+    },
+    readOnlyFallbackContent: {
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    readOnlyFallbackText: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      lineHeight: 22,
     },
     toolbar: {
       minHeight: 45,

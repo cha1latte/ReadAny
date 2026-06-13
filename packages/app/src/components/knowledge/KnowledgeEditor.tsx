@@ -124,6 +124,7 @@ interface KnowledgeEditorProps {
   className?: string;
   contentClassName?: string;
   autoFocus?: boolean;
+  readOnly?: boolean;
   chrome?: "default" | "canvas";
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
@@ -380,6 +381,7 @@ export function KnowledgeEditor({
   className,
   contentClassName,
   autoFocus = false,
+  readOnly = false,
   chrome = "default",
   tier = "knowledge_doc",
   surface,
@@ -538,6 +540,7 @@ export function KnowledgeEditor({
   const editor = useEditor({
     extensions,
     content: normalizedContentJson,
+    editable: !readOnly,
     editorProps: {
       attributes: {
         class: cn(
@@ -560,6 +563,7 @@ export function KnowledgeEditor({
       },
     },
     onUpdate: ({ editor }) => {
+      if (readOnly) return;
       const contentJson = editor.getJSON() as unknown as JSONValue;
       isInternalUpdate.current = true;
       onChange({
@@ -570,6 +574,20 @@ export function KnowledgeEditor({
     },
     immediatelyRender: false,
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!readOnly);
+    if (readOnly) {
+      editor.commands.blur();
+      setFloatingToolbarPosition(null);
+      setIsBlockInsertOpen(false);
+      setIsImageInsertOpen(false);
+      setIsInsertOpen(false);
+      setIsInternalLinkOpen(false);
+      setIsTemplateFormOpen(false);
+    }
+  }, [editor, readOnly]);
 
   useEffect(() => {
     if (!editor || isInternalUpdate.current) {
@@ -584,10 +602,10 @@ export function KnowledgeEditor({
   }, [editor, normalizedContentJson]);
 
   useEffect(() => {
-    if (editor && autoFocus) {
+    if (editor && autoFocus && !readOnly) {
       editor.commands.focus();
     }
-  }, [editor, autoFocus]);
+  }, [editor, autoFocus, readOnly]);
 
   useEffect(() => {
     if (!editor || !outlineTarget) return;
@@ -608,7 +626,7 @@ export function KnowledgeEditor({
   }, [editor, outlineTarget]);
 
   useEffect(() => {
-    if (!editor || !sourceReferenceRequest || !canUse("sourceReference")) return;
+    if (!editor || readOnly || !sourceReferenceRequest || !canUse("sourceReference")) return;
     if (handledSourceReferenceRequestIdRef.current === sourceReferenceRequest.requestId) return;
     const label = sourceReferenceRequest.label.trim();
     if (!label) return;
@@ -628,17 +646,18 @@ export function KnowledgeEditor({
         { type: "text", text: " " },
       ])
       .run();
-  }, [canUse, editor, sourceReferenceRequest]);
+  }, [canUse, editor, readOnly, sourceReferenceRequest]);
 
   const hasFloatingInlineTools =
-    canUse("bold") ||
-    canUse("italic") ||
-    canUse("strike") ||
-    canUse("inlineCode") ||
-    canUse("link");
+    !readOnly &&
+    (canUse("bold") ||
+      canUse("italic") ||
+      canUse("strike") ||
+      canUse("inlineCode") ||
+      canUse("link"));
 
   const updateFloatingToolbarPosition = useCallback(() => {
-    if (!editor || !hasFloatingInlineTools || editor.state.selection.empty) {
+    if (!editor || readOnly || !hasFloatingInlineTools || editor.state.selection.empty) {
       setFloatingToolbarPosition(null);
       return;
     }
@@ -665,7 +684,7 @@ export function KnowledgeEditor({
     } catch {
       setFloatingToolbarPosition(null);
     }
-  }, [editor, hasFloatingInlineTools]);
+  }, [editor, hasFloatingInlineTools, readOnly]);
 
   useEffect(() => {
     if (!editor) return;
@@ -682,7 +701,7 @@ export function KnowledgeEditor({
   }, [editor, updateFloatingToolbarPosition]);
 
   const setLink = useCallback(() => {
-    if (!editor || !canUse("link")) return;
+    if (!editor || readOnly || !canUse("link")) return;
     const previousUrl = editor.getAttributes("link").href;
     const url = window.prompt(t("editor.enterLink"), previousUrl);
     if (url === null) return;
@@ -691,15 +710,15 @@ export function KnowledgeEditor({
       return;
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [canUse, editor, t]);
+  }, [canUse, editor, readOnly, t]);
   const unsetLink = useCallback(() => {
-    if (!editor || !canUse("link")) return;
+    if (!editor || readOnly || !canUse("link")) return;
     editor.chain().focus().extendMarkRange("link").unsetLink().run();
-  }, [canUse, editor]);
+  }, [canUse, editor, readOnly]);
 
   const insertInternalLink = useCallback(
     (target?: KnowledgeInternalLinkTarget) => {
-      if (!editor || !canUse("internalLink")) return;
+      if (!editor || readOnly || !canUse("internalLink")) return;
       const label = (target?.title ?? internalLinkQuery).trim();
       if (!label) return;
       editor
@@ -718,12 +737,12 @@ export function KnowledgeEditor({
       setInternalLinkQuery("");
       setIsInternalLinkOpen(false);
     },
-    [canUse, editor, internalLinkQuery],
+    [canUse, editor, internalLinkQuery, readOnly],
   );
 
   const insertImageAttrs = useCallback(
     (attrs: KnowledgeImageInsertAttrs) => {
-      if (!editor || !canUse("image")) return;
+      if (!editor || readOnly || !canUse("image")) return;
       const src = attrs.src.trim();
       if (!src) return;
       editor
@@ -744,18 +763,18 @@ export function KnowledgeEditor({
       setImageAlt("");
       setIsImageInsertOpen(false);
     },
-    [canUse, editor],
+    [canUse, editor, readOnly],
   );
 
   const insertImage = useCallback(() => {
-    if (!editor || !canUse("image")) return;
+    if (!editor || readOnly || !canUse("image")) return;
     const src = imageSrc.trim();
     if (!src) return;
     insertImageAttrs({ src, alt: imageAlt });
-  }, [canUse, editor, imageAlt, imageSrc, insertImageAttrs]);
+  }, [canUse, editor, imageAlt, imageSrc, insertImageAttrs, readOnly]);
 
   const pickLocalImage = useCallback(async () => {
-    if (!onPickLocalImage || isPickingLocalImage) return;
+    if (readOnly || !onPickLocalImage || isPickingLocalImage) return;
     setIsPickingLocalImage(true);
     try {
       const attrs = await onPickLocalImage();
@@ -763,11 +782,11 @@ export function KnowledgeEditor({
     } finally {
       setIsPickingLocalImage(false);
     }
-  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage]);
+  }, [insertImageAttrs, isPickingLocalImage, onPickLocalImage, readOnly]);
 
   const insertCard = useCallback(
     (card: InsertableCardItem) => {
-      if (!editor || !canInsertCard(card.cardType)) return;
+      if (!editor || readOnly || !canInsertCard(card.cardType)) return;
       editor
         .chain()
         .focus()
@@ -779,7 +798,7 @@ export function KnowledgeEditor({
       setIsInsertOpen(false);
       setIsBlockInsertOpen(false);
     },
-    [canInsertCard, editor],
+    [canInsertCard, editor, readOnly],
   );
 
   const resetTemplateForm = useCallback(() => {
@@ -791,11 +810,13 @@ export function KnowledgeEditor({
   }, []);
 
   const openNewTemplateForm = useCallback(() => {
+    if (readOnly) return;
     resetTemplateForm();
     setIsTemplateFormOpen(true);
-  }, [resetTemplateForm]);
+  }, [readOnly, resetTemplateForm]);
 
   const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
+    if (readOnly) return;
     const attrs = createReadAnyCardAttrsFromTemplate(template);
     setEditingTemplateId(template.id);
     setTemplateName(getReadAnyCardTemplateInsertLabel(template));
@@ -803,10 +824,10 @@ export function KnowledgeEditor({
     setTemplateMarkdown(attrs.markdown ?? attrs.text ?? "");
     setTemplateSaveError(null);
     setIsTemplateFormOpen(true);
-  }, []);
+  }, [readOnly]);
 
   const saveTemplate = useCallback(async () => {
-    if (!editor || !canUse("readAnyCards") || isSavingTemplate) return;
+    if (readOnly || !editor || !canUse("readAnyCards") || isSavingTemplate) return;
     const name = templateName.trim();
     if (!name) return;
 
@@ -875,6 +896,7 @@ export function KnowledgeEditor({
     editingTemplateId,
     editor,
     isSavingTemplate,
+    readOnly,
     resetTemplateForm,
     t,
     templateDescription,
@@ -883,6 +905,7 @@ export function KnowledgeEditor({
   ]);
   const disableTemplate = useCallback(
     async (template: KnowledgeCardTemplate) => {
+      if (readOnly) return;
       const confirmed = window.confirm(
         t("notes.knowledgeCustomCardDisableConfirm", {
           name: template.name,
@@ -909,7 +932,7 @@ export function KnowledgeEditor({
         );
       }
     },
-    [editingTemplateId, resetTemplateForm, t],
+    [editingTemplateId, readOnly, resetTemplateForm, t],
   );
 
   if (!editor) return null;
@@ -1668,9 +1691,11 @@ export function KnowledgeEditor({
         }
       : null,
   ];
-  const toolbarGroups = toolbarGroupCandidates.filter(
-    (group): group is { key: string; node: ReactNode } => group !== null,
-  );
+  const toolbarGroups = readOnly
+    ? []
+    : toolbarGroupCandidates.filter(
+        (group): group is { key: string; node: ReactNode } => group !== null,
+      );
   const isCanvasChrome = chrome === "canvas";
 
   return (
@@ -1682,27 +1707,30 @@ export function KnowledgeEditor({
           ? "group bg-transparent"
           : [
               "group overflow-hidden rounded-lg border border-border/60 bg-background",
-              "focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 focus-within:ring-offset-1",
+              !readOnly &&
+                "focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 focus-within:ring-offset-1",
               "transition-all duration-200",
             ],
         className,
       )}
     >
-      <div
-        className={cn(
-          "flex flex-wrap items-center gap-1",
-          isCanvasChrome
-            ? "sticky top-0 z-10 mx-auto mb-5 max-w-[820px] rounded-md border border-border/55 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur"
-            : "border-b border-border/40 bg-muted/20 px-2 py-1.5",
-        )}
-      >
-        {toolbarGroups.map((group, index) => (
-          <Fragment key={group.key}>
-            {index > 0 ? <ToolbarDivider /> : null}
-            {group.node}
-          </Fragment>
-        ))}
-      </div>
+      {toolbarGroups.length > 0 ? (
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-1",
+            isCanvasChrome
+              ? "sticky top-0 z-10 mx-auto mb-5 max-w-[820px] rounded-md border border-border/55 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur"
+              : "border-b border-border/40 bg-muted/20 px-2 py-1.5",
+          )}
+        >
+          {toolbarGroups.map((group, index) => (
+            <Fragment key={group.key}>
+              {index > 0 ? <ToolbarDivider /> : null}
+              {group.node}
+            </Fragment>
+          ))}
+        </div>
+      ) : null}
 
       {floatingToolbarPosition ? (
         <div

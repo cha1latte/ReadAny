@@ -460,6 +460,7 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
               <div className="mt-2 text-destructive/75">
                 {t("knowledgeToolResult.failureSafeHint", {
                   defaultValue:
+                    display.safeNoWriteHint ||
                     "This failed tool call did not write to the knowledge base or change your documents.",
                 })}
               </div>

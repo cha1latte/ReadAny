@@ -378,7 +378,10 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
                 </Text>
               )}
               <Text style={s.knowledgeResultFailureHint}>
-                {t("knowledgeToolResult.failureSafeHint", "失败的工具不会写入知识库或修改文档。")}
+                {t(
+                  "knowledgeToolResult.failureSafeHint",
+                  display.safeNoWriteHint || "失败的工具不会写入知识库或修改文档。",
+                )}
               </Text>
             </View>
             {display.documents.length > 0 ? (

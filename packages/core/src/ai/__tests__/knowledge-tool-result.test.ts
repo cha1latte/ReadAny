@@ -159,6 +159,7 @@ describe("knowledge tool result display", () => {
       toolName: "proposeKnowledgeDocumentUpdate",
       documentId: "missing-doc",
       error: "Knowledge document not found",
+      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
   });
@@ -184,6 +185,7 @@ describe("knowledge tool result display", () => {
       status: "failed",
       documentId: "doc-1",
       error: "Model request failed",
+      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [
         {
           id: "doc-1",
@@ -212,6 +214,7 @@ describe("knowledge tool result display", () => {
       status: "failed",
       reason: "model_error",
       error: "Model request failed",
+      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
   });
@@ -225,6 +228,7 @@ describe("knowledge tool result display", () => {
       kind: "failure",
       toolName: "searchKnowledgeBase",
       error: "Tool searchKnowledgeBase is not available",
+      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
   });
@@ -238,6 +242,7 @@ describe("knowledge tool result display", () => {
       kind: "failure",
       toolName: "getBookKnowledge",
       error: "Bridge message failed",
+      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
   });

@@ -24,6 +24,7 @@ export interface KnowledgeToolResultDisplay {
   persisted?: boolean;
   reason?: string;
   error?: string;
+  safeNoWriteHint?: string;
   sourceChars?: number;
   documentId?: string;
   summaryPreview?: string;
@@ -44,6 +45,8 @@ const KNOWLEDGE_TOOL_NAMES = new Set([
   "proposeKnowledgeDocumentTagsUpdate",
   "proposeKnowledgeLinkCreate",
 ]);
+const KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT =
+  "No knowledge document or link was saved or changed by this failed tool call.";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -107,6 +110,7 @@ function asFailureDisplay(
     documentId: asString(result.documentId) || asString(result.fromDocumentId),
     reason,
     error: error || message || reason || "Tool execution failed",
+    safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
     documents: contextDocumentsFromResult(result),
   };
 }
@@ -123,6 +127,7 @@ function createFailureDisplay(
     documentId: result ? asString(result.documentId) || asString(result.fromDocumentId) : undefined,
     reason: result ? asString(result.reason) : undefined,
     error,
+    safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
     documents: result ? contextDocumentsFromResult(result) : [],
   };
 }

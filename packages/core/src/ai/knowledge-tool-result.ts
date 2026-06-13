@@ -66,6 +66,18 @@ function asBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function compactKnowledgePreview(value: unknown): string | undefined {
+  const markdown = asString(value);
+  if (!markdown) return undefined;
+  return markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[#>*_`~\-[\]()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 360);
+}
+
 function asResultRecord(value: unknown): Record<string, unknown> | null {
   if (isRecord(value)) return value;
   if (typeof value !== "string") return null;
@@ -126,7 +138,11 @@ function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
     title,
     path: asString(value.path),
     type: asString(value.type),
-    snippet: asString(value.snippet) || asString(value.excerpt) || asString(value.summary),
+    snippet:
+      asString(value.snippet) ||
+      asString(value.excerpt) ||
+      asString(value.summary) ||
+      compactKnowledgePreview(value.content),
     childCount: asNumber(value.childCount),
   };
 }
@@ -166,14 +182,7 @@ function contextDocumentsFromResult(result: Record<string, unknown>): KnowledgeT
 }
 
 function compactMarkdownPreview(value: unknown): string | undefined {
-  const markdown = asString(value);
-  if (!markdown) return undefined;
-  return markdown
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[#>*_`~\-[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 360);
+  return compactKnowledgePreview(value);
 }
 
 export function getKnowledgeToolResultDisplay(

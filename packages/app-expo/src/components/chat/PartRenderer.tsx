@@ -306,6 +306,10 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
           ]
             .filter(Boolean)
             .join(" · ")
+        : display.kind === "document"
+          ? display.documentId
+            ? t("knowledgeToolResult.documentId", { id: display.documentId })
+            : ""
         : t("knowledgeToolResult.count", {
             total: display.total ?? display.documents.length,
             showing: display.showing ?? display.documents.length,

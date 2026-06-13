@@ -88,6 +88,27 @@ describe("knowledge tool result display", () => {
     });
   });
 
+  it("uses full document content as a readable preview when exact reads include content", () => {
+    const display = getKnowledgeToolResultDisplay("getKnowledgeDocument", {
+      success: true,
+      documentId: "doc-2",
+      document: {
+        id: "doc-2",
+        title: "Long Note",
+        type: "standalone_note",
+        path: "Knowledge base / Long Note",
+        content: "## Main Idea\n\n```ts\nconst hidden = true;\n```\nA durable note with **rich** context.",
+      },
+    });
+
+    expect(display?.documents[0]).toMatchObject({
+      id: "doc-2",
+      title: "Long Note",
+      path: "Knowledge base / Long Note",
+      snippet: "Main Idea A durable note with rich context.",
+    });
+  });
+
   it("summarizes compact-memory updates", () => {
     const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
       success: true,

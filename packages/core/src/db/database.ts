@@ -90,6 +90,7 @@ export {
   getKnowledgeAttachments,
   insertKnowledgeAttachment,
   deleteKnowledgeAttachment,
+  disableKnowledgeCardTemplate,
   getKnowledgeCardTemplates,
   upsertKnowledgeCardTemplate,
 } from "./knowledge-queries";

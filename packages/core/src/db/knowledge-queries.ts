@@ -734,3 +734,20 @@ export async function upsertKnowledgeCardTemplate(template: KnowledgeCardTemplat
     ],
   );
 }
+
+export async function disableKnowledgeCardTemplate(id: string): Promise<void> {
+  const trimmedId = id.trim();
+  if (!trimmedId) return;
+
+  const database = await getDB();
+  const deviceId = await getDeviceId();
+  const syncVersion = await nextSyncVersion(database, "knowledge_card_templates");
+  const now = Date.now();
+
+  await database.execute(
+    `UPDATE knowledge_card_templates
+     SET enabled = 0, updated_at = ?, sync_version = ?, last_modified_by = ?
+     WHERE id = ? AND built_in = 0`,
+    [now, syncVersion, deviceId, trimmedId],
+  );
+}

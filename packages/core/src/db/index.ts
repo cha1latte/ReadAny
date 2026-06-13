@@ -67,6 +67,7 @@ export {
   getKnowledgeAttachments,
   insertKnowledgeAttachment,
   deleteKnowledgeAttachment,
+  disableKnowledgeCardTemplate,
   getKnowledgeCardTemplates,
   upsertKnowledgeCardTemplate,
   syncKnowledgeDocumentToLegacySource,

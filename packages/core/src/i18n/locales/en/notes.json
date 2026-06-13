@@ -294,6 +294,9 @@
     "knowledgeCustomCardBodyPlaceholder": "Question:\nAnswer:\nSource:",
     "knowledgeCustomCardCreate": "Create card",
     "knowledgeCustomCardCreateFailed": "Failed to create custom card.",
+    "knowledgeCustomCardDisable": "Remove custom card",
+    "knowledgeCustomCardDisableConfirm": "Remove \"{{name}}\" from the insert menu? Existing cards in documents will stay unchanged.",
+    "knowledgeCustomCardDisableFailed": "Failed to remove custom card.",
     "knowledgeCards": {
       "bookQuote": "Quote card",
       "callout": "Callout",

@@ -33,6 +33,7 @@ const {
   deleteKnowledgeAttachment,
   deleteKnowledgeDocument,
   deleteKnowledgeLink,
+  disableKnowledgeCardTemplate,
   ensureBookHomeDocument,
   getKnowledgeBacklinks,
   getKnowledgeAttachments,
@@ -516,5 +517,15 @@ _Source: Chapter 1_`,
     expect(sql).toContain("INSERT INTO knowledge_card_templates");
     expect(sql).toContain("ON CONFLICT(id) DO UPDATE");
     expect(params[3]).toBe('{"type":"object"}');
+  });
+
+  it("soft-disables user card templates for sync-safe template management", async () => {
+    await disableKnowledgeCardTemplate("card-review");
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("UPDATE knowledge_card_templates");
+    expect(sql).toContain("enabled = 0");
+    expect(sql).toContain("built_in = 0");
+    expect(params[3]).toBe("card-review");
   });
 });

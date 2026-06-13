@@ -1,4 +1,8 @@
-import { getKnowledgeCardTemplates, upsertKnowledgeCardTemplate } from "@/lib/db/database";
+import {
+  disableKnowledgeCardTemplate,
+  getKnowledgeCardTemplates,
+  upsertKnowledgeCardTemplate,
+} from "@/lib/db/database";
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
@@ -61,6 +65,7 @@ import {
   Sparkles,
   Strikethrough,
   TextQuote,
+  Trash2,
   Undo2,
   Unlink,
 } from "lucide-react";
@@ -144,6 +149,7 @@ interface InsertableCardItem {
   cardType: string;
   insertLabel: string;
   description?: string;
+  template?: KnowledgeCardTemplate;
   createAttrs: () => ReadAnyCardAttrs;
 }
 
@@ -458,6 +464,7 @@ export function KnowledgeEditor({
           cardType,
           insertLabel: getReadAnyCardTemplateInsertLabel(template),
           description: getReadAnyCardTemplateDescription(template),
+          template,
           createAttrs: () => createReadAnyCardAttrsFromTemplate(template),
         })),
     ],
@@ -818,6 +825,32 @@ export function KnowledgeEditor({
       setIsSavingTemplate(false);
     }
   }, [canUse, editor, isSavingTemplate, t, templateDescription, templateMarkdown, templateName]);
+  const disableTemplate = useCallback(
+    async (template: KnowledgeCardTemplate) => {
+      const confirmed = window.confirm(
+        t("notes.knowledgeCustomCardDisableConfirm", {
+          name: template.name,
+          defaultValue: `Remove "${template.name}" from the insert menu? Existing cards in documents will stay unchanged.`,
+        }),
+      );
+      if (!confirmed) return;
+
+      try {
+        await disableKnowledgeCardTemplate(template.id);
+        setCardTemplates((current) => current.filter((item) => item.id !== template.id));
+      } catch (error) {
+        console.warn("[KnowledgeEditor] Failed to disable card template:", error);
+        setTemplateSaveError(
+          error instanceof Error
+            ? error.message
+            : t("notes.knowledgeCustomCardDisableFailed", {
+                defaultValue: "Failed to remove custom card.",
+              }),
+        );
+      }
+    },
+    [t],
+  );
 
   if (!editor) return null;
 
@@ -1361,22 +1394,44 @@ export function KnowledgeEditor({
                   {allowedCards.map((card) => {
                     const Icon = cardIconMap[card.cardType as keyof typeof cardIconMap] ?? Sparkles;
                     return (
-                      <button
+                      <div
                         key={card.key}
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-popover-foreground transition-colors hover:bg-muted"
-                        onClick={() => insertCard(card)}
+                        className="group/card flex w-full items-center gap-1 rounded-md text-xs text-popover-foreground transition-colors hover:bg-muted"
                       >
-                        <Icon className="h-3.5 w-3.5 text-primary" />
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium">{card.insertLabel}</span>
-                          {card.description ? (
-                            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                              {card.description}
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
+                          onClick={() => insertCard(card)}
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">{card.insertLabel}</span>
+                            {card.description ? (
+                              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                                {card.description}
+                              </span>
+                            ) : null}
+                          </span>
+                        </button>
+                        {card.template ? (
+                          <button
+                            type="button"
+                            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover/card:opacity-100 focus:opacity-100"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void disableTemplate(card.template!);
+                            }}
+                            aria-label={t("notes.knowledgeCustomCardDisable", {
+                              defaultValue: "Remove custom card",
+                            })}
+                            title={t("notes.knowledgeCustomCardDisable", {
+                              defaultValue: "Remove custom card",
+                            })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
                     );
                   })}
                   {canUse("readAnyCards") ? (

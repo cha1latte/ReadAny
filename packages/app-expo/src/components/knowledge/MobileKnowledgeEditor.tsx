@@ -23,11 +23,16 @@ import {
   ScrollTextIcon,
   SparklesIcon,
   StrikethroughIcon,
+  Trash2Icon,
   Undo2Icon,
 } from "@/components/ui/Icon";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
-import { getKnowledgeCardTemplates, upsertKnowledgeCardTemplate } from "@readany/core/db/database";
+import {
+  disableKnowledgeCardTemplate,
+  getKnowledgeCardTemplates,
+  upsertKnowledgeCardTemplate,
+} from "@readany/core/db/database";
 import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
@@ -59,6 +64,7 @@ import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
@@ -221,6 +227,7 @@ interface InsertableCardItem {
   cardType: string;
   insertLabel: string;
   description?: string;
+  template?: KnowledgeCardTemplate;
   createAttrs: () => Record<string, unknown>;
 }
 
@@ -404,6 +411,7 @@ export function MobileKnowledgeEditor({
           cardType,
           insertLabel: getReadAnyCardTemplateInsertLabel(template),
           description: getReadAnyCardTemplateDescription(template),
+          template,
           createAttrs: () =>
             createReadAnyCardAttrsFromTemplate(template) as Record<string, unknown>,
         })),
@@ -916,6 +924,43 @@ export function MobileKnowledgeEditor({
     templateMarkdown,
     templateName,
   ]);
+  const disableTemplate = useCallback(
+    (template: KnowledgeCardTemplate) => {
+      Alert.alert(
+        t("notes.knowledgeCustomCardDisable", "移除自定义卡片"),
+        t(
+          "notes.knowledgeCustomCardDisableConfirm",
+          `从插入菜单移除「${template.name}」？已经插入到文档里的卡片不会变化。`,
+          { name: template.name },
+        ),
+        [
+          { text: t("common.cancel", "取消"), style: "cancel" },
+          {
+            text: t("common.confirm", "确认"),
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                try {
+                  await disableKnowledgeCardTemplate(template.id);
+                  setCardTemplates((current) =>
+                    current.filter((item) => item.id !== template.id),
+                  );
+                } catch (error) {
+                  console.warn("[MobileKnowledgeEditor] Failed to disable card template:", error);
+                  setTemplateSaveError(
+                    error instanceof Error
+                      ? error.message
+                      : t("notes.knowledgeCustomCardDisableFailed", "移除自定义卡片失败"),
+                  );
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [t],
+  );
 
   const handleFallbackChange = useCallback(
     (markdown: string) => {
@@ -1893,24 +1938,41 @@ export function MobileKnowledgeEditor({
                 {allowedCards.map((card) => {
                   const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
                   return (
-                    <TouchableOpacity
+                    <View
                       key={card.key}
                       style={styles.cardOption}
-                      activeOpacity={0.78}
-                      onPress={() => insertCard(card)}
                     >
-                      <View style={styles.cardOptionIcon}>
-                        <Icon size={18} color={colors.primary} />
-                      </View>
-                      <View style={styles.cardOptionText}>
-                        <Text style={styles.cardOptionTitle}>{card.insertLabel}</Text>
-                        {card.description ? (
-                          <Text style={styles.cardOptionDescription} numberOfLines={2}>
-                            {card.description}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.cardOptionMain}
+                        activeOpacity={0.78}
+                        onPress={() => insertCard(card)}
+                      >
+                        <View style={styles.cardOptionIcon}>
+                          <Icon size={18} color={colors.primary} />
+                        </View>
+                        <View style={styles.cardOptionText}>
+                          <Text style={styles.cardOptionTitle}>{card.insertLabel}</Text>
+                          {card.description ? (
+                            <Text style={styles.cardOptionDescription} numberOfLines={2}>
+                              {card.description}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                      {card.template ? (
+                        <TouchableOpacity
+                          style={styles.cardTemplateRemoveButton}
+                          activeOpacity={0.72}
+                          onPress={() => disableTemplate(card.template!)}
+                          accessibilityLabel={t(
+                            "notes.knowledgeCustomCardDisable",
+                            "移除自定义卡片",
+                          )}
+                        >
+                          <Trash2Icon size={15} color={colors.destructive} />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   );
                 })}
                 {canUse("readAnyCards") ? (
@@ -2570,6 +2632,13 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
+    cardOptionMain: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
     cardOptionIcon: {
       width: 38,
       height: 38,
@@ -2592,6 +2661,14 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.mutedForeground,
       fontSize: fontSize.xs,
       lineHeight: 17,
+    },
+    cardTemplateRemoveButton: {
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.destructive, 0.08),
     },
     blockOption: {
       minHeight: 58,

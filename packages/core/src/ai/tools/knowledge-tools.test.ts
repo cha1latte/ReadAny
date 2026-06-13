@@ -501,6 +501,35 @@ describe("knowledge tools", () => {
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
   });
 
+  it("rejects create drafts that would duplicate a sibling vault path", async () => {
+    const folder = doc({ id: "folder-1", type: "folder", title: "Folder" });
+    const existing = doc({
+      id: "existing-summary",
+      type: "summary",
+      title: "Reading Summary",
+      parentId: "folder-1",
+    });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(folder);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, existing]);
+
+    const tool = createProposeKnowledgeDocumentCreateTool();
+    const result = await tool.execute({
+      reasoning: "User asked to save a summary",
+      title: " reading   summary ",
+      contentMd: "## Summary\nSlow reading helps memory.",
+      type: "summary",
+      bookId: "book-1",
+      parentId: "folder-1",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid title: duplicate_sibling_title",
+    });
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("folder-1");
+    expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
+  });
+
   it("rejects create drafts under missing or non-folder parents", async () => {
     dbMocks.getKnowledgeDocument.mockResolvedValueOnce(null);
 

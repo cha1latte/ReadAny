@@ -15,6 +15,7 @@ import {
   formatKnowledgeDocumentPath,
   orderKnowledgeDocuments,
   validateKnowledgeDocumentParent,
+  validateKnowledgeDocumentSiblingTitle,
 } from "../../knowledge/document-utils";
 import { markdownToBasicTiptap } from "../../knowledge/editor-projection";
 import type {
@@ -170,6 +171,10 @@ function parentValidationError(reason: string): string {
   return `Invalid parentId: ${reason}`;
 }
 
+function titleValidationError(reason: string): string {
+  return `Invalid title: ${reason}`;
+}
+
 async function resolveCreateParentContext({
   type,
   bookId,
@@ -285,11 +290,6 @@ function createChildrenByParentId(
   }
 
   return childrenByParentId;
-}
-
-async function createPathContext(bookId?: string): Promise<Map<string, KnowledgeDocument>> {
-  const documents = await getKnowledgeDocuments({ ...(bookId ? { bookId } : {}), limit: 5000 });
-  return createDocumentMap(documents);
 }
 
 function createDraftTargetPath({
@@ -621,9 +621,21 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       const parentContext = await resolveCreateParentContext({ type, bookId, parentId });
       if (parentContext.error) return { success: false, error: parentContext.error };
       const contentJson = markdownToKnowledgeJson(contentMd);
-      const documentsById = parentId
-        ? await createPathContext(parentContext.bookId)
-        : createDocumentMap([]);
+      const pathContextDocuments = await getKnowledgeDocuments({
+        ...(parentContext.bookId ? { bookId: parentContext.bookId } : {}),
+        limit: 5000,
+      });
+      const titleValidation = validateKnowledgeDocumentSiblingTitle({
+        bookId: parentContext.bookId,
+        parentId,
+        title,
+        documents: pathContextDocuments,
+      });
+      if (!titleValidation.ok) {
+        return { success: false, error: titleValidationError(titleValidation.reason) };
+      }
+
+      const documentsById = createDocumentMap(pathContextDocuments);
       if (parentContext.parent) {
         documentsById.set(parentContext.parent.id, parentContext.parent);
       }

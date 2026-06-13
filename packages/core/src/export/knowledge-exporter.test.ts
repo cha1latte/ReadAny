@@ -395,7 +395,7 @@ describe("KnowledgeExporter", () => {
         toKind: "document",
         toId: "note-2",
         relation: "related",
-        label: "Deep question",
+        label: "Deep | question",
         createdAt: 1000,
         updatedAt: 1000,
       },
@@ -411,7 +411,7 @@ describe("KnowledgeExporter", () => {
       "- **related:** [[Books/The Book A Study/Reading Trail/Question Log|Question Log]]",
     );
     expect(home?.content).toContain(
-      "- **related:** [[Books/The Book A Study/Reading Trail/Themes/Question Log|Deep question]]",
+      "- **related:** [[Books/The Book A Study/Reading Trail/Themes/Question Log|Deep \\| question]]",
     );
   });
 

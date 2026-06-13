@@ -154,10 +154,19 @@ function renderInternalLink(node: TiptapNode, options: MarkdownProjectionOptions
         ? node.attrs.title.trim()
         : "";
 
-  if (target && label && label !== target) return `[[${target}|${label}]]`;
-  if (target) return `[[${target}]]`;
-  if (label) return `[[${label}]]`;
+  const markdownTarget = escapeWikiLinkPart(target);
+  const markdownLabel = escapeWikiLinkPart(label);
+
+  if (markdownTarget && markdownLabel && label !== target) {
+    return `[[${markdownTarget}|${markdownLabel}]]`;
+  }
+  if (markdownTarget) return `[[${markdownTarget}]]`;
+  if (markdownLabel) return `[[${markdownLabel}]]`;
   return "";
+}
+
+function escapeWikiLinkPart(value: string): string {
+  return value.trim().replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 function renderInline(node: TiptapNode, options: MarkdownProjectionOptions): string {
@@ -634,7 +643,7 @@ function looksLikeStableKnowledgeDocumentId(value: string): boolean {
 }
 
 function readAnyInternalLinkNode(value: string): TiptapNode {
-  const [target, alias] = value.split("|", 2).map((part) => part.trim());
+  const [target, alias] = splitWikiLinkValue(value);
   const isPathTarget = target.includes("/") || /\.md$/i.test(target);
   const label =
     alias || (isPathTarget ? target.split("/").pop()?.replace(/\.md$/i, "") : target) || target;
@@ -649,6 +658,42 @@ function readAnyInternalLinkNode(value: string): TiptapNode {
       ...(isPathTarget ? { targetPath: target } : {}),
     },
   };
+}
+
+function splitWikiLinkValue(value: string): [string, string?] {
+  let target = "";
+  let alias = "";
+  let hasAlias = false;
+  let escaped = false;
+
+  const append = (char: string) => {
+    if (hasAlias) alias += char;
+    else target += char;
+  };
+
+  for (const char of value) {
+    if (escaped) {
+      append(char);
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === "|" && !hasAlias) {
+      hasAlias = true;
+      continue;
+    }
+
+    append(char);
+  }
+
+  if (escaped) append("\\");
+
+  return hasAlias ? [target.trim(), alias.trim()] : [target.trim()];
 }
 
 function parseInlineMarkdown(markdown: string): TiptapNode[] {

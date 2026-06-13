@@ -334,7 +334,7 @@ function stripMarkdownExtension(path: string): string {
 }
 
 function wikiLinkPart(value: string): string {
-  return value.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+  return value.replace(/\s+/g, " ").trim().replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 function documentWikiLink(link: KnowledgeLink, context: ExportContext): string {

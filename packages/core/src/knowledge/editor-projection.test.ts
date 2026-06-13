@@ -973,6 +973,45 @@ describe("editor projection", () => {
     expect(markdown).toBe("Compare [[Books/The Book/Reading Trail/Question Log|Question Log]].");
   });
 
+  it("escapes internal link aliases so Obsidian round-trips titles with pipes", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Compare " },
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: "doc-1",
+                label: "Question | Log",
+                title: "Question | Log",
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(markdown).toBe("Compare [[doc-1|Question \\| Log]]");
+    expect(markdownToBasicTiptap(markdown)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Compare " },
+            {
+              type: "readanyInternalLink",
+              attrs: { documentId: "doc-1", label: "Question | Log", title: "Question | Log" },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("lets export callers resolve internal link ids to path-backed targets", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {

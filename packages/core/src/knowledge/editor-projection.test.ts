@@ -483,6 +483,48 @@ describe("editor projection", () => {
     });
   });
 
+  it("round-trips editable source references with encoded CFI links", () => {
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Cite " },
+            {
+              type: "readanySourceReference",
+              attrs: {
+                label: "Chapter 2",
+                sourceTitle: "Chapter 2",
+                sourceId: "hl-2",
+                cfi: "epubcfi(/6/2!/4/8)",
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(markdown).toBe(
+      "Cite [Chapter 2](readany://cfi/epubcfi%28%2F6%2F2!%2F4%2F8%29?sourceId=hl-2)",
+    );
+    expect(markdownToBasicTiptap(markdown)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Cite " },
+            {
+              type: "readanySourceReference",
+              attrs: { label: "Chapter 2", cfi: "epubcfi(/6/2!/4/8)", sourceId: "hl-2" },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("exports upgraded card metadata for round-tripping", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {

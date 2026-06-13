@@ -107,6 +107,12 @@ function safeHref(value: unknown): string {
   return href;
 }
 
+function encodeReadAnyUriComponent(value: string): string {
+  return encodeURIComponent(value).replace(/[()]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
 function className(options: ReadOnlyHtmlProjectionOptions, suffix: string): string {
   return `${options.classPrefix ?? "readany"}-${suffix}`;
 }
@@ -170,8 +176,11 @@ function renderInline(node: TiptapNode, options: MarkdownProjectionOptions): str
     const label = String(node.attrs?.label ?? node.attrs?.sourceTitle ?? "Source");
     const cfi = String(node.attrs?.cfi ?? "");
     const sourceId = String(node.attrs?.sourceId ?? "");
-    if (cfi) return `[${label}](readany://cfi/${encodeURIComponent(cfi)})`;
-    if (sourceId) return `[${label}](readany://source/${encodeURIComponent(sourceId)})`;
+    if (cfi) {
+      const sourceParam = sourceId ? `?sourceId=${encodeReadAnyUriComponent(sourceId)}` : "";
+      return `[${label}](readany://cfi/${encodeReadAnyUriComponent(cfi)}${sourceParam})`;
+    }
+    if (sourceId) return `[${label}](readany://source/${encodeReadAnyUriComponent(sourceId)})`;
     return label;
   }
 
@@ -593,11 +602,15 @@ function paragraphNode(text: string): TiptapNode {
 
 function linkNode(label: string, href: string): TiptapNode {
   if (href.startsWith("readany://cfi/")) {
+    const rawTarget = href.slice("readany://cfi/".length);
+    const [encodedCfi, query = ""] = rawTarget.split("?", 2);
+    const sourceId = new URLSearchParams(query).get("sourceId")?.trim();
     return {
       type: "readanySourceReference",
       attrs: {
         label,
-        cfi: decodeURIComponent(href.slice("readany://cfi/".length)),
+        cfi: decodeURIComponent(encodedCfi),
+        ...(sourceId ? { sourceId } : {}),
       },
     };
   }

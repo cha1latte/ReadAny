@@ -175,6 +175,11 @@ interface EditorIssue {
   message: string;
 }
 
+interface BridgeParseResult {
+  message: EditorBridgeMessage | null;
+  error?: "invalid_json" | "missing_type";
+}
+
 type EditorCommand =
   | {
       type: "init";
@@ -244,13 +249,15 @@ function isJsonValue(value: unknown): value is JSONValue {
   return Object.values(value).every(isJsonValue);
 }
 
-function parseBridgeMessage(data: string): EditorBridgeMessage | null {
+function parseBridgeMessage(data: string): BridgeParseResult {
   try {
     const parsed = JSON.parse(data);
-    if (!isRecord(parsed) || typeof parsed.type !== "string") return null;
-    return parsed as EditorBridgeMessage;
+    if (!isRecord(parsed) || typeof parsed.type !== "string") {
+      return { message: null, error: "missing_type" };
+    }
+    return { message: parsed as EditorBridgeMessage };
   } catch {
-    return null;
+    return { message: null, error: "invalid_json" };
   }
 }
 
@@ -629,8 +636,24 @@ export function MobileKnowledgeEditor({
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      const message = parseBridgeMessage(event.nativeEvent.data);
-      if (!message) return;
+      const { message, error } = parseBridgeMessage(event.nativeEvent.data);
+      if (!message) {
+        if (error) {
+          console.error("[MobileKnowledgeEditor] Invalid bridge message:", {
+            error,
+            data: event.nativeEvent.data.slice(0, 160),
+          });
+          setEditorIssue({
+            kind: "bridge",
+            code: `bridge_${error}`,
+            message: t(
+              "notes.knowledgeEditorBridgeError",
+              "编辑器通信异常，可以重试或使用备用编辑器",
+            ),
+          });
+        }
+        return;
+      }
 
       switch (message.type) {
         case "loaded":
@@ -657,7 +680,18 @@ export function MobileKnowledgeEditor({
           });
           break;
         case "contentChanged": {
-          if (!isJsonValue(message.contentJson)) return;
+          if (!isJsonValue(message.contentJson)) {
+            console.error("[MobileKnowledgeEditor] Invalid contentChanged payload:", message);
+            setEditorIssue({
+              kind: "bridge",
+              code: "bridge_invalid_content",
+              message: t(
+                "notes.knowledgeEditorBridgeError",
+                "编辑器通信异常，可以重试或使用备用编辑器",
+              ),
+            });
+            return;
+          }
           localFingerprintRef.current = fingerprintJson(message.contentJson);
           const nextValue = {
             contentJson: message.contentJson,

@@ -2710,11 +2710,10 @@ function KnowledgeVaultRootOverview({
         <div className="min-w-0">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
             <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-            {t("notes.knowledgeFolderInside")}
+            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
           </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })} / {items.length}{" "}
-            {t("notes.knowledgeDocuments")}
+            {t("notes.knowledgeFolderInside")} / {items.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -2832,9 +2831,14 @@ function KnowledgeFolderBrowserRow({
   const Icon = isFolder ? FolderOpen : document.type === "book_home" ? BookOpen : FileText;
   const childCount = childCountByParentId.get(document.id) ?? 0;
   const updatedLabel = formatKnowledgeDocumentUpdatedDate(document);
+  const pathLabel = knowledgeDocumentPath(document, documents, t)
+    .slice(1)
+    .map((item) => item.title)
+    .join(" / ");
   const meta = isFolder
     ? t("notes.knowledgeFolderChildCount", { count: childCount })
     : document.excerpt;
+  const metaParts = [knowledgeDocumentTypeLabel(document, t), pathLabel, meta].filter(Boolean);
   const canDelete =
     canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
@@ -2858,9 +2862,11 @@ function KnowledgeFolderBrowserRow({
           <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
             {document.title || t("notes.knowledgeUntitledDocument")}
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-            {knowledgeDocumentTypeLabel(document, t)}
-            {meta ? ` · ${meta}` : ""}
+          <span
+            className="mt-0.5 block truncate text-[11px] text-muted-foreground"
+            title={pathLabel}
+          >
+            {metaParts.join(" · ")}
           </span>
         </span>
         <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
@@ -4089,7 +4095,7 @@ function KnowledgeFolderOverview({
         <div className="min-w-0">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
             <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-            {t("notes.knowledgeFolderInside")}
+            {folder.title || t("notes.knowledgeUntitledDocument")}
           </p>
           <p className="mt-1 truncate text-xs text-muted-foreground" title={folderPathLabel}>
             {folderPathLabel} / {orderedChildren.length} {t("notes.knowledgeDocuments")}

@@ -203,6 +203,30 @@ The runtime UI should reinforce the vault model through its physical structure:
 - Path affordances should read as lightweight file paths. They may be tappable,
   but they should not look like unrelated filter chips.
 
+### Directory And WYSIWYG Gate
+
+Every runtime review should pass this gate before any secondary polish is
+accepted:
+
+- A document must always have an address. Tree rows, folder rows, breadcrumbs,
+  move targets, search results, AI proposals, export previews, and sync
+  conflict messages must show or preserve the same vault path.
+- Opening a folder should feel like opening a folder, not opening an empty note.
+  The main title is the real folder name, and the content area is a file list
+  with child folders/documents, counts, updated state, and quiet row actions.
+- Opening a document should feel like writing in a document, not filling a
+  settings form. The title and Tiptap body are the primary surface; tags,
+  sources, backlinks, summaries, and AI memory stay in surrounding context.
+- WYSIWYG is the default contract. Markdown textareas are acceptable only for
+  emergency recovery, import/export previews, or explicit debug/power-user
+  affordances.
+- Mobile must keep the same address model as desktop. It can use a native
+  vault-browse screen and focused editor screen, but it cannot flatten folders
+  into chips, cards, or one long note feed.
+
+If a feature cannot answer "where is this document in the vault?" and "am I
+editing the rendered document directly?", it is not ready to merge.
+
 ### Path Fidelity Acceptance
 
 The vault path must survive every surface where a document leaves the current

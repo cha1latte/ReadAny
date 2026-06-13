@@ -3787,6 +3787,7 @@ function KnowledgeDocumentTreeRow({
 
 function KnowledgeFolderBrowserItem({
   item,
+  documents,
   childCountByParentId,
   onSelect,
   onOpenActions,
@@ -3795,6 +3796,7 @@ function KnowledgeFolderBrowserItem({
   colors,
 }: {
   item: KnowledgeDocument;
+  documents: KnowledgeDocument[];
   childCountByParentId: Map<string, number>;
   onSelect: (document: KnowledgeDocument) => void;
   onOpenActions: (document: KnowledgeDocument) => void;
@@ -3806,8 +3808,10 @@ function KnowledgeFolderBrowserItem({
   const isHome = item.type === "book_home";
   const childCount = childCountByParentId.get(item.id) ?? 0;
   const updatedLabel = formatKnowledgeDocumentUpdatedDate(item);
+  const pathLabel = knowledgeDocumentPathText(item, documents, t);
   const meta = [
     knowledgeDocumentTypeLabel(item, t),
+    pathLabel,
     updatedLabel,
     isFolder ? t("notes.knowledgeFolderChildCount", { count: childCount }) : item.excerpt,
   ]
@@ -3894,10 +3898,10 @@ function KnowledgeVaultRootOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {t("notes.knowledgeFolderInside", "目录内容")}
+            {t("notes.knowledgeVaultRoot", "知识库")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
-            {t("notes.knowledgeVaultRoot", "知识库")} / {items.length}{" "}
+            {t("notes.knowledgeFolderInside", "目录内容")} / {items.length}{" "}
             {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>
@@ -3962,6 +3966,7 @@ function KnowledgeVaultRootOverview({
             <KnowledgeFolderBrowserItem
               key={item.id}
               item={item}
+              documents={documents}
               childCountByParentId={childCountByParentId}
               onSelect={onSelect}
               onOpenActions={onOpenActions}
@@ -4015,7 +4020,7 @@ function KnowledgeFolderOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {t("notes.knowledgeFolderInside", "目录内容")}
+            {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
             {folderPath} / {items.length} {t("notes.knowledgeDocuments", "文档")}
@@ -4082,6 +4087,7 @@ function KnowledgeFolderOverview({
             <KnowledgeFolderBrowserItem
               key={item.id}
               item={item}
+              documents={documents}
               childCountByParentId={childCountByParentId}
               onSelect={onSelect}
               onOpenActions={onOpenActions}

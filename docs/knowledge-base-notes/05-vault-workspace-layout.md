@@ -227,6 +227,26 @@ accepted:
 If a feature cannot answer "where is this document in the vault?" and "am I
 editing the rendered document directly?", it is not ready to merge.
 
+### Obsidian-Like Hierarchy Review
+
+The hierarchy must be reviewed as a real document address system, not as a
+decorative grouping layer.
+
+- The left desktop tree and the mobile vault browser are the source of spatial
+  memory. They should show nested folders, active ancestry, and sibling
+  documents before showing secondary filters such as tags or recents.
+- Folder opening is a navigation state. The screen should look like an opened
+  directory with rows for child folders and child documents, not like a card
+  dashboard, empty editor, or metadata panel.
+- Breadcrumbs should read as file paths. They can be clickable, but they should
+  stay visually lightweight and must not become unrelated chips or pills.
+- Document editing is WYSIWYG first. The title and body are the document
+  surface; Markdown text, raw JSON, import previews, and export paths are
+  supporting projections.
+- Mobile is allowed to use native screens and sheets, but its hierarchy should
+  still feel like "browse folder -> open document -> write", not "scroll cards
+  until the right note appears".
+
 ### Path Fidelity Acceptance
 
 The vault path must survive every surface where a document leaves the current

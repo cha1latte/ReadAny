@@ -2783,12 +2783,12 @@ function KnowledgePathTrail({
               {isFolderLike ? (
                 <FolderIcon
                   size={12}
-                  color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                  color={isLastPathPart ? colors.foreground : colors.mutedForeground}
                 />
               ) : (
                 <ScrollTextIcon
                   size={12}
-                  color={isLastPathPart ? colors.primary : colors.mutedForeground}
+                  color={isLastPathPart ? colors.foreground : colors.mutedForeground}
                 />
               )}
               <Text

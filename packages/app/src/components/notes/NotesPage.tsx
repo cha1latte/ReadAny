@@ -2711,14 +2711,17 @@ function KnowledgeVaultRootOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
-        <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
-            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+      <div className="mb-4 flex items-end justify-between gap-4 border-b border-border/30 pb-3">
+        <div className="min-w-0 border-l-2 border-primary/35 pl-3">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-primary">
+            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
             {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
           </p>
+          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+            {t("notes.knowledgeFolderInside")}
+          </h3>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {t("notes.knowledgeFolderInside")} / {items.length} {t("notes.knowledgeDocuments")}
+            / {items.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -3532,7 +3535,7 @@ function KnowledgeDocumentBreadcrumbs({
             {isClickable ? (
               <button
                 type="button"
-                className="inline-flex max-w-[12rem] items-center gap-1 truncate rounded-sm px-0.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted/35 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+                className="inline-flex max-w-[12rem] items-center gap-1 truncate px-0.5 py-0.5 text-muted-foreground transition-colors hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
                 onClick={() => {
                   if (isRoot) {
                     onSelectRoot?.();
@@ -3548,8 +3551,8 @@ function KnowledgeDocumentBreadcrumbs({
             ) : (
               <span
                 className={cn(
-                  "inline-flex max-w-[12rem] items-center gap-1 truncate rounded-sm px-0.5 py-0.5",
-                  isLast ? "text-primary" : "text-muted-foreground",
+                  "inline-flex max-w-[12rem] items-center gap-1 truncate px-0.5 py-0.5",
+                  isLast ? "text-foreground" : "text-muted-foreground",
                 )}
                 title={item.title}
               >
@@ -3607,10 +3610,10 @@ function KnowledgePathInline({
               type="button"
               disabled={!canNavigate}
               className={cn(
-                "inline-flex h-6 max-w-[12rem] min-w-0 items-center gap-1 rounded-sm px-1 text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45",
+                "inline-flex h-6 max-w-[12rem] min-w-0 items-center gap-1 px-0.5 text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45",
                 isLast
-                  ? "cursor-default text-primary"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                  ? "cursor-default text-foreground"
+                  : "text-muted-foreground hover:text-primary",
                 !canNavigate && !isLast && "cursor-default opacity-70",
               )}
               onClick={() => {
@@ -4167,14 +4170,17 @@ function KnowledgeFolderOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
-        <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
-            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-            {folder.title || t("notes.knowledgeUntitledDocument")}
+      <div className="mb-4 flex items-end justify-between gap-4 border-b border-border/30 pb-3">
+        <div className="min-w-0 border-l-2 border-primary/35 pl-3">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-primary">
+            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+            {folderPathLabel}
           </p>
+          <h3 className="mt-1 truncate text-lg font-semibold leading-tight text-foreground">
+            {folder.title || t("notes.knowledgeUntitledDocument")}
+          </h3>
           <p className="mt-1 truncate text-xs text-muted-foreground" title={folderPathLabel}>
-            {folderPathLabel} / {orderedChildren.length} {t("notes.knowledgeDocuments")}
+            / {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

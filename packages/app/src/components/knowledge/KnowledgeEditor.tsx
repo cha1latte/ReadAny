@@ -413,13 +413,14 @@ export function KnowledgeEditor({
   const imageSrcInputId = useId();
   const imageAltInputId = useId();
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
+  const cardTemplatesRef = useRef<KnowledgeCardTemplate[]>([]);
   const isInternalUpdate = useRef(false);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
   const internalLinkInputRef = useRef<HTMLInputElement | null>(null);
   const handledSourceReferenceRequestIdRef = useRef<number | null>(null);
   const normalizedContentJson = useMemo(
-    () => normalizeTiptapDocument(value.contentJson),
-    [value.contentJson],
+    () => normalizeTiptapDocument(value.contentJson, { cardTemplates }),
+    [cardTemplates, value.contentJson],
   );
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
@@ -490,6 +491,10 @@ export function KnowledgeEditor({
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    cardTemplatesRef.current = cardTemplates;
+  }, [cardTemplates]);
 
   useEffect(() => {
     if (!isInternalLinkOpen) return;
@@ -564,11 +569,16 @@ export function KnowledgeEditor({
     },
     onUpdate: ({ editor }) => {
       if (readOnly) return;
-      const contentJson = editor.getJSON() as unknown as JSONValue;
+      const currentCardTemplates = cardTemplatesRef.current;
+      const contentJson = normalizeTiptapDocument(editor.getJSON() as unknown as JSONValue, {
+        cardTemplates: currentCardTemplates,
+      }) as unknown as JSONValue;
       isInternalUpdate.current = true;
       onChange({
         contentJson,
-        contentMd: renderKnowledgeJsonToMarkdown(contentJson),
+        contentMd: renderKnowledgeJsonToMarkdown(contentJson, {
+          cardTemplates: currentCardTemplates,
+        }),
         plainText: editor.getText(),
       });
     },
@@ -595,11 +605,21 @@ export function KnowledgeEditor({
       return;
     }
 
+    const normalizedJson = normalizedContentJson as unknown as JSONValue;
     const currentJson = editor.getJSON() as unknown as JSONValue;
-    if (!contentJsonEquals(currentJson, normalizedContentJson as unknown as JSONValue)) {
+    if (!contentJsonEquals(currentJson, normalizedJson)) {
       editor.commands.setContent(normalizedContentJson);
     }
-  }, [editor, normalizedContentJson]);
+
+    if (!readOnly && !contentJsonEquals(value.contentJson, normalizedJson)) {
+      isInternalUpdate.current = true;
+      onChange({
+        contentJson: normalizedJson,
+        contentMd: renderKnowledgeJsonToMarkdown(normalizedJson, { cardTemplates }),
+        plainText: editor.getText(),
+      });
+    }
+  }, [cardTemplates, editor, normalizedContentJson, onChange, readOnly, value.contentJson]);
 
   useEffect(() => {
     if (editor && autoFocus && !readOnly) {

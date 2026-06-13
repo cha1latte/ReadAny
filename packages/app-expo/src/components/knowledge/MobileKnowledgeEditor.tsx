@@ -91,12 +91,15 @@ export interface MobileKnowledgeEditorValue {
 
 function normalizeMobileKnowledgeEditorValue(
   value: MobileKnowledgeEditorValue,
+  cardTemplates: KnowledgeCardTemplate[] = [],
 ): MobileKnowledgeEditorValue {
-  const contentJson = normalizeTiptapDocument(value.contentJson) as unknown as JSONValue;
+  const contentJson = normalizeTiptapDocument(value.contentJson, {
+    cardTemplates,
+  }) as unknown as JSONValue;
   return {
     ...value,
     contentJson,
-    contentMd: renderKnowledgeJsonToMarkdown(contentJson),
+    contentMd: renderKnowledgeJsonToMarkdown(contentJson, { cardTemplates }),
   };
 }
 
@@ -311,13 +314,17 @@ export function MobileKnowledgeEditor({
   const insets = useSafeAreaInsets();
   const styles = makeStyles(colors);
   const isDocumentLayout = layout === "document";
+  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const normalizedContentJson = useMemo(
-    () => normalizeTiptapDocument(value.contentJson) as unknown as JSONValue,
-    [value.contentJson],
+    () =>
+      normalizeTiptapDocument(value.contentJson, {
+        cardTemplates,
+      }) as unknown as JSONValue,
+    [cardTemplates, value.contentJson],
   );
   const normalizedContentMd = useMemo(
-    () => renderKnowledgeJsonToMarkdown(normalizedContentJson),
-    [normalizedContentJson],
+    () => renderKnowledgeJsonToMarkdown(normalizedContentJson, { cardTemplates }),
+    [cardTemplates, normalizedContentJson],
   );
   const normalizedValue = useMemo(
     () => ({
@@ -360,7 +367,6 @@ export function MobileKnowledgeEditor({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [isPickingLocalImage, setIsPickingLocalImage] = useState(false);
-  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
   const [isTemplateFormOpen, setIsTemplateFormOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateName, setTemplateName] = useState("");
@@ -468,6 +474,12 @@ export function MobileKnowledgeEditor({
   useEffect(() => {
     latestValueRef.current = normalizedValue;
   }, [normalizedValue]);
+
+  useEffect(() => {
+    if (readOnly || fingerprintJson(value.contentJson) === valueFingerprint) return;
+    localFingerprintRef.current = valueFingerprint;
+    onChange(normalizedValue);
+  }, [normalizedValue, onChange, readOnly, value.contentJson, valueFingerprint]);
 
   useEffect(() => {
     let mounted = true;
@@ -776,10 +788,13 @@ export function MobileKnowledgeEditor({
             });
             return;
           }
-          localFingerprintRef.current = fingerprintJson(message.contentJson);
+          const contentJson = normalizeTiptapDocument(message.contentJson, {
+            cardTemplates,
+          }) as unknown as JSONValue;
+          localFingerprintRef.current = fingerprintJson(contentJson);
           const nextValue = {
-            contentJson: message.contentJson,
-            contentMd: renderKnowledgeJsonToMarkdown(message.contentJson),
+            contentJson,
+            contentMd: renderKnowledgeJsonToMarkdown(contentJson, { cardTemplates }),
             plainText: typeof message.plainText === "string" ? message.plainText : "",
           };
           scheduleDraftSave(nextValue);
@@ -801,7 +816,7 @@ export function MobileKnowledgeEditor({
           break;
       }
     },
-    [onChange, readOnly, scheduleDraftSave, sendInit, t],
+    [cardTemplates, onChange, readOnly, scheduleDraftSave, sendInit, t],
   );
 
   const runCommand = useCallback(
@@ -814,7 +829,7 @@ export function MobileKnowledgeEditor({
 
   const restorePendingDraft = useCallback(() => {
     if (readOnly || !pendingDraft) return;
-    const nextValue = normalizeMobileKnowledgeEditorValue(pendingDraft.value);
+    const nextValue = normalizeMobileKnowledgeEditorValue(pendingDraft.value, cardTemplates);
     setPendingDraft(null);
     const nextFingerprint = fingerprintJson(nextValue.contentJson);
     lastWrittenDraftFingerprintRef.current = nextFingerprint;
@@ -824,7 +839,15 @@ export function MobileKnowledgeEditor({
       localFingerprintRef.current = nextFingerprint;
       injectCommand({ type: "setContent", contentJson: nextValue.contentJson });
     }
-  }, [injectCommand, isBridgeReady, isEditorReady, onChange, pendingDraft, readOnly]);
+  }, [
+    cardTemplates,
+    injectCommand,
+    isBridgeReady,
+    isEditorReady,
+    onChange,
+    pendingDraft,
+    readOnly,
+  ]);
 
   const discardPendingDraft = useCallback(() => {
     if (!draftKey) return;

@@ -43,6 +43,11 @@ export interface MarkdownImportOptions {
   cardTemplates?: KnowledgeCardTemplate[];
 }
 
+export interface NormalizeTiptapDocumentOptions {
+  /** Synced custom card templates used to upgrade active editor card attrs safely. */
+  cardTemplates?: KnowledgeCardTemplate[];
+}
+
 export interface ReadOnlyHtmlProjectionOptions extends MarkdownProjectionOptions {
   /** CSS class prefix for static read-only renderers. */
   classPrefix?: string;
@@ -56,17 +61,25 @@ export function isTiptapNode(value: JSONValue | unknown): value is TiptapNode {
   return isObject(value) && typeof value.type === "string";
 }
 
-export function normalizeTiptapDocument(content: JSONValue | null | undefined): TiptapNode {
+export function normalizeTiptapDocument(
+  content: JSONValue | null | undefined,
+  options: NormalizeTiptapDocumentOptions = {},
+): TiptapNode {
   if (!isTiptapNode(content)) return EMPTY_TIPTAP_DOCUMENT as unknown as TiptapNode;
-  return normalizeTiptapNode(content);
+  return normalizeTiptapNode(content, options);
 }
 
-function normalizeTiptapNode(node: TiptapNode): TiptapNode {
+function normalizeTiptapNode(
+  node: TiptapNode,
+  options: NormalizeTiptapDocumentOptions,
+): TiptapNode {
   const attrs =
     node.type === "readanyCard"
-      ? (upgradeReadAnyCardAttrs(node.attrs ?? {}) as Record<string, unknown>)
+      ? ((options.cardTemplates?.length
+          ? upgradeReadAnyCardAttrsWithTemplates(node.attrs ?? {}, options.cardTemplates)
+          : upgradeReadAnyCardAttrs(node.attrs ?? {})) as Record<string, unknown>)
       : node.attrs;
-  const content = node.content?.map(normalizeTiptapNode);
+  const content = node.content?.map((child) => normalizeTiptapNode(child, options));
 
   return {
     ...node,
@@ -317,7 +330,7 @@ export function renderKnowledgeJsonToMarkdown(
   content: JSONValue | null | undefined,
   options: MarkdownProjectionOptions = {},
 ): string {
-  const document = normalizeTiptapDocument(content);
+  const document = normalizeTiptapDocument(content, { cardTemplates: options.cardTemplates });
   return renderBlock(document, 0, options).trim();
 }
 
@@ -520,7 +533,7 @@ export function renderKnowledgeJsonToReadOnlyHtml(
   content: JSONValue | null | undefined,
   options: ReadOnlyHtmlProjectionOptions = {},
 ): string {
-  const document = normalizeTiptapDocument(content);
+  const document = normalizeTiptapDocument(content, { cardTemplates: options.cardTemplates });
   return renderHtmlBlock(document, options).trim();
 }
 

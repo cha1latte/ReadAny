@@ -331,6 +331,88 @@ describe("editor projection", () => {
     });
   });
 
+  it("uses synced custom card templates while normalizing active editor documents", () => {
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Before card" }],
+        },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 1,
+            title: "My own prompt",
+            markdown: "Question: What changed?",
+            data: {
+              layout: {
+                density: "detailed",
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const normalized = normalizeTiptapDocument(content, {
+      cardTemplates: [
+        {
+          id: "template-reading-question",
+          name: "Reading Prompt",
+          version: 3,
+          schemaJson: {
+            cardType: "custom:template-reading-question",
+            title: "Reading Prompt",
+            markdown: "Prompt:\nResponse:",
+            attrs: {
+              data: {
+                kind: "prompt",
+                layout: {
+                  tone: "short",
+                  density: "compact",
+                },
+              },
+            },
+          },
+          builtIn: false,
+          enabled: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    });
+
+    expect(normalized).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Before card" }],
+        },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 3,
+            title: "My own prompt",
+            markdown: "Question: What changed?",
+            text: "Question: What changed?",
+            data: {
+              kind: "prompt",
+              layout: {
+                tone: "short",
+                density: "detailed",
+              },
+            },
+          },
+        },
+      ],
+    });
+    expect((content.content[1] as { attrs: { version: number } }).attrs.version).toBe(1);
+  });
+
   it("exports upgraded card metadata for round-tripping", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {

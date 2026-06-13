@@ -17,6 +17,7 @@ export type {
 } from "./internal-links";
 export type {
   MarkdownProjectionOptions,
+  NormalizeTiptapDocumentOptions,
   ReadOnlyHtmlProjectionOptions,
   TiptapMark,
   TiptapNode,

@@ -107,7 +107,7 @@ function safeHref(value: unknown): string {
   return href;
 }
 
-function encodeReadAnyUriComponent(value: string): string {
+export function encodeReadAnyUriComponent(value: string): string {
   return encodeURIComponent(value).replace(/[()]/g, (char) =>
     `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );

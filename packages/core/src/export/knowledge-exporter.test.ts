@@ -295,7 +295,18 @@ describe("KnowledgeExporter", () => {
         toId: "hl-1",
         relation: "source",
         label: "Original highlight",
-        cfi: "epubcfi(/6/2)",
+        cfi: "epubcfi(/6/2!/4/8)",
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+      {
+        id: "link-3",
+        fromDocumentId: "doc-1",
+        toKind: "cfi",
+        toId: "epubcfi(/6/4)",
+        relation: "source",
+        label: "Precise location",
+        cfi: "epubcfi(/6/4)",
         createdAt: 1000,
         updatedAt: 1000,
       },
@@ -324,7 +335,10 @@ describe("KnowledgeExporter", () => {
     expect(home?.content).toContain("## ReadAny Links");
     expect(home?.content).toContain("- **related:** [[Notes/Related Idea|Related Idea]]");
     expect(home?.content).toContain(
-      "- **source:** [Original highlight](readany://cfi/epubcfi(%2F6%2F2))",
+      "- **source:** [Original highlight](readany://cfi/epubcfi%28%2F6%2F2!%2F4%2F8%29?sourceId=hl-1)",
+    );
+    expect(home?.content).toContain(
+      "- **source:** [Precise location](readany://cfi/epubcfi%28%2F6%2F4%29)",
     );
     expect(home?.content).toContain("## Attachments");
     expect(home?.content).toContain("- [diagram.png](attachments/diagram.png)");

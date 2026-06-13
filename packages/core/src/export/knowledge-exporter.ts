@@ -1,6 +1,9 @@
 import { createKnowledgeAttachmentUri } from "../knowledge/attachments";
 import { collectKnowledgeDocumentSubtree } from "../knowledge/document-utils";
-import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
+import {
+  encodeReadAnyUriComponent,
+  renderKnowledgeJsonToMarkdown,
+} from "../knowledge/editor-projection";
 import type {
   Book,
   KnowledgeAttachment,
@@ -360,8 +363,13 @@ function renderLinkItem(link: KnowledgeLink, context: ExportContext): string {
     link.toKind === "url"
       ? link.toId
       : link.cfi
-        ? `readany://cfi/${encodeURIComponent(link.cfi)}`
-        : `readany://${link.toKind}/${encodeURIComponent(link.toId)}`;
+        ? [
+            `readany://cfi/${encodeReadAnyUriComponent(link.cfi)}`,
+            link.toKind !== "cfi" ? `sourceId=${encodeReadAnyUriComponent(link.toId)}` : "",
+          ]
+            .filter(Boolean)
+            .join("?")
+        : `readany://${link.toKind}/${encodeReadAnyUriComponent(link.toId)}`;
   return `- **${link.relation}:** [${label}](${target})`;
 }
 

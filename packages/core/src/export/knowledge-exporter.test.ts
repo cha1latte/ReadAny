@@ -728,7 +728,7 @@ describe("KnowledgeExporter", () => {
                 attrs: {
                   attachmentId: "att-1",
                   src: "asset://localhost/local/cover.png",
-                  alt: "Cover",
+                  alt: "Cover [draft]",
                 },
               },
             ],
@@ -740,7 +740,7 @@ describe("KnowledgeExporter", () => {
           id: "att-1",
           documentId: "doc-1",
           kind: "image",
-          fileName: "cover.png",
+          fileName: "cover (final).png",
           mimeType: "image/png",
           localPath: "local/cover.png",
           size: 42,
@@ -751,7 +751,7 @@ describe("KnowledgeExporter", () => {
     });
 
     const document = vault.files.find((file) => file.path.endsWith("README.md"));
-    expect(document?.content).toContain("![Cover](../../Assets/cover.png)");
+    expect(document?.content).toContain("![Cover \\[draft\\]](<../../Assets/cover (final).png>)");
     expect(document?.content).not.toContain("asset://localhost");
   });
 

@@ -92,6 +92,15 @@ function escapeMarkdownText(text: string): string {
   return text.replace(/\u00a0/g, " ");
 }
 
+function escapeMarkdownImageAlt(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/([\[\]])/g, "\\$1");
+}
+
+function markdownImageDestination(src: string): string {
+  if (!/[()<>\s]/.test(src)) return src;
+  return `<${src.replace(/</g, "%3C").replace(/>/g, "%3E")}>`;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -375,7 +384,9 @@ function renderBlock(
       const resolvedSrc =
         options.resolveImageSrc?.(node.attrs ?? {}, src) ||
         (attachmentId ? createKnowledgeAttachmentUri(attachmentId) : src);
-      return resolvedSrc ? `![${alt}](${resolvedSrc})` : "";
+      return resolvedSrc
+        ? `![${escapeMarkdownImageAlt(alt)}](${markdownImageDestination(resolvedSrc)})`
+        : "";
     }
     case "readanyCard":
       return renderReadAnyCard(node, options);
@@ -779,6 +790,91 @@ function parseInlineMarkdown(markdown: string): TiptapNode[] {
   return nodes;
 }
 
+function unescapeMarkdownText(value: string): string {
+  return value.replace(/\\([\\\]\[])/g, "$1");
+}
+
+function parseMarkdownImageBlock(block: string): { alt: string; src: string } | null {
+  if (!block.startsWith("![")) return null;
+
+  let index = 2;
+  let escaped = false;
+  let alt = "";
+
+  for (; index < block.length; index += 1) {
+    const char = block[index];
+    if (escaped) {
+      alt += `\\${char}`;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === "]") break;
+    alt += char;
+  }
+
+  if (index >= block.length || block[index] !== "]" || block[index + 1] !== "(") return null;
+  index += 2;
+
+  let src = "";
+  if (block[index] === "<") {
+    index += 1;
+    for (; index < block.length; index += 1) {
+      const char = block[index];
+      if (char === ">") {
+        index += 1;
+        break;
+      }
+      src += char;
+    }
+    if (block[index] !== ")") return null;
+    index += 1;
+  } else {
+    let depth = 0;
+    escaped = false;
+
+    for (; index < block.length; index += 1) {
+      const char = block[index];
+      if (escaped) {
+        src += char;
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === "(") {
+        depth += 1;
+        src += char;
+        continue;
+      }
+      if (char === ")") {
+        if (depth === 0) {
+          index += 1;
+          break;
+        }
+        depth -= 1;
+        src += char;
+        continue;
+      }
+      src += char;
+    }
+  }
+
+  if (block.slice(index).trim()) return null;
+  const trimmedSrc = src.trim();
+  if (!trimmedSrc) return null;
+
+  return {
+    alt: unescapeMarkdownText(alt),
+    src: trimmedSrc,
+  };
+}
+
 function splitMarkdownBlocks(markdown: string): string[] {
   const blocks: string[] = [];
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -899,14 +995,14 @@ export function markdownToBasicTiptap(
       };
     }
 
-    const image = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    const image = parseMarkdownImageBlock(block);
     if (image) {
-      const attachmentId = parseKnowledgeAttachmentUri(image[2]);
+      const attachmentId = parseKnowledgeAttachmentUri(image.src);
       return {
         type: "image",
         attrs: {
-          alt: image[1],
-          src: image[2],
+          alt: image.alt,
+          src: image.src,
           ...(attachmentId ? { attachmentId } : {}),
         },
       };

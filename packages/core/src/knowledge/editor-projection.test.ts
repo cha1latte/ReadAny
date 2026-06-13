@@ -57,6 +57,7 @@ describe("editor projection", () => {
         { type: "horizontalRule" },
         { type: "image", attrs: { src: "cover.png", alt: "Cover" } },
         { type: "image", attrs: { attachmentId: "att-1", src: "asset://cover.png", alt: "Local" } },
+        { type: "image", attrs: { src: "Assets/Cover (final).png", alt: "Cover [draft]" } },
       ],
     });
 
@@ -70,6 +71,7 @@ describe("editor projection", () => {
         "---",
         "![Cover](cover.png)",
         "![Local](readany-attachment://att-1)",
+        "![Cover \\[draft\\]](<Assets/Cover (final).png>)",
       ].join("\n\n"),
     );
   });
@@ -1114,13 +1116,18 @@ describe("editor projection", () => {
 
   it("imports Markdown image and fenced code blocks without losing blank lines", () => {
     const json = markdownToBasicTiptap(
-      ["![Cover](assets/cover.png)", "```ts\nconst a = 1;\n\nconst b = 2;\n```"].join("\n\n"),
+      [
+        "![Cover](assets/cover.png)",
+        "![Cover \\[draft\\]](<assets/Cover (final).png>)",
+        "```ts\nconst a = 1;\n\nconst b = 2;\n```",
+      ].join("\n\n"),
     );
 
     expect(json).toEqual({
       type: "doc",
       content: [
         { type: "image", attrs: { alt: "Cover", src: "assets/cover.png" } },
+        { type: "image", attrs: { alt: "Cover [draft]", src: "assets/Cover (final).png" } },
         {
           type: "codeBlock",
           attrs: { language: "ts" },

@@ -59,8 +59,9 @@ export {
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
-  createKnowledgeExcerpt,
+  createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
+  createKnowledgeExcerpt,
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,
@@ -82,6 +83,8 @@ export {
 } from "./document-utils";
 export type {
   HighlightNoteProjection,
+  KnowledgeDocumentMoveTarget,
+  KnowledgeDocumentMoveTargetOptions,
   KnowledgeDocumentOutlineItem,
   KnowledgeDocumentPathItem,
   KnowledgeDocumentPathLabelOptions,

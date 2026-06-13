@@ -755,7 +755,7 @@ export const makeStyles = (colors: ThemeColors) =>
     knowledgeMoveTargetList: { gap: 6, paddingBottom: 4 },
     knowledgeCreateTargetList: { marginTop: 10 },
     knowledgeMoveTarget: {
-      minHeight: 42,
+      minHeight: 44,
       flexDirection: "row",
       alignItems: "center",
       gap: 9,
@@ -774,6 +774,11 @@ export const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    knowledgeMoveTargetTextBlock: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
+    },
     knowledgeMoveTargetText: {
       flex: 1,
       minWidth: 0,
@@ -781,6 +786,17 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       fontWeight: fontWeight.medium,
       lineHeight: 18,
+    },
+    knowledgeMoveTargetTitle: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      fontWeight: fontWeight.medium,
+      lineHeight: 18,
+    },
+    knowledgeMoveTargetPath: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      lineHeight: 16,
     },
     knowledgeMoveTargetDangerText: {
       color: colors.destructive,

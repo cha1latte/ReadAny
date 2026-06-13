@@ -66,6 +66,7 @@ import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
+  createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
@@ -2006,23 +2007,12 @@ function KnowledgeHomePanel({
   }, [documents]);
   const getMoveTargets = useCallback(
     (targetDocument: KnowledgeDocument) => {
-      if (targetDocument.type === "book_home") return [];
-      const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
-      const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
-      const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
-        .filter((node) => node.document.type === "folder")
-        .map((node) => ({
-          id: node.document.id,
-          title: node.document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档"),
-          depth: node.depth + 1,
-        }));
-
-      return [
-        { id: undefined, title: t("notes.knowledgeMoveRoot", "根目录"), depth: 0 },
-        ...folderTargets,
-      ].filter(
-        (target) => validateKnowledgeDocumentParent(targetDocument.id, target.id, documents).ok,
-      );
+      return createKnowledgeDocumentMoveTargets(targetDocument, documents, {
+        rootTitle: t("notes.knowledgeVaultRoot", "知识库"),
+        rootTargetTitle: t("notes.knowledgeMoveRoot", "根目录"),
+        untitledTitle: t("notes.knowledgeUntitledDocument", "未命名文档"),
+        orphanedParentTitle: t("notes.knowledgeOrphanedDocument", "孤立"),
+      });
     },
     [documents, t],
   );
@@ -2339,9 +2329,14 @@ function KnowledgeHomePanel({
                     <FolderInputIcon size={15} color={colors.primary} />
                   )}
                 </View>
-                <Text style={styles.knowledgeMoveTargetText} numberOfLines={1}>
-                  {target.title}
-                </Text>
+                <View style={styles.knowledgeMoveTargetTextBlock}>
+                  <Text style={styles.knowledgeMoveTargetTitle} numberOfLines={1}>
+                    {target.title}
+                  </Text>
+                  <Text style={styles.knowledgeMoveTargetPath} numberOfLines={1}>
+                    {target.path}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>

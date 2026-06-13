@@ -58,6 +58,7 @@ import {
   type KnowledgeDocumentTreeNode,
   buildKnowledgeDocumentTree,
   canonicalizeKnowledgeAttachmentImageSources,
+  createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createKnowledgeSummarySourceFingerprint,
@@ -2797,32 +2798,17 @@ function KnowledgeVaultRootOverview({
   );
 }
 
-interface KnowledgeMoveTarget {
-  id?: string;
-  title: string;
-  depth: number;
-}
-
 function knowledgeDocumentMoveTargets(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],
   t: (key: string, options?: Record<string, unknown>) => string,
-): KnowledgeMoveTarget[] {
-  if (document.type === "book_home") return [];
-  const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
-  const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
-  const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
-    .filter((node) => node.document.type === "folder")
-    .map((node) => ({
-      id: node.document.id,
-      title: node.document.title.trim() || t("notes.knowledgeUntitledDocument"),
-      depth: node.depth + 1,
-    }));
-
-  return [
-    { id: undefined, title: t("notes.knowledgeMoveRoot"), depth: 0 },
-    ...folderTargets,
-  ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
+) {
+  return createKnowledgeDocumentMoveTargets(document, documents, {
+    rootTitle: t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+    rootTargetTitle: t("notes.knowledgeMoveRoot"),
+    untitledTitle: t("notes.knowledgeUntitledDocument"),
+    orphanedParentTitle: t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" }),
+  });
 }
 
 function KnowledgeFolderBrowserRow({
@@ -2898,7 +2884,7 @@ function KnowledgeFolderBrowserRow({
                 <FolderDown className="h-3.5 w-3.5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-72 min-w-48 overflow-y-auto">
+            <DropdownMenuContent align="end" className="max-h-72 min-w-64 overflow-y-auto">
               <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 {t("notes.knowledgeMoveTo")}
               </div>
@@ -2906,18 +2892,24 @@ function KnowledgeFolderBrowserRow({
                 <DropdownMenuItem
                   key={target.id ?? "__root__"}
                   onClick={() => onMove(document, target.id)}
-                  className="text-xs"
+                  className="items-start py-2 text-xs"
+                  title={target.path}
                 >
                   <span
-                    className="inline-flex min-w-0 items-center gap-2"
+                    className="inline-flex min-w-0 items-start gap-2"
                     style={{ paddingLeft: `${Math.min(target.depth, 7) * 10}px` }}
                   >
                     {target.id ? (
-                      <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     ) : (
-                      <FolderUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <FolderUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     )}
-                    <span className="truncate">{target.title}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{target.title}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                        {target.path}
+                      </span>
+                    </span>
                   </span>
                 </DropdownMenuItem>
               ))}
@@ -3655,10 +3647,6 @@ function KnowledgeDocumentExplorer({
     () => documents.filter((document) => document.type === "folder").length,
     [documents],
   );
-  const folderNodes = useMemo(
-    () => flatNodes.filter((node) => node.document.type === "folder"),
-    [flatNodes],
-  );
   const visibleSearchNodes = useMemo(() => {
     if (!normalizedQuery) return [];
     return flatNodes.filter((node) =>
@@ -3712,17 +3700,7 @@ function KnowledgeDocumentExplorer({
       : "";
     const canDelete =
       canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
-    const canMove = document.type !== "book_home";
-    const moveTargets = canMove
-      ? [
-          { id: undefined, title: t("notes.knowledgeMoveRoot"), depth: 0 },
-          ...folderNodes.map((folderNode) => ({
-            id: folderNode.document.id,
-            title: folderNode.document.title.trim() || t("notes.knowledgeUntitledDocument"),
-            depth: folderNode.depth + 1,
-          })),
-        ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok)
-      : [];
+    const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
     const Icon = isFolder ? (isExpanded ? FolderOpen : Folder) : FileText;
 
     return (
@@ -3830,7 +3808,7 @@ function KnowledgeDocumentExplorer({
                     <FolderDown className="h-3.5 w-3.5" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-72 min-w-48 overflow-y-auto">
+                <DropdownMenuContent align="end" className="max-h-72 min-w-64 overflow-y-auto">
                   <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     {t("notes.knowledgeMoveTo")}
                   </div>
@@ -3838,18 +3816,24 @@ function KnowledgeDocumentExplorer({
                     <DropdownMenuItem
                       key={target.id ?? "__root__"}
                       onClick={() => onMove(document, target.id)}
-                      className="text-xs"
+                      className="items-start py-2 text-xs"
+                      title={target.path}
                     >
                       <span
-                        className="inline-flex min-w-0 items-center gap-2"
+                        className="inline-flex min-w-0 items-start gap-2"
                         style={{ paddingLeft: `${Math.min(target.depth, 7) * 10}px` }}
                       >
                         {target.id ? (
-                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         ) : (
-                          <FolderUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <FolderUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
-                        <span className="truncate">{target.title}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{target.title}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                            {target.path}
+                          </span>
+                        </span>
                       </span>
                     </DropdownMenuItem>
                   ))}

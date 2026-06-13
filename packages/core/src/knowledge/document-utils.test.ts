@@ -5,6 +5,7 @@ import {
   createHighlightNoteMarkdown,
   createHighlightNoteProjection,
   createHighlightNoteTitle,
+  createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   createLegacyNoteMarkdown,
@@ -176,6 +177,61 @@ describe("knowledge document utilities", () => {
         orphanedParentTitle: "孤立文档",
       }),
     ).toContain("knowledge base / 孤立文档 / loose");
+  });
+
+  it("creates move targets with full paths for duplicate folder names", () => {
+    const ideas = document({ id: "ideas", type: "folder", title: "Ideas" });
+    const reviews = document({ id: "reviews", type: "folder", title: "Reviews" });
+    const inbox = document({ id: "inbox", type: "folder", title: "Inbox" });
+    const ideaThemes = document({
+      id: "idea-themes",
+      type: "folder",
+      title: "Themes",
+      parentId: "ideas",
+    });
+    const reviewThemes = document({
+      id: "review-themes",
+      type: "folder",
+      title: "Themes",
+      parentId: "reviews",
+    });
+    const note = document({ id: "note", title: "Loose Note", parentId: "inbox" });
+
+    expect(
+      createKnowledgeDocumentMoveTargets(
+        note,
+        [ideas, reviews, inbox, ideaThemes, reviewThemes, note],
+        {
+          rootTargetTitle: "Root",
+        },
+      ),
+    ).toEqual([
+      { id: undefined, title: "Root", path: "Knowledge base", depth: 0 },
+      { id: "ideas", title: "Ideas", path: "Knowledge base / Ideas", depth: 1 },
+      {
+        id: "idea-themes",
+        title: "Themes",
+        path: "Knowledge base / Ideas / Themes",
+        depth: 2,
+      },
+      { id: "reviews", title: "Reviews", path: "Knowledge base / Reviews", depth: 1 },
+      {
+        id: "review-themes",
+        title: "Themes",
+        path: "Knowledge base / Reviews / Themes",
+        depth: 2,
+      },
+    ]);
+  });
+
+  it("omits invalid move targets for folders", () => {
+    const parent = document({ id: "parent", type: "folder", title: "Parent" });
+    const child = document({ id: "child", type: "folder", title: "Child", parentId: "parent" });
+    const sibling = document({ id: "sibling", type: "folder", title: "Sibling" });
+
+    expect(createKnowledgeDocumentMoveTargets(parent, [parent, child, sibling])).toEqual([
+      { id: "sibling", title: "Sibling", path: "Knowledge base / Sibling", depth: 1 },
+    ]);
   });
 
   it("validates document parent moves", () => {

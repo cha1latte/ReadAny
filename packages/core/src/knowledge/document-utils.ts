@@ -40,6 +40,17 @@ export interface KnowledgeDocumentSearchTextOptions extends KnowledgeDocumentPat
   typeLabel?: string;
 }
 
+export interface KnowledgeDocumentMoveTargetOptions extends KnowledgeDocumentPathLabelOptions {
+  rootTargetTitle?: string;
+}
+
+export interface KnowledgeDocumentMoveTarget {
+  id?: string;
+  title: string;
+  path: string;
+  depth: number;
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -534,6 +545,36 @@ export function createKnowledgeDocumentSearchText(
   ]
     .join(" ")
     .toLowerCase();
+}
+
+export function createKnowledgeDocumentMoveTargets(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+  options: KnowledgeDocumentMoveTargetOptions = {},
+): KnowledgeDocumentMoveTarget[] {
+  if (document.type === "book_home") return [];
+
+  const rootTitle = options.rootTitle ?? "Knowledge base";
+  const rootTargetTitle = options.rootTargetTitle ?? rootTitle;
+  const untitledTitle = options.untitledTitle ?? "Untitled document";
+  const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
+  const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+  const folderTargets = flattenKnowledgeDocumentTree(tree.roots)
+    .filter((node) => node.document.type === "folder")
+    .map((node) => ({
+      id: node.document.id,
+      title: node.document.title.trim() || untitledTitle,
+      path: formatKnowledgeDocumentPath(node.document, documents, {
+        ...options,
+        includeOrphanedParent: options.includeOrphanedParent ?? true,
+      }),
+      depth: node.depth + 1,
+    }));
+
+  return [
+    { id: undefined, title: rootTargetTitle, path: rootTitle, depth: 0 },
+    ...folderTargets,
+  ].filter((target) => validateKnowledgeDocumentParent(document.id, target.id, documents).ok);
 }
 
 export type KnowledgeDocumentParentValidationReason =

@@ -2341,7 +2341,12 @@ function KnowledgeHomePanel({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-background px-8 py-7">
-            <div className="mx-auto max-w-[880px] pb-5">
+            <div
+              className={cn(
+                "pb-5",
+                isVaultRootOpen || isFolderDocument ? "w-full" : "mx-auto max-w-[880px]",
+              )}
+            >
               {isVaultRootOpen ? (
                 <KnowledgeVaultRootTitle
                   bookTitle={book.title}
@@ -2698,7 +2703,7 @@ function KnowledgeVaultRootOverview({
   );
 
   return (
-    <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
+    <div className="w-full px-1 pb-10 pt-1">
       <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
@@ -4099,7 +4104,7 @@ function KnowledgeFolderOverview({
   }, [documents]);
 
   return (
-    <div className="mx-auto max-w-[960px] px-1 pb-10 pt-1">
+    <div className="w-full px-1 pb-10 pt-1">
       <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
           <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">

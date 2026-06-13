@@ -1267,6 +1267,57 @@ export function NotesPage() {
     }
   };
 
+  const handleRenameKnowledgeDocument = async (document: KnowledgeDocument, title: string) => {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle || normalizedTitle === document.title.trim()) return;
+
+    const titleValidation = validateKnowledgeDocumentSiblingTitle({
+      documentId: document.id,
+      bookId: document.bookId,
+      parentId: document.parentId,
+      title: normalizedTitle,
+      documents: knowledgeDocuments,
+    });
+    if (!titleValidation.ok) {
+      toast.error(t("notes.knowledgeDocumentTitleDuplicate"));
+      return;
+    }
+
+    const saved = await saveActiveKnowledgeDocumentNow();
+    if (!saved) return;
+
+    try {
+      await updateKnowledgeDocument(document.id, { title: normalizedTitle });
+      const updatedAt = Date.now();
+      setKnowledgeDocuments((documents) =>
+        orderKnowledgeDocuments(
+          documents.map((item) =>
+            item.id === document.id ? { ...item, title: normalizedTitle, updatedAt } : item,
+          ),
+          documents.find((item) => item.type === "book_home")?.id,
+        ),
+      );
+
+      if (knowledgeHome?.id === document.id) {
+        const updatedDocument = { ...knowledgeHome, title: normalizedTitle, updatedAt };
+        setKnowledgeHome(updatedDocument);
+        setKnowledgeTitle(normalizedTitle);
+        setSavedKnowledgeFingerprint(
+          knowledgeDocumentFingerprint(
+            normalizedTitle,
+            knowledgeValue,
+            normalizeKnowledgeTags(knowledgeTags),
+          ),
+        );
+      }
+
+      toast.success(t("notes.knowledgeDocumentRenamed"));
+    } catch (error) {
+      console.error("[Notes] Failed to rename knowledge document:", error);
+      toast.error(t("notes.knowledgeDocumentRenameFailed"));
+    }
+  };
+
   const handlePickKnowledgeImageAttachment = useCallback(
     async (document: KnowledgeDocument): Promise<KnowledgeImageInsertAttrs | null> => {
       try {
@@ -2078,6 +2129,7 @@ export function NotesPage() {
                 onCreateDocument={handleCreateKnowledgeDocument}
                 onDeleteDocument={handleDeleteKnowledgeDocument}
                 onMoveDocument={handleMoveKnowledgeDocument}
+                onRenameDocument={handleRenameKnowledgeDocument}
                 onPickImageAttachment={handlePickKnowledgeImageAttachment}
                 onCompressSummary={handleCompressKnowledgeSummary}
                 onExport={handleKnowledgeExport}
@@ -2199,6 +2251,7 @@ interface KnowledgeHomePanelProps {
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRenameDocument: (document: KnowledgeDocument, title: string) => void;
   onPickImageAttachment: (document: KnowledgeDocument) => Promise<KnowledgeImageInsertAttrs | null>;
   onCompressSummary: () => void;
   onExport: (format: KnowledgeExportFormat) => void;
@@ -2247,6 +2300,7 @@ function KnowledgeHomePanel({
   onCreateDocument,
   onDeleteDocument,
   onMoveDocument,
+  onRenameDocument,
   onPickImageAttachment,
   onCompressSummary,
   onExport,
@@ -2381,6 +2435,7 @@ function KnowledgeHomePanel({
           onCreate={onCreateDocument}
           onDelete={onDeleteDocument}
           onMove={onMoveDocument}
+          onRename={onRenameDocument}
           t={t}
         />
 
@@ -2515,6 +2570,7 @@ function KnowledgeHomePanel({
                 onCreate={onCreateDocument}
                 onDelete={onDeleteDocument}
                 onMove={onMoveDocument}
+                onRename={onRenameDocument}
                 t={t}
               />
             ) : isFolderDocument ? (
@@ -2527,6 +2583,7 @@ function KnowledgeHomePanel({
                 onCreate={onCreateDocument}
                 onDelete={onDeleteDocument}
                 onMove={onMoveDocument}
+                onRename={onRenameDocument}
                 t={t}
               />
             ) : (
@@ -2772,6 +2829,7 @@ function KnowledgeVaultRootOverview({
   onCreate,
   onDelete,
   onMove,
+  onRename,
   t,
 }: {
   items: KnowledgeDocument[];
@@ -2781,6 +2839,7 @@ function KnowledgeVaultRootOverview({
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRename: (document: KnowledgeDocument, title: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const childCountByParentId = useMemo(() => {
@@ -2879,6 +2938,7 @@ function KnowledgeVaultRootOverview({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
           <KnowledgeFolderBrowserSection
@@ -2889,6 +2949,7 @@ function KnowledgeVaultRootOverview({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
           <KnowledgeFolderBrowserSection
@@ -2899,6 +2960,7 @@ function KnowledgeVaultRootOverview({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
         </div>
@@ -2915,6 +2977,7 @@ function KnowledgeFolderBrowserSection({
   onSelect,
   onDelete,
   onMove,
+  onRename,
   t,
 }: {
   title: string;
@@ -2924,6 +2987,7 @@ function KnowledgeFolderBrowserSection({
   onSelect: (document: KnowledgeDocument) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRename: (document: KnowledgeDocument, title: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   if (items.length === 0) return null;
@@ -2956,6 +3020,7 @@ function KnowledgeFolderBrowserSection({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
         ))}
@@ -2977,6 +3042,57 @@ function knowledgeDocumentMoveTargets(
   });
 }
 
+function KnowledgeInlineRenameField({
+  value,
+  placeholder,
+  onChange,
+  onCommit,
+  onCancel,
+  ariaLabel,
+  className,
+}: {
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+      onBlur={onCommit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+        }
+      }}
+      aria-label={ariaLabel}
+      className={cn(
+        "h-7 min-w-0 rounded-md border border-primary/35 bg-background px-2 text-xs font-medium text-foreground shadow-sm outline-none ring-2 ring-primary/10 transition focus:ring-primary/20",
+        className,
+      )}
+    />
+  );
+}
+
 function KnowledgeFolderBrowserRow({
   document,
   documents,
@@ -2984,6 +3100,7 @@ function KnowledgeFolderBrowserRow({
   onSelect,
   onDelete,
   onMove,
+  onRename,
   t,
 }: {
   document: KnowledgeDocument;
@@ -2992,6 +3109,7 @@ function KnowledgeFolderBrowserRow({
   onSelect: (document: KnowledgeDocument) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRename: (document: KnowledgeDocument, title: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const isFolder = document.type === "folder";
@@ -3009,42 +3127,112 @@ function KnowledgeFolderBrowserRow({
   const canDelete =
     canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
   const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
+  const displayTitle = document.title.trim() || t("notes.knowledgeUntitledDocument");
+  const renamePlaceholder = t("notes.knowledgeUntitledDocument");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(document.title.trim());
+
+  useEffect(() => {
+    if (!isRenaming) setRenameDraft(document.title.trim());
+  }, [document.title, isRenaming]);
+
+  const cancelRename = () => {
+    setRenameDraft(document.title.trim());
+    setIsRenaming(false);
+  };
+
+  const commitRename = () => {
+    const nextTitle = renameDraft.trim();
+    setIsRenaming(false);
+    if (!nextTitle || nextTitle === document.title.trim()) {
+      setRenameDraft(document.title.trim());
+      return;
+    }
+    onRename(document, nextTitle);
+  };
 
   return (
     <div className="group flex w-full items-center gap-2.5 border-b border-border/30 px-1 py-1 transition-colors last:border-b-0 hover:bg-muted/20">
-      <button
-        type="button"
-        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 pr-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
-        onClick={() => onSelect(document)}
-      >
-        <span
-          className={cn(
-            "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm",
-            isFolder ? "text-primary" : "text-muted-foreground",
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
-            {document.title || t("notes.knowledgeUntitledDocument")}
-          </span>
+      {isRenaming ? (
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 pr-1 text-left">
           <span
-            className="mt-0.5 block truncate text-[11px] text-muted-foreground"
-            title={pathLabel}
+            className={cn(
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm",
+              isFolder ? "text-primary" : "text-muted-foreground",
+            )}
           >
-            {metaParts.join(" · ")}
+            <Icon className="h-3.5 w-3.5" />
           </span>
-        </span>
-        <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
-          {updatedLabel || "-"}
-        </span>
-        <span className="hidden w-12 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
-          {isFolder ? childCount : "-"}
-        </span>
-      </button>
+          <span className="min-w-0 flex-1">
+            <KnowledgeInlineRenameField
+              value={renameDraft}
+              placeholder={renamePlaceholder}
+              onChange={setRenameDraft}
+              onCommit={commitRename}
+              onCancel={cancelRename}
+              ariaLabel={t("notes.knowledgeRenameDocument")}
+              className="w-full text-sm"
+            />
+            <span
+              className="mt-0.5 block truncate text-[11px] text-muted-foreground"
+              title={pathLabel}
+            >
+              {metaParts.join(" · ")}
+            </span>
+          </span>
+          <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+            {updatedLabel || "-"}
+          </span>
+          <span className="hidden w-12 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+            {isFolder ? childCount : "-"}
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 pr-1 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+          onClick={() => onSelect(document)}
+        >
+          <span
+            className={cn(
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-sm",
+              isFolder ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
+              {displayTitle}
+            </span>
+            <span
+              className="mt-0.5 block truncate text-[11px] text-muted-foreground"
+              title={pathLabel}
+            >
+              {metaParts.join(" · ")}
+            </span>
+          </span>
+          <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+            {updatedLabel || "-"}
+          </span>
+          <span className="hidden w-12 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+            {isFolder ? childCount : "-"}
+          </span>
+        </button>
+      )}
 
       <div className="flex h-7 shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {!isRenaming ? (
+          <button
+            type="button"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+            onClick={() => setIsRenaming(true)}
+            aria-label={t("notes.knowledgeRenameDocument")}
+            title={t("notes.knowledgeRenameDocument")}
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
         {moveTargets.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -3737,6 +3925,7 @@ function KnowledgeDocumentExplorer({
   onCreate,
   onDelete,
   onMove,
+  onRename,
   t,
 }: {
   documents: KnowledgeDocument[];
@@ -3748,10 +3937,13 @@ function KnowledgeDocumentExplorer({
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRename: (document: KnowledgeDocument, title: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const [query, setQuery] = useState("");
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const [renamingDocumentId, setRenamingDocumentId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
   const tree = useMemo(
     () => buildKnowledgeDocumentTree(documents, homeDocumentId),
@@ -3856,6 +4048,24 @@ function KnowledgeDocumentExplorer({
     });
   };
 
+  const startRename = (document: KnowledgeDocument) => {
+    setRenamingDocumentId(document.id);
+    setRenameDraft(document.title.trim());
+  };
+
+  const cancelRename = () => {
+    setRenamingDocumentId(null);
+    setRenameDraft("");
+  };
+
+  const commitRename = (document: KnowledgeDocument) => {
+    const nextTitle = renameDraft.trim();
+    setRenamingDocumentId(null);
+    setRenameDraft("");
+    if (!nextTitle || nextTitle === document.title.trim()) return;
+    onRename(document, nextTitle);
+  };
+
   const renderNode = (node: KnowledgeDocumentTreeNode): ReactNode => {
     const document = node.document;
     const isFolder = document.type === "folder";
@@ -3875,6 +4085,7 @@ function KnowledgeDocumentExplorer({
       canDeleteKnowledgeDocument(document) && !(document.type === "folder" && childCount > 0);
     const moveTargets = knowledgeDocumentMoveTargets(document, documents, t);
     const Icon = isFolder ? (isExpanded ? FolderOpen : Folder) : FileText;
+    const isRenaming = renamingDocumentId === document.id;
 
     return (
       <div key={document.id}>
@@ -3922,53 +4133,91 @@ function KnowledgeDocumentExplorer({
             <span className="h-6 w-5 shrink-0" />
           )}
 
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
-            onClick={() => onSelect(document)}
-          >
-            <Icon
-              className={cn(
-                "h-3.5 w-3.5 shrink-0",
-                isActive
-                  ? "text-primary"
-                  : isFolder
-                    ? "text-foreground/75"
-                    : "text-muted-foreground",
-              )}
-            />
-            <span className="min-w-0 flex-1">
-              <span
+          {isRenaming ? (
+            <div className="flex min-w-0 flex-1 items-center gap-2 py-1">
+              <Icon
                 className={cn(
-                  "block truncate text-xs font-medium",
-                  isActive ? "text-primary" : "text-foreground",
+                  "h-3.5 w-3.5 shrink-0",
+                  isActive
+                    ? "text-primary"
+                    : isFolder
+                      ? "text-foreground/75"
+                      : "text-muted-foreground",
                 )}
-              >
-                {title}
-              </span>
-              {!isFolder || isOrphaned || searchPath ? (
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {searchPath || (!isFolder ? knowledgeDocumentTypeLabel(document, t) : null)}
-                  {isOrphaned ? (
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-0.5 rounded-sm bg-amber-500/10 px-1 text-[10px] font-medium text-amber-700 dark:text-amber-300",
-                        !isFolder && "ml-1",
-                      )}
-                    >
-                      <AlertTriangle className="h-2.5 w-2.5" />
-                      {t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" })}
-                    </span>
-                  ) : null}
+              />
+              <KnowledgeInlineRenameField
+                value={renameDraft}
+                placeholder={t("notes.knowledgeUntitledDocument")}
+                onChange={setRenameDraft}
+                onCommit={() => commitRename(document)}
+                onCancel={cancelRename}
+                ariaLabel={t("notes.knowledgeRenameDocument")}
+                className="h-6 flex-1"
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
+              onClick={() => onSelect(document)}
+            >
+              <Icon
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0",
+                  isActive
+                    ? "text-primary"
+                    : isFolder
+                      ? "text-foreground/75"
+                      : "text-muted-foreground",
+                )}
+              />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "block truncate text-xs font-medium",
+                    isActive ? "text-primary" : "text-foreground",
+                  )}
+                >
+                  {title}
                 </span>
+                {!isFolder || isOrphaned || searchPath ? (
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {searchPath || (!isFolder ? knowledgeDocumentTypeLabel(document, t) : null)}
+                    {isOrphaned ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-0.5 rounded-sm bg-amber-500/10 px-1 text-[10px] font-medium text-amber-700 dark:text-amber-300",
+                          !isFolder && "ml-1",
+                        )}
+                      >
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                        {t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" })}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </span>
+              {isFolder ? (
+                <span className="shrink-0 text-[10px] text-muted-foreground">{childCount}</span>
               ) : null}
-            </span>
-            {isFolder ? (
-              <span className="shrink-0 text-[10px] text-muted-foreground">{childCount}</span>
-            ) : null}
-          </button>
+            </button>
+          )}
 
           <div className="flex h-6 shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {!isRenaming ? (
+              <button
+                type="button"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startRename(document);
+                }}
+                aria-label={t("notes.knowledgeRenameDocument")}
+                title={t("notes.knowledgeRenameDocument")}
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
             {moveTargets.length > 0 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -4229,6 +4478,7 @@ function KnowledgeFolderOverview({
   onCreate,
   onDelete,
   onMove,
+  onRename,
   t,
 }: {
   folder: KnowledgeDocument;
@@ -4239,6 +4489,7 @@ function KnowledgeFolderOverview({
   onCreate: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDelete: (document: KnowledgeDocument) => void;
   onMove: (document: KnowledgeDocument, parentId?: string | null) => void;
+  onRename: (document: KnowledgeDocument, title: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const orderedChildren = useMemo(() => orderKnowledgeDocuments(items, undefined), [items]);
@@ -4338,6 +4589,7 @@ function KnowledgeFolderOverview({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
           <KnowledgeFolderBrowserSection
@@ -4348,6 +4600,7 @@ function KnowledgeFolderOverview({
             onSelect={onSelect}
             onDelete={onDelete}
             onMove={onMove}
+            onRename={onRename}
             t={t}
           />
         </div>

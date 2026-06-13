@@ -521,7 +521,18 @@ export async function syncFiles(
   const remoteAttachmentAtPath = new Map<string, boolean>();
   const remoteAttachmentSizeAtPath = new Map<string, number>();
   for (const attachment of attachmentInfos) {
-    if (listings.attachmentPathById.get(attachment.id) === attachment.remotePath) {
+    const listedRemotePath = listings.attachmentPathById.get(attachment.id);
+    if (listedRemotePath) {
+      if (listedRemotePath !== attachment.remotePath) {
+        const nextLocalPath = attachment.row.local_path?.trim()
+          ? attachment.localPath
+          : knowledgeAttachmentLocalPath(attachment.row, appDataDir, listedRemotePath);
+        await patchKnowledgeAttachmentLocalCache(db, attachment, { remotePath: listedRemotePath });
+        attachment.row.remote_path = listedRemotePath;
+        attachment.localPath = nextLocalPath;
+        attachment.remotePath = listedRemotePath;
+        attachment.manifestFileName = getBaseName(listedRemotePath) || attachment.manifestFileName;
+      }
       remoteAttachmentAtPath.set(attachment.id, true);
       const remoteSize = listings.attachmentSizeById.get(attachment.id);
       if (isPositiveFiniteNumber(remoteSize)) {

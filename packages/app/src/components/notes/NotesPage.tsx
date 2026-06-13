@@ -2655,15 +2655,15 @@ function KnowledgeVaultRootTitle({
           {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
         </span>
       </nav>
-      <h2 className="block w-full min-w-0 text-[30px] font-semibold leading-[1.12] text-foreground">
-        {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}
+      <h2 className="block w-full min-w-0 truncate text-[30px] font-semibold leading-[1.12] text-foreground">
+        {bookTitle}
       </h2>
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+        <span>{t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })}</span>
+        <span className="text-border">/</span>
         <span>
           {documentCount} {t("notes.knowledgeDocuments")}
         </span>
-        <span className="text-border">/</span>
-        <span className="truncate">{bookTitle}</span>
       </div>
     </>
   );
@@ -2704,11 +2704,12 @@ function KnowledgeVaultRootOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
+      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
             {t("notes.knowledgeFolderInside")}
-          </h3>
+          </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" })} / {items.length}{" "}
             {t("notes.knowledgeDocuments")}
@@ -2769,6 +2770,14 @@ function KnowledgeVaultRootOverview({
         </div>
       ) : (
         <div className="overflow-hidden border-y border-border/35 bg-background">
+          <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_3rem_4.5rem] border-b border-border/30 px-1 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 md:grid">
+            <span>{t("notes.knowledgeDocuments")}</span>
+            <span className="text-right">
+              {t("notes.knowledgeUpdated", { defaultValue: "Updated" })}
+            </span>
+            <span className="text-right">{t("notes.knowledgeDocumentFolder")}</span>
+            <span />
+          </div>
           {orderedChildren.map((document) => (
             <KnowledgeFolderBrowserRow
               key={document.id}
@@ -2867,16 +2876,12 @@ function KnowledgeFolderBrowserRow({
             {meta ? ` · ${meta}` : ""}
           </span>
         </span>
-        {updatedLabel ? (
-          <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
-            {updatedLabel}
-          </span>
-        ) : null}
-        {isFolder ? (
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-            {childCount}
-          </span>
-        ) : null}
+        <span className="hidden w-20 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+          {updatedLabel || "-"}
+        </span>
+        <span className="hidden w-12 shrink-0 text-right text-[11px] font-medium text-muted-foreground md:block">
+          {isFolder ? childCount : "-"}
+        </span>
       </button>
 
       <div className="flex h-7 shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
@@ -4105,11 +4110,12 @@ function KnowledgeFolderOverview({
 
   return (
     <div className="w-full px-1 pb-10 pt-1">
-      <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
+      <div className="mb-3 flex items-center justify-between gap-4 border-b border-border/30 pb-3">
         <div className="min-w-0">
-          <h3 className="truncate text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
             {t("notes.knowledgeFolderInside")}
-          </h3>
+          </p>
           <p className="mt-1 truncate text-xs text-muted-foreground" title={folderPathLabel}>
             {folderPathLabel} / {orderedChildren.length} {t("notes.knowledgeDocuments")}
           </p>
@@ -4171,6 +4177,14 @@ function KnowledgeFolderOverview({
         <div className="space-y-4">
           <section>
             <div className="overflow-hidden border-y border-border/35 bg-background">
+              <div className="hidden grid-cols-[minmax(0,1fr)_5.5rem_3rem_4.5rem] border-b border-border/30 px-1 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80 md:grid">
+                <span>{t("notes.knowledgeDocuments")}</span>
+                <span className="text-right">
+                  {t("notes.knowledgeUpdated", { defaultValue: "Updated" })}
+                </span>
+                <span className="text-right">{t("notes.knowledgeDocumentFolder")}</span>
+                <span />
+              </div>
               {orderedChildren.map((document) => (
                 <KnowledgeFolderBrowserRow
                   key={document.id}

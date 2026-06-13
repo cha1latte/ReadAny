@@ -2129,9 +2129,6 @@ function KnowledgeHomePanel({
         >
           <View style={styles.knowledgeVaultHeader}>
             <View style={styles.knowledgeVaultText}>
-              <Text style={styles.knowledgeVaultEyebrow}>
-                {t("notes.knowledgeEyebrow", "知识库")}
-              </Text>
               <Text style={styles.knowledgeVaultTitle} numberOfLines={1}>
                 {book.title}
               </Text>
@@ -3394,12 +3391,6 @@ function KnowledgeDocumentExplorer({
       : !isRootActive
         ? activeDocument?.parentId
         : undefined;
-  const createDestinationDocument = activeCreateParentId
-    ? documents.find((document) => document.id === activeCreateParentId)
-    : null;
-  const createDestinationPath = createDestinationDocument
-    ? knowledgeDocumentPathText(createDestinationDocument, documents, t)
-    : t("notes.knowledgeVaultRoot", "知识库");
   const normalizedQuery = query.trim().toLowerCase();
   const createParentDocument = useMemo(
     () => documents.find((document) => document.id === createParentId),
@@ -3501,7 +3492,8 @@ function KnowledgeDocumentExplorer({
             {t("notes.knowledgeWorkspaceVault", "目录")}
           </Text>
           <Text style={styles.knowledgeExplorerHint} numberOfLines={1}>
-            {t("notes.knowledgeCreateIn", "创建于")} · {createDestinationPath}
+            {t("notes.knowledgeVaultRoot", "知识库")} / {documents.length}{" "}
+            {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>
         <TouchableOpacity
@@ -3910,14 +3902,11 @@ function KnowledgeVaultRootOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {t("notes.knowledgeVaultRoot", "知识库")}
-          </Text>
-          <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
-            {t("notes.knowledgeVaultRoot", "知识库")} /{" "}
             {t("notes.knowledgeFolderInside", "目录内容")}
           </Text>
-          <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>
-            {items.length} {t("notes.knowledgeDocuments", "文档")}
+          <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
+            {t("notes.knowledgeVaultRoot", "知识库")} / {items.length}{" "}
+            {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>
         <TouchableOpacity
@@ -4034,13 +4023,10 @@ function KnowledgeFolderOverview({
       <View style={styles.knowledgeFolderHeader}>
         <View style={styles.knowledgeFolderLeadText}>
           <Text style={styles.knowledgeFolderTitle} numberOfLines={1}>
-            {folder.title || t("notes.knowledgeUntitledDocument", "未命名文档")}
+            {t("notes.knowledgeFolderInside", "目录内容")}
           </Text>
           <Text style={styles.knowledgeFolderDescription} numberOfLines={1}>
-            {folderPath}
-          </Text>
-          <Text style={styles.knowledgeFolderMeta} numberOfLines={1}>
-            {items.length} {t("notes.knowledgeDocuments", "文档")}
+            {folderPath} / {items.length} {t("notes.knowledgeDocuments", "文档")}
           </Text>
         </View>
         <TouchableOpacity

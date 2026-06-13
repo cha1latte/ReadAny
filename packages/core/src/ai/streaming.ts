@@ -72,7 +72,13 @@ export class StreamingChat {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     const effectiveBookId = options.book?.id || options.bookId || options.thread.bookId || null;
-    const knowledgeContext = await loadKnowledgePromptContext({ bookId: effectiveBookId });
+    const latestUserInput =
+      [...options.thread.messages].reverse().find((message) => message.role === "user")?.content ??
+      "";
+    const knowledgeContext = await loadKnowledgePromptContext({
+      bookId: effectiveBookId,
+      query: latestUserInput,
+    });
 
     const { messages } = processMessages(
       options.thread,

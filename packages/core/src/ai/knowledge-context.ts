@@ -1,4 +1,4 @@
-import { getKnowledgeDocuments } from "../db/database";
+import { getKnowledgeDocuments, searchKnowledgeDocuments } from "../db/database";
 import { formatKnowledgeDocumentPath } from "../knowledge/document-utils";
 import type { KnowledgeDocument } from "../types";
 
@@ -11,6 +11,7 @@ const ORPHANED_TITLE = "Orphaned";
 
 export interface KnowledgePromptContextOptions {
   bookId?: string | null;
+  query?: string;
   maxDocuments?: number;
   maxChars?: number;
 }
@@ -29,10 +30,15 @@ function stripMarkdown(value: string): string {
   );
 }
 
+function normalizeQuery(value?: string): string {
+  return compactText(value ?? "").toLowerCase();
+}
+
 function truncateText(value: string, maxLength: number): string {
   const compacted = compactText(value);
   if (compacted.length <= maxLength) return compacted;
-  return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+  if (maxLength <= 3) return ".".repeat(Math.max(0, maxLength));
+  return `${compacted.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 function documentPriority(document: KnowledgeDocument): number {
@@ -52,9 +58,38 @@ function documentPriority(document: KnowledgeDocument): number {
   return typeScore[document.type] + contentScore;
 }
 
-function sortKnowledgeContextDocuments(documents: KnowledgeDocument[]): KnowledgeDocument[] {
+function queryScore(document: KnowledgeDocument, normalizedQuery: string): number {
+  if (!normalizedQuery) return 0;
+
+  const haystacks = [
+    document.title,
+    document.excerpt ?? "",
+    document.summaryMd ?? "",
+    document.contentMd,
+    document.tags.join(" "),
+  ].map((value) => value.toLowerCase());
+  if (haystacks.some((value) => value.includes(normalizedQuery))) return 200;
+
+  const tokens = normalizedQuery
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  if (tokens.length === 0) return 0;
+
+  return tokens.reduce(
+    (score, token) => score + (haystacks.some((value) => value.includes(token)) ? 24 : 0),
+    0,
+  );
+}
+
+function sortKnowledgeContextDocuments(
+  documents: KnowledgeDocument[],
+  normalizedQuery = "",
+): KnowledgeDocument[] {
   return [...documents].sort(
     (left, right) =>
+      queryScore(right, normalizedQuery) - queryScore(left, normalizedQuery) ||
       documentPriority(right) - documentPriority(left) ||
       right.updatedAt - left.updatedAt ||
       right.createdAt - left.createdAt,
@@ -90,14 +125,15 @@ export function buildKnowledgePromptContext(
 ): string | undefined {
   const maxDocuments = Math.max(1, Math.floor(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS));
   const maxChars = Math.max(600, Math.floor(options.maxChars ?? DEFAULT_MAX_CHARS));
-  const candidates = sortKnowledgeContextDocuments(documents)
+  const normalizedQuery = normalizeQuery(options.query);
+  const candidates = sortKnowledgeContextDocuments(documents, normalizedQuery)
     .filter((document) => !document.deletedAt && document.type !== "folder")
     .slice(0, maxDocuments);
 
   if (candidates.length === 0) return undefined;
 
   const intro =
-    "Bounded snapshot of the user's durable knowledge documents for the current book. This is not the full vault. Use document ids with getKnowledgeDocument for exact reads before quoting, updating, or relying on a long document.";
+    "Bounded snapshot of the user's durable knowledge documents for the current book. It is prioritized by the current question when available, then by high-value book home, summaries, reviews, and recent notes. This is not the full vault. Use document ids with getKnowledgeDocument for exact reads before quoting, updating, or relying on a long document.";
   const lines = [intro];
 
   for (const document of candidates) {
@@ -122,8 +158,21 @@ export async function loadKnowledgePromptContext(
   if (!bookId) return undefined;
 
   try {
-    const documents = await getKnowledgeDocuments({ bookId, limit: DOCUMENT_SCAN_LIMIT });
-    return buildKnowledgePromptContext(documents, options);
+    const query = normalizeQuery(options.query);
+    const [documents, queryMatches] = await Promise.all([
+      getKnowledgeDocuments({ bookId, limit: DOCUMENT_SCAN_LIMIT }),
+      query
+        ? searchKnowledgeDocuments({
+            bookId,
+            query,
+            limit: Math.max(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS, 12),
+          })
+        : Promise.resolve([]),
+    ]);
+    const mergedDocuments = Array.from(
+      new Map([...queryMatches, ...documents].map((document) => [document.id, document])).values(),
+    );
+    return buildKnowledgePromptContext(mergedDocuments, options);
   } catch (error) {
     console.warn("[knowledge-context] Failed to load knowledge prompt context:", error);
     return undefined;

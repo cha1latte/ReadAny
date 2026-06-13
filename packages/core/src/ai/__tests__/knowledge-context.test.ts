@@ -4,6 +4,7 @@ import { buildKnowledgePromptContext, loadKnowledgePromptContext } from "../know
 
 const dbMocks = vi.hoisted(() => ({
   getKnowledgeDocuments: vi.fn(),
+  searchKnowledgeDocuments: vi.fn(),
 }));
 
 vi.mock("../../db/database", () => dbMocks);
@@ -81,6 +82,30 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).not.toContain("Recent Scratch");
   });
 
+  it("prioritizes documents that match the current question", () => {
+    const home = doc({
+      id: "home-1",
+      type: "book_home",
+      title: "Book Home",
+      summaryMd: "The central reading workspace.",
+      updatedAt: 20,
+    });
+    const relevantNote = doc({
+      id: "relevant-1",
+      title: "Tea Ceremony Notes",
+      excerpt: "Ritual timing and shared attention.",
+      updatedAt: 10,
+    });
+
+    const context = buildKnowledgePromptContext([home, relevantNote], {
+      query: "tea ceremony",
+      maxDocuments: 1,
+    });
+
+    expect(context).toContain("Tea Ceremony Notes");
+    expect(context).not.toContain("Book Home");
+  });
+
   it("keeps the prompt snapshot bounded", () => {
     const context = buildKnowledgePromptContext(
       [
@@ -110,12 +135,47 @@ describe("loadKnowledgePromptContext", () => {
         excerpt: "This is the user's own review.",
       }),
     ]);
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([]);
 
     const context = await loadKnowledgePromptContext({ bookId: "book-1" });
 
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
+    expect(dbMocks.searchKnowledgeDocuments).not.toHaveBeenCalled();
     expect(context).toContain("Reading Review");
     expect(context).toContain("This is the user's own review.");
+  });
+
+  it("merges question-related search matches with the full vault path context", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Characters",
+      contentMd: "",
+    });
+    const searched = doc({
+      id: "match-1",
+      parentId: "folder-1",
+      title: "Ada Notes",
+      excerpt: "Ada's promise changes the ending.",
+      updatedAt: 1,
+    });
+
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder]);
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([searched]);
+
+    const context = await loadKnowledgePromptContext({
+      bookId: "book-1",
+      query: "Ada promise",
+      maxDocuments: 1,
+    });
+
+    expect(dbMocks.searchKnowledgeDocuments).toHaveBeenCalledWith({
+      bookId: "book-1",
+      query: "ada promise",
+      limit: 12,
+    });
+    expect(context).toContain("Ada Notes");
+    expect(context).toContain("path: Knowledge base / Characters / Ada Notes");
   });
 
   it("does not query when no current book is attached", async () => {

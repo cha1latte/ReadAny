@@ -758,9 +758,28 @@ describe("knowledge tools", () => {
   });
 
   it("creates confirmation-required link proposals without saving links", async () => {
+    const sourceFolder = doc({
+      id: "folder-source",
+      type: "folder",
+      title: "Source Folder",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const targetFolder = doc({
+      id: "folder-target",
+      type: "folder",
+      title: "Target Folder",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const source = doc({ id: "doc-1", title: "Source Note", parentId: "folder-source" });
+    const target = doc({ id: "doc-2", title: "Related Idea", parentId: "folder-target" });
     dbMocks.getKnowledgeDocument
-      .mockResolvedValueOnce(doc({ id: "doc-1" }))
-      .mockResolvedValueOnce(doc({ id: "doc-2", title: "Related Idea" }));
+      .mockResolvedValueOnce(source)
+      .mockResolvedValueOnce(target);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([sourceFolder, targetFolder, source, target]);
 
     const tool = createProposeKnowledgeLinkCreateTool();
     const result = (await tool.execute({
@@ -775,6 +794,8 @@ describe("knowledge tools", () => {
       requiresConfirmation: boolean;
       action: string;
       confirmationKind: string;
+      source: { id: string; title: string; path: string };
+      target: { id: string; title: string; path: string };
       link: {
         fromDocumentId: string;
         toKind: string;
@@ -791,6 +812,16 @@ describe("knowledge tools", () => {
       requiresConfirmation: true,
       action: "link",
       confirmationKind: "knowledge_link_create",
+      source: {
+        id: "doc-1",
+        title: "Source Note",
+        path: "Knowledge base / Source Folder / Source Note",
+      },
+      target: {
+        id: "doc-2",
+        title: "Related Idea",
+        path: "Knowledge base / Target Folder / Related Idea",
+      },
       link: {
         fromDocumentId: "doc-1",
         toKind: "document",

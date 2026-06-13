@@ -129,6 +129,18 @@ describe("knowledge write proposals", () => {
       action: "link",
       requiresConfirmation: true,
       confirmationKind: "knowledge_link_create",
+      source: {
+        id: "doc-1",
+        type: "standalone_note",
+        title: "Source note",
+        path: "Knowledge base / Ideas / Source note",
+      },
+      target: {
+        id: "doc-2",
+        type: "standalone_note",
+        title: "Target note",
+        path: "Knowledge base / Ideas / Target note",
+      },
       link: {
         id: "link-1",
         fromDocumentId: "doc-1",
@@ -141,6 +153,14 @@ describe("knowledge write proposals", () => {
 
     expect(proposal).toMatchObject({
       action: "link",
+      source: {
+        id: "doc-1",
+        path: "Knowledge base / Ideas / Source note",
+      },
+      target: {
+        id: "doc-2",
+        path: "Knowledge base / Ideas / Target note",
+      },
       link: {
         id: "link-1",
         fromDocumentId: "doc-1",
@@ -154,8 +174,12 @@ describe("knowledge write proposals", () => {
       action: "link",
       title: "Related idea",
       linkType: "document",
-      contentPreview: "related -> document: doc-2",
+      contentPreview:
+        "related -> document: doc-2\nFrom: Knowledge base / Ideas / Source note\nTo: Knowledge base / Ideas / Target note",
       changedFields: ["related"],
+      currentPath: "Knowledge base / Ideas / Source note",
+      targetPath: "Knowledge base / Ideas / Target note",
+      visiblePath: "Knowledge base / Ideas / Source note -> Knowledge base / Ideas / Target note",
       hasPathChange: false,
     });
   });

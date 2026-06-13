@@ -344,6 +344,22 @@ function documentSummary(
   };
 }
 
+function documentPathContext(
+  document: KnowledgeDocument,
+  documentsById: Map<string, KnowledgeDocument>,
+  childrenByParentId = createChildrenByParentId([...documentsById.values()]),
+) {
+  const summary = documentSummary(document, "", false, documentsById, childrenByParentId);
+  return {
+    id: summary.id,
+    bookId: summary.bookId,
+    parentId: summary.parentId,
+    type: summary.type,
+    title: summary.title,
+    path: summary.path,
+  };
+}
+
 export function createSearchKnowledgeBaseTool(): ToolDefinition {
   return {
     name: "searchKnowledgeBase",
@@ -921,10 +937,31 @@ export function createProposeKnowledgeLinkCreateTool(): ToolDefinition {
       const source = await getKnowledgeDocument(fromDocumentId);
       if (!source) return { success: false, error: "Source knowledge document not found" };
 
+      let targetDocument: KnowledgeDocument | undefined;
       if (toKind === "document") {
         const target = await getKnowledgeDocument(toId);
         if (!target) return { success: false, error: "Target knowledge document not found" };
+        targetDocument = target;
       }
+
+      const sourceContextDocuments = await getKnowledgeDocuments({
+        ...(source.bookId ? { bookId: source.bookId } : {}),
+        limit: 5000,
+      });
+      const targetContextDocuments =
+        targetDocument && !sameOptionalString(targetDocument.bookId, source.bookId)
+          ? await getKnowledgeDocuments({
+              ...(targetDocument.bookId ? { bookId: targetDocument.bookId } : {}),
+              limit: 5000,
+            })
+          : [];
+      const documentsById = createDocumentMap([
+        ...sourceContextDocuments,
+        ...targetContextDocuments,
+        source,
+        ...(targetDocument ? [targetDocument] : []),
+      ]);
+      const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       return {
         success: true,
@@ -932,6 +969,10 @@ export function createProposeKnowledgeLinkCreateTool(): ToolDefinition {
         requiresConfirmation: true,
         confirmationKind: "knowledge_link_create",
         message: "Link draft generated only. No knowledge link has been saved.",
+        source: documentPathContext(source, documentsById, childrenByParentId),
+        target: targetDocument
+          ? documentPathContext(targetDocument, documentsById, childrenByParentId)
+          : undefined,
         link: {
           id: generateId(),
           fromDocumentId,

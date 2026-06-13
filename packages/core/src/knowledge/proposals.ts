@@ -61,12 +61,23 @@ export interface KnowledgeDocumentUpdateProposal {
   changedFields: string[];
 }
 
+export interface KnowledgeProposalDocumentContext {
+  id: string;
+  bookId?: string;
+  parentId?: string;
+  type?: KnowledgeDocumentType;
+  title?: string;
+  path?: string;
+}
+
 export interface KnowledgeLinkCreateProposal {
   success: true;
   action: "link";
   requiresConfirmation: true;
   confirmationKind: "knowledge_link_create";
   message?: string;
+  source?: KnowledgeProposalDocumentContext;
+  target?: KnowledgeProposalDocumentContext;
   link: {
     id?: string;
     fromDocumentId: string;
@@ -377,6 +388,8 @@ function normalizeLinkProposal(
     requiresConfirmation: true,
     confirmationKind: "knowledge_link_create",
     message: stringOrUndefined(result.message),
+    source: normalizeProposalDocumentContext(result.source),
+    target: normalizeProposalDocumentContext(result.target),
     link: {
       id: stringOrUndefined(link.id),
       fromDocumentId,
@@ -386,6 +399,22 @@ function normalizeLinkProposal(
       label: stringOrUndefined(link.label),
       cfi: stringOrUndefined(link.cfi),
     },
+  };
+}
+
+function normalizeProposalDocumentContext(
+  value: unknown,
+): KnowledgeProposalDocumentContext | undefined {
+  if (!isRecord(value)) return undefined;
+  const id = stringOrUndefined(value.id);
+  if (!id) return undefined;
+  return {
+    id,
+    bookId: stringOrUndefined(value.bookId),
+    parentId: stringOrUndefined(value.parentId),
+    type: asDocumentType(value.type) ?? undefined,
+    title: stringOrUndefined(value.title),
+    path: stringOrUndefined(value.path),
   };
 }
 
@@ -444,10 +473,18 @@ export function createKnowledgeWriteProposalPreview(
     contentPreview: [
       `${proposal.link.relation} -> ${proposal.link.toKind}: ${proposal.link.toId}`,
       proposal.link.cfi ? `CFI: ${proposal.link.cfi}` : "",
+      proposal.source?.path ? `From: ${proposal.source.path}` : "",
+      proposal.target?.path ? `To: ${proposal.target.path}` : "",
     ]
       .filter(Boolean)
       .join("\n"),
     changedFields: [proposal.link.relation],
+    currentPath: proposal.source?.path,
+    targetPath: proposal.target?.path,
+    visiblePath:
+      proposal.source?.path && proposal.target?.path
+        ? `${proposal.source.path} -> ${proposal.target.path}`
+        : proposal.source?.path || proposal.target?.path,
     hasPathChange: false,
   };
 }

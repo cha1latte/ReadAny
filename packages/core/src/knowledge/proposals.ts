@@ -213,6 +213,10 @@ function createInvalidParentError(reason: string): Error {
   return new Error(`Invalid knowledge document parent: ${reason}`);
 }
 
+function createInvalidLinkError(reason: string): Error {
+  return new Error(`Invalid knowledge link: ${reason}`);
+}
+
 function emitKnowledgeChanged(data: {
   action: KnowledgeProposalAction;
   documentId?: string;
@@ -520,6 +524,14 @@ export async function applyKnowledgeWriteProposal(
     return { action: "update", documentId: proposal.documentId };
   }
 
+  const sourceDocument = await getKnowledgeDocument(proposal.link.fromDocumentId);
+  if (!sourceDocument) throw createInvalidLinkError("missing_source_document");
+
+  if (proposal.link.toKind === "document") {
+    const targetDocument = await getKnowledgeDocument(proposal.link.toId);
+    if (!targetDocument) throw createInvalidLinkError("missing_target_document");
+  }
+
   const existingLinks = await getKnowledgeLinks(proposal.link.fromDocumentId);
   const existing = existingLinks.find(
     (link) =>
@@ -551,7 +563,6 @@ export async function applyKnowledgeWriteProposal(
     updatedAt: now,
   };
   await insertKnowledgeLink(link);
-  const sourceDocument = await getKnowledgeDocument(link.fromDocumentId);
   emitKnowledgeChanged({
     action: "link",
     documentId: link.fromDocumentId,

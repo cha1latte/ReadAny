@@ -450,6 +450,7 @@ describe("knowledge write proposals", () => {
     expect(proposal).not.toBeNull();
     if (!proposal) throw new Error("Expected link proposal");
 
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "doc-1", bookId: "book-1" }));
     dbMocks.getKnowledgeLinks.mockResolvedValueOnce([]);
     await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
       action: "link",
@@ -485,6 +486,55 @@ describe("knowledge write proposals", () => {
       linkId: "existing-link",
       alreadyApplied: true,
     });
+  });
+
+  it("validates link proposal source and document targets before applying", async () => {
+    const missingSourceProposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      link: {
+        fromDocumentId: "missing-source",
+        toKind: "highlight",
+        toId: "hl-1",
+        relation: "source",
+      },
+    });
+    expect(missingSourceProposal).not.toBeNull();
+    if (!missingSourceProposal) throw new Error("Expected link proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(null);
+    await expect(applyKnowledgeWriteProposal(missingSourceProposal)).rejects.toThrow(
+      "Invalid knowledge link: missing_source_document",
+    );
+    expect(dbMocks.getKnowledgeLinks).not.toHaveBeenCalled();
+    expect(dbMocks.insertKnowledgeLink).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    const missingTargetProposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      link: {
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "missing-target",
+        relation: "related",
+      },
+    });
+    expect(missingTargetProposal).not.toBeNull();
+    if (!missingTargetProposal) throw new Error("Expected link proposal");
+
+    dbMocks.getKnowledgeDocument
+      .mockResolvedValueOnce(document({ id: "doc-1", bookId: "book-1" }))
+      .mockResolvedValueOnce(null);
+    await expect(applyKnowledgeWriteProposal(missingTargetProposal)).rejects.toThrow(
+      "Invalid knowledge link: missing_target_document",
+    );
+    expect(dbMocks.getKnowledgeLinks).not.toHaveBeenCalled();
+    expect(dbMocks.insertKnowledgeLink).not.toHaveBeenCalled();
   });
 
   it("emits knowledge changed events after link proposals apply", async () => {

@@ -20,6 +20,7 @@ interface PipelineContext {
   isVectorized: boolean;
   userLanguage: string;
   memorySummary?: string;
+  knowledgeContext?: string;
 }
 
 export interface ProcessedMessage {

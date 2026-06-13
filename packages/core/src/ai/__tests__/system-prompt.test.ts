@@ -26,6 +26,23 @@ function makeBook(): Book {
 }
 
 describe("buildSystemPrompt citations", () => {
+  it("injects bounded knowledge-base context when provided", () => {
+    const prompt = buildSystemPrompt({
+      book: makeBook(),
+      semanticContext: null,
+      enabledSkills: [],
+      isVectorized: false,
+      userLanguage: "en",
+      knowledgeContext:
+        "- [summary] Memory Map\n  id: summary-1\n  path: Knowledge base / Themes / Memory Map",
+    });
+
+    expect(prompt).toContain("Knowledge Base Context");
+    expect(prompt).toContain("id: summary-1");
+    expect(prompt).toContain("Knowledge base / Themes / Memory Map");
+    expect(prompt).toContain("getKnowledgeDocument");
+  });
+
   it("allows fallback citations only when a returned CFI can be validated", () => {
     const prompt = buildSystemPrompt({
       book: makeBook(),

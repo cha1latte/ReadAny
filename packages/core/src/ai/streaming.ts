@@ -6,6 +6,7 @@ import i18n from "i18next";
  */
 import type { AIConfig, Book, SemanticContext, Skill, Thread } from "../types";
 import { streamReadingAgent } from "./agents/reading-agent";
+import { loadKnowledgePromptContext } from "./knowledge-context";
 import { processMessages } from "./message-pipeline";
 import { getToolResultError } from "./tool-result";
 import type { ToolDefinition } from "./tools/tool-types";
@@ -70,17 +71,20 @@ export class StreamingChat {
   async stream(options: StreamingOptions): Promise<void> {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
+    const effectiveBookId = options.book?.id || options.bookId || options.thread.bookId || null;
+    const knowledgeContext = await loadKnowledgePromptContext({ bookId: effectiveBookId });
 
     const { messages } = processMessages(
       options.thread,
       {
         book: options.book,
-        bookId: options.book?.id || options.bookId || options.thread.bookId || null,
+        bookId: effectiveBookId,
         semanticContext: options.semanticContext,
         enabledSkills: options.enabledSkills,
         isVectorized: options.isVectorized,
         userLanguage: i18n.language || options.book?.meta.language || "en",
         memorySummary: options.thread.memorySummary,
+        knowledgeContext,
       },
       { slidingWindowSize: options.aiConfig.slidingWindowSize },
     );
@@ -105,13 +109,14 @@ export class StreamingChat {
         {
           aiConfig: options.aiConfig,
           book: options.book,
-          bookId: options.book?.id || options.bookId || options.thread.bookId || null,
+          bookId: effectiveBookId,
           semanticContext: options.semanticContext,
           enabledSkills: options.enabledSkills,
           isVectorized: options.isVectorized,
           deepThinking: options.deepThinking,
           spoilerFree: options.spoilerFree,
           memorySummary: options.thread.memorySummary,
+          knowledgeContext,
           getAvailableTools: options.getAvailableTools,
           signal,
         },

@@ -42,6 +42,39 @@ beforeEach(() => {
 });
 
 describe("streamReadingAgent tool registration", () => {
+  it("passes knowledge context into the agent system prompt", async () => {
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          // no-op stream
+        },
+      })),
+    });
+
+    for await (const _event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: false,
+        knowledgeContext:
+          "- [summary] Memory Map\n  id: summary-1\n  path: Knowledge base / Themes / Memory Map",
+        getAvailableTools,
+      },
+      "结合我的笔记讲讲",
+    )) {
+      // drain stream
+    }
+
+    const call = createReactAgentMock.mock.calls[createReactAgentMock.mock.calls.length - 1]?.[0];
+
+    expect(call.prompt).toContain("Knowledge Base Context");
+    expect(call.prompt).toContain("id: summary-1");
+    expect(call.prompt).toContain("Knowledge base / Themes / Memory Map");
+  });
+
   it("registers fallback tools when only bookId is available", async () => {
     createReactAgentMock.mockReturnValue({
       streamEvents: vi.fn(() => ({

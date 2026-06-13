@@ -54,6 +54,7 @@ export interface ReadingAgentOptions {
   deepThinking?: boolean;
   spoilerFree?: boolean;
   memorySummary?: string;
+  knowledgeContext?: string;
   /** Injected tool provider — returns available tools for the agent */
   getAvailableTools: (options: {
     bookId: string | null;
@@ -126,6 +127,7 @@ export async function* streamReadingAgent(
     deepThinking,
     spoilerFree,
     memorySummary,
+    knowledgeContext,
     getAvailableTools,
     signal,
   } = options;
@@ -167,6 +169,7 @@ export async function* streamReadingAgent(
       userLanguage: i18n.language || "en",
       spoilerFree,
       memorySummary,
+      knowledgeContext,
     });
 
     // Build input messages (history + user input, without system — handled by agent prompt)

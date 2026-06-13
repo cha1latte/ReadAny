@@ -19,6 +19,7 @@ interface PromptContext {
   userLanguage: string;
   spoilerFree?: boolean;
   memorySummary?: string;
+  knowledgeContext?: string;
 }
 
 /** Build the full system prompt from context */
@@ -27,6 +28,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     buildRoleSection(),
     buildBookContextSection(ctx.book),
     buildMemorySection(ctx.memorySummary),
+    buildKnowledgeContextSection(ctx.knowledgeContext),
     buildSemanticSection(ctx.semanticContext),
     buildToolsSection(ctx.enabledSkills, ctx.isVectorized, !!(ctx.book?.id || ctx.bookId)),
     buildWorkflowSection(ctx.isVectorized, !!(ctx.book?.id || ctx.bookId)),
@@ -45,6 +47,11 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 function buildMemorySection(memorySummary?: string): string {
   if (!memorySummary?.trim()) return "";
   return ["## Conversation Memory", memorySummary.trim()].join("\n");
+}
+
+function buildKnowledgeContextSection(knowledgeContext?: string): string {
+  if (!knowledgeContext?.trim()) return "";
+  return ["## Knowledge Base Context", knowledgeContext.trim()].join("\n");
 }
 
 function buildRoleSection(): string {

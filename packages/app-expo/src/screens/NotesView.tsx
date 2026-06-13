@@ -3717,6 +3717,17 @@ function KnowledgeDocumentExplorer({
     () => buildKnowledgeDocumentTree(documents, homeDocumentId),
     [documents, homeDocumentId],
   );
+  const activePathIds = useMemo(
+    () =>
+      new Set(
+        activeDocument
+          ? knowledgeDocumentPathItems(activeDocument, documents, t)
+              .map((item) => item.id)
+              .filter((id) => id !== "__vault__")
+          : [],
+      ),
+    [activeDocument, documents, t],
+  );
   const orphanedDocumentIds = useMemo(
     () => new Set(tree.orphaned.map((document) => document.id)),
     [tree],
@@ -3908,6 +3919,7 @@ function KnowledgeDocumentExplorer({
                 key={node.document.id}
                 node={{ ...node, depth: 0 }}
                 activeDocumentId={activeDocumentId}
+                activePathIds={activePathIds}
                 expandedFolderIds={expandedFolderIds}
                 childCountByParentId={childCountByParentId}
                 orphanedDocumentIds={orphanedDocumentIds}
@@ -3933,6 +3945,7 @@ function KnowledgeDocumentExplorer({
               key={node.document.id}
               node={node}
               activeDocumentId={activeDocumentId}
+              activePathIds={activePathIds}
               expandedFolderIds={expandedFolderIds}
               childCountByParentId={childCountByParentId}
               orphanedDocumentIds={orphanedDocumentIds}
@@ -4013,6 +4026,7 @@ function KnowledgeDocumentExplorer({
 function KnowledgeDocumentTreeRow({
   node,
   activeDocumentId,
+  activePathIds,
   expandedFolderIds,
   childCountByParentId,
   orphanedDocumentIds,
@@ -4026,6 +4040,7 @@ function KnowledgeDocumentTreeRow({
 }: {
   node: KnowledgeDocumentTreeNode;
   activeDocumentId: string | null;
+  activePathIds: Set<string>;
   expandedFolderIds: Set<string>;
   childCountByParentId: Map<string, number>;
   orphanedDocumentIds: Set<string>;
@@ -4041,6 +4056,7 @@ function KnowledgeDocumentTreeRow({
   const isFolder = document.type === "folder";
   const isExpanded = expandedFolderIds.has(document.id);
   const isActive = document.id === activeDocumentId;
+  const isInActivePath = !isActive && activePathIds.has(document.id);
   const isOrphaned = orphanedDocumentIds.has(document.id);
   const childCount = childCountByParentId.get(document.id) ?? 0;
   const title = document.title.trim() || t("notes.knowledgeUntitledDocument", "未命名文档");
@@ -4053,6 +4069,7 @@ function KnowledgeDocumentTreeRow({
         style={[
           styles.knowledgeTreeNode,
           isActive && styles.knowledgeTreeNodeActive,
+          isInActivePath && styles.knowledgeTreeNodeAncestor,
           { paddingLeft: 10 + Math.min(node.depth, 6) * 16 },
         ]}
         onPress={() => onSelect(document)}
@@ -4094,7 +4111,11 @@ function KnowledgeDocumentTreeRow({
         <View style={styles.knowledgeTreeTextBlock}>
           <Text
             numberOfLines={1}
-            style={[styles.knowledgeTreeTitle, isActive && styles.knowledgeTreeTitleActive]}
+            style={[
+              styles.knowledgeTreeTitle,
+              isInActivePath && styles.knowledgeTreeTitleAncestor,
+              isActive && styles.knowledgeTreeTitleActive,
+            ]}
           >
             {title}
           </Text>
@@ -4121,6 +4142,7 @@ function KnowledgeDocumentTreeRow({
               key={child.document.id}
               node={child}
               activeDocumentId={activeDocumentId}
+              activePathIds={activePathIds}
               expandedFolderIds={expandedFolderIds}
               childCountByParentId={childCountByParentId}
               orphanedDocumentIds={orphanedDocumentIds}

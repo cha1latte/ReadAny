@@ -959,6 +959,12 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: withOpacity(colors.primary, 0.2),
       backgroundColor: withOpacity(colors.primary, 0.055),
     },
+    knowledgeTreeNodeAncestor: {
+      borderLeftWidth: 2,
+      borderLeftColor: withOpacity(colors.border, 0.85),
+      borderColor: withOpacity(colors.border, 0.58),
+      backgroundColor: withOpacity(colors.mutedForeground, 0.045),
+    },
     knowledgeTreeToggle: {
       width: 22,
       height: 28,
@@ -989,6 +995,7 @@ export const makeStyles = (colors: ThemeColors) =>
       lineHeight: 17,
     },
     knowledgeTreeTitleActive: { color: colors.primary },
+    knowledgeTreeTitleAncestor: { color: colors.foreground },
     knowledgeTreeMeta: {
       marginTop: 1,
       fontSize: 11,

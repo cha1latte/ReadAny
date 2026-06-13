@@ -2930,7 +2930,6 @@ function KnowledgePathTrail({
         const isLastPathPart = part.id === activeId;
         const isRootPathPart = part.id === "__vault__";
         const targetDocument = documents.find((item) => item.id === part.id);
-        const isFolderLike = isRootPathPart || part.type === "folder";
 
         return (
           <View key={`${part.id}-${index}`} style={styles.knowledgeVaultPathSegment}>
@@ -2952,17 +2951,6 @@ function KnowledgePathTrail({
               }}
               disabled={(!targetDocument && !isRootPathPart) || isLastPathPart}
             >
-              {isFolderLike ? (
-                <FolderIcon
-                  size={12}
-                  color={isLastPathPart ? colors.foreground : colors.mutedForeground}
-                />
-              ) : (
-                <ScrollTextIcon
-                  size={12}
-                  color={isLastPathPart ? colors.foreground : colors.mutedForeground}
-                />
-              )}
               <Text
                 style={[
                   styles.knowledgeVaultPathChipText,

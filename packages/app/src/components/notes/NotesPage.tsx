@@ -3958,8 +3958,6 @@ function KnowledgePathInline({
         const targetDocument = documentById.get(item.id);
         const isRoot = item.id === "__vault__";
         const isLast = index === path.length - 1;
-        const isFolderLike = isRoot || item.type === "folder";
-        const Icon = isFolderLike ? Folder : FileText;
         const canNavigate = !isLast && (isRoot || !!targetDocument);
 
         return (
@@ -3984,7 +3982,6 @@ function KnowledgePathInline({
                 if (targetDocument) onSelectDocument(targetDocument);
               }}
             >
-              <Icon className="h-3 w-3 shrink-0" />
               <span className="truncate">{item.title}</span>
             </button>
           </span>
@@ -4381,7 +4378,6 @@ function KnowledgeDocumentExplorer({
                 const isCurrent = index === activePathItems.length - 1;
                 const targetDocument = documents.find((document) => document.id === item.id);
                 const isRoot = item.id === "__vault__";
-                const isFolderLike = isRoot || item.type === "folder";
 
                 return (
                   <span
@@ -4402,18 +4398,13 @@ function KnowledgeDocumentExplorer({
                         onSelect(targetDocument);
                       }}
                       className={cn(
-                        "inline-flex h-5 max-w-[9.5rem] min-w-0 items-center gap-1 rounded-sm px-1 text-[10px] transition-colors",
+                        "inline-flex h-5 max-w-[9.5rem] min-w-0 items-center px-0.5 text-[10px] transition-colors",
                         isCurrent
                           ? "text-primary"
-                          : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+                          : "text-muted-foreground hover:text-foreground",
                         (!targetDocument || isCurrent) && "cursor-default",
                       )}
                     >
-                      {isFolderLike ? (
-                        <Folder className="h-3 w-3 shrink-0" />
-                      ) : (
-                        <FileText className="h-3 w-3 shrink-0" />
-                      )}
                       <span className="truncate">{item.title}</span>
                     </button>
                   </span>

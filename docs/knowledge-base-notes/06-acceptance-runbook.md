@@ -86,9 +86,13 @@ pnpm --filter @readany/app-expo exec node scripts/build-knowledge-editor.js
 git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 # The acceptance script also checks the generated WebView bundle for required
 # bridge messages, commands, cards, internal/source links, and image attachment
-# fallbacks, including the card-to-normal-text conversion control.
+# fallbacks, including the card-to-normal-text conversion control and custom
+# card structured-field rendering.
 # The acceptance script also checks the desktop knowledge editor source for
-# ReadAny card editing controls and card-to-normal-text conversion.
+# ReadAny card editing controls, card-to-normal-text conversion, and custom card
+# field schema editing.
+# The acceptance script also checks the mobile knowledge editor source for
+# custom card field schema editing before WebView insertion.
 # The acceptance script also checks the desktop and mobile chat renderer sources
 # for knowledge proposal, result, failure-card, path, and confirmation-write UI
 # contracts.
@@ -121,6 +125,9 @@ internal/source links, and image attachment fallback UI.
 It also checks the desktop knowledge editor source and mobile WebView bundle for
 the ReadAny card conversion control so AI/card blocks can be turned back into
 ordinary editable content instead of becoming permanent special blocks.
+Custom card field schema editing is checked in the desktop and mobile editor
+sources, while the WebView bundle is checked for structured-field rendering so
+synced custom cards can be edited without dropping to raw JSON.
 The desktop production bundle check scans the built browser assets for the
 knowledge editor shell, AI proposal/result renderers, ReadAny cards,
 internal/source links, Obsidian export markers, and portable attachment URIs.
@@ -157,7 +164,7 @@ Evidence mapping:
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
 | Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states, and export as readable Obsidian callouts. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-exporter.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |
-| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, and conversion back to normal editable content. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile WebView bundle contract check |
+| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, conversion back to normal editable content, and user-authored structured field schemas. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile knowledge editor contract check, mobile WebView bundle contract check |
 
 ## Desktop Manual Checks
 

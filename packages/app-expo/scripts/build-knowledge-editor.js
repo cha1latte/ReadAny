@@ -23,9 +23,11 @@ async function buildKnowledgeEditor() {
     import TaskList from "@tiptap/extension-task-list";
     import StarterKit from "@tiptap/starter-kit";
     import {
+      createReadAnyCardAttrsFromTemplate,
       createReadAnyCardReadOnlyModel,
       createReadAnyCardTiptapContent,
       formatReadAnyCardDataForEditor,
+      getReadAnyCardTemplateFields,
       parseReadAnyCardDataFromEditor,
     } from "@readany/core/knowledge";
 
@@ -59,6 +61,13 @@ async function buildKnowledgeEditor() {
     };
     const createCardModel = (attrs = {}) =>
       createReadAnyCardReadOnlyModel(attrs, { body: "", cardTemplates });
+    const findCardTemplate = (cardType) =>
+      cardTemplates.find(
+        (template) => createReadAnyCardAttrsFromTemplate(template).cardType === cardType,
+      );
+    const getCardDataRecord = (value) =>
+      value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+    const getFieldInputValue = (value) => (value === undefined || value === null ? "" : String(value));
 
     const setTheme = (theme = {}) => {
       const root = document.documentElement;
@@ -332,6 +341,124 @@ async function buildKnowledgeEditor() {
           detailGrid.className = "readany-card-detail-grid";
           details.appendChild(detailGrid);
 
+          const structuredFields = document.createElement("div");
+          structuredFields.className = "readany-card-structured-fields";
+          details.appendChild(structuredFields);
+          let dataInput = null;
+          let dataError = null;
+
+          const updateStructuredData = (key, value) => {
+            const nextData = {
+              ...getCardDataRecord(createCardModel(currentNode.attrs || {}).attrs?.data),
+              [key]: value,
+            };
+            if (dataError) {
+              dataError.style.display = "none";
+              dataError.textContent = "";
+            }
+            if (dataInput) {
+              dataInput.value = formatReadAnyCardDataForEditor(nextData);
+            }
+            updateCardAttrs(currentNode, getPos, { data: nextData });
+          };
+
+          const renderStructuredFields = (model) => {
+            structuredFields.textContent = "";
+            const template = findCardTemplate(model.cardType);
+            const fields = template ? getReadAnyCardTemplateFields(template) : [];
+            if (fields.length === 0) {
+              structuredFields.style.display = "none";
+              return;
+            }
+            structuredFields.style.display = "block";
+
+            const heading = document.createElement("div");
+            heading.className = "readany-card-structured-heading";
+            heading.textContent = "Structured fields";
+            const count = document.createElement("span");
+            count.className = "readany-card-structured-count";
+            count.textContent = String(fields.length);
+            heading.appendChild(count);
+            structuredFields.appendChild(heading);
+
+            const grid = document.createElement("div");
+            grid.className = "readany-card-structured-grid";
+            const currentData = getCardDataRecord(model.attrs?.data);
+            fields.forEach((field) => {
+              if (field.type === "checkbox") {
+                const label = document.createElement("label");
+                label.className = "readany-card-structured-checkbox";
+                const input = document.createElement("input");
+                input.type = "checkbox";
+                input.checked = currentData[field.key] === true;
+                input.disabled = editor?.isEditable === false;
+                input.addEventListener("change", () => {
+                  if (!editor?.isEditable) return;
+                  updateStructuredData(field.key, input.checked);
+                });
+                label.appendChild(input);
+                const text = document.createElement("span");
+                text.textContent = field.label;
+                label.appendChild(text);
+                grid.appendChild(label);
+                return;
+              }
+
+              const label = document.createElement("label");
+              label.className = "readany-card-field-label";
+              const caption = document.createElement("span");
+              caption.textContent = field.label;
+              label.appendChild(caption);
+
+              if (field.type === "multiline") {
+                const textarea = document.createElement("textarea");
+                textarea.className = "readany-card-data readany-card-structured-textarea";
+                textarea.value = getFieldInputValue(currentData[field.key]);
+                textarea.placeholder = field.placeholder || "";
+                textarea.rows = 3;
+                textarea.readOnly = editor?.isEditable === false;
+                textarea.tabIndex = editor?.isEditable === false ? -1 : 0;
+                textarea.addEventListener("blur", () => {
+                  if (!editor?.isEditable) return;
+                  updateStructuredData(field.key, textarea.value);
+                });
+                label.appendChild(textarea);
+              } else {
+                const input = document.createElement("input");
+                input.className = "readany-card-field";
+                input.type = field.type === "number" ? "number" : "text";
+                input.value = getFieldInputValue(currentData[field.key]);
+                input.placeholder = field.placeholder || "";
+                input.readOnly = editor?.isEditable === false;
+                input.tabIndex = editor?.isEditable === false ? -1 : 0;
+                input.addEventListener("blur", () => {
+                  if (!editor?.isEditable) return;
+                  if (field.type === "number") {
+                    const rawValue = input.value.trim();
+                    if (!rawValue) {
+                      updateStructuredData(field.key, null);
+                      return;
+                    }
+                    const numberValue = Number(rawValue);
+                    if (!Number.isFinite(numberValue)) {
+                      if (dataError) {
+                        dataError.textContent = field.label + " must be a valid number.";
+                        dataError.style.display = "block";
+                      }
+                      return;
+                    }
+                    updateStructuredData(field.key, numberValue);
+                    return;
+                  }
+                  updateStructuredData(field.key, input.value);
+                });
+                label.appendChild(input);
+              }
+              grid.appendChild(label);
+            });
+            structuredFields.appendChild(grid);
+          };
+
           const createTextField = (labelText, key, placeholder = "") => {
             const label = document.createElement("label");
             label.className = "readany-card-field-label";
@@ -363,14 +490,14 @@ async function buildKnowledgeEditor() {
           const dataCaption = document.createElement("span");
           dataCaption.textContent = "Data JSON";
           dataLabel.appendChild(dataCaption);
-          const dataInput = document.createElement("textarea");
+          dataInput = document.createElement("textarea");
           dataInput.className = "readany-card-data";
           dataInput.value = formatReadAnyCardDataForEditor(modelAttrs?.data);
           dataInput.placeholder = '{"key":"value"}';
           dataInput.rows = 4;
           dataInput.readOnly = editor?.isEditable === false;
           dataInput.tabIndex = editor?.isEditable === false ? -1 : 0;
-          const dataError = document.createElement("div");
+          dataError = document.createElement("div");
           dataError.className = "readany-card-data-error";
           dataError.style.display = "none";
           dataInput.addEventListener("input", () => {
@@ -394,6 +521,7 @@ async function buildKnowledgeEditor() {
           dataLabel.appendChild(dataError);
           details.appendChild(dataLabel);
           body.appendChild(details);
+          renderStructuredFields(readOnlyModel);
 
           dom.appendChild(icon);
           dom.appendChild(body);
@@ -421,6 +549,7 @@ async function buildKnowledgeEditor() {
               fitTextArea(preview);
               source.style.display = nextModel.sourceTitle ? "block" : "none";
               source.textContent = nextModel.sourceTitle || "";
+              renderStructuredFields(nextModel);
               const editable = editor?.isEditable !== false;
               [sourceTitleInput, sourceIdInput, cfiInput, dataInput].forEach((field) => {
                 field.readOnly = !editable;

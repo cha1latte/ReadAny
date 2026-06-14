@@ -133,11 +133,14 @@ export {
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   formatReadAnyCardDataForEditor,
+  createReadAnyCardTemplateFieldDefaults,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
+  normalizeReadAnyCardTemplateFields,
   normalizeReadAnyCardAttrs,
   parseReadAnyCardDataFromEditor,
   renderReadAnyCardMarkdownFallback,
@@ -155,6 +158,8 @@ export type {
   ReadAnyCardReadOnlyModel,
   ReadAnyCardReadOnlyState,
   ReadAnyCardTemplateSchema,
+  ReadAnyCardTemplateField,
+  ReadAnyCardTemplateFieldType,
   ReadAnyCardDataParseResult,
 } from "./card-registry";
 export {

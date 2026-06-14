@@ -35,13 +35,14 @@ import {
   upsertKnowledgeCardTemplate,
 } from "@readany/core/db/database";
 import {
+  KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
+  type ReadAnyCardTemplateField,
   builtInReadAnyCards,
-  clearKnowledgeEditorDraft,
-  KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
   clampKnowledgeEditorBridgeHeight,
+  clearKnowledgeEditorDraft,
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createKnowledgeEditorDraftKey,
@@ -50,6 +51,7 @@ import {
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
   getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
   isKnowledgeEditorBridgeJsonValue,
@@ -57,10 +59,11 @@ import {
   knowledgeEditorDraftFingerprint,
   loadKnowledgeEditorDraft,
   markdownToBasicTiptap,
+  normalizeReadAnyCardTemplateFields,
   normalizeTiptapDocument,
+  parseKnowledgeEditorBridgeMessage,
   renderKnowledgeJsonToMarkdown,
   saveKnowledgeEditorDraft,
-  parseKnowledgeEditorBridgeMessage,
   updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
 import type {
@@ -74,8 +77,8 @@ import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -306,6 +309,7 @@ export function MobileKnowledgeEditor({
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
   const [templateMarkdown, setTemplateMarkdown] = useState("");
+  const [templateFields, setTemplateFields] = useState<ReadAnyCardTemplateField[]>([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
   const errorMessage = editorIssue?.message ?? null;
@@ -909,6 +913,36 @@ export function MobileKnowledgeEditor({
     setTemplateName("");
     setTemplateDescription("");
     setTemplateMarkdown("");
+    setTemplateFields([]);
+    setTemplateSaveError(null);
+  }, []);
+
+  const addTemplateField = useCallback(() => {
+    setTemplateFields((current) => [
+      ...current,
+      {
+        key: `field_${current.length + 1}`,
+        label: t("notes.knowledgeCustomCardFieldNew", `字段 ${current.length + 1}`, {
+          count: current.length + 1,
+        }),
+        type: "text",
+      },
+    ]);
+    setTemplateSaveError(null);
+  }, [t]);
+
+  const updateTemplateField = useCallback(
+    (index: number, patch: Partial<ReadAnyCardTemplateField>) => {
+      setTemplateFields((current) =>
+        current.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)),
+      );
+      setTemplateSaveError(null);
+    },
+    [],
+  );
+
+  const removeTemplateField = useCallback((index: number) => {
+    setTemplateFields((current) => current.filter((_, fieldIndex) => fieldIndex !== index));
     setTemplateSaveError(null);
   }, []);
 
@@ -918,16 +952,20 @@ export function MobileKnowledgeEditor({
     setIsTemplateFormOpen(true);
   }, [readOnly, resetTemplateForm]);
 
-  const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
-    if (readOnly) return;
-    const attrs = createReadAnyCardAttrsFromTemplate(template);
-    setEditingTemplateId(template.id);
-    setTemplateName(getReadAnyCardTemplateInsertLabel(template));
-    setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
-    setTemplateMarkdown((attrs.markdown ?? attrs.text ?? "") as string);
-    setTemplateSaveError(null);
-    setIsTemplateFormOpen(true);
-  }, [readOnly]);
+  const openTemplateEditForm = useCallback(
+    (template: KnowledgeCardTemplate) => {
+      if (readOnly) return;
+      const attrs = createReadAnyCardAttrsFromTemplate(template);
+      setEditingTemplateId(template.id);
+      setTemplateName(getReadAnyCardTemplateInsertLabel(template));
+      setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
+      setTemplateMarkdown((attrs.markdown ?? attrs.text ?? "") as string);
+      setTemplateFields(getReadAnyCardTemplateFields(template));
+      setTemplateSaveError(null);
+      setIsTemplateFormOpen(true);
+    },
+    [readOnly],
+  );
 
   const saveTemplate = useCallback(async () => {
     if (readOnly || !canUse("readAnyCards") || isSavingTemplate) return;
@@ -937,6 +975,7 @@ export function MobileKnowledgeEditor({
     setIsSavingTemplate(true);
     setTemplateSaveError(null);
     try {
+      const normalizedTemplateFields = normalizeReadAnyCardTemplateFields(templateFields);
       const editingTemplate = editingTemplateId
         ? cardTemplates.find((template) => template.id === editingTemplateId)
         : null;
@@ -949,12 +988,14 @@ export function MobileKnowledgeEditor({
             name,
             description: templateDescription,
             markdown: templateMarkdown,
+            fields: normalizedTemplateFields,
           })
         : createCustomReadAnyCardTemplate({
             id: `card-template-${generateId()}`,
             name,
             description: templateDescription,
             markdown: templateMarkdown,
+            fields: normalizedTemplateFields,
           });
 
       await upsertKnowledgeCardTemplate(template);
@@ -993,6 +1034,7 @@ export function MobileKnowledgeEditor({
     runCommand,
     t,
     templateDescription,
+    templateFields,
     templateMarkdown,
     templateName,
   ]);
@@ -1015,9 +1057,7 @@ export function MobileKnowledgeEditor({
               void (async () => {
                 try {
                   await disableKnowledgeCardTemplate(template.id);
-                  setCardTemplates((current) =>
-                    current.filter((item) => item.id !== template.id),
-                  );
+                  setCardTemplates((current) => current.filter((item) => item.id !== template.id));
                   if (editingTemplateId === template.id) {
                     resetTemplateForm();
                     setIsTemplateFormOpen(false);
@@ -2034,10 +2074,7 @@ export function MobileKnowledgeEditor({
                 {allowedCards.map((card) => {
                   const Icon = cardIconMap[card.cardType] ?? SparklesIcon;
                   return (
-                    <View
-                      key={card.key}
-                      style={styles.cardOption}
-                    >
+                    <View key={card.key} style={styles.cardOption}>
                       <TouchableOpacity
                         style={styles.cardOptionMain}
                         activeOpacity={0.78}
@@ -2060,7 +2097,9 @@ export function MobileKnowledgeEditor({
                           <TouchableOpacity
                             style={styles.cardTemplateEditButton}
                             activeOpacity={0.72}
-                            onPress={() => openTemplateEditForm(card.template!)}
+                            onPress={() => {
+                              if (card.template) openTemplateEditForm(card.template);
+                            }}
                             accessibilityLabel={t(
                               "notes.knowledgeCustomCardEdit",
                               "编辑自定义卡片",
@@ -2071,7 +2110,9 @@ export function MobileKnowledgeEditor({
                           <TouchableOpacity
                             style={styles.cardTemplateRemoveButton}
                             activeOpacity={0.72}
-                            onPress={() => disableTemplate(card.template!)}
+                            onPress={() => {
+                              if (card.template) disableTemplate(card.template);
+                            }}
                             accessibilityLabel={t(
                               "notes.knowledgeCustomCardDisable",
                               "移除自定义卡片",
@@ -2100,10 +2141,7 @@ export function MobileKnowledgeEditor({
                                   "notes.knowledgeCustomCardEditHint",
                                   "只影响之后插入的卡片，文档里已有的卡片保持不变。",
                                 )
-                              : t(
-                                  "notes.knowledgeCustomCardNewHint",
-                                  "创建一个可同步复用的结构。",
-                                )}
+                              : t("notes.knowledgeCustomCardNewHint", "创建一个可同步复用的结构。")}
                           </Text>
                         </View>
                         <Text style={styles.cardTemplateLabel}>
@@ -2150,6 +2188,163 @@ export function MobileKnowledgeEditor({
                           textAlignVertical="top"
                           style={[styles.linkInput, styles.cardTemplateBodyInput]}
                         />
+                        <View style={styles.cardTemplateFieldSection}>
+                          <View style={styles.cardTemplateFieldHeader}>
+                            <View style={styles.cardTemplateFieldHeaderText}>
+                              <Text style={styles.cardTemplateFieldTitle}>
+                                {t("notes.knowledgeCustomCardFields", "字段")}
+                              </Text>
+                              <Text style={styles.cardTemplateFieldHint}>
+                                {t(
+                                  "notes.knowledgeCustomCardFieldsHint",
+                                  "把卡片数据变成可编辑字段，而不是只编辑原始 JSON。",
+                                )}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.cardTemplateAddFieldButton}
+                              onPress={addTemplateField}
+                              activeOpacity={0.75}
+                            >
+                              <PlusIcon size={14} color={colors.primary} />
+                              <Text style={styles.cardTemplateAddFieldText}>
+                                {t("notes.knowledgeCustomCardAddField", "添加")}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          {templateFields.length > 0 ? (
+                            <View style={styles.cardTemplateFieldList}>
+                              {templateFields.map((field, index) => (
+                                <View
+                                  key={`${field.key}-${index}`}
+                                  style={styles.cardTemplateFieldCard}
+                                >
+                                  <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldLabel", "名称")}
+                                  </Text>
+                                  <TextInput
+                                    value={field.label}
+                                    onChangeText={(text) =>
+                                      updateTemplateField(index, { label: text })
+                                    }
+                                    placeholder={t(
+                                      "notes.knowledgeCustomCardFieldLabelPlaceholder",
+                                      "问题、证据、置信度...",
+                                    )}
+                                    placeholderTextColor={colors.mutedForeground}
+                                    style={styles.linkInput}
+                                  />
+                                  <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldKey", "数据键")}
+                                  </Text>
+                                  <TextInput
+                                    value={field.key}
+                                    onChangeText={(text) =>
+                                      updateTemplateField(index, { key: text })
+                                    }
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    placeholder="field_key"
+                                    placeholderTextColor={colors.mutedForeground}
+                                    style={[styles.linkInput, styles.cardTemplateKeyInput]}
+                                  />
+                                  <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldType", "类型")}
+                                  </Text>
+                                  <View style={styles.cardTemplateTypeGrid}>
+                                    {[
+                                      ["text", t("notes.knowledgeCustomCardFieldTypeText", "文本")],
+                                      [
+                                        "multiline",
+                                        t("notes.knowledgeCustomCardFieldTypeMultiline", "长文本"),
+                                      ],
+                                      [
+                                        "number",
+                                        t("notes.knowledgeCustomCardFieldTypeNumber", "数字"),
+                                      ],
+                                      [
+                                        "checkbox",
+                                        t("notes.knowledgeCustomCardFieldTypeCheckbox", "复选框"),
+                                      ],
+                                    ].map(([type, label]) => {
+                                      const isActive = field.type === type;
+                                      return (
+                                        <TouchableOpacity
+                                          key={type}
+                                          style={[
+                                            styles.cardTemplateTypeButton,
+                                            isActive && styles.cardTemplateTypeButtonActive,
+                                          ]}
+                                          activeOpacity={0.72}
+                                          onPress={() =>
+                                            updateTemplateField(index, {
+                                              type: type as ReadAnyCardTemplateField["type"],
+                                            })
+                                          }
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.cardTemplateTypeText,
+                                              isActive && styles.cardTemplateTypeTextActive,
+                                            ]}
+                                          >
+                                            {label}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                  <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldDefault", "默认值")}
+                                  </Text>
+                                  <TextInput
+                                    value={
+                                      field.defaultValue === undefined ||
+                                      field.defaultValue === null
+                                        ? ""
+                                        : String(field.defaultValue)
+                                    }
+                                    onChangeText={(text) =>
+                                      updateTemplateField(index, {
+                                        defaultValue: text ? text : undefined,
+                                      })
+                                    }
+                                    placeholder={
+                                      field.type === "checkbox"
+                                        ? "true / false"
+                                        : t(
+                                            "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                            "可选",
+                                          )
+                                    }
+                                    placeholderTextColor={colors.mutedForeground}
+                                    keyboardType={field.type === "number" ? "numeric" : "default"}
+                                    style={styles.linkInput}
+                                  />
+                                  <TouchableOpacity
+                                    style={styles.cardTemplateRemoveFieldButton}
+                                    onPress={() => removeTemplateField(index)}
+                                    activeOpacity={0.75}
+                                  >
+                                    <Trash2Icon size={14} color={colors.destructive} />
+                                    <Text style={styles.cardTemplateRemoveFieldText}>
+                                      {t("notes.knowledgeCustomCardRemoveField", "移除字段")}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                            </View>
+                          ) : (
+                            <View style={styles.cardTemplateNoFields}>
+                              <Text style={styles.cardTemplateNoFieldsText}>
+                                {t(
+                                  "notes.knowledgeCustomCardNoFields",
+                                  "还没有字段。卡片仍可使用默认正文和高级 JSON。",
+                                )}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                         {templateSaveError ? (
                           <Text style={styles.cardTemplateError}>{templateSaveError}</Text>
                         ) : null}
@@ -2780,6 +2975,127 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.destructive,
       fontSize: fontSize.xs,
       lineHeight: 17,
+    },
+    cardTemplateFieldSection: {
+      gap: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.8),
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.background, 0.72),
+      padding: 9,
+    },
+    cardTemplateFieldHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    cardTemplateFieldHeaderText: {
+      flex: 1,
+      gap: 2,
+    },
+    cardTemplateFieldTitle: {
+      color: colors.foreground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateFieldHint: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 16,
+    },
+    cardTemplateAddFieldButton: {
+      minHeight: 30,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.primary, 0.28),
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.primary, 0.08),
+      paddingHorizontal: 9,
+    },
+    cardTemplateAddFieldText: {
+      color: colors.primary,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateFieldList: {
+      gap: 8,
+    },
+    cardTemplateFieldCard: {
+      gap: 7,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.75),
+      borderRadius: radius.md,
+      backgroundColor: withOpacity(colors.muted, 0.18),
+      padding: 9,
+    },
+    cardTemplateKeyInput: {
+      fontFamily: Platform.select({
+        ios: "Menlo",
+        android: "monospace",
+        default: "monospace",
+      }),
+    },
+    cardTemplateTypeGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    cardTemplateTypeButton: {
+      minHeight: 30,
+      minWidth: 74,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.background,
+      paddingHorizontal: 9,
+    },
+    cardTemplateTypeButtonActive: {
+      borderColor: withOpacity(colors.primary, 0.42),
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    cardTemplateTypeText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    cardTemplateTypeTextActive: {
+      color: colors.primary,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateRemoveFieldButton: {
+      minHeight: 30,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.destructive, 0.28),
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.destructive, 0.07),
+    },
+    cardTemplateRemoveFieldText: {
+      color: colors.destructive,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateNoFields: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderStyle: "dashed",
+      borderColor: withOpacity(colors.border, 0.8),
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.muted, 0.16),
+      paddingHorizontal: 9,
+      paddingVertical: 8,
+    },
+    cardTemplateNoFieldsText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      lineHeight: 16,
     },
     customCardOption: {
       borderStyle: "dashed",

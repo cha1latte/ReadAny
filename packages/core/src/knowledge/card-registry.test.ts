@@ -5,11 +5,13 @@ import {
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
+  createReadAnyCardTemplateFieldDefaults,
   formatReadAnyCardDataForEditor,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
+  normalizeReadAnyCardTemplateFields,
   parseReadAnyCardDataFromEditor,
   renderReadAnyCardMarkdownFallback,
   updateCustomReadAnyCardTemplate,
@@ -336,6 +338,116 @@ describe("ReadAny card registry", () => {
     });
   });
 
+  it("normalizes visual custom card fields and creates data defaults", () => {
+    const fields = normalizeReadAnyCardTemplateFields([
+      {
+        label: "Core Idea",
+        type: "text",
+        placeholder: "What changed?",
+        defaultValue: "Untitled idea",
+      },
+      {
+        key: "core idea",
+        label: "Duplicate label",
+        type: "multiline",
+        defaultValue: "Evidence:",
+      },
+      {
+        label: "Confidence",
+        type: "number",
+        defaultValue: "0.8",
+      },
+      {
+        label: "Reviewed",
+        type: "checkbox",
+        defaultValue: "true",
+      },
+      {
+        label: "Ignored",
+        type: "unsupported",
+        defaultValue: { nested: true },
+      },
+    ]);
+
+    expect(fields).toEqual([
+      {
+        key: "core_idea",
+        label: "Core Idea",
+        type: "text",
+        placeholder: "What changed?",
+        defaultValue: "Untitled idea",
+      },
+      {
+        key: "core_idea_2",
+        label: "Duplicate label",
+        type: "multiline",
+        defaultValue: "Evidence:",
+      },
+      {
+        key: "confidence",
+        label: "Confidence",
+        type: "number",
+        defaultValue: 0.8,
+      },
+      {
+        key: "reviewed",
+        label: "Reviewed",
+        type: "checkbox",
+        defaultValue: true,
+      },
+      {
+        key: "ignored",
+        label: "Ignored",
+        type: "text",
+      },
+    ]);
+    expect(createReadAnyCardTemplateFieldDefaults(fields)).toEqual({
+      core_idea: "Untitled idea",
+      core_idea_2: "Evidence:",
+      confidence: 0.8,
+      reviewed: true,
+    });
+  });
+
+  it("stores visual custom card fields in synced templates and insert attrs", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-concept",
+      name: "Concept",
+      description: "Track a concept with evidence.",
+      markdown: "Definition:\nEvidence:",
+      fields: [
+        { key: "term", label: "Term", type: "text", defaultValue: "New concept" },
+        { key: "evidence", label: "Evidence", type: "multiline" },
+        { key: "confidence", label: "Confidence", type: "number", defaultValue: 1 },
+      ],
+      now: 123,
+    });
+
+    expect(template.schemaJson).toMatchObject({
+      fields: [
+        { key: "term", label: "Term", type: "text", defaultValue: "New concept" },
+        { key: "evidence", label: "Evidence", type: "multiline" },
+        { key: "confidence", label: "Confidence", type: "number", defaultValue: 1 },
+      ],
+      attrs: {
+        data: {
+          term: "New concept",
+          confidence: 1,
+        },
+      },
+    });
+    expect(createReadAnyCardAttrsFromTemplate(template)).toEqual({
+      cardType: "custom:template-concept",
+      version: 1,
+      title: "Concept",
+      markdown: "Definition:\nEvidence:",
+      data: {
+        term: "New concept",
+        confidence: 1,
+      },
+    });
+  });
+
   it("updates custom card templates without changing their stable card type", () => {
     const template = createCustomReadAnyCardTemplate({
       id: "template-reading-question",
@@ -386,6 +498,60 @@ describe("ReadAny card registry", () => {
       title: "Reading Prompt",
       markdown: "Prompt:\nResponse:",
       data: { tone: "short" },
+    });
+  });
+
+  it("updates visual custom card fields without dropping existing data defaults", () => {
+    const template = {
+      ...createCustomReadAnyCardTemplate({
+        id: "template-reading-question",
+        name: "Reading Question",
+        markdown: "Question:\nAnswer:",
+        fields: [{ key: "question", label: "Question", type: "text", defaultValue: "Why?" }],
+        now: 123,
+      }),
+      schemaJson: {
+        cardType: "custom:template-reading-question",
+        title: "Reading Question",
+        markdown: "Question:\nAnswer:",
+        fields: [{ key: "question", label: "Question", type: "text", defaultValue: "Why?" }],
+        attrs: {
+          data: {
+            question: "User default question",
+            tone: "short",
+          },
+        },
+      },
+    };
+
+    const updated = updateCustomReadAnyCardTemplate({
+      template,
+      name: "Reading Prompt",
+      markdown: "Prompt:\nResponse:",
+      fields: [
+        { key: "question", label: "Question", type: "text", defaultValue: "Why?" },
+        { key: "answer", label: "Answer", type: "multiline", defaultValue: "Because..." },
+      ],
+      now: 456,
+    });
+
+    expect(updated.schemaJson).toMatchObject({
+      fields: [
+        { key: "question", label: "Question", type: "text", defaultValue: "Why?" },
+        { key: "answer", label: "Answer", type: "multiline", defaultValue: "Because..." },
+      ],
+      attrs: {
+        data: {
+          question: "User default question",
+          answer: "Because...",
+          tone: "short",
+        },
+      },
+    });
+    expect(createReadAnyCardAttrsFromTemplate(updated).data).toEqual({
+      question: "User default question",
+      answer: "Because...",
+      tone: "short",
     });
   });
 

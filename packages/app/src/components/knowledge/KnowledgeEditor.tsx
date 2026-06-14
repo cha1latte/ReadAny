@@ -7,7 +7,9 @@ import {
   type KnowledgeEditorFeature,
   type KnowledgeEditorSurface,
   type KnowledgeEditorTier,
+  READANY_ATTACHMENT_URI_PREFIX,
   type ReadAnyCardAttrs,
+  type ReadAnyCardTemplateField,
   builtInReadAnyCards,
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
@@ -19,11 +21,12 @@ import {
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
   getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
+  normalizeReadAnyCardTemplateFields,
   normalizeTiptapDocument,
   parseReadAnyCardDataFromEditor,
-  READANY_ATTACHMENT_URI_PREFIX,
   renderKnowledgeJsonToMarkdown,
   updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
@@ -365,17 +368,13 @@ function KnowledgeImageNodeView({ node }: NodeViewProps) {
     !!attrs.attachmentId && (!src || src.startsWith(READANY_ATTACHMENT_URI_PREFIX));
   const isMissing = hasLoadError || !src || isUnresolvedAttachment;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset image load state when the resolved src changes.
   useEffect(() => {
     setHasLoadError(false);
   }, [src]);
 
   return (
-    <NodeViewWrapper
-      as="figure"
-      className="my-4"
-      data-readany-image="true"
-      contentEditable={false}
-    >
+    <NodeViewWrapper as="figure" className="my-4" data-readany-image="true" contentEditable={false}>
       {isMissing ? (
         <div className="mx-auto flex min-h-32 max-w-xl items-center gap-3 rounded-md border border-dashed border-border/70 bg-muted/25 px-4 py-4 text-left">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground">
@@ -447,6 +446,7 @@ export function KnowledgeEditor({
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
   const [templateMarkdown, setTemplateMarkdown] = useState("");
+  const [templateFields, setTemplateFields] = useState<ReadAnyCardTemplateField[]>([]);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
   const [floatingToolbarPosition, setFloatingToolbarPosition] = useState<{
@@ -774,13 +774,14 @@ export function KnowledgeEditor({
   const syncCardControlsEditable = useCallback(() => {
     const shell = editorShellRef.current;
     if (!shell) return;
-    shell
-      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-readany-card-control]")
-      .forEach((control) => {
-        control.readOnly = readOnly;
-        control.tabIndex = readOnly ? -1 : 0;
-        control.setAttribute("aria-readonly", readOnly ? "true" : "false");
-      });
+    const controls = shell.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      "[data-readany-card-control]",
+    );
+    for (const control of controls) {
+      control.readOnly = readOnly;
+      control.tabIndex = readOnly ? -1 : 0;
+      control.setAttribute("aria-readonly", readOnly ? "true" : "false");
+    }
   }, [readOnly]);
 
   useEffect(() => {
@@ -910,6 +911,37 @@ export function KnowledgeEditor({
     setTemplateName("");
     setTemplateDescription("");
     setTemplateMarkdown("");
+    setTemplateFields([]);
+    setTemplateSaveError(null);
+  }, []);
+
+  const addTemplateField = useCallback(() => {
+    setTemplateFields((current) => [
+      ...current,
+      {
+        key: `field_${current.length + 1}`,
+        label: t("notes.knowledgeCustomCardFieldNew", {
+          count: current.length + 1,
+          defaultValue: `Field ${current.length + 1}`,
+        }),
+        type: "text",
+      },
+    ]);
+    setTemplateSaveError(null);
+  }, [t]);
+
+  const updateTemplateField = useCallback(
+    (index: number, patch: Partial<ReadAnyCardTemplateField>) => {
+      setTemplateFields((current) =>
+        current.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)),
+      );
+      setTemplateSaveError(null);
+    },
+    [],
+  );
+
+  const removeTemplateField = useCallback((index: number) => {
+    setTemplateFields((current) => current.filter((_, fieldIndex) => fieldIndex !== index));
     setTemplateSaveError(null);
   }, []);
 
@@ -919,16 +951,20 @@ export function KnowledgeEditor({
     setIsTemplateFormOpen(true);
   }, [readOnly, resetTemplateForm]);
 
-  const openTemplateEditForm = useCallback((template: KnowledgeCardTemplate) => {
-    if (readOnly) return;
-    const attrs = createReadAnyCardAttrsFromTemplate(template);
-    setEditingTemplateId(template.id);
-    setTemplateName(getReadAnyCardTemplateInsertLabel(template));
-    setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
-    setTemplateMarkdown(attrs.markdown ?? attrs.text ?? "");
-    setTemplateSaveError(null);
-    setIsTemplateFormOpen(true);
-  }, [readOnly]);
+  const openTemplateEditForm = useCallback(
+    (template: KnowledgeCardTemplate) => {
+      if (readOnly) return;
+      const attrs = createReadAnyCardAttrsFromTemplate(template);
+      setEditingTemplateId(template.id);
+      setTemplateName(getReadAnyCardTemplateInsertLabel(template));
+      setTemplateDescription(getReadAnyCardTemplateDescription(template) ?? "");
+      setTemplateMarkdown(attrs.markdown ?? attrs.text ?? "");
+      setTemplateFields(getReadAnyCardTemplateFields(template));
+      setTemplateSaveError(null);
+      setIsTemplateFormOpen(true);
+    },
+    [readOnly],
+  );
 
   const saveTemplate = useCallback(async () => {
     if (readOnly || !editor || !canUse("readAnyCards") || isSavingTemplate) return;
@@ -938,6 +974,7 @@ export function KnowledgeEditor({
     setIsSavingTemplate(true);
     setTemplateSaveError(null);
     try {
+      const normalizedTemplateFields = normalizeReadAnyCardTemplateFields(templateFields);
       const editingTemplate = editingTemplateId
         ? cardTemplates.find((template) => template.id === editingTemplateId)
         : null;
@@ -954,12 +991,14 @@ export function KnowledgeEditor({
             name,
             description: templateDescription,
             markdown: templateMarkdown,
+            fields: normalizedTemplateFields,
           })
         : createCustomReadAnyCardTemplate({
             id: `card-template-${generateId()}`,
             name,
             description: templateDescription,
             markdown: templateMarkdown,
+            fields: normalizedTemplateFields,
           });
 
       await upsertKnowledgeCardTemplate(template);
@@ -1004,6 +1043,7 @@ export function KnowledgeEditor({
     resetTemplateForm,
     t,
     templateDescription,
+    templateFields,
     templateMarkdown,
     templateName,
   ]);
@@ -1577,7 +1617,7 @@ export function KnowledgeEditor({
               </ToolbarButton>
 
               {isInsertOpen && (
-                <div className="absolute left-0 top-8 z-20 w-80 rounded-lg border border-border/70 bg-popover p-1.5 shadow-lg">
+                <div className="absolute left-0 top-8 z-20 w-[26rem] max-w-[calc(100vw-2rem)] rounded-lg border border-border/70 bg-popover p-1.5 shadow-lg">
                   {allowedCards.map((card) => {
                     const Icon = cardIconMap[card.cardType as keyof typeof cardIconMap] ?? Sparkles;
                     return (
@@ -1607,7 +1647,7 @@ export function KnowledgeEditor({
                               className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                openTemplateEditForm(card.template!);
+                                if (card.template) openTemplateEditForm(card.template);
                               }}
                               aria-label={t("notes.knowledgeCustomCardEdit", {
                                 defaultValue: "Edit custom card",
@@ -1623,7 +1663,7 @@ export function KnowledgeEditor({
                               className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                void disableTemplate(card.template!);
+                                if (card.template) void disableTemplate(card.template);
                               }}
                               aria-label={t("notes.knowledgeCustomCardDisable", {
                                 defaultValue: "Remove custom card",
@@ -1731,6 +1771,208 @@ export function KnowledgeEditor({
                               rows={3}
                               className="min-h-16 w-full resize-none rounded-md border border-border/55 bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
                             />
+                          </div>
+                          <div className="space-y-2 rounded-md border border-border/45 bg-background/65 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-foreground">
+                                  {t("notes.knowledgeCustomCardFields", {
+                                    defaultValue: "Fields",
+                                  })}
+                                </p>
+                                <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                                  {t("notes.knowledgeCustomCardFieldsHint", {
+                                    defaultValue:
+                                      "Turn card data into editable fields instead of raw JSON.",
+                                  })}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                onClick={addTemplateField}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                {t("notes.knowledgeCustomCardAddField", {
+                                  defaultValue: "Add",
+                                })}
+                              </button>
+                            </div>
+                            {templateFields.length > 0 ? (
+                              <div className="space-y-1.5">
+                                {templateFields.map((field, index) => (
+                                  <div
+                                    key={`${field.key}-${index}`}
+                                    className="grid gap-1.5 rounded-md border border-border/45 bg-muted/20 p-2"
+                                  >
+                                    <div className="grid gap-1.5 sm:grid-cols-[1fr_0.9fr]">
+                                      <label className="space-y-1">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                          {t("notes.knowledgeCustomCardFieldLabel", {
+                                            defaultValue: "Label",
+                                          })}
+                                        </span>
+                                        <input
+                                          value={field.label}
+                                          onChange={(event) =>
+                                            updateTemplateField(index, {
+                                              label: event.currentTarget.value,
+                                            })
+                                          }
+                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                          placeholder={t(
+                                            "notes.knowledgeCustomCardFieldLabelPlaceholder",
+                                            {
+                                              defaultValue: "Question, evidence, confidence...",
+                                            },
+                                          )}
+                                        />
+                                      </label>
+                                      <label className="space-y-1">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                          {t("notes.knowledgeCustomCardFieldKey", {
+                                            defaultValue: "Data key",
+                                          })}
+                                        </span>
+                                        <input
+                                          value={field.key}
+                                          onChange={(event) =>
+                                            updateTemplateField(index, {
+                                              key: event.currentTarget.value,
+                                            })
+                                          }
+                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                          placeholder="field_key"
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_auto]">
+                                      <label className="space-y-1">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                          {t("notes.knowledgeCustomCardFieldType", {
+                                            defaultValue: "Type",
+                                          })}
+                                        </span>
+                                        <select
+                                          value={field.type}
+                                          onChange={(event) =>
+                                            updateTemplateField(index, {
+                                              type: event.currentTarget
+                                                .value as ReadAnyCardTemplateField["type"],
+                                            })
+                                          }
+                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                        >
+                                          <option value="text">
+                                            {t("notes.knowledgeCustomCardFieldTypeText", {
+                                              defaultValue: "Text",
+                                            })}
+                                          </option>
+                                          <option value="multiline">
+                                            {t("notes.knowledgeCustomCardFieldTypeMultiline", {
+                                              defaultValue: "Long text",
+                                            })}
+                                          </option>
+                                          <option value="number">
+                                            {t("notes.knowledgeCustomCardFieldTypeNumber", {
+                                              defaultValue: "Number",
+                                            })}
+                                          </option>
+                                          <option value="checkbox">
+                                            {t("notes.knowledgeCustomCardFieldTypeCheckbox", {
+                                              defaultValue: "Checkbox",
+                                            })}
+                                          </option>
+                                        </select>
+                                      </label>
+                                      <div className="space-y-1">
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                          {t("notes.knowledgeCustomCardFieldDefault", {
+                                            defaultValue: "Default",
+                                          })}
+                                        </span>
+                                        {field.type === "checkbox" ? (
+                                          <select
+                                            value={
+                                              field.defaultValue === undefined
+                                                ? ""
+                                                : field.defaultValue
+                                                  ? "true"
+                                                  : "false"
+                                            }
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                defaultValue:
+                                                  event.currentTarget.value === ""
+                                                    ? undefined
+                                                    : event.currentTarget.value === "true",
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                          >
+                                            <option value="">
+                                              {t("notes.knowledgeCustomCardFieldDefaultEmpty", {
+                                                defaultValue: "No default",
+                                              })}
+                                            </option>
+                                            <option value="true">
+                                              {t("common.yes", { defaultValue: "Yes" })}
+                                            </option>
+                                            <option value="false">
+                                              {t("common.no", { defaultValue: "No" })}
+                                            </option>
+                                          </select>
+                                        ) : (
+                                          <input
+                                            value={
+                                              field.defaultValue === undefined ||
+                                              field.defaultValue === null
+                                                ? ""
+                                                : String(field.defaultValue)
+                                            }
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                defaultValue:
+                                                  event.currentTarget.value === ""
+                                                    ? undefined
+                                                    : event.currentTarget.value,
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder={t(
+                                              "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                              {
+                                                defaultValue: "Optional",
+                                              },
+                                            )}
+                                          />
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="mt-5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                        onClick={() => removeTemplateField(index)}
+                                        aria-label={t("notes.knowledgeCustomCardRemoveField", {
+                                          defaultValue: "Remove field",
+                                        })}
+                                        title={t("notes.knowledgeCustomCardRemoveField", {
+                                          defaultValue: "Remove field",
+                                        })}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-md border border-dashed border-border/60 bg-muted/20 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+                                {t("notes.knowledgeCustomCardNoFields", {
+                                  defaultValue:
+                                    "No fields yet. The card can still use the default body and advanced JSON.",
+                                })}
+                              </div>
+                            )}
                           </div>
                           {templateSaveError ? (
                             <p className="text-[11px] leading-4 text-destructive">
@@ -1951,6 +2193,17 @@ function BlockInsertButton({
   );
 }
 
+function getCardDataRecord(value: unknown): Record<string, JSONValue> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? ({ ...(value as Record<string, JSONValue>) } satisfies Record<string, JSONValue>)
+    : {};
+}
+
+function getCardFieldInputValue(value: JSONValue | undefined): string {
+  if (value === undefined || value === null) return "";
+  return String(value);
+}
+
 function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
@@ -1965,6 +2218,11 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   });
   const modelAttrs = readOnlyModel.attrs;
   const { cardType, version, isFutureVersion, isCustomCard } = readOnlyModel;
+  const cardTemplate = cardTemplates.find(
+    (template) => createReadAnyCardAttrsFromTemplate(template).cardType === cardType,
+  );
+  const cardFields = cardTemplate ? getReadAnyCardTemplateFields(cardTemplate) : [];
+  const structuredData = getCardDataRecord(modelAttrs.data);
   const isFallbackCard = readOnlyModel.state === "unsupported";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
@@ -2002,6 +2260,34 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const updateTextAttr = (key: "sourceTitle" | "sourceId" | "cfi", value: string) => {
     if (!isEditable) return;
     updateAttributes({ [key]: value.trim() || null });
+  };
+  const updateStructuredData = (key: string, value: JSONValue) => {
+    if (!isEditable) return;
+    const nextData = {
+      ...getCardDataRecord(modelAttrs.data),
+      [key]: value,
+    };
+    setDataError(null);
+    setDataInput(formatReadAnyCardDataForEditor(nextData));
+    updateAttributes({ data: nextData });
+  };
+  const updateNumberField = (field: ReadAnyCardTemplateField, rawValue: string) => {
+    const trimmedValue = rawValue.trim();
+    if (!trimmedValue) {
+      updateStructuredData(field.key, null);
+      return;
+    }
+    const numberValue = Number(trimmedValue);
+    if (!Number.isFinite(numberValue)) {
+      setDataError(
+        t("notes.knowledgeCardFieldNumberInvalid", {
+          field: field.label,
+          defaultValue: `${field.label} must be a valid number.`,
+        }),
+      );
+      return;
+    }
+    updateStructuredData(field.key, numberValue);
   };
   const applyDataInput = () => {
     if (!isEditable) return;
@@ -2065,7 +2351,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                     })
                   : isFallbackCard
                     ? t("notes.knowledgeCardFallback", { defaultValue: "fallback" })
-                    : readOnlyModel.stateLabel ?? `v${version}`}
+                    : (readOnlyModel.stateLabel ?? `v${version}`)}
               </span>
             ) : null}
             {readOnlyModel.sourceTitle ? (
@@ -2209,6 +2495,88 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                   />
                 </label>
               </div>
+              {cardFields.length > 0 ? (
+                <div className="rounded-md border border-border/45 bg-background/65 p-2.5">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-foreground">
+                      {t("notes.knowledgeCardStructuredFields", {
+                        defaultValue: "Structured fields",
+                      })}
+                    </p>
+                    <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      {cardFields.length}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {cardFields.map((field) => {
+                      const currentValue = structuredData[field.key];
+                      if (field.type === "checkbox") {
+                        return (
+                          <label
+                            key={field.key}
+                            className="flex min-h-9 items-center gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 py-2"
+                          >
+                            <input
+                              type="checkbox"
+                              defaultChecked={currentValue === true}
+                              onChange={(event) =>
+                                updateStructuredData(field.key, event.currentTarget.checked)
+                              }
+                              readOnly={!isEditable}
+                              disabled={!isEditable}
+                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+                            />
+                            <span className="min-w-0 flex-1 text-xs font-medium text-foreground">
+                              {field.label}
+                            </span>
+                          </label>
+                        );
+                      }
+
+                      const label = (
+                        <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {field.label}
+                        </span>
+                      );
+                      if (field.type === "multiline") {
+                        return (
+                          <label key={field.key} className="space-y-1 sm:col-span-2">
+                            {label}
+                            <textarea
+                              defaultValue={getCardFieldInputValue(currentValue)}
+                              onBlur={(event) =>
+                                updateStructuredData(field.key, event.currentTarget.value)
+                              }
+                              readOnly={!isEditable}
+                              rows={3}
+                              className="min-h-20 w-full resize-y rounded-md border border-border/55 bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                              placeholder={field.placeholder}
+                            />
+                          </label>
+                        );
+                      }
+
+                      return (
+                        <label key={field.key} className="space-y-1">
+                          {label}
+                          <input
+                            type={field.type === "number" ? "number" : "text"}
+                            defaultValue={getCardFieldInputValue(currentValue)}
+                            onBlur={(event) =>
+                              field.type === "number"
+                                ? updateNumberField(field, event.currentTarget.value)
+                                : updateStructuredData(field.key, event.currentTarget.value)
+                            }
+                            readOnly={!isEditable}
+                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                            placeholder={field.placeholder}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <label className="space-y-1">
                 <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   {t("notes.knowledgeCardData", { defaultValue: "Card data JSON" })}

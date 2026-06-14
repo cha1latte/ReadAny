@@ -14,6 +14,10 @@ const mobileChatRendererPath = path.join(
   rootDir,
   "packages/app-expo/src/components/chat/PartRenderer.tsx",
 );
+const mobileKnowledgeEditorPath = path.join(
+  rootDir,
+  "packages/app-expo/src/components/knowledge/MobileKnowledgeEditor.tsx",
+);
 const desktopChatRendererPath = path.join(
   rootDir,
   "packages/app/src/components/chat/PartRenderer.tsx",
@@ -223,6 +227,8 @@ function verifyKnowledgeEditorBundleContract(bundle) {
     "readany-card",
     "readany-card-convert",
     "Convert card to normal text",
+    "readany-card-structured-fields",
+    "Structured fields",
     "readany-internal-link",
     "readany-source-reference",
     "readany-image-missing",
@@ -280,8 +286,25 @@ function verifyDesktopKnowledgeEditorContract() {
     "convertToBlocks",
     "insertContentAt",
     "knowledgeCardConvertToText",
+    "getReadAnyCardTemplateFields",
+    "normalizeReadAnyCardTemplateFields",
+    "knowledgeCustomCardFields",
+    "knowledgeCardStructuredFields",
     "data-readany-card-control",
     "parseReadAnyCardDataFromEditor",
+  ]);
+}
+
+function verifyMobileKnowledgeEditorContract() {
+  verifySourceContract("mobile knowledge editor contract", mobileKnowledgeEditorPath, [
+    "getReadAnyCardTemplateFields",
+    "normalizeReadAnyCardTemplateFields",
+    "knowledgeCustomCardFields",
+    "knowledgeCustomCardFieldType",
+    "knowledgeCustomCardFieldDefault",
+    "knowledgeCustomCardRemoveField",
+    "createCustomReadAnyCardTemplate",
+    "updateCustomReadAnyCardTemplate",
   ]);
 }
 
@@ -342,6 +365,7 @@ for (const [command, args, label] of commands) {
 verifyDesktopProductionBundleContract();
 verifyKnowledgeEditorBundle();
 verifyDesktopKnowledgeEditorContract();
+verifyMobileKnowledgeEditorContract();
 verifyDesktopAIKnowledgeChatContract();
 verifyMobileAIKnowledgeChatContract();
 verifyDesktopKnowledgeWorkspaceContract();

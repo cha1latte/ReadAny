@@ -67,8 +67,19 @@ export interface ReadAnyCardTemplateSchema {
   sourceTitle?: string;
   sourceId?: string;
   cfi?: string;
+  fields?: ReadAnyCardTemplateField[];
   attrs?: Record<string, unknown>;
   migrations?: ReadAnyCardTemplateMigration[];
+}
+
+export type ReadAnyCardTemplateFieldType = "text" | "multiline" | "number" | "checkbox";
+
+export interface ReadAnyCardTemplateField {
+  key: string;
+  label: string;
+  type: ReadAnyCardTemplateFieldType;
+  placeholder?: string;
+  defaultValue?: JSONValue;
 }
 
 export interface ReadAnyCardTemplateMigration {
@@ -84,6 +95,7 @@ export interface CreateCustomReadAnyCardTemplateInput {
   name: string;
   description?: string;
   markdown?: string;
+  fields?: ReadAnyCardTemplateField[];
   now?: number;
 }
 
@@ -92,6 +104,7 @@ export interface UpdateCustomReadAnyCardTemplateInput {
   name: string;
   description?: string;
   markdown?: string;
+  fields?: ReadAnyCardTemplateField[];
   now?: number;
 }
 
@@ -160,6 +173,110 @@ function firstString(...values: unknown[]): string | undefined {
     if (text) return text;
   }
   return undefined;
+}
+
+const READANY_CARD_TEMPLATE_FIELD_TYPES = new Set<ReadAnyCardTemplateFieldType>([
+  "text",
+  "multiline",
+  "number",
+  "checkbox",
+]);
+
+function normalizeTemplateFieldType(value: unknown): ReadAnyCardTemplateFieldType {
+  return typeof value === "string" &&
+    READANY_CARD_TEMPLATE_FIELD_TYPES.has(value as ReadAnyCardTemplateFieldType)
+    ? (value as ReadAnyCardTemplateFieldType)
+    : "text";
+}
+
+function normalizeTemplateFieldKey(input: string, fallback: string): string {
+  const source = input.trim() || fallback;
+  const normalized = source
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-\s]/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized || fallback;
+}
+
+function normalizeTemplateFieldDefaultValue(
+  type: ReadAnyCardTemplateFieldType,
+  value: unknown,
+): JSONValue | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  if (type === "checkbox") {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const text = value.trim().toLowerCase();
+      if (text === "true") return true;
+      if (text === "false") return false;
+    }
+    return undefined;
+  }
+
+  if (type === "number") {
+    const numberValue = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return undefined;
+}
+
+export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCardTemplateField[] {
+  if (!Array.isArray(fields)) return [];
+
+  const usedKeys = new Set<string>();
+  const normalizedFields: ReadAnyCardTemplateField[] = [];
+  for (const [index, rawField] of fields.entries()) {
+    if (!isRecord(rawField)) continue;
+
+    const type = normalizeTemplateFieldType(rawField.type);
+    const label = firstString(rawField.label, rawField.key) ?? `Field ${index + 1}`;
+    const baseKey = normalizeTemplateFieldKey(
+      firstString(rawField.key, rawField.label) ?? "",
+      `field_${index + 1}`,
+    );
+    let key = baseKey;
+    let suffix = 2;
+    while (usedKeys.has(key)) {
+      key = `${baseKey}_${suffix}`;
+      suffix += 1;
+    }
+    usedKeys.add(key);
+
+    const field: ReadAnyCardTemplateField = {
+      key,
+      label,
+      type,
+    };
+    const placeholder = stringAttr(rawField.placeholder);
+    if (placeholder) field.placeholder = placeholder;
+    const defaultValue = normalizeTemplateFieldDefaultValue(type, rawField.defaultValue);
+    if (defaultValue !== undefined && isJsonValue(defaultValue)) {
+      field.defaultValue = defaultValue;
+    }
+    normalizedFields.push(field);
+  }
+
+  return normalizedFields.slice(0, 12);
+}
+
+export function createReadAnyCardTemplateFieldDefaults(
+  fields: unknown,
+): Record<string, JSONValue> | undefined {
+  const normalizedFields = normalizeReadAnyCardTemplateFields(fields);
+  const defaults = Object.fromEntries(
+    normalizedFields
+      .filter((field) => field.defaultValue !== undefined)
+      .map((field) => [field.key, field.defaultValue as JSONValue]),
+  );
+  return Object.keys(defaults).length > 0 ? defaults : undefined;
 }
 
 function templateSchema(template: KnowledgeCardTemplate): ReadAnyCardTemplateSchema {
@@ -736,10 +853,12 @@ export function createCustomReadAnyCardTemplate({
   name,
   description,
   markdown,
+  fields,
   now = Date.now(),
 }: CreateCustomReadAnyCardTemplateInput): KnowledgeCardTemplate {
   const trimmedName = name.trim();
   const title = trimmedName || "Custom card";
+  const normalizedFields = normalizeReadAnyCardTemplateFields(fields);
   const schemaJson: Record<string, JSONValue> = {
     cardType: `custom:${id}`,
     insertLabel: title,
@@ -748,6 +867,13 @@ export function createCustomReadAnyCardTemplate({
   };
   const trimmedDescription = description?.trim();
   if (trimmedDescription) schemaJson.description = trimmedDescription;
+  if (normalizedFields.length > 0) {
+    schemaJson.fields = normalizedFields as unknown as JSONValue;
+    const defaults = createReadAnyCardTemplateFieldDefaults(normalizedFields);
+    if (defaults) {
+      schemaJson.attrs = { data: defaults };
+    }
+  }
 
   return {
     id,
@@ -766,6 +892,7 @@ export function updateCustomReadAnyCardTemplate({
   name,
   description,
   markdown,
+  fields,
   now = Date.now(),
 }: UpdateCustomReadAnyCardTemplateInput): KnowledgeCardTemplate {
   if (template.builtIn) {
@@ -775,8 +902,29 @@ export function updateCustomReadAnyCardTemplate({
   const trimmedName = name.trim();
   const title = trimmedName || template.name || "Custom card";
   const existingSchema = (templateSchema(template) as Record<string, JSONValue>) ?? {};
+  const normalizedFields =
+    fields === undefined
+      ? normalizeReadAnyCardTemplateFields(existingSchema.fields)
+      : normalizeReadAnyCardTemplateFields(fields);
+  const {
+    description: _existingDescription,
+    fields: _existingFields,
+    attrs: _existingAttrs,
+    ...schemaRest
+  } = existingSchema;
+  const existingAttrs = isRecord(existingSchema.attrs)
+    ? (existingSchema.attrs as Record<string, JSONValue>)
+    : {};
+  const { data: _existingData, ...attrsRest } = existingAttrs;
+  const existingAttrData = isRecord(existingAttrs.data)
+    ? (existingAttrs.data as Record<string, JSONValue>)
+    : {};
+  const fieldDefaults = createReadAnyCardTemplateFieldDefaults(normalizedFields);
+  const mergedData = fieldDefaults
+    ? (mergeRecordDefaults(fieldDefaults, existingAttrData) as Record<string, JSONValue>)
+    : existingAttrData;
   const schemaJson: Record<string, JSONValue> = {
-    ...existingSchema,
+    ...schemaRest,
     cardType: `custom:${template.id}`,
     insertLabel: title,
     title,
@@ -784,7 +932,10 @@ export function updateCustomReadAnyCardTemplate({
   };
   const trimmedDescription = description?.trim();
   if (trimmedDescription) schemaJson.description = trimmedDescription;
-  else delete schemaJson.description;
+  if (normalizedFields.length > 0) schemaJson.fields = normalizedFields as unknown as JSONValue;
+  const nextAttrs: Record<string, JSONValue> =
+    Object.keys(mergedData).length > 0 ? { ...attrsRest, data: mergedData } : { ...attrsRest };
+  if (Object.keys(nextAttrs).length > 0) schemaJson.attrs = nextAttrs;
 
   return {
     ...template,
@@ -801,11 +952,21 @@ export function createReadAnyCardAttrsFromTemplate(
 ): ReadAnyCardAttrs {
   const schema = templateSchema(template);
   const schemaAttrs = isRecord(schema.attrs) ? schema.attrs : {};
+  const fieldDefaults = createReadAnyCardTemplateFieldDefaults(schema.fields);
+  const schemaAttrsWithFieldDefaults =
+    fieldDefaults && isRecord(schemaAttrs.data)
+      ? {
+          ...schemaAttrs,
+          data: mergeRecordDefaults(fieldDefaults, schemaAttrs.data),
+        }
+      : fieldDefaults
+        ? { ...schemaAttrs, data: fieldDefaults }
+        : schemaAttrs;
   const cardType =
     stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
   const version = numberAttr(schemaAttrs.version) ?? template.version;
   const attrs = normalizeReadAnyCardAttrs({
-    ...schemaAttrs,
+    ...schemaAttrsWithFieldDefaults,
     cardType,
     version,
     title: stringAttr(schema.title) ?? stringAttr(schema.insertLabel) ?? template.name,
@@ -828,6 +989,12 @@ export function getReadAnyCardTemplateDescription(
   template: KnowledgeCardTemplate,
 ): string | undefined {
   return stringAttr(templateSchema(template).description);
+}
+
+export function getReadAnyCardTemplateFields(
+  template: KnowledgeCardTemplate,
+): ReadAnyCardTemplateField[] {
+  return normalizeReadAnyCardTemplateFields(templateSchema(template).fields);
 }
 
 export function createReadAnyCardReadOnlyModel(

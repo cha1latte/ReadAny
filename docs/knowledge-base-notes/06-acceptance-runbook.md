@@ -38,6 +38,7 @@ The script above runs the full automated gate. Expanded manually, it is:
 pnpm --filter @readany/core exec vitest run \
   src/db/__tests__/knowledge-queries.test.ts \
   src/sync/__tests__/simple-sync.integration.test.ts \
+  src/sync/__tests__/sync-files.test.ts \
   src/knowledge/document-utils.test.ts \
   src/knowledge/vault-path-fidelity.test.ts \
   src/knowledge/editor-profile.test.ts \
@@ -74,6 +75,7 @@ Evidence mapping:
 | Contract | Evidence |
 | --- | --- |
 | Knowledge tables, queries, tombstones, and sync metadata exist. | `knowledge-queries.test.ts`, `simple-sync.integration.test.ts` |
+| Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |

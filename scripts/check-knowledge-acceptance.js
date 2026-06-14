@@ -13,6 +13,7 @@ const knowledgeEditorBundlePath = path.join(
 const knowledgeTests = [
   "src/db/__tests__/knowledge-queries.test.ts",
   "src/sync/__tests__/simple-sync.integration.test.ts",
+  "src/sync/__tests__/sync-files.test.ts",
   "src/knowledge/document-utils.test.ts",
   "src/knowledge/vault-path-fidelity.test.ts",
   "src/knowledge/editor-profile.test.ts",

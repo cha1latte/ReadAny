@@ -124,7 +124,7 @@ function buildToolsSection(
     "- **searchKnowledgeBase**: Search durable ReadAny knowledge documents, book home pages, reviews, summaries, and standalone notes (params: reasoning, query, bookId, type, limit)",
   );
   tools.push(
-    "- **getKnowledgeDocument**: Read one exact knowledge document by stable document id, including its vault path, children, summary, and optional full Markdown content. Use after searchKnowledgeBase before quoting or drafting updates for a specific document (params: reasoning, documentId, includeContent)",
+    "- **getKnowledgeDocument**: Read one exact knowledge document by stable document id, including its vault path, children, outgoing links, backlinks, summary, and optional full Markdown content. Use after searchKnowledgeBase before quoting or drafting updates for a specific document (params: reasoning, documentId, includeContent)",
   );
   tools.push(
     "- **proposeKnowledgeDocumentCreate**: Draft a new knowledge document for user confirmation only; it does NOT save anything. Use parentId to place it inside a vault folder when appropriate (params: reasoning, title, contentMd, type, bookId, parentId, tags)",

@@ -234,6 +234,20 @@ function contextDocumentsFromResult(
   addDocument(isRecord(result.source) ? asDocumentSummary(result.source) : null);
   addDocument(isRecord(result.current) ? asDocumentSummary(result.current) : null);
   addDocument(isRecord(result.target) ? asDocumentSummary(result.target) : null);
+  if (Array.isArray(result.outgoingLinks)) {
+    for (const link of result.outgoingLinks) {
+      if (isRecord(link)) {
+        addDocument(isRecord(link.target) ? asDocumentSummary(link.target) : null);
+      }
+    }
+  }
+  if (Array.isArray(result.backlinks)) {
+    for (const backlink of result.backlinks) {
+      if (isRecord(backlink)) {
+        addDocument(isRecord(backlink.from) ? asDocumentSummary(backlink.from) : null);
+      }
+    }
+  }
 
   if (documents.length > 0) return documents;
 

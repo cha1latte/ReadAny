@@ -3,6 +3,7 @@ import type { AIConfig, KnowledgeDocument } from "../../types";
 
 const dbMocks = vi.hoisted(() => ({
   createKnowledgeDocument: vi.fn(),
+  getKnowledgeBacklinks: vi.fn(),
   getKnowledgeDocument: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
   getKnowledgeLinks: vi.fn(),
@@ -77,6 +78,8 @@ describe("knowledge tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
+    dbMocks.getKnowledgeLinks.mockResolvedValue([]);
+    dbMocks.getKnowledgeBacklinks.mockResolvedValue([]);
     knowledgeMemoryMocks.maybeCompressAndPersistKnowledgeSummary.mockResolvedValue({
       status: "compressed",
       persisted: true,
@@ -470,8 +473,54 @@ describe("knowledge tools", () => {
       parentId: "doc-1",
       updatedAt: 3000,
     });
+    const related = doc({
+      id: "doc-related",
+      type: "standalone_note",
+      title: "Related Idea",
+      parentId: "folder-1",
+      updatedAt: 2500,
+    });
+    const backlinkSource = doc({
+      id: "doc-source",
+      type: "standalone_note",
+      title: "Earlier Observation",
+      parentId: "folder-1",
+      updatedAt: 2400,
+    });
     dbMocks.getKnowledgeDocument.mockResolvedValue(child);
-    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, child, nested]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      folder,
+      child,
+      nested,
+      related,
+      backlinkSource,
+    ]);
+    dbMocks.getKnowledgeLinks.mockResolvedValue([
+      {
+        id: "link-out",
+        fromDocumentId: "doc-1",
+        toKind: "document",
+        toId: "doc-related",
+        relation: "related",
+        label: "Compare with",
+        createdAt: 2100,
+        updatedAt: 2100,
+      },
+    ]);
+    dbMocks.getKnowledgeBacklinks.mockResolvedValue([
+      {
+        link: {
+          id: "link-back",
+          fromDocumentId: "doc-source",
+          toKind: "document",
+          toId: "doc-1",
+          relation: "references",
+          createdAt: 2200,
+          updatedAt: 2200,
+        },
+        fromDocument: backlinkSource,
+      },
+    ]);
 
     const tool = createGetKnowledgeDocumentTool();
     const result = (await tool.execute({
@@ -490,10 +539,23 @@ describe("knowledge tools", () => {
         childCount: number;
         children: Array<{ id: string; path: string }>;
       };
+      outgoingLinks: Array<{
+        id: string;
+        relation: string;
+        label?: string;
+        target?: { id: string; path: string };
+      }>;
+      backlinks: Array<{
+        id: string;
+        relation: string;
+        from: { id: string; path: string };
+      }>;
     };
 
     expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-1");
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
+    expect(dbMocks.getKnowledgeLinks).toHaveBeenCalledWith("doc-1");
+    expect(dbMocks.getKnowledgeBacklinks).toHaveBeenCalledWith("doc-1", 12);
     expect(result).toMatchObject({
       success: true,
       documentId: "doc-1",
@@ -511,6 +573,27 @@ describe("knowledge tools", () => {
           },
         ],
       },
+      outgoingLinks: [
+        {
+          id: "link-out",
+          relation: "related",
+          label: "Compare with",
+          target: {
+            id: "doc-related",
+            path: "Knowledge base / Reading Journal / Related Idea",
+          },
+        },
+      ],
+      backlinks: [
+        {
+          id: "link-back",
+          relation: "references",
+          from: {
+            id: "doc-source",
+            path: "Knowledge base / Reading Journal / Earlier Observation",
+          },
+        },
+      ],
     });
   });
 
@@ -529,6 +612,53 @@ describe("knowledge tools", () => {
       documentId: "missing-doc",
     });
     expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
+  });
+
+  it("resolves outgoing document link targets outside the current path context", async () => {
+    const source = doc({
+      id: "doc-source",
+      type: "standalone_note",
+      title: "Source Note",
+    });
+    const remoteTarget = doc({
+      id: "doc-remote",
+      bookId: "book-remote",
+      type: "summary",
+      title: "Remote Summary",
+      contentMd: "Remote context.",
+    });
+    dbMocks.getKnowledgeDocument.mockImplementation(async (documentId: string) => {
+      if (documentId === "doc-source") return source;
+      if (documentId === "doc-remote") return remoteTarget;
+      return null;
+    });
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([source]);
+    dbMocks.getKnowledgeLinks.mockResolvedValue([
+      {
+        id: "link-remote",
+        fromDocumentId: "doc-source",
+        toKind: "document",
+        toId: "doc-remote",
+        relation: "references",
+        createdAt: 2300,
+        updatedAt: 2300,
+      },
+    ]);
+
+    const tool = createGetKnowledgeDocumentTool();
+    const result = (await tool.execute({
+      reasoning: "Need linked context",
+      documentId: "doc-source",
+    })) as {
+      outgoingLinks: Array<{ target?: { id: string; path: string; title: string } }>;
+    };
+
+    expect(dbMocks.getKnowledgeDocument).toHaveBeenCalledWith("doc-remote");
+    expect(result.outgoingLinks[0].target).toMatchObject({
+      id: "doc-remote",
+      title: "Remote Summary",
+      path: "Knowledge base / Remote Summary",
+    });
   });
 
   it("compresses and persists derived knowledge summaries without changing content", async () => {

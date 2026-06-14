@@ -6,8 +6,10 @@
  * durable notes.
  */
 import {
+  getKnowledgeBacklinks,
   getKnowledgeDocument,
   getKnowledgeDocuments,
+  getKnowledgeLinks,
   searchKnowledgeDocuments,
 } from "../../db/database";
 import {
@@ -25,6 +27,7 @@ import type {
   JSONValue,
   KnowledgeDocument,
   KnowledgeDocumentType,
+  KnowledgeLink,
   KnowledgeLinkRelation,
   KnowledgeLinkTargetKind,
 } from "../../types";
@@ -35,6 +38,7 @@ import type { ToolDefinition } from "./tool-types";
 const SEARCH_SCAN_LIMIT = 200;
 const DEFAULT_RESULT_LIMIT = 8;
 const MAX_CHILD_CONTEXT_COUNT = 8;
+const MAX_LINK_CONTEXT_COUNT = 12;
 const LINK_TARGET_KINDS = new Set<KnowledgeLinkTargetKind>([
   "book",
   "highlight",
@@ -393,6 +397,39 @@ function documentPathContext(
   };
 }
 
+function linkTargetContext(
+  link: KnowledgeLink,
+  documentsById: Map<string, KnowledgeDocument>,
+  childrenByParentId = createChildrenByParentId([...documentsById.values()]),
+) {
+  const targetDocument = link.toKind === "document" ? documentsById.get(link.toId) : undefined;
+  return {
+    id: link.id,
+    relation: link.relation,
+    toKind: link.toKind,
+    toId: link.toId,
+    label: link.label,
+    cfi: link.cfi,
+    target: targetDocument
+      ? documentPathContext(targetDocument, documentsById, childrenByParentId)
+      : undefined,
+  };
+}
+
+function backlinkContext(
+  backlink: { link: KnowledgeLink; fromDocument: KnowledgeDocument },
+  documentsById: Map<string, KnowledgeDocument>,
+  childrenByParentId = createChildrenByParentId([...documentsById.values()]),
+) {
+  return {
+    id: backlink.link.id,
+    relation: backlink.link.relation,
+    label: backlink.link.label,
+    cfi: backlink.link.cfi,
+    from: documentPathContext(backlink.fromDocument, documentsById, childrenByParentId),
+  };
+}
+
 export function createSearchKnowledgeBaseTool(): ToolDefinition {
   return {
     name: "searchKnowledgeBase",
@@ -566,11 +603,36 @@ export function createGetKnowledgeDocumentTool(): ToolDefinition {
       }
 
       const includeContent = args.includeContent === true;
-      const pathContextDocuments = await getKnowledgeDocuments({
-        ...(document.bookId ? { bookId: document.bookId } : {}),
-        limit: 5000,
-      });
-      const documentsById = createDocumentMap([...pathContextDocuments, document]);
+      const [pathContextDocuments, outgoingLinks, backlinks] = await Promise.all([
+        getKnowledgeDocuments({
+          ...(document.bookId ? { bookId: document.bookId } : {}),
+          limit: 5000,
+        }),
+        getKnowledgeLinks(documentId),
+        getKnowledgeBacklinks(documentId, MAX_LINK_CONTEXT_COUNT),
+      ]);
+      const pathContextDocumentsById = createDocumentMap([...pathContextDocuments, document]);
+      const missingTargetDocumentIds = [
+        ...new Set(
+          outgoingLinks
+            .filter(
+              (link) => link.toKind === "document" && !pathContextDocumentsById.has(link.toId),
+            )
+            .map((link) => link.toId)
+            .slice(0, MAX_LINK_CONTEXT_COUNT),
+        ),
+      ];
+      const linkedTargetDocuments = (
+        await Promise.all(
+          missingTargetDocumentIds.map((targetId) => getKnowledgeDocument(targetId)),
+        )
+      ).filter((item): item is KnowledgeDocument => !!item);
+      const documentsById = createDocumentMap([
+        ...pathContextDocuments,
+        document,
+        ...linkedTargetDocuments,
+        ...backlinks.map((backlink) => backlink.fromDocument),
+      ]);
       const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
       const summary = documentSummary(
         document,
@@ -586,6 +648,12 @@ export function createGetKnowledgeDocumentTool(): ToolDefinition {
         bookId: document.bookId,
         path: summary.path,
         document: summary,
+        outgoingLinks: outgoingLinks
+          .slice(0, MAX_LINK_CONTEXT_COUNT)
+          .map((link) => linkTargetContext(link, documentsById, childrenByParentId)),
+        backlinks: backlinks.map((backlink) =>
+          backlinkContext(backlink, documentsById, childrenByParentId),
+        ),
       };
     },
   };

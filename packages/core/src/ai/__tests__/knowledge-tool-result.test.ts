@@ -71,6 +71,30 @@ describe("knowledge tool result display", () => {
         path: "Knowledge base / Chapter Notes / Theme Map",
         snippet: "A durable map of the chapter themes.",
       },
+      outgoingLinks: [
+        {
+          id: "link-out",
+          relation: "related",
+          target: {
+            id: "doc-2",
+            title: "Related Note",
+            type: "standalone_note",
+            path: "Knowledge base / Chapter Notes / Related Note",
+          },
+        },
+      ],
+      backlinks: [
+        {
+          id: "link-back",
+          relation: "references",
+          from: {
+            id: "doc-3",
+            title: "Earlier Note",
+            type: "standalone_note",
+            path: "Knowledge base / Chapter Notes / Earlier Note",
+          },
+        },
+      ],
     });
 
     expect(display).toEqual({
@@ -86,6 +110,18 @@ describe("knowledge tool result display", () => {
           type: "standalone_note",
           path: "Knowledge base / Chapter Notes / Theme Map",
           snippet: "A durable map of the chapter themes.",
+        },
+        {
+          id: "doc-2",
+          title: "Related Note",
+          type: "standalone_note",
+          path: "Knowledge base / Chapter Notes / Related Note",
+        },
+        {
+          id: "doc-3",
+          title: "Earlier Note",
+          type: "standalone_note",
+          path: "Knowledge base / Chapter Notes / Earlier Note",
         },
       ],
     });

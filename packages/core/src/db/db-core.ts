@@ -113,6 +113,31 @@ export async function cleanupOrphanedSyncRows(databaseArg?: IDatabase): Promise<
     "DELETE FROM book_tags WHERE book_id NOT IN (SELECT id FROM books) OR tag_id NOT IN (SELECT id FROM tags)",
     "UPDATE books SET group_id = NULL WHERE group_id IS NOT NULL AND group_id NOT IN (SELECT id FROM book_groups)",
     "DELETE FROM messages WHERE thread_id NOT IN (SELECT id FROM threads)",
+    `DELETE FROM knowledge_links
+     WHERE from_document_id IN (
+       SELECT id FROM knowledge_documents
+       WHERE book_id IS NOT NULL
+         AND book_id NOT IN (SELECT id FROM books)
+     )
+        OR (
+          to_kind = 'document'
+          AND to_id IN (
+            SELECT id FROM knowledge_documents
+            WHERE book_id IS NOT NULL
+              AND book_id NOT IN (SELECT id FROM books)
+          )
+        )`,
+    `UPDATE knowledge_attachments
+     SET document_id = NULL
+     WHERE document_id IN (
+       SELECT id FROM knowledge_documents
+       WHERE book_id IS NOT NULL
+         AND book_id NOT IN (SELECT id FROM books)
+     )`,
+    "DELETE FROM knowledge_documents WHERE book_id IS NOT NULL AND book_id NOT IN (SELECT id FROM books)",
+    "DELETE FROM knowledge_links WHERE from_document_id NOT IN (SELECT id FROM knowledge_documents)",
+    "DELETE FROM knowledge_links WHERE to_kind = 'document' AND to_id NOT IN (SELECT id FROM knowledge_documents)",
+    "UPDATE knowledge_attachments SET document_id = NULL WHERE document_id IS NOT NULL AND document_id NOT IN (SELECT id FROM knowledge_documents)",
   ];
 
   for (const sql of cleanupStatements) {

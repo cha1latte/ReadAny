@@ -32,6 +32,7 @@ const mobileNotesViewPath = path.join(rootDir, "packages/app-expo/src/screens/No
 const knowledgeTests = [
   "src/db/__tests__/knowledge-queries.test.ts",
   "src/db/__tests__/knowledge-source-writeback.test.ts",
+  "src/db/__tests__/db-core.test.ts",
   "src/db/__tests__/highlight-queries.test.ts",
   "src/db/__tests__/note-queries.test.ts",
   "src/sync/__tests__/simple-sync.integration.test.ts",

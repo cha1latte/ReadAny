@@ -44,6 +44,7 @@ The script above runs the full automated gate. Expanded manually, it is:
 pnpm --filter @readany/core exec vitest run \
   src/db/__tests__/knowledge-queries.test.ts \
   src/db/__tests__/knowledge-source-writeback.test.ts \
+  src/db/__tests__/db-core.test.ts \
   src/db/__tests__/highlight-queries.test.ts \
   src/db/__tests__/note-queries.test.ts \
   src/sync/__tests__/simple-sync.integration.test.ts \

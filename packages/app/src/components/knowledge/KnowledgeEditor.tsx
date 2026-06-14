@@ -14,6 +14,7 @@ import {
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
   createReadAnyCardTiptapContent,
+  formatReadAnyCardDataForEditor,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
   getKnowledgeEditorSurfaceProfile,
@@ -21,6 +22,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
   normalizeTiptapDocument,
+  parseReadAnyCardDataFromEditor,
   READANY_ATTACHMENT_URI_PREFIX,
   renderKnowledgeJsonToMarkdown,
   updateCustomReadAnyCardTemplate,
@@ -1932,6 +1934,9 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
   const title = attrs.title || "";
   const body = readOnlyModel.body;
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [dataInput, setDataInput] = useState(() => formatReadAnyCardDataForEditor(attrs.data));
+  const [dataError, setDataError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const resizeBody = useCallback((element = bodyRef.current) => {
     if (!element) return;
@@ -1944,6 +1949,11 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
     resizeBody();
   }, [body, resizeBody]);
 
+  useEffect(() => {
+    setDataInput(formatReadAnyCardDataForEditor(attrs.data));
+    setDataError(null);
+  }, [attrs.data]);
+
   const updateTitle = (nextTitle: string) => {
     if (!isEditable) return;
     updateAttributes({ title: nextTitle });
@@ -1951,6 +1961,21 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const updateBody = (nextBody: string) => {
     if (!isEditable) return;
     updateAttributes({ markdown: nextBody, text: nextBody });
+  };
+  const updateTextAttr = (key: "sourceTitle" | "sourceId" | "cfi", value: string) => {
+    if (!isEditable) return;
+    updateAttributes({ [key]: value.trim() || null });
+  };
+  const applyDataInput = () => {
+    if (!isEditable) return;
+    const result = parseReadAnyCardDataFromEditor(dataInput);
+    if (!result.ok) {
+      setDataError(result.error);
+      return;
+    }
+    setDataError(null);
+    updateAttributes({ data: result.data });
+    setDataInput(formatReadAnyCardDataForEditor(result.data));
   };
   const convertToBlocks = () => {
     if (!isEditable || typeof getPos !== "function") return;
@@ -2031,6 +2056,27 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                 <FileText className="h-3.5 w-3.5" />
               </button>
             ) : null}
+            {isEditable ? (
+              <button
+                type="button"
+                className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/45"
+                aria-expanded={isDetailsOpen}
+                aria-label={t("notes.knowledgeCardDetails", {
+                  defaultValue: "Card details",
+                })}
+                title={t("notes.knowledgeCardDetails", {
+                  defaultValue: "Card details",
+                })}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsDetailsOpen((open) => !open);
+                }}
+              >
+                <Code className="h-3.5 w-3.5" />
+                {t("notes.knowledgeCardDetailsShort", { defaultValue: "Details" })}
+              </button>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -2079,6 +2125,81 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
               isEditable ? "focus:border-primary/20 focus:bg-muted/20" : "cursor-default",
             )}
           />
+          {isDetailsOpen ? (
+            <div
+              className="mt-2.5 grid gap-2 rounded-md border border-border/55 bg-muted/20 p-2.5"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="min-w-0 space-y-1">
+                  <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("notes.knowledgeCardSourceTitle", { defaultValue: "Source title" })}
+                  </span>
+                  <input
+                    defaultValue={attrs.sourceTitle || ""}
+                    onBlur={(event) => updateTextAttr("sourceTitle", event.currentTarget.value)}
+                    readOnly={!isEditable}
+                    className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                    placeholder={t("notes.knowledgeCardSourceTitlePlaceholder", {
+                      defaultValue: "Chapter or document",
+                    })}
+                  />
+                </label>
+                <label className="min-w-0 space-y-1">
+                  <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("notes.knowledgeCardSourceId", { defaultValue: "Source ID" })}
+                  </span>
+                  <input
+                    defaultValue={attrs.sourceId || ""}
+                    onBlur={(event) => updateTextAttr("sourceId", event.currentTarget.value)}
+                    readOnly={!isEditable}
+                    className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                    placeholder="highlight-1"
+                  />
+                </label>
+                <label className="min-w-0 space-y-1">
+                  <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    CFI
+                  </span>
+                  <input
+                    defaultValue={attrs.cfi || ""}
+                    onBlur={(event) => updateTextAttr("cfi", event.currentTarget.value)}
+                    readOnly={!isEditable}
+                    className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                    placeholder="epubcfi(...)"
+                  />
+                </label>
+              </div>
+              <label className="space-y-1">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("notes.knowledgeCardData", { defaultValue: "Card data JSON" })}
+                </span>
+                <textarea
+                  value={dataInput}
+                  onChange={(event) => {
+                    setDataInput(event.target.value);
+                    setDataError(null);
+                  }}
+                  onBlur={applyDataInput}
+                  readOnly={!isEditable}
+                  rows={4}
+                  spellCheck={false}
+                  className="min-h-20 w-full resize-y rounded-md border border-border/55 bg-background px-2.5 py-2 font-mono text-[11px] leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                  placeholder='{"key":"value"}'
+                />
+              </label>
+              {dataError ? (
+                <p className="text-[11px] leading-4 text-destructive">
+                  {t("notes.knowledgeCardDataInvalid", {
+                    error: dataError,
+                    defaultValue: `Invalid JSON: ${dataError}`,
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </NodeViewWrapper>

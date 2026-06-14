@@ -86,8 +86,50 @@ export interface UpdateCustomReadAnyCardTemplateInput {
   now?: number;
 }
 
+export type ReadAnyCardDataParseResult =
+  | { ok: true; data: JSONValue | null }
+  | { ok: false; error: string };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isJsonValue(value: unknown): value is JSONValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return typeof value !== "number" || Number.isFinite(value);
+  }
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (!isRecord(value)) return false;
+  return Object.values(value).every(isJsonValue);
+}
+
+export function formatReadAnyCardDataForEditor(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (!isJsonValue(value)) return "";
+  return JSON.stringify(value, null, 2);
+}
+
+export function parseReadAnyCardDataFromEditor(input: string): ReadAnyCardDataParseResult {
+  const trimmed = input.trim();
+  if (!trimmed) return { ok: true, data: null };
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!isJsonValue(parsed)) {
+      return { ok: false, error: "Card data must be valid JSON without NaN or Infinity." };
+    }
+    return { ok: true, data: parsed };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Invalid JSON",
+    };
+  }
 }
 
 function stringAttr(value: unknown): string | undefined {

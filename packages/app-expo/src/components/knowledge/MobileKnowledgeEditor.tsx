@@ -192,6 +192,7 @@ interface EditorTheme {
   muted: string;
   mutedForeground: string;
   primary: string;
+  destructive: string;
 }
 
 interface InsertableCardItem {
@@ -381,6 +382,7 @@ export function MobileKnowledgeEditor({
       muted: colors.muted,
       mutedForeground: colors.mutedForeground,
       primary: colors.primary,
+      destructive: colors.destructive,
     }),
     [colors],
   );

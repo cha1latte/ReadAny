@@ -4,10 +4,12 @@ import {
   createDefaultReadAnyCardAttrs,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
+  formatReadAnyCardDataForEditor,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
+  parseReadAnyCardDataFromEditor,
   renderReadAnyCardMarkdownFallback,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
@@ -455,6 +457,39 @@ describe("ReadAny card registry", () => {
         [template],
       ).data,
     ).toBe("legacy-data");
+  });
+
+  it("formats and parses custom card data safely for editor controls", () => {
+    expect(formatReadAnyCardDataForEditor(undefined)).toBe("");
+    expect(formatReadAnyCardDataForEditor(null)).toBe("");
+    expect(
+      formatReadAnyCardDataForEditor({
+        source: "ai",
+        layout: { density: "compact" },
+        steps: ["read", "review"],
+      }),
+    ).toBe(
+      [
+        "{",
+        '  "source": "ai",',
+        '  "layout": {',
+        '    "density": "compact"',
+        "  },",
+        '  "steps": [',
+        '    "read",',
+        '    "review"',
+        "  ]",
+        "}",
+      ].join("\n"),
+    );
+
+    expect(parseReadAnyCardDataFromEditor("")).toEqual({ ok: true, data: null });
+    expect(parseReadAnyCardDataFromEditor('{"source":"ai","count":2}')).toEqual({
+      ok: true,
+      data: { source: "ai", count: 2 },
+    });
+    expect(parseReadAnyCardDataFromEditor("[NaN]").ok).toBe(false);
+    expect(parseReadAnyCardDataFromEditor("{broken").ok).toBe(false);
   });
 
   it("rejects edits to built-in card templates", () => {

@@ -15,6 +15,7 @@
         --muted: #252525;
         --muted-foreground: #a1a1aa;
         --primary: #f97316;
+        --destructive: #ef4444;
       }
 
       * {
@@ -421,6 +422,91 @@
         margin-top: 7px;
         color: var(--muted-foreground);
         font-size: 11px;
+      }
+
+      .readany-card-details {
+        margin-top: 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--muted) 18%, transparent);
+        padding: 7px;
+      }
+
+      .readany-card-details-summary {
+        min-height: 30px;
+        color: var(--muted-foreground);
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 30px;
+        list-style-position: inside;
+        text-transform: uppercase;
+      }
+
+      .readany-card-detail-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 1fr;
+        margin-top: 6px;
+      }
+
+      .readany-card-field-label {
+        display: block;
+        min-width: 0;
+        color: var(--muted-foreground);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .readany-card-field,
+      .readany-card-data {
+        display: block;
+        width: 100%;
+        margin-top: 4px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        outline: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-size: 12px;
+      }
+
+      .readany-card-field {
+        min-height: 34px;
+        padding: 0 9px;
+      }
+
+      .readany-card-data {
+        min-height: 80px;
+        padding: 8px 9px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+          monospace;
+        line-height: 1.5;
+        resize: vertical;
+      }
+
+      .readany-card-field:focus,
+      .readany-card-data:focus {
+        border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+        background: color-mix(in srgb, var(--primary) 5%, var(--background));
+      }
+
+      .readany-card-data-label {
+        margin-top: 8px;
+      }
+
+      .readany-card-data-error {
+        margin-top: 5px;
+        color: var(--destructive);
+        font-size: 11px;
+        line-height: 1.35;
+        text-transform: none;
+      }
+
+      .readany-editor-readonly .readany-card-details {
+        display: none;
       }
     </style>
   </head>

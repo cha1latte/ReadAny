@@ -22,7 +22,12 @@ async function buildKnowledgeEditor() {
     import TaskItem from "@tiptap/extension-task-item";
     import TaskList from "@tiptap/extension-task-list";
     import StarterKit from "@tiptap/starter-kit";
-    import { createReadAnyCardReadOnlyModel, createReadAnyCardTiptapContent } from "@readany/core/knowledge";
+    import {
+      createReadAnyCardReadOnlyModel,
+      createReadAnyCardTiptapContent,
+      formatReadAnyCardDataForEditor,
+      parseReadAnyCardDataFromEditor,
+    } from "@readany/core/knowledge";
 
     const EMPTY_DOC = { type: "doc", content: [] };
     let editor = null;
@@ -57,6 +62,7 @@ async function buildKnowledgeEditor() {
         muted: theme.muted,
         mutedForeground: theme.mutedForeground,
         primary: theme.primary,
+        destructive: theme.destructive,
       };
       for (const [key, value] of Object.entries(entries)) {
         if (typeof value === "string" && value) {
@@ -138,7 +144,7 @@ async function buildKnowledgeEditor() {
       const editable = editor.isEditable;
       document.documentElement.classList.toggle("readany-editor-readonly", !editable);
       document
-        .querySelectorAll(".readany-card-title, .readany-card-preview")
+        .querySelectorAll(".readany-card-title, .readany-card-preview, .readany-card-field, .readany-card-data")
         .forEach((element) => {
           element.readOnly = !editable;
           element.tabIndex = editable ? 0 : -1;
@@ -303,6 +309,81 @@ async function buildKnowledgeEditor() {
           source.textContent = readOnlyModel.sourceTitle || "";
           body.appendChild(source);
 
+          const details = document.createElement("details");
+          details.className = "readany-card-details";
+
+          const detailsSummary = document.createElement("summary");
+          detailsSummary.className = "readany-card-details-summary";
+          detailsSummary.textContent = "Details";
+          details.appendChild(detailsSummary);
+
+          const detailGrid = document.createElement("div");
+          detailGrid.className = "readany-card-detail-grid";
+          details.appendChild(detailGrid);
+
+          const createTextField = (labelText, key, placeholder = "") => {
+            const label = document.createElement("label");
+            label.className = "readany-card-field-label";
+            const labelCaption = document.createElement("span");
+            labelCaption.textContent = labelText;
+            label.appendChild(labelCaption);
+            const input = document.createElement("input");
+            input.className = "readany-card-field";
+            input.type = "text";
+            input.placeholder = placeholder;
+            input.value = currentNode.attrs?.[key] || "";
+            input.readOnly = editor?.isEditable === false;
+            input.tabIndex = editor?.isEditable === false ? -1 : 0;
+            input.addEventListener("blur", () => {
+              if (!editor?.isEditable) return;
+              updateCardAttrs(currentNode, getPos, { [key]: input.value.trim() || null });
+            });
+            label.appendChild(input);
+            detailGrid.appendChild(label);
+            return input;
+          };
+
+          const sourceTitleInput = createTextField("Source", "sourceTitle", "Chapter");
+          const sourceIdInput = createTextField("Source ID", "sourceId", "highlight-1");
+          const cfiInput = createTextField("CFI", "cfi", "epubcfi(...)");
+
+          const dataLabel = document.createElement("label");
+          dataLabel.className = "readany-card-field-label readany-card-data-label";
+          const dataCaption = document.createElement("span");
+          dataCaption.textContent = "Data JSON";
+          dataLabel.appendChild(dataCaption);
+          const dataInput = document.createElement("textarea");
+          dataInput.className = "readany-card-data";
+          dataInput.value = formatReadAnyCardDataForEditor(currentNode.attrs?.data);
+          dataInput.placeholder = '{"key":"value"}';
+          dataInput.rows = 4;
+          dataInput.readOnly = editor?.isEditable === false;
+          dataInput.tabIndex = editor?.isEditable === false ? -1 : 0;
+          const dataError = document.createElement("div");
+          dataError.className = "readany-card-data-error";
+          dataError.style.display = "none";
+          dataInput.addEventListener("input", () => {
+            dataError.style.display = "none";
+            dataError.textContent = "";
+          });
+          dataInput.addEventListener("blur", () => {
+            if (!editor?.isEditable) return;
+            const parsed = parseReadAnyCardDataFromEditor(dataInput.value);
+            if (!parsed.ok) {
+              dataError.textContent = "Invalid JSON: " + parsed.error;
+              dataError.style.display = "block";
+              return;
+            }
+            dataError.style.display = "none";
+            dataError.textContent = "";
+            dataInput.value = formatReadAnyCardDataForEditor(parsed.data);
+            updateCardAttrs(currentNode, getPos, { data: parsed.data });
+          });
+          dataLabel.appendChild(dataInput);
+          dataLabel.appendChild(dataError);
+          details.appendChild(dataLabel);
+          body.appendChild(details);
+
           dom.appendChild(icon);
           dom.appendChild(body);
           return {
@@ -328,6 +409,26 @@ async function buildKnowledgeEditor() {
               fitTextArea(preview);
               source.style.display = nextModel.sourceTitle ? "block" : "none";
               source.textContent = nextModel.sourceTitle || "";
+              const editable = editor?.isEditable !== false;
+              [sourceTitleInput, sourceIdInput, cfiInput, dataInput].forEach((field) => {
+                field.readOnly = !editable;
+                field.tabIndex = editable ? 0 : -1;
+                field.setAttribute("aria-readonly", editable ? "false" : "true");
+              });
+              if (document.activeElement !== sourceTitleInput) {
+                sourceTitleInput.value = nextAttrs.sourceTitle || "";
+              }
+              if (document.activeElement !== sourceIdInput) {
+                sourceIdInput.value = nextAttrs.sourceId || "";
+              }
+              if (document.activeElement !== cfiInput) {
+                cfiInput.value = nextAttrs.cfi || "";
+              }
+              if (document.activeElement !== dataInput) {
+                dataInput.value = formatReadAnyCardDataForEditor(nextAttrs.data);
+                dataError.style.display = "none";
+                dataError.textContent = "";
+              }
               return true;
             },
           };

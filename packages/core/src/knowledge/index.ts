@@ -125,12 +125,14 @@ export {
   builtInReadAnyCards,
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
+  formatReadAnyCardDataForEditor,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   normalizeReadAnyCardAttrs,
+  parseReadAnyCardDataFromEditor,
   renderReadAnyCardMarkdownFallback,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
@@ -146,6 +148,7 @@ export type {
   ReadAnyCardReadOnlyModel,
   ReadAnyCardReadOnlyState,
   ReadAnyCardTemplateSchema,
+  ReadAnyCardDataParseResult,
 } from "./card-registry";
 export {
   createKnowledgeSummaryCompressionState,

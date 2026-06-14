@@ -19,6 +19,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "acceptance:knowledge": "node scripts/check-knowledge-acceptance.js",
+    "acceptance:knowledge:manual": "node scripts/check-knowledge-manual-evidence.js",
     "version:check": "node scripts/bump-version.js --check",
     "version:set": "node scripts/bump-version.js"
   },

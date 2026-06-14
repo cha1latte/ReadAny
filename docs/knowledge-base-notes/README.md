@@ -99,3 +99,13 @@ External docs checked:
 - [Vault Workspace Layout](05-vault-workspace-layout.md)
 - [Acceptance Runbook](06-acceptance-runbook.md)
 - [Manual QA Evidence](07-manual-qa-evidence.md)
+
+## Acceptance Commands
+
+```bash
+pnpm acceptance:knowledge
+pnpm acceptance:knowledge:manual
+```
+
+Use `pnpm acceptance:knowledge:manual -- --allow-incomplete` while manual
+desktop, mobile, AI, Obsidian, and sync evidence is still being collected.

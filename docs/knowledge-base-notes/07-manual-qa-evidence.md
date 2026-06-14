@@ -5,7 +5,8 @@ Automated checks prove the shared contracts; this checklist proves the runtime
 experience that still needs real desktop and mobile interaction.
 
 Do not mark the feature ready for PR review until every required row is `Pass`
-or has an explicit owner-approved exception.
+or has an explicit owner-approved exception, and
+`pnpm acceptance:knowledge:manual` passes.
 
 ## Session Metadata
 
@@ -31,6 +32,10 @@ or has an explicit owner-approved exception.
 - Each `Fail` should include reproduction steps and an issue or follow-up task.
 - Each `Blocked` should explain the missing device, account, credential, test
   data, or external service.
+- `Blocked` and `N/A` rows that are accepted for final PR review must include an
+  owner-approved exception note, for example `Exception approved: ...`.
+- Set `Ready for PR review?` to `Yes` and `Blocking failures` to `None` only
+  after all required rows are complete.
 - Keep this file updated on the branch so the final PR can link to one source of
   truth.
 

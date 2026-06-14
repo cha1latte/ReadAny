@@ -16,6 +16,8 @@ The branch is ready for final PR review when all of these are true:
 - `07-manual-qa-evidence.md` is filled with the commit under test, platforms,
   screenshots/logs/exports, and pass/fail/blocker status for all required
   manual checks.
+- `pnpm acceptance:knowledge:manual` passes after `07-manual-qa-evidence.md`
+  is filled.
 - Desktop and mobile both show a vault hierarchy before editing.
 - Folder nodes open folder browsers, not empty document editors.
 - Document nodes open a WYSIWYG Tiptap surface with quiet autosave.
@@ -94,6 +96,20 @@ git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 git diff --check
 ```
 
+After the runtime manual checks are complete, run the strict manual evidence
+gate:
+
+```bash
+pnpm acceptance:knowledge:manual
+```
+
+While evidence is still being collected, this non-blocking command can show the
+remaining missing rows without failing the shell:
+
+```bash
+pnpm acceptance:knowledge:manual -- --allow-incomplete
+```
+
 `pnpm acceptance:knowledge` compares the mobile WebView editor bundle before and
 after rebuilding it. If the generated HTML changes, commit
 `packages/app-expo/assets/editor/knowledge-editor.html` and rerun the gate.
@@ -110,6 +126,10 @@ The desktop and mobile knowledge workspace contract checks scan the runtime UI
 sources for the vault tree, root/folder browser, document editor, breadcrumb/path,
 search, create target, import review, and keyboard-safe mobile editor entry
 points that make the vault mental model visible before editing.
+`pnpm acceptance:knowledge:manual` checks that `07-manual-qa-evidence.md`
+contains session metadata, allowed status values, non-empty evidence for passing
+rows, owner-approved exception notes for `Blocked`/`N/A` rows, and a final
+ready decision with no blocking failures.
 
 Evidence mapping:
 

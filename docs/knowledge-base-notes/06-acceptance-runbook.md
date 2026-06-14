@@ -42,9 +42,13 @@ pnpm --filter @readany/core exec vitest run \
   src/knowledge/vault-path-fidelity.test.ts \
   src/knowledge/editor-profile.test.ts \
   src/knowledge/editor-projection.test.ts \
+  src/knowledge/editor-draft.test.ts \
   src/knowledge/mobile-editor-bridge.test.ts \
   src/knowledge/rich-text-preservation.test.ts \
   src/knowledge/card-registry.test.ts \
+  src/knowledge/attachments.test.ts \
+  src/knowledge/internal-links.test.ts \
+  src/knowledge/source-links.test.ts \
   src/knowledge/proposals.test.ts \
   src/knowledge/compact-summary.test.ts \
   src/ai/__tests__/knowledge-context.test.ts \
@@ -67,7 +71,8 @@ Evidence mapping:
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
-| Mobile WebView messages, draft recovery, and error states are typed. | `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |
+| Draft recovery, mobile WebView messages, and error states are typed. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |
+| Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
 | AI reads knowledge safely and writes only through confirmation proposals. | `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts` |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-tools.test.ts` |
 | ReadAny cards preserve attrs, data, schema migrations, fallback rendering, and unknown versions. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts` |

@@ -13,6 +13,7 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
+  type KnowledgeProposalApplyResult,
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
   createKnowledgeWriteProposalPreview,
@@ -288,10 +289,17 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+type KnowledgeOpenDocumentSource = "ai_result" | "ai_relation" | "ai_proposal";
+type KnowledgeOpenDocumentTarget = {
+  id?: string;
+  bookId?: string;
+  title?: string;
+  path?: string;
+};
 
 function requestKnowledgeDocumentOpen(
-  document: KnowledgeToolResultDisplay["documents"][number],
-  source: "ai_result" | "ai_relation",
+  document: KnowledgeOpenDocumentTarget,
+  source: KnowledgeOpenDocumentSource,
 ): boolean {
   if (!document.id) return false;
   let handled = false;
@@ -709,6 +717,8 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
   const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal) || Boolean(knowledgeResult));
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
+  const [proposalApplyResult, setProposalApplyResult] =
+    useState<KnowledgeProposalApplyResult | null>(null);
 
   const getStatusIcon = () => {
     if (hasError) return <XCircle className="h-4 w-4 text-destructive" />;
@@ -733,6 +743,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   useEffect(() => {
     if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
+    setProposalApplyResult(null);
   }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
@@ -743,6 +754,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       if (proposal.action !== "link") {
         queueKnowledgeProposalSummaryMaintenance(result.documentId);
       }
+      setProposalApplyResult(result);
       setProposalApplyState("applied");
       toast.success(t("knowledgeProposal.applySuccess"));
     } catch (error) {
@@ -848,6 +860,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                     <KnowledgeProposalCard
                       proposal={proposal}
                       applyState={proposalApplyState}
+                      applyResult={proposalApplyResult}
                       onApply={handleApplyProposal}
                     />
                   ) : knowledgeResult ? (
@@ -874,10 +887,12 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 function KnowledgeProposalCard({
   proposal,
   applyState,
+  applyResult,
   onApply,
 }: {
   proposal: KnowledgeWriteProposal;
   applyState: KnowledgeProposalApplyState;
+  applyResult: KnowledgeProposalApplyResult | null;
   onApply: () => void;
 }) {
   const { t } = useTranslation();
@@ -926,6 +941,40 @@ function KnowledgeProposalCard({
           : "knowledgeProposal.types.knowledgeDocument",
       );
   const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
+  const openTarget = useMemo<KnowledgeOpenDocumentTarget | null>(() => {
+    if (applyState !== "applied" || !applyResult?.documentId) return null;
+    if (proposal.action === "create") {
+      return {
+        id: applyResult.documentId,
+        bookId: proposal.draft.bookId,
+        title: proposal.draft.title,
+        path: preview.targetPath ?? preview.visiblePath,
+      };
+    }
+    if (proposal.action === "update") {
+      return {
+        id: applyResult.documentId,
+        bookId: proposal.current?.bookId,
+        title: proposal.patch.title ?? proposal.current?.title,
+        path: preview.targetPath ?? proposal.current?.path ?? preview.visiblePath,
+      };
+    }
+    return {
+      id: applyResult.documentId,
+      bookId: proposal.source?.bookId,
+      title: proposal.source?.title,
+      path: proposal.source?.path ?? preview.currentPath,
+    };
+  }, [applyResult, applyState, preview, proposal]);
+  const handleOpenAppliedDocument = () => {
+    if (!openTarget) return;
+    if (requestKnowledgeDocumentOpen(openTarget, "ai_proposal")) return;
+    toast.info(
+      t("knowledgeToolResult.openUnavailable", {
+        defaultValue: "Open the book knowledge tab to view this document.",
+      }),
+    );
+  };
 
   return (
     <div className="overflow-hidden rounded-md border border-primary/20 bg-background">
@@ -1041,6 +1090,18 @@ function KnowledgeProposalCard({
         )}
 
         <div className="flex items-center justify-end gap-2">
+          {openTarget ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleOpenAppliedDocument}
+              className="h-8"
+            >
+              <FileText className="mr-1 h-3.5 w-3.5" />
+              {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"

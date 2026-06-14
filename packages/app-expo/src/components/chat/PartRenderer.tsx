@@ -21,6 +21,7 @@ import {
 import { getKnowledgeCardTemplates } from "@readany/core/db/database";
 import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
+  type KnowledgeProposalApplyResult,
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
   createKnowledgeWriteProposalPreview,
@@ -237,10 +238,17 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
 };
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+type KnowledgeOpenDocumentSource = "ai_result" | "ai_relation" | "ai_proposal";
+type KnowledgeOpenDocumentTarget = {
+  id?: string;
+  bookId?: string;
+  title?: string;
+  path?: string;
+};
 
 function requestKnowledgeDocumentOpen(
-  document: KnowledgeToolResultDisplay["documents"][number],
-  source: "ai_result" | "ai_relation",
+  document: KnowledgeOpenDocumentTarget,
+  source: KnowledgeOpenDocumentSource,
 ): boolean {
   if (!document.id) return false;
   let handled = false;
@@ -622,6 +630,8 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
   const [isOpen, setIsOpen] = useState(hasError || Boolean(proposal) || Boolean(knowledgeResult));
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
+  const [proposalApplyResult, setProposalApplyResult] =
+    useState<KnowledgeProposalApplyResult | null>(null);
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
@@ -629,6 +639,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   useEffect(() => {
     if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
+    setProposalApplyResult(null);
   }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
@@ -639,6 +650,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       if (proposal.action !== "link") {
         queueKnowledgeProposalSummaryMaintenance(result.documentId);
       }
+      setProposalApplyResult(result);
       setProposalApplyState("applied");
     } catch (error) {
       setProposalApplyState("idle");
@@ -740,6 +752,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                 <KnowledgeProposalCard
                   proposal={proposal}
                   applyState={proposalApplyState}
+                  applyResult={proposalApplyResult}
                   onApply={handleApplyProposal}
                 />
               ) : knowledgeResult ? (
@@ -766,10 +779,12 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 function KnowledgeProposalCard({
   proposal,
   applyState,
+  applyResult,
   onApply,
 }: {
   proposal: KnowledgeWriteProposal;
   applyState: KnowledgeProposalApplyState;
+  applyResult: KnowledgeProposalApplyResult | null;
   onApply: () => void;
 }) {
   const { t } = useTranslation();
@@ -821,6 +836,39 @@ function KnowledgeProposalCard({
         preview.action === "link" ? "知识关联" : "知识文档",
       );
   const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
+  const openTarget = useMemo<KnowledgeOpenDocumentTarget | null>(() => {
+    if (applyState !== "applied" || !applyResult?.documentId) return null;
+    if (proposal.action === "create") {
+      return {
+        id: applyResult.documentId,
+        bookId: proposal.draft.bookId,
+        title: proposal.draft.title,
+        path: preview.targetPath ?? preview.visiblePath,
+      };
+    }
+    if (proposal.action === "update") {
+      return {
+        id: applyResult.documentId,
+        bookId: proposal.current?.bookId,
+        title: proposal.patch.title ?? proposal.current?.title,
+        path: preview.targetPath ?? proposal.current?.path ?? preview.visiblePath,
+      };
+    }
+    return {
+      id: applyResult.documentId,
+      bookId: proposal.source?.bookId,
+      title: proposal.source?.title,
+      path: proposal.source?.path ?? preview.currentPath,
+    };
+  }, [applyResult, applyState, preview, proposal]);
+  const handleOpenAppliedDocument = () => {
+    if (!openTarget) return;
+    if (requestKnowledgeDocumentOpen(openTarget, "ai_proposal")) return;
+    Alert.alert(
+      t("knowledgeToolResult.openDocument", "打开文档"),
+      t("knowledgeToolResult.openUnavailable", "请先打开这本书的知识库页，再查看这个文档。"),
+    );
+  };
   const previewContent = preview.contentPreview
     ? preview.contentPreview.length > 520
       ? `${preview.contentPreview.slice(0, 520)}...`
@@ -930,20 +978,35 @@ function KnowledgeProposalCard({
           </View>
         ) : null}
 
-        <TouchableOpacity
-          style={[s.proposalApplyButton, applyState !== "idle" && s.proposalApplyButtonDisabled]}
-          onPress={onApply}
-          disabled={applyState !== "idle"}
-          activeOpacity={0.8}
-        >
-          <Text style={s.proposalApplyText}>
-            {applyState === "applying"
-              ? t("knowledgeProposal.applying", "应用中...")
-              : applyState === "applied"
-                ? t("knowledgeProposal.applied", "已应用")
-                : t("knowledgeProposal.apply", "应用到知识库")}
-          </Text>
-        </TouchableOpacity>
+        <View style={s.proposalActionRow}>
+          {openTarget ? (
+            <TouchableOpacity
+              style={s.proposalOpenButton}
+              onPress={handleOpenAppliedDocument}
+              activeOpacity={0.8}
+              accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+            >
+              <NotebookPenIcon size={13} color={colors.primary} />
+              <Text style={s.proposalOpenText}>
+                {t("knowledgeToolResult.open", "打开")}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            style={[s.proposalApplyButton, applyState !== "idle" && s.proposalApplyButtonDisabled]}
+            onPress={onApply}
+            disabled={applyState !== "idle"}
+            activeOpacity={0.8}
+          >
+            <Text style={s.proposalApplyText}>
+              {applyState === "applying"
+                ? t("knowledgeProposal.applying", "应用中...")
+                : applyState === "applied"
+                  ? t("knowledgeProposal.applied", "已应用")
+                  : t("knowledgeProposal.apply", "应用到知识库")}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -1582,6 +1645,30 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontSize: fs.xs,
       lineHeight: 16,
       marginVertical: 4,
+    },
+    proposalActionRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      alignItems: "center",
+      gap: 8,
+    },
+    proposalOpenButton: {
+      minHeight: 34,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.card,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    proposalOpenText: {
+      fontSize: fs.xs,
+      fontWeight: fw.semibold,
+      color: colors.primary,
     },
     proposalApplyButton: {
       alignSelf: "flex-end",

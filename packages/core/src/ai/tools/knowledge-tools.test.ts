@@ -691,7 +691,7 @@ describe("knowledge tools", () => {
       persisted: boolean;
       documentId: string;
       path: string;
-      document: { id: string; path: string; parentTitle?: string };
+      document: { id: string; path: string; parentTitle?: string; summary?: string };
       reason: string;
       sourceChars: number;
       summaryMd: string;
@@ -714,6 +714,7 @@ describe("knowledge tools", () => {
         id: "doc-long",
         parentTitle: "Long Notes",
         path: "Knowledge base / Long Notes / Compression Target",
+        summary: "## Durable memory\n- Read slowly.",
       },
       reason: "missing_summary",
       sourceChars: 4000,

@@ -711,13 +711,29 @@ export function createCompressKnowledgeDocumentSummaryTool(aiConfig: AIConfig): 
         aiConfig,
         compressionOptions,
       );
+      const projectedDocument =
+        result.persisted && result.state
+          ? {
+              ...document,
+              summaryMd: result.state.summaryMd,
+              summarySourceFingerprint: result.state.sourceFingerprint,
+              summarySourceUpdatedAt: result.state.sourceUpdatedAt,
+              summaryUpdatedAt: result.state.compressedAt,
+            }
+          : document;
       const pathContextDocuments = await getKnowledgeDocuments({
         ...(document.bookId ? { bookId: document.bookId } : {}),
         limit: 5000,
       });
-      const documentsById = createDocumentMap([...pathContextDocuments, document]);
+      const documentsById = createDocumentMap([...pathContextDocuments, projectedDocument]);
       const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
-      const summary = documentSummary(document, "", false, documentsById, childrenByParentId);
+      const summary = documentSummary(
+        projectedDocument,
+        "",
+        false,
+        documentsById,
+        childrenByParentId,
+      );
 
       return {
         success: result.status !== "failed",

@@ -315,11 +315,15 @@ describe("knowledge tools", () => {
       type: "standalone_note",
     })) as {
       bookId: string;
+      total: number;
+      showing: number;
       documents: Array<{ id: string; path: string; content?: string; snippet: string }>;
     };
 
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(result.bookId).toBe("book-1");
+    expect(result.total).toBe(1);
+    expect(result.showing).toBe(1);
     expect(result.documents[0]).toMatchObject({
       id: "doc-1",
       parentTitle: "Reading Journal",
@@ -366,8 +370,10 @@ describe("knowledge tools", () => {
     const result = (await tool.execute({
       reasoning: "Need high-level knowledge",
       limit: 2,
-    })) as { documents: Array<{ id: string; summary?: string }> };
+    })) as { total: number; showing: number; documents: Array<{ id: string; summary?: string }> };
 
+    expect(result.total).toBe(3);
+    expect(result.showing).toBe(2);
     expect(result.documents.map((document) => document.id)).toEqual(["home-1", "summary-1"]);
     expect(result.documents[1].summary).toBe("Durable memory about the whole book.");
   });
@@ -404,7 +410,10 @@ describe("knowledge tools", () => {
     const result = (await tool.execute({
       reasoning: "Need folder context",
       type: "folder",
+      limit: 1,
     })) as {
+      total: number;
+      showing: number;
       documents: Array<{
         id: string;
         isFolder: boolean;
@@ -413,6 +422,8 @@ describe("knowledge tools", () => {
       }>;
     };
 
+    expect(result.total).toBe(2);
+    expect(result.showing).toBe(1);
     expect(result.documents[0]).toMatchObject({
       id: "folder-1",
       isFolder: true,
@@ -931,9 +942,7 @@ describe("knowledge tools", () => {
     });
     const source = doc({ id: "doc-1", title: "Source Note", parentId: "folder-source" });
     const target = doc({ id: "doc-2", title: "Related Idea", parentId: "folder-target" });
-    dbMocks.getKnowledgeDocument
-      .mockResolvedValueOnce(source)
-      .mockResolvedValueOnce(target);
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(source).mockResolvedValueOnce(target);
     dbMocks.getKnowledgeDocuments.mockResolvedValue([sourceFolder, targetFolder, source, target]);
 
     const tool = createProposeKnowledgeLinkCreateTool();

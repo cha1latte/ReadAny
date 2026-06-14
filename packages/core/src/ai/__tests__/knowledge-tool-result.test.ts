@@ -39,7 +39,8 @@ describe("knowledge tool result display", () => {
   it("summarizes current-book knowledge reads", () => {
     const display = getKnowledgeToolResultDisplay("getBookKnowledge", {
       bookId: "book-1",
-      total: 1,
+      total: 3,
+      showing: 1,
       documents: [
         {
           id: "home-1",
@@ -52,6 +53,8 @@ describe("knowledge tool result display", () => {
 
     expect(display?.kind).toBe("bookKnowledge");
     expect(display?.bookId).toBe("book-1");
+    expect(display?.total).toBe(3);
+    expect(display?.showing).toBe(1);
     expect(display?.documents[0]?.snippet).toBe("Compact memory");
   });
 
@@ -97,7 +100,8 @@ describe("knowledge tool result display", () => {
         title: "Long Note",
         type: "standalone_note",
         path: "Knowledge base / Long Note",
-        content: "## Main Idea\n\n```ts\nconst hidden = true;\n```\nA durable note with **rich** context.",
+        content:
+          "## Main Idea\n\n```ts\nconst hidden = true;\n```\nA durable note with **rich** context.",
       },
     });
 
@@ -159,7 +163,8 @@ describe("knowledge tool result display", () => {
       toolName: "proposeKnowledgeDocumentUpdate",
       documentId: "missing-doc",
       error: "Knowledge document not found",
-      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
+      safeNoWriteHint:
+        "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
     expect(display?.failureCardAttrs).toMatchObject({
@@ -194,7 +199,8 @@ describe("knowledge tool result display", () => {
       status: "failed",
       documentId: "doc-1",
       error: "Model request failed",
-      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
+      safeNoWriteHint:
+        "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [
         {
           id: "doc-1",
@@ -338,7 +344,8 @@ describe("knowledge tool result display", () => {
       status: "failed",
       reason: "model_error",
       error: "Model request failed",
-      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
+      safeNoWriteHint:
+        "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
     expect(display?.failureCardMarkdown).toContain("> Reason: model_error");
@@ -353,7 +360,8 @@ describe("knowledge tool result display", () => {
       kind: "failure",
       toolName: "searchKnowledgeBase",
       error: "Tool searchKnowledgeBase is not available",
-      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
+      safeNoWriteHint:
+        "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
     expect(display?.failureCardMarkdown).toContain("> [!failure] searchKnowledgeBase");
@@ -368,7 +376,8 @@ describe("knowledge tool result display", () => {
       kind: "failure",
       toolName: "getBookKnowledge",
       error: "Bridge message failed",
-      safeNoWriteHint: "No knowledge document or link was saved or changed by this failed tool call.",
+      safeNoWriteHint:
+        "No knowledge document or link was saved or changed by this failed tool call.",
       documents: [],
     });
     expect(display?.failureCardAttrs?.cardType).toBe("aiToolFailure");

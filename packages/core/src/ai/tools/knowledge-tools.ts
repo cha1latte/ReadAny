@@ -12,8 +12,8 @@ import {
 } from "../../db/database";
 import {
   buildKnowledgeDocumentTree,
-  flattenKnowledgeDocumentTree,
   createKnowledgeDocumentSearchText,
+  flattenKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
   orderKnowledgeDocuments,
   validateKnowledgeDocumentParent,
@@ -505,23 +505,24 @@ export function createGetBookKnowledgeTool(bookId: string): ToolDefinition {
       const includeContent = args.includeContent === true;
       const limit = asPositiveLimit(args.limit, DEFAULT_RESULT_LIMIT);
       const pathContextDocuments = await getKnowledgeDocuments({ bookId, limit: 5000 });
-      const documents =
+      const matchingDocuments =
         type === "folder"
           ? flattenKnowledgeDocumentTree(buildKnowledgeDocumentTree(pathContextDocuments).roots)
               .map((node) => node.document)
               .filter((document) => document.type === "folder")
-              .slice(0, limit)
           : sortBookKnowledgeDocuments(
               type
                 ? pathContextDocuments.filter((document) => document.type === type)
                 : pathContextDocuments.filter((document) => document.type !== "folder"),
-            ).slice(0, limit);
+            );
+      const documents = matchingDocuments.slice(0, limit);
       const documentsById = createDocumentMap(pathContextDocuments);
       const childrenByParentId = createChildrenByParentId([...documentsById.values()]);
 
       return {
         bookId,
-        total: documents.length,
+        total: matchingDocuments.length,
+        showing: documents.length,
         documents: documents.map((document) =>
           documentSummary(document, "", includeContent, documentsById, childrenByParentId),
         ),

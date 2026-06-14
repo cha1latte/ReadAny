@@ -214,7 +214,9 @@ function asDocumentList(value: unknown): KnowledgeToolResultDocument[] {
   return value.map(asDocumentSummary).filter((item): item is KnowledgeToolResultDocument => !!item);
 }
 
-function contextDocumentsFromResult(result: Record<string, unknown>): KnowledgeToolResultDocument[] {
+function contextDocumentsFromResult(
+  result: Record<string, unknown>,
+): KnowledgeToolResultDocument[] {
   const documents: KnowledgeToolResultDocument[] = [];
   const seen = new Set<string>();
   const addDocument = (document: KnowledgeToolResultDocument | null) => {
@@ -301,6 +303,7 @@ export function getKnowledgeToolResultDisplay(
       kind: "bookKnowledge",
       toolName,
       total: asNumber(resultRecord.total),
+      showing: asNumber(resultRecord.showing),
       bookId: asString(resultRecord.bookId),
       documents: asDocumentList(resultRecord.documents),
     };

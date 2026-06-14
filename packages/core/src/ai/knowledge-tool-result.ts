@@ -139,13 +139,20 @@ function createFailureDisplay(
 
 function createFailureCardAttrs(display: KnowledgeToolResultDisplay): ReadAnyCardAttrs {
   const primaryDocument = display.documents[0];
+  const pathLines = display.documents
+    .map((document) => document.path || document.title)
+    .filter((path): path is string => Boolean(path?.trim()));
+  const uniquePathLines = [...new Set(pathLines)];
   const markdown = [
     display.toolName ? `Tool: ${display.toolName}` : undefined,
     display.status ? `Status: ${display.status}` : undefined,
     display.error ? `Error: ${display.error}` : undefined,
     display.reason ? `Reason: ${display.reason}` : undefined,
     display.documentId ? `Document: ${display.documentId}` : undefined,
-    primaryDocument?.path ? `Path: ${primaryDocument.path}` : undefined,
+    uniquePathLines.length === 1 ? `Path: ${uniquePathLines[0]}` : undefined,
+    uniquePathLines.length > 1
+      ? ["Paths:", ...uniquePathLines.map((path) => `- ${path}`)].join("\n")
+      : undefined,
     display.safeNoWriteHint,
   ]
     .filter(Boolean)
@@ -208,14 +215,25 @@ function asDocumentList(value: unknown): KnowledgeToolResultDocument[] {
 }
 
 function contextDocumentsFromResult(result: Record<string, unknown>): KnowledgeToolResultDocument[] {
-  const directDocument = asDocumentSummary(result.document);
-  if (directDocument) return [directDocument];
+  const documents: KnowledgeToolResultDocument[] = [];
+  const seen = new Set<string>();
+  const addDocument = (document: KnowledgeToolResultDocument | null) => {
+    if (!document) return;
+    const key = [document.id, document.path, document.title].filter(Boolean).join("|");
+    if (seen.has(key)) return;
+    seen.add(key);
+    documents.push(document);
+  };
 
-  const targetDocument = isRecord(result.target) ? asDocumentSummary(result.target) : null;
-  if (targetDocument) return [targetDocument];
+  addDocument(asDocumentSummary(result.document));
+  for (const document of asDocumentList(result.documents)) {
+    addDocument(document);
+  }
+  addDocument(isRecord(result.source) ? asDocumentSummary(result.source) : null);
+  addDocument(isRecord(result.current) ? asDocumentSummary(result.current) : null);
+  addDocument(isRecord(result.target) ? asDocumentSummary(result.target) : null);
 
-  const currentDocument = isRecord(result.current) ? asDocumentSummary(result.current) : null;
-  if (currentDocument) return [currentDocument];
+  if (documents.length > 0) return documents;
 
   const documentId = asString(result.documentId) || asString(result.fromDocumentId);
   const path =

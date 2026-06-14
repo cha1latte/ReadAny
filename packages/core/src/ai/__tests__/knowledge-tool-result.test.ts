@@ -242,6 +242,85 @@ describe("knowledge tool result display", () => {
     );
   });
 
+  it("keeps current and target knowledge paths visible on update failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("proposeKnowledgeDocumentUpdate", {
+      success: false,
+      status: "failed",
+      error: "Move target became invalid before confirmation",
+      documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        title: "Draft",
+        path: "Knowledge base / Inbox / Draft",
+      },
+      target: {
+        id: "doc-1",
+        title: "Draft",
+        path: "Knowledge base / Themes / Draft",
+      },
+    });
+
+    expect(display).toMatchObject({
+      kind: "failure",
+      toolName: "proposeKnowledgeDocumentUpdate",
+      documents: [
+        {
+          id: "doc-1",
+          title: "Draft",
+          path: "Knowledge base / Inbox / Draft",
+        },
+        {
+          id: "doc-1",
+          title: "Draft",
+          path: "Knowledge base / Themes / Draft",
+        },
+      ],
+    });
+    expect(display?.failureCardMarkdown).toContain("> Paths:");
+    expect(display?.failureCardMarkdown).toContain("> - Knowledge base / Inbox / Draft");
+    expect(display?.failureCardMarkdown).toContain("> - Knowledge base / Themes / Draft");
+  });
+
+  it("keeps source and target paths visible on link failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("proposeKnowledgeLinkCreate", {
+      success: false,
+      status: "failed",
+      error: "Target knowledge document no longer exists",
+      fromDocumentId: "source-doc",
+      source: {
+        id: "source-doc",
+        title: "Source note",
+        path: "Knowledge base / Sources / Source note",
+      },
+      target: {
+        id: "target-doc",
+        title: "Target note",
+        path: "Knowledge base / Themes / Target note",
+      },
+    });
+
+    expect(display).toMatchObject({
+      kind: "failure",
+      toolName: "proposeKnowledgeLinkCreate",
+      documentId: "source-doc",
+      documents: [
+        {
+          id: "source-doc",
+          title: "Source note",
+          path: "Knowledge base / Sources / Source note",
+        },
+        {
+          id: "target-doc",
+          title: "Target note",
+          path: "Knowledge base / Themes / Target note",
+        },
+      ],
+    });
+    expect(display?.failureCardMarkdown).toContain("> Paths:");
+    expect(display?.failureCardMarkdown).toContain("> - Knowledge base / Sources / Source note");
+    expect(display?.failureCardMarkdown).toContain("> - Knowledge base / Themes / Target note");
+  });
+
   it("parses JSON string failures from knowledge tools", () => {
     const display = getKnowledgeToolResultDisplay(
       "compressKnowledgeDocumentSummary",

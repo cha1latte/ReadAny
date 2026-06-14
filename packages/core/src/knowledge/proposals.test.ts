@@ -27,6 +27,7 @@ const { eventBus } = await import("../utils/event-bus");
 const {
   applyKnowledgeWriteProposal,
   createKnowledgeWriteProposalPreview,
+  getKnowledgeProposalApplyErrorDetails,
   getKnowledgeWriteProposal,
 } = await import("./proposals");
 
@@ -530,6 +531,60 @@ describe("knowledge write proposals", () => {
       "Invalid knowledge document update: stale_document",
     );
     expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("exposes translatable apply error details without changing legacy messages", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        updatedAt: 1000,
+      },
+      patch: {
+        title: "Outdated AI Patch",
+      },
+      changedFields: ["title"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "doc-1", title: "User changed this", updatedAt: 2000 }),
+    );
+
+    let caught: unknown;
+    try {
+      await applyKnowledgeWriteProposal(proposal);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("Invalid knowledge document update: stale_document");
+    expect(getKnowledgeProposalApplyErrorDetails(caught)).toEqual({
+      scope: "update",
+      reason: "stale_document",
+      message: "Invalid knowledge document update: stale_document",
+      i18nKey: "knowledgeProposal.errors.update.stale_document",
+    });
+  });
+
+  it("parses legacy apply error messages for UI display", () => {
+    expect(
+      getKnowledgeProposalApplyErrorDetails(
+        new Error("Invalid knowledge document title: duplicate_sibling_title"),
+      ),
+    ).toEqual({
+      scope: "title",
+      reason: "duplicate_sibling_title",
+      message: "Invalid knowledge document title: duplicate_sibling_title",
+      i18nKey: "knowledgeProposal.errors.title.duplicate_sibling_title",
+    });
+    expect(getKnowledgeProposalApplyErrorDetails(new Error("Network failed"))).toBeNull();
   });
 
   it("syncs internal document links after applying create proposals", async () => {

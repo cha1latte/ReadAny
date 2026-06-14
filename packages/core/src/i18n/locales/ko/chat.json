@@ -163,6 +163,30 @@
     "applyFailed": "지식 제안을 적용하지 못했어요",
     "retry": "다시 시도",
     "applyFailedSafeHint": "아무 내용도 저장되지 않았어요. 문서를 새로고침하거나 확인한 뒤 다시 시도해 주세요.",
+    "errors": {
+      "parent": {
+        "book_home_locked": "책 홈 문서는 폴더 안으로 이동할 수 없어요.",
+        "missing_parent": "대상 폴더가 더 이상 없어요. 지식 화면을 새로고침한 뒤 다시 시도해 주세요.",
+        "parent_not_folder": "선택한 대상이 폴더가 아니에요. 폴더를 선택한 뒤 다시 시도해 주세요.",
+        "book_mismatch": "대상 위치가 다른 책의 지식 보관함에 있어요. 같은 책의 폴더를 선택해 주세요.",
+        "missing_document": "이 문서가 더 이상 없어요. 지식 화면을 새로고침한 뒤 다시 시도해 주세요.",
+        "descendant_parent": "폴더를 자기 하위 폴더 안으로 이동할 수 없어요.",
+        "invalid_parent": "대상 폴더가 올바르지 않아요. 지식 화면을 새로고침한 뒤 다시 시도해 주세요."
+      },
+      "title": {
+        "duplicate_sibling_title": "그 폴더에 같은 제목의 문서가 이미 있어요. 먼저 둘 중 하나의 이름을 바꿔 주세요."
+      },
+      "create": {
+        "create_id_conflict": "이 초안이 이미 존재하는 다른 문서를 가리켜요. 제안을 새로고침한 뒤 적용해 주세요."
+      },
+      "update": {
+        "stale_document": "제안이 만들어진 뒤 이 문서가 변경됐어요. 최신 버전을 확인하거나 새로고침한 뒤 적용해 주세요."
+      },
+      "link": {
+        "missing_source_document": "원본 문서가 더 이상 없어요. 지식 화면을 새로고침한 뒤 다시 시도해 주세요.",
+        "missing_target_document": "대상 문서가 더 이상 없어요. 지식 화면을 새로고침한 뒤 다시 시도해 주세요."
+      }
+    },
     "fields": {
       "parentFolder": "폴더",
       "title": "제목",

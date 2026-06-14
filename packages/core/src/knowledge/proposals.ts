@@ -126,6 +126,49 @@ export interface KnowledgeWriteProposalPreviewOptions {
   cardTemplates?: KnowledgeCardTemplate[];
 }
 
+export type KnowledgeProposalApplyErrorScope =
+  | "parent"
+  | "title"
+  | "create"
+  | "update"
+  | "link";
+
+export interface KnowledgeProposalApplyErrorDetails {
+  scope: KnowledgeProposalApplyErrorScope;
+  reason: string;
+  message: string;
+  i18nKey: string;
+}
+
+const APPLY_ERROR_PREFIX: Record<KnowledgeProposalApplyErrorScope, string> = {
+  parent: "Invalid knowledge document parent",
+  title: "Invalid knowledge document title",
+  create: "Invalid knowledge document create",
+  update: "Invalid knowledge document update",
+  link: "Invalid knowledge link",
+};
+
+const APPLY_ERROR_SCOPE_BY_PREFIX = new Map<string, KnowledgeProposalApplyErrorScope>(
+  Object.entries(APPLY_ERROR_PREFIX).map(([scope, prefix]) => [
+    prefix,
+    scope as KnowledgeProposalApplyErrorScope,
+  ]),
+);
+
+export class KnowledgeProposalApplyError extends Error {
+  readonly scope: KnowledgeProposalApplyErrorScope;
+  readonly reason: string;
+  readonly i18nKey: string;
+
+  constructor(scope: KnowledgeProposalApplyErrorScope, reason: string) {
+    super(`${APPLY_ERROR_PREFIX[scope]}: ${reason}`);
+    this.name = "KnowledgeProposalApplyError";
+    this.scope = scope;
+    this.reason = reason;
+    this.i18nKey = `knowledgeProposal.errors.${scope}.${reason}`;
+  }
+}
+
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "book_home",
   "folder",
@@ -220,24 +263,60 @@ function sameOptionalString(left: string | undefined, right: string | undefined)
   return (left || undefined) === (right || undefined);
 }
 
+function createInvalidProposalApplyError(
+  scope: KnowledgeProposalApplyErrorScope,
+  reason: string,
+): KnowledgeProposalApplyError {
+  return new KnowledgeProposalApplyError(scope, reason);
+}
+
+export function getKnowledgeProposalApplyErrorDetails(
+  error: unknown,
+): KnowledgeProposalApplyErrorDetails | null {
+  if (error instanceof KnowledgeProposalApplyError) {
+    return {
+      scope: error.scope,
+      reason: error.reason,
+      message: error.message,
+      i18nKey: error.i18nKey,
+    };
+  }
+
+  if (error instanceof Error) {
+    const match = error.message.match(/^(.+): ([a-z0-9_]+)$/);
+    if (!match) return null;
+    const scope = APPLY_ERROR_SCOPE_BY_PREFIX.get(match[1]);
+    if (!scope) return null;
+    const reason = match[2];
+    return {
+      scope,
+      reason,
+      message: error.message,
+      i18nKey: `knowledgeProposal.errors.${scope}.${reason}`,
+    };
+  }
+
+  return null;
+}
+
 function createInvalidParentError(reason: string): Error {
-  return new Error(`Invalid knowledge document parent: ${reason}`);
+  return createInvalidProposalApplyError("parent", reason);
 }
 
 function createInvalidTitleError(reason: string): Error {
-  return new Error(`Invalid knowledge document title: ${reason}`);
+  return createInvalidProposalApplyError("title", reason);
 }
 
 function createInvalidCreateError(reason: string): Error {
-  return new Error(`Invalid knowledge document create: ${reason}`);
+  return createInvalidProposalApplyError("create", reason);
 }
 
 function createInvalidUpdateError(reason: string): Error {
-  return new Error(`Invalid knowledge document update: ${reason}`);
+  return createInvalidProposalApplyError("update", reason);
 }
 
 function createInvalidLinkError(reason: string): Error {
-  return new Error(`Invalid knowledge link: ${reason}`);
+  return createInvalidProposalApplyError("link", reason);
 }
 
 function emitKnowledgeChanged(data: {

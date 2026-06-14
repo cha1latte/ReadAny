@@ -163,6 +163,30 @@
     "applyFailed": "Impossible d'appliquer la proposition",
     "retry": "Réessayer",
     "applyFailedSafeHint": "Rien n'a été écrit. Actualisez ou vérifiez le document, puis réessayez.",
+    "errors": {
+      "parent": {
+        "book_home_locked": "Les documents d'accueil du livre ne peuvent pas être déplacés dans un dossier.",
+        "missing_parent": "Le dossier de destination n'existe plus. Actualisez la vue connaissances, puis réessayez.",
+        "parent_not_folder": "La destination sélectionnée n'est pas un dossier. Choisissez un dossier, puis réessayez.",
+        "book_mismatch": "La destination appartient au coffre d'un autre livre. Choisissez un dossier du même livre.",
+        "missing_document": "Ce document n'existe plus. Actualisez la vue connaissances, puis réessayez.",
+        "descendant_parent": "Un dossier ne peut pas être déplacé dans l'un de ses propres sous-dossiers.",
+        "invalid_parent": "Le dossier de destination n'est pas valide. Actualisez la vue connaissances, puis réessayez."
+      },
+      "title": {
+        "duplicate_sibling_title": "Un document portant le même titre existe déjà dans ce dossier. Renommez d'abord l'un des deux."
+      },
+      "create": {
+        "create_id_conflict": "Ce brouillon pointe vers un autre document existant. Actualisez la proposition avant de l'appliquer."
+      },
+      "update": {
+        "stale_document": "Ce document a changé après la création de la proposition. Actualisez ou vérifiez la dernière version avant de l'appliquer."
+      },
+      "link": {
+        "missing_source_document": "Le document source n'existe plus. Actualisez la vue connaissances, puis réessayez.",
+        "missing_target_document": "Le document cible n'existe plus. Actualisez la vue connaissances, puis réessayez."
+      }
+    },
     "fields": {
       "parentFolder": "Dossier",
       "title": "Titre",

@@ -142,7 +142,8 @@ The desktop and mobile chat renderer contract checks scan the chat renderer
 sources for AI knowledge proposal/result/failure cards, visible vault paths,
 current-workspace document open actions from result and applied proposal cards,
 safe no-write hints, confirmation-required apply behavior, and persistent
-proposal-apply failure states with retry affordances.
+proposal-apply failure states with retry affordances and localized conflict
+reasons instead of raw internal error codes.
 The desktop and mobile knowledge workspace contract checks scan the runtime UI
 sources for the vault tree, root/folder browser, document editor, breadcrumb/path,
 search, create target, import review, and keyboard-safe mobile editor entry

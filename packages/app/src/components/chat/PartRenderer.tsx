@@ -17,6 +17,7 @@ import {
   type KnowledgeWriteProposal,
   applyKnowledgeWriteProposal,
   createKnowledgeWriteProposalPreview,
+  getKnowledgeProposalApplyErrorDetails,
   getKnowledgeWriteProposal,
 } from "@readany/core/knowledge/proposals";
 import type {
@@ -761,7 +762,12 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       setProposalApplyState("applied");
       toast.success(t("knowledgeProposal.applySuccess"));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("knowledgeProposal.applyFailed");
+      const details = getKnowledgeProposalApplyErrorDetails(error);
+      const message = details
+        ? t(details.i18nKey, { defaultValue: details.message })
+        : error instanceof Error
+          ? error.message
+          : t("knowledgeProposal.applyFailed");
       setProposalApplyError(message);
       setProposalApplyState("failed");
       console.error("[KnowledgeProposal] Failed to apply proposal:", error);

@@ -163,6 +163,30 @@
     "applyFailed": "No se pudo aplicar la propuesta",
     "retry": "Reintentar",
     "applyFailedSafeHint": "No se escribió nada. Actualiza o revisa el documento y vuelve a intentarlo.",
+    "errors": {
+      "parent": {
+        "book_home_locked": "Los documentos de inicio del libro no se pueden mover a una carpeta.",
+        "missing_parent": "La carpeta de destino ya no existe. Actualiza la vista de conocimiento y vuelve a intentarlo.",
+        "parent_not_folder": "El destino seleccionado no es una carpeta. Elige una carpeta y vuelve a intentarlo.",
+        "book_mismatch": "El destino pertenece a la base de otro libro. Elige una carpeta del mismo libro.",
+        "missing_document": "El documento ya no existe. Actualiza la vista de conocimiento y vuelve a intentarlo.",
+        "descendant_parent": "Una carpeta no se puede mover dentro de una de sus propias subcarpetas.",
+        "invalid_parent": "La carpeta de destino no es válida. Actualiza la vista de conocimiento y vuelve a intentarlo."
+      },
+      "title": {
+        "duplicate_sibling_title": "Ya existe un documento con el mismo título en esa carpeta. Cambia el nombre de uno primero."
+      },
+      "create": {
+        "create_id_conflict": "Este borrador apunta a otro documento existente. Actualiza la propuesta antes de aplicarla."
+      },
+      "update": {
+        "stale_document": "Este documento cambió después de crear la propuesta. Actualiza o revisa la última versión antes de aplicarla."
+      },
+      "link": {
+        "missing_source_document": "El documento de origen ya no existe. Actualiza la vista de conocimiento y vuelve a intentarlo.",
+        "missing_target_document": "El documento de destino ya no existe. Actualiza la vista de conocimiento y vuelve a intentarlo."
+      }
+    },
     "fields": {
       "parentFolder": "Carpeta",
       "title": "Título",

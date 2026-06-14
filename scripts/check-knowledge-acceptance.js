@@ -273,6 +273,7 @@ function verifyMobileAIKnowledgeChatContract() {
     "knowledgeProposal.failedBadge",
     "knowledgeProposal.applyFailedSafeHint",
     "knowledgeProposal.retry",
+    "getKnowledgeProposalApplyErrorDetails",
     "proposalApplyButton",
     "preview.visiblePath",
     "preview.hasPathChange",
@@ -303,6 +304,7 @@ function verifyDesktopAIKnowledgeChatContract() {
     "knowledgeProposal.failedBadge",
     "knowledgeProposal.applyFailedSafeHint",
     "knowledgeProposal.retry",
+    "getKnowledgeProposalApplyErrorDetails",
     "preview.visiblePath",
     "preview.hasPathChange",
   ]);

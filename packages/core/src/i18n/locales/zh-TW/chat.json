@@ -163,6 +163,30 @@
     "applyFailed": "套用知識庫提案失敗",
     "retry": "重試",
     "applyFailedSafeHint": "沒有寫入任何內容。請重新整理或檢查文件後再試一次。",
+    "errors": {
+      "parent": {
+        "book_home_locked": "書籍首頁不能移動到資料夾裡。",
+        "missing_parent": "目標資料夾已不存在。請重新整理知識庫後再試一次。",
+        "parent_not_folder": "選擇的目標不是資料夾。請選擇資料夾後再試。",
+        "book_mismatch": "目標位置屬於另一本書的知識庫。請選擇同一本書裡的資料夾。",
+        "missing_document": "這份文件已不存在。請重新整理知識庫後再試一次。",
+        "descendant_parent": "資料夾不能移動到自己的子資料夾裡。",
+        "invalid_parent": "目標資料夾無效。請重新整理知識庫後再試一次。"
+      },
+      "title": {
+        "duplicate_sibling_title": "這個資料夾裡已經有同名文件。請先重新命名其中一份。"
+      },
+      "create": {
+        "create_id_conflict": "這份草稿指向另一份已存在的文件。請重新整理提案後再套用。"
+      },
+      "update": {
+        "stale_document": "提案建立後，這份文件已被修改。請重新整理或檢查最新版本後再套用。"
+      },
+      "link": {
+        "missing_source_document": "來源文件已不存在。請重新整理知識庫後再試一次。",
+        "missing_target_document": "目標文件已不存在。請重新整理知識庫後再試一次。"
+      }
+    },
     "fields": {
       "parentFolder": "所在資料夾",
       "title": "標題",

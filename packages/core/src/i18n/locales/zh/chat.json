@@ -163,6 +163,30 @@
     "applyFailed": "应用知识库提案失败",
     "retry": "重试",
     "applyFailedSafeHint": "没有写入任何内容。请刷新或检查文档后再试一次。",
+    "errors": {
+      "parent": {
+        "book_home_locked": "书籍主页不能移动到文件夹里。",
+        "missing_parent": "目标文件夹已经不存在了。请刷新知识库后再试一次。",
+        "parent_not_folder": "选择的目标不是文件夹。请选择一个文件夹后再试。",
+        "book_mismatch": "目标位置属于另一本书的知识库。请选择同一本书里的文件夹。",
+        "missing_document": "这个文档已经不存在了。请刷新知识库后再试一次。",
+        "descendant_parent": "文件夹不能移动到自己的子文件夹里。",
+        "invalid_parent": "目标文件夹无效。请刷新知识库后再试一次。"
+      },
+      "title": {
+        "duplicate_sibling_title": "这个文件夹里已经有同名文档了。请先重命名其中一个。"
+      },
+      "create": {
+        "create_id_conflict": "这个草稿指向了另一个已存在的文档。请刷新提案后再应用。"
+      },
+      "update": {
+        "stale_document": "提案创建后，这个文档已经被修改过了。请刷新或检查最新版本后再应用。"
+      },
+      "link": {
+        "missing_source_document": "来源文档已经不存在了。请刷新知识库后再试一次。",
+        "missing_target_document": "目标文档已经不存在了。请刷新知识库后再试一次。"
+      }
+    },
     "fields": {
       "parentFolder": "所在文件夹",
       "title": "标题",

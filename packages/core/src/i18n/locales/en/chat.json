@@ -163,6 +163,30 @@
     "applyFailed": "Failed to apply knowledge proposal",
     "retry": "Try again",
     "applyFailedSafeHint": "Nothing was written. Refresh or review the document, then try again.",
+    "errors": {
+      "parent": {
+        "book_home_locked": "Book home documents cannot be moved into a folder.",
+        "missing_parent": "The destination folder no longer exists. Refresh the knowledge view and try again.",
+        "parent_not_folder": "The selected destination is not a folder. Choose a folder and try again.",
+        "book_mismatch": "The destination belongs to a different book vault. Choose a folder in the same book.",
+        "missing_document": "The document no longer exists. Refresh the knowledge view and try again.",
+        "descendant_parent": "A folder cannot be moved inside one of its own child folders.",
+        "invalid_parent": "The destination folder is invalid. Refresh the knowledge view and try again."
+      },
+      "title": {
+        "duplicate_sibling_title": "A document with the same title already exists in that folder. Rename one of them first."
+      },
+      "create": {
+        "create_id_conflict": "This draft points to an existing different document. Refresh the proposal before applying it."
+      },
+      "update": {
+        "stale_document": "This document changed after the proposal was created. Refresh or review the latest version before applying it."
+      },
+      "link": {
+        "missing_source_document": "The source document no longer exists. Refresh the knowledge view and try again.",
+        "missing_target_document": "The target document no longer exists. Refresh the knowledge view and try again."
+      }
+    },
     "fields": {
       "parentFolder": "Folder",
       "title": "Title",

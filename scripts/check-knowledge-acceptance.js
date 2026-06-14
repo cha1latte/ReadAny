@@ -31,6 +31,7 @@ const knowledgeTests = [
   "src/knowledge/source-links.test.ts",
   "src/knowledge/proposals.test.ts",
   "src/knowledge/compact-summary.test.ts",
+  "src/i18n/locales.test.ts",
   "src/ai/__tests__/system-prompt.test.ts",
   "src/ai/__tests__/streaming.test.ts",
   "src/ai/__tests__/reading-agent-tools.test.ts",

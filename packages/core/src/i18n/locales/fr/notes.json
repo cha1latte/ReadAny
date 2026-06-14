@@ -296,6 +296,9 @@
     "knowledgeCustomCardBodyPlaceholder": "Question :\nRéponse :\nSource :",
     "knowledgeCustomCardCreate": "Créer la carte",
     "knowledgeCustomCardCreateFailed": "Impossible de créer la carte personnalisée",
+    "knowledgeCustomCardDisable": "Supprimer la carte personnalisée",
+    "knowledgeCustomCardDisableConfirm": "Supprimer \"{{name}}\" du menu d'insertion ? Les cartes déjà présentes dans les documents resteront inchangées.",
+    "knowledgeCustomCardDisableFailed": "Impossible de supprimer la carte personnalisée",
     "knowledgeCards": {
       "bookQuote": "Carte de citation",
       "callout": "Encadré",

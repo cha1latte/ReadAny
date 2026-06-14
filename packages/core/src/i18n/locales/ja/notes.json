@@ -296,6 +296,9 @@
     "knowledgeCustomCardBodyPlaceholder": "質問：\n回答：\n出典：",
     "knowledgeCustomCardCreate": "カードを作成",
     "knowledgeCustomCardCreateFailed": "カスタムカードを作成できませんでした",
+    "knowledgeCustomCardDisable": "カスタムカードを削除",
+    "knowledgeCustomCardDisableConfirm": "「{{name}}」を挿入メニューから削除しますか？文書内の既存カードは変更されません。",
+    "knowledgeCustomCardDisableFailed": "カスタムカードを削除できませんでした",
     "knowledgeCards": {
       "bookQuote": "引用カード",
       "callout": "コールアウト",

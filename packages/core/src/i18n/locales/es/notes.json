@@ -296,6 +296,9 @@
     "knowledgeCustomCardBodyPlaceholder": "Pregunta:\nRespuesta:\nFuente:",
     "knowledgeCustomCardCreate": "Crear tarjeta",
     "knowledgeCustomCardCreateFailed": "No se pudo crear la tarjeta personalizada",
+    "knowledgeCustomCardDisable": "Eliminar tarjeta personalizada",
+    "knowledgeCustomCardDisableConfirm": "¿Eliminar \"{{name}}\" del menú de inserción? Las tarjetas existentes en los documentos no cambiarán.",
+    "knowledgeCustomCardDisableFailed": "No se pudo eliminar la tarjeta personalizada",
     "knowledgeCards": {
       "bookQuote": "Tarjeta de cita",
       "callout": "Aviso",

@@ -296,6 +296,9 @@
     "knowledgeCustomCardBodyPlaceholder": "問題：\n回答：\n來源：",
     "knowledgeCustomCardCreate": "建立卡片",
     "knowledgeCustomCardCreateFailed": "建立自訂卡片失敗",
+    "knowledgeCustomCardDisable": "移除自訂卡片",
+    "knowledgeCustomCardDisableConfirm": "從插入選單移除「{{name}}」？已經插入到文件裡的卡片不會變更。",
+    "knowledgeCustomCardDisableFailed": "移除自訂卡片失敗",
     "knowledgeCards": {
       "bookQuote": "書摘卡",
       "callout": "提示卡",

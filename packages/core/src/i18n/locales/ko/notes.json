@@ -296,6 +296,9 @@
     "knowledgeCustomCardBodyPlaceholder": "질문:\n답변:\n출처:",
     "knowledgeCustomCardCreate": "카드 만들기",
     "knowledgeCustomCardCreateFailed": "사용자 지정 카드를 만들지 못했어요",
+    "knowledgeCustomCardDisable": "사용자 지정 카드 제거",
+    "knowledgeCustomCardDisableConfirm": "삽입 메뉴에서 \"{{name}}\" 카드를 제거할까요? 문서에 이미 삽입된 카드는 그대로 유지됩니다.",
+    "knowledgeCustomCardDisableFailed": "사용자 지정 카드를 제거하지 못했어요",
     "knowledgeCards": {
       "bookQuote": "인용 카드",
       "callout": "콜아웃",

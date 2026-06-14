@@ -939,6 +939,25 @@ export function createProposeKnowledgeDocumentUpdateTool(): ToolDefinition {
         limit: 5000,
       });
       const currentDocumentsById = createDocumentMap([...pathContextDocuments, document]);
+      const isParentPatch = Object.prototype.hasOwnProperty.call(patch, "parentId");
+      if (changedFields.includes("title") || isParentPatch) {
+        const targetTitle = patch.title ?? document.title;
+        const targetParentId = isParentPatch ? patch.parentId : document.parentId;
+        const titleValidation = validateKnowledgeDocumentSiblingTitle({
+          documentId: document.id,
+          bookId: document.bookId,
+          parentId: targetParentId,
+          title: targetTitle,
+          documents: [...currentDocumentsById.values()],
+        });
+        if (!titleValidation.ok) {
+          return {
+            success: false,
+            error: titleValidationError(titleValidation.reason),
+            documentId,
+          };
+        }
+      }
       const currentChildrenByParentId = createChildrenByParentId([
         ...currentDocumentsById.values(),
       ]);

@@ -930,6 +930,97 @@ describe("knowledge tools", () => {
     });
   });
 
+  it("rejects update patches that would rename a document to a sibling title", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const source = doc({
+      id: "doc-1",
+      type: "standalone_note",
+      title: "Ritual Notes",
+      parentId: "folder-1",
+    });
+    const sibling = doc({
+      id: "doc-2",
+      type: "standalone_note",
+      title: "Shared Attention",
+      parentId: "folder-1",
+    });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, source, sibling]);
+
+    const tool = createProposeKnowledgeDocumentUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "Rename the note",
+      documentId: "doc-1",
+      title: "Shared Attention",
+    })) as { success: boolean; error: string; documentId: string };
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid title: duplicate_sibling_title",
+      documentId: "doc-1",
+    });
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects update patches that would move a document onto a duplicate sibling path", async () => {
+    const sourceFolder = doc({
+      id: "folder-source",
+      type: "folder",
+      title: "Source Folder",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const targetFolder = doc({
+      id: "folder-target",
+      type: "folder",
+      title: "Target Folder",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const source = doc({
+      id: "doc-1",
+      type: "standalone_note",
+      title: "Thread Notes",
+      parentId: "folder-source",
+    });
+    const targetSibling = doc({
+      id: "doc-2",
+      type: "standalone_note",
+      title: "Thread Notes",
+      parentId: "folder-target",
+    });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      sourceFolder,
+      targetFolder,
+      source,
+      targetSibling,
+    ]);
+
+    const tool = createProposeKnowledgeDocumentUpdateTool();
+    const result = (await tool.execute({
+      reasoning: "Move the note",
+      documentId: "doc-1",
+      parentId: "folder-target",
+    })) as { success: boolean; error: string; documentId: string };
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid title: duplicate_sibling_title",
+      documentId: "doc-1",
+    });
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
   it("does not create an update proposal when nothing changes", async () => {
     dbMocks.getKnowledgeDocument.mockResolvedValue(doc());
 

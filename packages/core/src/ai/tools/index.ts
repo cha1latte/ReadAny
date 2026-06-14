@@ -9,7 +9,8 @@
  * - Library Tools: listBooks, searchAllHighlights, searchAllNotes, readingStats, classifyBooks,
  *   tagBooks, manageBookTags, updateBookMetadata, manageBookGroups
  * - Knowledge Tools: searchKnowledgeBase, getKnowledgeDocument, getBookKnowledge,
- *   proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, proposeKnowledgeDocumentTagsUpdate,
+ *   proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate,
+ *   proposeKnowledgeDocumentTagsUpdate, proposeKnowledgeLinkCreate,
  *   compressKnowledgeDocumentSummary
  * - Skill Tools: getSkills, skillToTool
  * - Mindmap Tools: mindmap

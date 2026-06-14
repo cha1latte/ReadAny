@@ -78,6 +78,28 @@ describe("buildSystemPrompt citations", () => {
     expect(prompt).toContain("knowledge document, tag, or link");
   });
 
+  it("lists knowledge summary compression only when that tool is available", () => {
+    const baseContext = {
+      book: makeBook(),
+      semanticContext: null,
+      enabledSkills: [],
+      isVectorized: false,
+      userLanguage: "en",
+    };
+
+    const promptWithoutCompression = buildSystemPrompt(baseContext);
+    expect(promptWithoutCompression).not.toContain("compressKnowledgeDocumentSummary");
+    expect(promptWithoutCompression).not.toContain("Knowledge memory safety");
+
+    const promptWithCompression = buildSystemPrompt({
+      ...baseContext,
+      canCompressKnowledgeSummary: true,
+    });
+    expect(promptWithCompression).toContain("compressKnowledgeDocumentSummary");
+    expect(promptWithCompression).toContain("Knowledge memory safety");
+    expect(promptWithCompression).toContain("must never be described as editing");
+  });
+
   it("allows fallback citations only when a returned CFI can be validated", () => {
     const prompt = buildSystemPrompt({
       book: makeBook(),

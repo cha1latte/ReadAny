@@ -143,6 +143,38 @@ describe("streamReadingAgent tool registration", () => {
     expect(toolNames).toContain("addCitation");
   });
 
+  it("keeps knowledge summary compression in both the prompt and registered tools", async () => {
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          // no-op stream
+        },
+      })),
+    });
+
+    for await (const _event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: false,
+        getAvailableTools,
+      },
+      "帮我整理这本书的知识库",
+    )) {
+      // drain stream
+    }
+
+    const call = createReactAgentMock.mock.calls[createReactAgentMock.mock.calls.length - 1]?.[0];
+    const toolNames = (call.tools as ToolDefinition[]).map((tool) => tool.name);
+
+    expect(toolNames).toContain("compressKnowledgeDocumentSummary");
+    expect(call.prompt).toContain("- **compressKnowledgeDocumentSummary**");
+    expect(call.prompt).toContain("Knowledge memory safety");
+  });
+
   it("keeps tool-call turn text out of the final response before addCitation completes", async () => {
     createReactAgentMock.mockReturnValue({
       streamEvents: vi.fn(() => ({

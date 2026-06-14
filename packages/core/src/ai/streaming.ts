@@ -96,6 +96,7 @@ export class StreamingChat {
         enabledSkills: options.enabledSkills,
         isVectorized: options.isVectorized,
         userLanguage: i18n.language || options.book?.meta.language || "en",
+        canCompressKnowledgeSummary: true,
         memorySummary: options.thread.memorySummary,
         annotationContext,
         knowledgeContext,

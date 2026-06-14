@@ -169,6 +169,7 @@ export async function* streamReadingAgent(
       enabledSkills,
       isVectorized,
       userLanguage: i18n.language || "en",
+      canCompressKnowledgeSummary: true,
       spoilerFree,
       memorySummary,
       annotationContext,

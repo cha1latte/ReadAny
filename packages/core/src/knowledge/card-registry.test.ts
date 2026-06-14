@@ -919,6 +919,88 @@ describe("ReadAny card registry", () => {
     });
   });
 
+  it("adds custom card field rename migrations when template field keys change", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-reading-question",
+      name: "Reading Question",
+      markdown: "Question:\nAnswer:",
+      fields: [
+        { key: "question", label: "Question", type: "text" },
+        {
+          key: "answer",
+          label: "Answer",
+          type: "multiline",
+          visibleWhen: { fieldKey: "question", operator: "notEmpty" },
+        },
+      ],
+      now: 123,
+    });
+
+    const updated = updateCustomReadAnyCardTemplate({
+      template,
+      name: "Reading Prompt",
+      markdown: "Prompt:\nAnswer:",
+      fields: [
+        { key: "prompt", label: "Prompt", type: "text" },
+        {
+          key: "answer",
+          label: "Answer",
+          type: "multiline",
+          visibleWhen: { fieldKey: "question", operator: "notEmpty" },
+        },
+      ],
+      now: 456,
+    });
+
+    expect(updated.schemaJson).toMatchObject({
+      fields: [
+        { key: "prompt", label: "Prompt", type: "text" },
+        {
+          key: "answer",
+          label: "Answer",
+          type: "multiline",
+          visibleWhen: { fieldKey: "prompt", operator: "notEmpty" },
+        },
+      ],
+      migrations: [
+        {
+          fromVersion: 1,
+          toVersion: 2,
+          dataRenames: { question: "prompt" },
+        },
+      ],
+    });
+
+    const migrated = upgradeReadAnyCardAttrsWithTemplates(
+      {
+        cardType: "custom:template-reading-question",
+        version: 1,
+        title: "Old prompt card",
+        data: {
+          question: "What changed?",
+          answer: "The template field key changed.",
+        },
+      },
+      [updated],
+    );
+
+    expect(migrated).toMatchObject({
+      version: 2,
+      data: {
+        prompt: "What changed?",
+        answer: "The template field key changed.",
+      },
+    });
+    const model = createReadAnyCardReadOnlyModel(migrated, {
+      body: "",
+      cardTemplates: [updated],
+    });
+    expect(model.structuredFields).toEqual([
+      { key: "prompt", label: "Prompt", value: "What changed?" },
+      { key: "answer", label: "Answer", value: "The template field key changed." },
+    ]);
+  });
+
   it("migrates custom card attrs to newer synced templates without overwriting user content", () => {
     const template = updateCustomReadAnyCardTemplate({
       template: {

@@ -723,6 +723,56 @@ function applyTemplateMigrations(
   return nextAttrs;
 }
 
+function createTemplateFieldRenameMap(
+  previousFields: ReadAnyCardTemplateField[],
+  nextFields: ReadAnyCardTemplateField[],
+): Record<string, string> | undefined {
+  const renames: Record<string, string> = {};
+  const count = Math.min(previousFields.length, nextFields.length);
+
+  for (let index = 0; index < count; index += 1) {
+    const previousField = previousFields[index];
+    const nextField = nextFields[index];
+    if (
+      previousField.key &&
+      nextField.key &&
+      previousField.key !== nextField.key &&
+      previousField.type === nextField.type
+    ) {
+      renames[previousField.key] = nextField.key;
+    }
+  }
+
+  return Object.keys(renames).length > 0 ? renames : undefined;
+}
+
+function rewriteTemplateFieldConditions(
+  fields: ReadAnyCardTemplateField[],
+  fieldRenames: Record<string, string> | undefined,
+): ReadAnyCardTemplateField[] {
+  if (!fieldRenames) return fields;
+  return fields.map((field) => {
+    const visibleWhen = field.visibleWhen;
+    const nextFieldKey = visibleWhen ? fieldRenames[visibleWhen.fieldKey] : undefined;
+    return visibleWhen && nextFieldKey
+      ? { ...field, visibleWhen: { ...visibleWhen, fieldKey: nextFieldKey } }
+      : field;
+  });
+}
+
+function createTemplateFieldRenameMigration(
+  fieldRenames: Record<string, string> | undefined,
+  fromVersion: number,
+  toVersion: number,
+): ReadAnyCardTemplateMigration | undefined {
+  if (!fieldRenames) return undefined;
+  return {
+    fromVersion,
+    toVersion,
+    dataRenames: fieldRenames,
+  };
+}
+
 function customTemplateCardType(template: KnowledgeCardTemplate): string {
   const schema = templateSchema(template);
   return stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
@@ -1077,8 +1127,12 @@ export function updateCustomReadAnyCardTemplate({
     description: _existingDescription,
     fields: _existingFields,
     attrs: _existingAttrs,
+    migrations: existingMigrations,
     ...schemaRest
   } = existingSchema;
+  const existingFields = normalizeReadAnyCardTemplateFields(existingSchema.fields);
+  const fieldRenames = createTemplateFieldRenameMap(existingFields, normalizedFields);
+  const conditionSafeFields = rewriteTemplateFieldConditions(normalizedFields, fieldRenames);
   const existingAttrs = isRecord(existingSchema.attrs)
     ? (existingSchema.attrs as Record<string, JSONValue>)
     : {};
@@ -1090,6 +1144,17 @@ export function updateCustomReadAnyCardTemplate({
   const mergedData = fieldDefaults
     ? (mergeRecordDefaults(fieldDefaults, existingAttrData) as Record<string, JSONValue>)
     : existingAttrData;
+  const previousVersion = Math.max(1, Math.floor(template.version || 1));
+  const nextVersion = previousVersion + 1;
+  const renameMigration = createTemplateFieldRenameMigration(
+    fieldRenames,
+    previousVersion,
+    nextVersion,
+  );
+  const migrations = [
+    ...(renameMigration ? [renameMigration] : []),
+    ...(Array.isArray(existingMigrations) ? existingMigrations : []),
+  ];
   const schemaJson: Record<string, JSONValue> = {
     ...schemaRest,
     cardType: `custom:${template.id}`,
@@ -1099,7 +1164,10 @@ export function updateCustomReadAnyCardTemplate({
   };
   const trimmedDescription = description?.trim();
   if (trimmedDescription) schemaJson.description = trimmedDescription;
-  if (normalizedFields.length > 0) schemaJson.fields = normalizedFields as unknown as JSONValue;
+  if (conditionSafeFields.length > 0) {
+    schemaJson.fields = conditionSafeFields as unknown as JSONValue;
+  }
+  if (migrations.length > 0) schemaJson.migrations = migrations as unknown as JSONValue;
   const nextAttrs: Record<string, JSONValue> =
     Object.keys(mergedData).length > 0 ? { ...attrsRest, data: mergedData } : { ...attrsRest };
   if (Object.keys(nextAttrs).length > 0) schemaJson.attrs = nextAttrs;
@@ -1107,7 +1175,7 @@ export function updateCustomReadAnyCardTemplate({
   return {
     ...template,
     name: title,
-    version: Math.max(1, Math.floor(template.version || 1)) + 1,
+    version: nextVersion,
     schemaJson,
     builtIn: false,
     updatedAt: now,

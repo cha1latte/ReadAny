@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { getKnowledgeToolResultDisplay } from "../ai/knowledge-tool-result";
 import type {
   Book,
   KnowledgeAttachment,
   KnowledgeCardTemplate,
   KnowledgeDocument,
   KnowledgeLink,
+  JSONValue,
 } from "../types";
 import {
   KnowledgeExporter,
@@ -592,6 +594,64 @@ describe("KnowledgeExporter", () => {
     );
     expect(file.content).toContain("Question: What changed?");
     expect(file.content).not.toContain("Prompt:\\nResponse:");
+  });
+
+  it("exports AI tool failure cards with paths and safe no-write hints", () => {
+    const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
+      success: false,
+      status: "failed",
+      error: "Model request failed",
+      reason: "model_error",
+      documentId: "doc-1",
+      document: {
+        id: "doc-1",
+        title: "Durable Memory",
+        type: "summary",
+        path: "Knowledge base / Chapter Notes / Durable Memory",
+      },
+    });
+    const failureAttrs = display?.failureCardAttrs;
+    if (!failureAttrs) throw new Error("Expected knowledge tool failure card attrs");
+
+    const failureDoc = knowledgeDocument({
+      id: "failure-doc",
+      bookId: undefined,
+      type: "standalone_note",
+      title: "Tool Failure Log",
+      sourceKind: undefined,
+      sourceId: undefined,
+      contentJson: {
+        type: "doc",
+        content: [
+          {
+            type: "readanyCard",
+            attrs: failureAttrs as unknown as JSONValue,
+          },
+        ],
+      },
+      contentMd: "",
+    });
+    const vault = new KnowledgeExporter().buildVaultPackage({
+      documents: [failureDoc],
+    });
+    const exported = vault.files.find((file) => file.path === "Notes/Tool Failure Log.md");
+
+    expect(vault.manifest.documents["failure-doc"]).toMatchObject({
+      id: "failure-doc",
+      path: "Notes/Tool Failure Log.md",
+    });
+    expect(exported?.content).toContain("> [!failure] compressKnowledgeDocumentSummary");
+    expect(exported?.content).toContain("> Tool: compressKnowledgeDocumentSummary");
+    expect(exported?.content).toContain("> Status: failed");
+    expect(exported?.content).toContain("> Error: Model request failed");
+    expect(exported?.content).toContain("> Reason: model_error");
+    expect(exported?.content).toContain("> Document: doc-1");
+    expect(exported?.content).toContain(
+      "> Path: Knowledge base / Chapter Notes / Durable Memory",
+    );
+    expect(exported?.content).toContain(
+      "> No knowledge document or link was saved or changed by this failed tool call.",
+    );
   });
 
   it("exports multiple documents as a single shareable knowledge bundle", () => {

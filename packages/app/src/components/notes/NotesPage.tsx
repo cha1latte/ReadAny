@@ -72,6 +72,7 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  getKnowledgeDocumentCreateParentId,
   getKnowledgeDocumentOpenMode,
   ensureKnowledgeSourceLink,
   knowledgeDocumentFingerprint,
@@ -1889,11 +1890,10 @@ export function NotesPage() {
       if (!saved) return;
 
       const { readTextFile } = await import("@tauri-apps/plugin-fs");
-      const defaultParentId = isKnowledgeVaultRootOpen
-        ? undefined
-        : knowledgeHome?.type === "folder"
-          ? knowledgeHome.id
-          : knowledgeHome?.parentId;
+      const defaultParentId = getKnowledgeDocumentCreateParentId({
+        document: knowledgeHome,
+        isVaultRootOpen: isKnowledgeVaultRootOpen,
+      });
       const [files, cardTemplates] = await Promise.all([
         Promise.all(
           paths.map(async (path) => ({
@@ -4381,11 +4381,10 @@ function KnowledgeDocumentExplorer({
       ),
     [activeDocument, documents, t],
   );
-  const activeCreateParentId = isRootActive
-    ? undefined
-    : activeDocument?.type === "folder"
-      ? activeDocument.id
-      : activeDocument?.parentId;
+  const activeCreateParentId = getKnowledgeDocumentCreateParentId({
+    document: activeDocument,
+    isVaultRootOpen: isRootActive,
+  });
   const createDestinationDocument = activeCreateParentId
     ? documents.find((document) => document.id === activeCreateParentId)
     : null;

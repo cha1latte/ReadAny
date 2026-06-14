@@ -89,6 +89,7 @@ Evidence mapping:
 | Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
 | Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
+| Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 | Draft recovery, mobile WebView messages, and error states are typed. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |

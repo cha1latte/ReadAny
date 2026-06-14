@@ -437,6 +437,15 @@ export function getKnowledgeDocumentWorkspaceMode(
   return getKnowledgeDocumentOpenMode({ document }) === "document_editor" ? "document" : "vault";
 }
 
+export function getKnowledgeDocumentCreateParentId(input: {
+  document?: Pick<KnowledgeDocument, "id" | "parentId" | "type"> | null;
+  isVaultRootOpen?: boolean;
+}): string | undefined {
+  if (input.isVaultRootOpen || !input.document) return undefined;
+  if (input.document.type === "folder") return input.document.id;
+  return input.document.parentId || undefined;
+}
+
 export function validateKnowledgeDocumentSiblingTitle(input: {
   documentId?: string;
   bookId?: string;

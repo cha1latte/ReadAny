@@ -19,6 +19,7 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
+  getKnowledgeDocumentCreateParentId,
   getKnowledgeDocumentOpenMode,
   getKnowledgeDocumentWorkspaceMode,
   isGeneratedHighlightNoteDocument,
@@ -125,6 +126,26 @@ describe("knowledge document utilities", () => {
     expect(
       getKnowledgeDocumentWorkspaceMode(document({ id: "note", type: "standalone_note" })),
     ).toBe("document");
+  });
+
+  it("resolves create targets from the active vault context", () => {
+    const folder = document({ id: "folder", type: "folder", title: "Ideas" });
+    const nested = document({
+      id: "nested",
+      type: "standalone_note",
+      title: "Question",
+      parentId: "folder",
+    });
+    const rootNote = document({ id: "root-note", type: "standalone_note", title: "Root Note" });
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+
+    expect(getKnowledgeDocumentCreateParentId({ document: folder })).toBe("folder");
+    expect(getKnowledgeDocumentCreateParentId({ document: nested })).toBe("folder");
+    expect(getKnowledgeDocumentCreateParentId({ document: rootNote })).toBeUndefined();
+    expect(getKnowledgeDocumentCreateParentId({ document: home })).toBeUndefined();
+    expect(
+      getKnowledgeDocumentCreateParentId({ document: folder, isVaultRootOpen: true }),
+    ).toBeUndefined();
   });
 
   it("builds a stable document tree from parent ids", () => {

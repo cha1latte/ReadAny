@@ -91,6 +91,7 @@ export {
   flattenKnowledgeDocumentTree,
   buildKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
+  getKnowledgeDocumentCreateParentId,
   getKnowledgeDocumentOpenMode,
   getKnowledgeDocumentWorkspaceMode,
   validateKnowledgeDocumentParent,

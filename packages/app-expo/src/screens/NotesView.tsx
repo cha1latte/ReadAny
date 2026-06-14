@@ -81,6 +81,7 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  getKnowledgeDocumentCreateParentId,
   getKnowledgeDocumentOpenMode,
   getKnowledgeDocumentWorkspaceMode,
   ensureKnowledgeSourceLink,
@@ -1804,11 +1805,10 @@ export function NotesView({
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
 
-      const defaultParentId = isKnowledgeVaultRootOpen
-        ? undefined
-        : knowledgeHome?.type === "folder"
-          ? knowledgeHome.id
-          : knowledgeHome?.parentId;
+      const defaultParentId = getKnowledgeDocumentCreateParentId({
+        document: knowledgeHome,
+        isVaultRootOpen: isKnowledgeVaultRootOpen,
+      });
       const [files, cardTemplates] = await Promise.all([
         Promise.all(
           paths.map(async (path) => ({
@@ -4097,12 +4097,10 @@ function KnowledgeDocumentExplorer({
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
   const [createParentId, setCreateParentId] = useState<string | undefined>();
   const [isCreateSheetVisible, setIsCreateSheetVisible] = useState(false);
-  const activeCreateParentId =
-    !isRootActive && activeDocument?.type === "folder"
-      ? activeDocument.id
-      : !isRootActive
-        ? activeDocument?.parentId
-        : undefined;
+  const activeCreateParentId = getKnowledgeDocumentCreateParentId({
+    document: activeDocument,
+    isVaultRootOpen: isRootActive,
+  });
   const normalizedQuery = query.trim().toLowerCase();
   const createParentDocument = useMemo(
     () => documents.find((document) => document.id === createParentId),

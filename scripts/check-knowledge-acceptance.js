@@ -10,6 +10,10 @@ const knowledgeEditorBundlePath = path.join(
   "packages/app-expo/assets/editor/knowledge-editor.html",
 );
 const desktopDistDir = path.join(rootDir, "packages/app/dist");
+const mobileChatRendererPath = path.join(
+  rootDir,
+  "packages/app-expo/src/components/chat/PartRenderer.tsx",
+);
 
 const knowledgeTests = [
   "src/db/__tests__/knowledge-queries.test.ts",
@@ -208,12 +212,49 @@ function verifyKnowledgeEditorBundleContract(bundle) {
   }
 }
 
+function verifyMobileAIKnowledgeChatContract() {
+  console.log("\n[knowledge-acceptance] mobile AI knowledge chat contract");
+  const source = readFile(mobileChatRendererPath);
+  if (!source) {
+    console.error(
+      `[knowledge-acceptance] mobile chat renderer is missing: ${mobileChatRendererPath}`,
+    );
+    process.exit(1);
+  }
+
+  const requiredFragments = [
+    "getKnowledgeWriteProposal(part.result)",
+    "getKnowledgeToolResultDisplay(part.name, part.result",
+    "applyKnowledgeWriteProposal(proposal)",
+    "KnowledgeProposalCard",
+    "KnowledgeToolResultCard",
+    'display.kind === "failure"',
+    "knowledgeProposal.safeHint",
+    "knowledgeToolResult.failureSafeHint",
+    "knowledgeProposal.applyFailed",
+    "proposalApplyButton",
+    "preview.visiblePath",
+    "preview.hasPathChange",
+  ];
+  const missingFragments = requiredFragments.filter((fragment) => !source.includes(fragment));
+  if (missingFragments.length > 0) {
+    console.error(
+      [
+        "[knowledge-acceptance] mobile chat renderer is missing AI knowledge features:",
+        ...missingFragments.map((fragment) => `- ${fragment}`),
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
 for (const [command, args, label] of commands) {
   runCommand(command, args, label);
 }
 
 verifyDesktopProductionBundleContract();
 verifyKnowledgeEditorBundle();
+verifyMobileAIKnowledgeChatContract();
 runCommand("git", ["diff", "--check"], "diff whitespace check");
 
 console.log("\n[knowledge-acceptance] all automated checks passed");

@@ -82,6 +82,9 @@ git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 # The acceptance script also checks the generated WebView bundle for required
 # bridge messages, commands, cards, internal/source links, and image attachment
 # fallbacks.
+# The acceptance script also checks the mobile chat renderer source for
+# knowledge proposal, result, failure-card, path, and confirmation-write UI
+# contracts.
 git diff --check
 ```
 
@@ -94,6 +97,9 @@ internal/source links, and image attachment fallback UI.
 The desktop production bundle check scans the built browser assets for the
 knowledge editor shell, AI proposal/result renderers, ReadAny cards,
 internal/source links, Obsidian export markers, and portable attachment URIs.
+The mobile chat renderer contract check scans the Expo chat renderer source for
+AI knowledge proposal/result/failure cards, visible vault paths, safe no-write
+hints, and confirmation-required apply behavior.
 
 Evidence mapping:
 
@@ -112,9 +118,9 @@ Evidence mapping:
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 | Draft recovery, mobile WebView messages, and error states are typed and present in the generated bundle. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, mobile WebView bundle contract check, `app-expo` TypeScript |
 | Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
-| AI reads knowledge safely and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts` |
+| AI reads knowledge safely and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts`, desktop production bundle contract check, mobile AI knowledge chat contract check |
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
-| Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts` |
+| Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, desktop production bundle contract check, mobile AI knowledge chat contract check |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |
 | ReadAny cards preserve attrs, data, schema migrations, fallback rendering, and unknown versions. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 

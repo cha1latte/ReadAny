@@ -2924,10 +2924,12 @@ function KnowledgeHomePanel({
             ) : (
               <article className="mx-auto max-w-[820px]">
                 <KnowledgeEditor
+                  documentId={document.id}
                   tier="knowledge_doc"
                   surface={getKnowledgeEditorSurfaceForDocumentType(document.type)}
                   value={value}
                   onChange={onChange}
+                  isSaved={isSaved}
                   onPickLocalImage={() => onPickImageAttachment(document)}
                   placeholder={t("notes.knowledgePlaceholder")}
                   chrome="canvas"

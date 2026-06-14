@@ -13,9 +13,11 @@ import {
   builtInReadAnyCards,
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
+  createKnowledgeEditorDraftKey,
   createReadAnyCardAttrsFromTemplate,
   createReadAnyCardReadOnlyModel,
   createReadAnyCardTiptapContent,
+  clearKnowledgeEditorDraft,
   formatReadAnyCardDataForEditor,
   getKnowledgeEditorFeatureForCardType,
   getKnowledgeEditorProfile,
@@ -25,13 +27,18 @@ import {
   getReadAnyCardTemplateInsertLabel,
   getVisibleReadAnyCardTemplateFields,
   hasKnowledgeEditorFeature,
+  isKnowledgeEditorDraftRestorable,
   isReadAnyCardTemplateRequiredValueMissing,
+  knowledgeEditorDraftFingerprint,
+  loadKnowledgeEditorDraft,
   normalizeReadAnyCardTemplateFields,
   normalizeTiptapDocument,
   parseReadAnyCardDataFromEditor,
   renderKnowledgeJsonToMarkdown,
+  saveKnowledgeEditorDraft,
   updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
+import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { cn, generateId } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -39,6 +46,7 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
+import type { Content } from "@tiptap/core";
 import {
   EditorContent,
   Node,
@@ -129,6 +137,7 @@ export interface KnowledgeSourceReferenceRequest {
 }
 
 interface KnowledgeEditorProps {
+  documentId?: string;
   value: KnowledgeEditorValue;
   onChange: (value: KnowledgeEditorValue) => void;
   placeholder?: string;
@@ -139,6 +148,7 @@ interface KnowledgeEditorProps {
   chrome?: "default" | "canvas";
   tier?: KnowledgeEditorTier;
   surface?: KnowledgeEditorSurface;
+  isSaved?: boolean;
   onPickLocalImage?: () => Promise<KnowledgeImageInsertAttrs | null>;
   outlineTarget?: KnowledgeEditorOutlineTarget | null;
   internalLinkTargets?: KnowledgeInternalLinkTarget[];
@@ -184,6 +194,8 @@ const customCardFieldConditionOperators = [
   "empty",
   "notEmpty",
 ] as const satisfies NonNullable<ReadAnyCardTemplateField["visibleWhen"]>["operator"][];
+
+const DESKTOP_DRAFT_SAVE_DELAY_MS = 650;
 
 function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
   return field.type === "select" || field.type === "multiselect";
@@ -501,6 +513,7 @@ function contentJsonEquals(left: JSONValue, right: JSONValue): boolean {
 }
 
 export function KnowledgeEditor({
+  documentId,
   value,
   onChange,
   placeholder,
@@ -511,6 +524,7 @@ export function KnowledgeEditor({
   chrome = "default",
   tier = "knowledge_doc",
   surface,
+  isSaved,
   onPickLocalImage,
   outlineTarget,
   internalLinkTargets = [],
@@ -550,6 +564,21 @@ export function KnowledgeEditor({
     () => normalizeTiptapDocument(value.contentJson, { cardTemplates }),
     [cardTemplates, value.contentJson],
   );
+  const valueFingerprint = useMemo(
+    () => knowledgeEditorDraftFingerprint(normalizedContentJson as unknown as JSONValue),
+    [normalizedContentJson],
+  );
+  const draftKey = useMemo(
+    () => (documentId ? createKnowledgeEditorDraftKey(documentId, "desktop") : null),
+    [documentId],
+  );
+  const previousDraftKeyRef = useRef(draftKey);
+  const draftKeyRef = useRef(draftKey);
+  const readOnlyRef = useRef(readOnly);
+  const baseFingerprintRef = useRef(valueFingerprint);
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWrittenDraftFingerprintRef = useRef<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<KnowledgeEditorDraft | null>(null);
   const editorProfile = useMemo(
     () => (surface ? getKnowledgeEditorSurfaceProfile(surface) : getKnowledgeEditorProfile(tier)),
     [surface, tier],
@@ -681,6 +710,91 @@ export function KnowledgeEditor({
     return source.slice(0, 8);
   }, [internalLinkQuery, internalLinkTargets]);
 
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    draftKeyRef.current = draftKey;
+  }, [draftKey]);
+
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
+
+  useEffect(() => {
+    if (previousDraftKeyRef.current === draftKey) return;
+    previousDraftKeyRef.current = draftKey;
+    baseFingerprintRef.current = valueFingerprint;
+    lastWrittenDraftFingerprintRef.current = null;
+    setPendingDraft(null);
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+  }, [draftKey, valueFingerprint]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!draftKey || readOnly) {
+      setPendingDraft(null);
+      return;
+    }
+
+    const initialFingerprint = baseFingerprintRef.current;
+    const loadDraft = async () => {
+      const draft = await loadKnowledgeEditorDraft(draftKey);
+      if (!mounted) return;
+      if (isKnowledgeEditorDraftRestorable(draft, initialFingerprint)) {
+        setPendingDraft(draft);
+      } else if (draft) {
+        void clearKnowledgeEditorDraft(draftKey);
+      }
+    };
+
+    void loadDraft();
+    return () => {
+      mounted = false;
+    };
+  }, [draftKey, readOnly]);
+
+  useEffect(() => {
+    if (!draftKey || !isSaved) return;
+    if (lastWrittenDraftFingerprintRef.current !== valueFingerprint) return;
+
+    lastWrittenDraftFingerprintRef.current = null;
+    baseFingerprintRef.current = valueFingerprint;
+    setPendingDraft((draft) => (draft?.contentFingerprint === valueFingerprint ? null : draft));
+    void clearKnowledgeEditorDraft(draftKey);
+  }, [draftKey, isSaved, valueFingerprint]);
+
+  const scheduleDraftSave = useCallback(
+    (nextValue: KnowledgeEditorValue) => {
+      const activeDraftKey = draftKeyRef.current;
+      if (readOnlyRef.current || !activeDraftKey) return;
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+
+      const nextFingerprint = knowledgeEditorDraftFingerprint(nextValue.contentJson);
+      if (nextFingerprint === baseFingerprintRef.current) {
+        lastWrittenDraftFingerprintRef.current = null;
+        void clearKnowledgeEditorDraft(activeDraftKey);
+        return;
+      }
+
+      draftSaveTimerRef.current = setTimeout(() => {
+        void saveKnowledgeEditorDraft(activeDraftKey, nextValue, {
+          baseFingerprint: baseFingerprintRef.current,
+        })
+          .then((draft) => {
+            lastWrittenDraftFingerprintRef.current = draft.contentFingerprint;
+          })
+          .catch((error) => {
+            console.warn("[KnowledgeEditor] Failed to save editor draft:", error);
+          });
+      }, DESKTOP_DRAFT_SAVE_DELAY_MS);
+    },
+    [],
+  );
+
   const editor = useEditor({
     extensions,
     content: normalizedContentJson,
@@ -712,14 +826,16 @@ export function KnowledgeEditor({
       const contentJson = normalizeTiptapDocument(editor.getJSON() as unknown as JSONValue, {
         cardTemplates: currentCardTemplates,
       }) as unknown as JSONValue;
-      isInternalUpdate.current = true;
-      onChange({
+      const nextValue = {
         contentJson,
         contentMd: renderKnowledgeJsonToMarkdown(contentJson, {
           cardTemplates: currentCardTemplates,
         }),
         plainText: editor.getText(),
-      });
+      };
+      isInternalUpdate.current = true;
+      scheduleDraftSave(nextValue);
+      onChange(nextValue);
     },
     immediatelyRender: false,
   });
@@ -1164,6 +1280,30 @@ export function KnowledgeEditor({
     },
     [editingTemplateId, readOnly, resetTemplateForm, t],
   );
+
+  const restorePendingDraft = useCallback(() => {
+    if (readOnly || !pendingDraft) return;
+    const contentJson = normalizeTiptapDocument(pendingDraft.value.contentJson, {
+      cardTemplates,
+    }) as unknown as JSONValue;
+    const nextValue = {
+      contentJson,
+      contentMd: renderKnowledgeJsonToMarkdown(contentJson, { cardTemplates }),
+      plainText: pendingDraft.value.plainText,
+    };
+    const nextFingerprint = knowledgeEditorDraftFingerprint(contentJson);
+    setPendingDraft(null);
+    lastWrittenDraftFingerprintRef.current = nextFingerprint;
+    isInternalUpdate.current = true;
+    editor?.commands.setContent(contentJson as Content);
+    onChange(nextValue);
+  }, [cardTemplates, editor, onChange, pendingDraft, readOnly]);
+
+  const discardPendingDraft = useCallback(() => {
+    setPendingDraft(null);
+    lastWrittenDraftFingerprintRef.current = null;
+    if (draftKey) void clearKnowledgeEditorDraft(draftKey);
+  }, [draftKey]);
 
   if (!editor) return null;
 
@@ -2615,6 +2755,44 @@ export function KnowledgeEditor({
               {group.node}
             </Fragment>
           ))}
+        </div>
+      ) : null}
+
+      {!readOnly && pendingDraft ? (
+        <div
+          className={cn(
+            "flex min-w-0 items-center justify-between gap-3 border border-primary/20 bg-primary/[0.055] px-3 py-2 text-xs text-foreground",
+            isCanvasChrome ? "mx-auto mb-4 max-w-[820px] rounded-md" : "m-3 mb-0 rounded-md",
+          )}
+        >
+          <div className="min-w-0">
+            <p className="truncate font-medium">
+              {t("notes.knowledgeEditorDraftFound", {
+                defaultValue: "Unsaved draft found",
+              })}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {t("notes.knowledgeEditorDraftHint", {
+                defaultValue: "Restore the latest unsaved edits or discard this draft.",
+              })}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              className="h-7 rounded-md px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={discardPendingDraft}
+            >
+              {t("notes.knowledgeEditorDraftDiscard", { defaultValue: "Discard" })}
+            </button>
+            <button
+              type="button"
+              className="h-7 rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              onClick={restorePendingDraft}
+            >
+              {t("notes.knowledgeEditorDraftRestore", { defaultValue: "Restore" })}
+            </button>
+          </div>
         </div>
       ) : null}
 

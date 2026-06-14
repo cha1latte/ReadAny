@@ -84,6 +84,44 @@ describe("knowledge editor drafts", () => {
     expect(await loadKnowledgeEditorDraft(key)).toBeNull();
   });
 
+  it("keeps desktop and mobile drafts isolated for the same document", async () => {
+    const mobileKey = createKnowledgeEditorDraftKey("doc-shared", "mobile");
+    const desktopKey = createKnowledgeEditorDraftKey("doc-shared", "desktop");
+
+    await saveKnowledgeEditorDraft(
+      mobileKey,
+      {
+        contentJson: { type: "doc", content: [{ type: "paragraph", attrs: { source: "mobile" } }] },
+        contentMd: "Mobile draft",
+        plainText: "Mobile draft",
+      },
+      { baseFingerprint: "base-mobile", updatedAt: 2_000 },
+    );
+    await saveKnowledgeEditorDraft(
+      desktopKey,
+      {
+        contentJson: {
+          type: "doc",
+          content: [{ type: "paragraph", attrs: { source: "desktop" } }],
+        },
+        contentMd: "Desktop draft",
+        plainText: "Desktop draft",
+      },
+      { baseFingerprint: "base-desktop", updatedAt: 3_000 },
+    );
+
+    expect(await loadKnowledgeEditorDraft(mobileKey)).toMatchObject({
+      key: mobileKey,
+      baseFingerprint: "base-mobile",
+      value: { contentMd: "Mobile draft" },
+    });
+    expect(await loadKnowledgeEditorDraft(desktopKey)).toMatchObject({
+      key: desktopKey,
+      baseFingerprint: "base-desktop",
+      value: { contentMd: "Desktop draft" },
+    });
+  });
+
   it("offers only fresh drafts that differ from the current document", async () => {
     const draft = await saveKnowledgeEditorDraft(
       createKnowledgeEditorDraftKey("doc-2", "mobile"),

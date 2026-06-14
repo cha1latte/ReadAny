@@ -96,7 +96,9 @@ Verification:
 Status: implemented for knowledge documents on the current branch. Legacy quick
 annotation surfaces still use lightweight native editors by design. The next
 mobile milestone is interaction correction: split vault browsing and document
-editing into clear modes instead of one stacked screen.
+editing into clear modes instead of one stacked screen. The mobile vault
+browser now exposes labeled header actions for folder/note creation so the
+first browsing mode is understandable without relying on icon recognition.
 
 Goal:
 

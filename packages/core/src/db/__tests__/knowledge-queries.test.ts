@@ -336,14 +336,45 @@ _Source: Chapter 1_`,
   });
 
   it("deletes a knowledge document with a tombstone", async () => {
-    mockExecute.mockResolvedValue(undefined);
+    mockSelect
+      .mockResolvedValueOnce([{ id: "link-1" }, { id: "link-2" }])
+      .mockResolvedValueOnce([{ id: "att-1" }]);
 
     await deleteKnowledgeDocument("doc-1");
 
+    expect(mockSelect).toHaveBeenNthCalledWith(
+      1,
+      "SELECT id FROM knowledge_links WHERE from_document_id = ?",
+      ["doc-1"],
+    );
+    expect(mockSelect).toHaveBeenNthCalledWith(
+      2,
+      "SELECT id FROM knowledge_attachments WHERE document_id = ?",
+      ["doc-1"],
+    );
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-1", "knowledge_links");
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-2", "knowledge_links");
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+      mockDb,
+      "att-1",
+      "knowledge_attachments",
+    );
     expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "doc-1", "knowledge_documents");
-    expect(mockExecute).toHaveBeenCalledWith("DELETE FROM knowledge_documents WHERE id = ?", [
-      "doc-1",
-    ]);
+    expect(mockExecute).toHaveBeenNthCalledWith(
+      1,
+      "DELETE FROM knowledge_links WHERE from_document_id = ?",
+      ["doc-1"],
+    );
+    expect(mockExecute).toHaveBeenNthCalledWith(
+      2,
+      "DELETE FROM knowledge_attachments WHERE document_id = ?",
+      ["doc-1"],
+    );
+    expect(mockExecute).toHaveBeenNthCalledWith(
+      3,
+      "DELETE FROM knowledge_documents WHERE id = ?",
+      ["doc-1"],
+    );
   });
 
   it("maps and inserts knowledge links", async () => {

@@ -1022,12 +1022,13 @@ describe("simple sync convergence", () => {
     );
   });
 
-  it("keeps synced knowledge document tombstones from being resurrected", async () => {
+  it("keeps synced knowledge document dependency tombstones from being resurrected", async () => {
     const backend = new MemoryBackend();
     const deviceA = new FakeSyncDb();
     const deviceB = new FakeSyncDb();
 
     deviceA.insert("books", bookRow());
+    deviceA.insert("highlights", highlightRow());
     deviceA.insert(
       "knowledge_documents",
       knowledgeDocumentRow({
@@ -1039,6 +1040,20 @@ describe("simple sync convergence", () => {
         updated_at: 1100,
       }),
     );
+    deviceA.insert(
+      "knowledge_links",
+      knowledgeLinkRow({
+        id: "link-delete",
+        from_document_id: "doc-delete",
+      }),
+    );
+    deviceA.insert(
+      "knowledge_attachments",
+      knowledgeAttachmentRow({
+        id: "attachment-delete",
+        document_id: "doc-delete",
+      }),
+    );
 
     now = 1100;
     await syncDevice("device-a", deviceA, backend);
@@ -1048,8 +1063,16 @@ describe("simple sync convergence", () => {
     expect(deviceB.get("knowledge_documents", "doc-delete")).toMatchObject({
       title: "Delete Candidate",
     });
+    expect(deviceB.get("knowledge_links", "link-delete")).toMatchObject({
+      from_document_id: "doc-delete",
+    });
+    expect(deviceB.get("knowledge_attachments", "attachment-delete")).toMatchObject({
+      document_id: "doc-delete",
+    });
 
     now = 1300;
+    deviceB.deleteWithTombstone("knowledge_links", "link-delete", now);
+    deviceB.deleteWithTombstone("knowledge_attachments", "attachment-delete", now);
     deviceB.deleteWithTombstone("knowledge_documents", "doc-delete", now);
 
     now = 1400;
@@ -1060,15 +1083,31 @@ describe("simple sync convergence", () => {
 
     expect(result.success).toBe(true);
     expect(deviceA.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceA.get("knowledge_links", "link-delete")).toBeUndefined();
+    expect(deviceA.get("knowledge_attachments", "attachment-delete")).toBeUndefined();
     expect(deviceA.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
+    expect(deviceA.tombstones.get("knowledge_links:link-delete")?.deleted_at).toBe(1300);
+    expect(deviceA.tombstones.get("knowledge_attachments:attachment-delete")?.deleted_at).toBe(
+      1300,
+    );
 
     now = 1600;
     await syncDevice("device-b", deviceB, backend);
 
     expect(deviceB.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceB.get("knowledge_links", "link-delete")).toBeUndefined();
+    expect(deviceB.get("knowledge_attachments", "attachment-delete")).toBeUndefined();
     expect(deviceB.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
+    expect(deviceB.tombstones.get("knowledge_links:link-delete")?.deleted_at).toBe(1300);
+    expect(deviceB.tombstones.get("knowledge_attachments:attachment-delete")?.deleted_at).toBe(
+      1300,
+    );
     expect(deviceA.exportRecords().knowledge_documents).toEqual(
       deviceB.exportRecords().knowledge_documents,
+    );
+    expect(deviceA.exportRecords().knowledge_links).toEqual(deviceB.exportRecords().knowledge_links);
+    expect(deviceA.exportRecords().knowledge_attachments).toEqual(
+      deviceB.exportRecords().knowledge_attachments,
     );
   });
 

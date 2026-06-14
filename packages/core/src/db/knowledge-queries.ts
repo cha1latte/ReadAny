@@ -566,7 +566,25 @@ export async function updateKnowledgeDocumentSummary(
 
 export async function deleteKnowledgeDocument(id: string): Promise<void> {
   const database = await getDB();
+  const [linkRows, attachmentRows] = await Promise.all([
+    database.select<{ id: string }>("SELECT id FROM knowledge_links WHERE from_document_id = ?", [
+      id,
+    ]),
+    database.select<{ id: string }>(
+      "SELECT id FROM knowledge_attachments WHERE document_id = ?",
+      [id],
+    ),
+  ]);
+
+  for (const row of linkRows) {
+    await insertTombstone(database, row.id, "knowledge_links");
+  }
+  for (const row of attachmentRows) {
+    await insertTombstone(database, row.id, "knowledge_attachments");
+  }
   await insertTombstone(database, id, "knowledge_documents");
+  await database.execute("DELETE FROM knowledge_links WHERE from_document_id = ?", [id]);
+  await database.execute("DELETE FROM knowledge_attachments WHERE document_id = ?", [id]);
   await database.execute("DELETE FROM knowledge_documents WHERE id = ?", [id]);
 }
 

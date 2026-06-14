@@ -931,13 +931,20 @@ export function NotesView({
   }, [isKnowledgeVaultRootOpen, saveActiveKnowledgeDocumentNow]);
 
   const refreshSelectedKnowledgeDocuments = useCallback(
-    async (preferredDocumentId?: string | null) => {
+    async (
+      preferredDocumentId?: string | null,
+      options: { keepVaultRootOpen?: boolean } = {},
+    ) => {
       if (!selectedKnowledgeBookId) return;
 
       const homeDocument = await ensureBookHomeDocument(
         selectedKnowledgeBookId,
         selectedKnowledgeBookTitle,
       );
+      await Promise.all([
+        ensureHighlightNoteKnowledgeDocuments(selectedKnowledgeBookId),
+        ensureNoteKnowledgeDocuments(selectedKnowledgeBookId),
+      ]);
       const bookDocuments = await getKnowledgeDocuments({
         bookId: selectedKnowledgeBookId,
         limit: 200,
@@ -962,7 +969,7 @@ export function NotesView({
       if (!nextActiveDocument) {
         const emptyValue = createEmptyKnowledgeValue();
         setSelectedKnowledgeDocumentId(null);
-        setIsKnowledgeVaultRootOpen(false);
+        setIsKnowledgeVaultRootOpen(Boolean(options.keepVaultRootOpen));
         setKnowledgeHome(null);
         setKnowledgeTitle("");
         setKnowledgeTags([]);
@@ -974,8 +981,8 @@ export function NotesView({
       }
 
       const nextValue = await createResolvedKnowledgeValue(nextActiveDocument);
-      setSelectedKnowledgeDocumentId(nextActiveDocument.id);
-      setIsKnowledgeVaultRootOpen(false);
+      setSelectedKnowledgeDocumentId(options.keepVaultRootOpen ? null : nextActiveDocument.id);
+      setIsKnowledgeVaultRootOpen(Boolean(options.keepVaultRootOpen));
       setKnowledgeHome(nextActiveDocument);
       setKnowledgeTitle(nextActiveDocument.title);
       setKnowledgeTags(normalizeKnowledgeTags(nextActiveDocument.tags));
@@ -1015,6 +1022,30 @@ export function NotesView({
   }, [
     activeKnowledgeDocumentId,
     refreshSelectedKnowledgeDocuments,
+    selectedKnowledgeBookId,
+    selectedKnowledgeDocumentId,
+  ]);
+
+  useEffect(() => {
+    return eventBus.on("sync:completed", () => {
+      if (!selectedKnowledgeBookId) return;
+
+      void (async () => {
+        try {
+          const saved = await saveActiveKnowledgeDocumentNow();
+          if (!saved) return;
+          await refreshSelectedKnowledgeDocuments(selectedKnowledgeDocumentId, {
+            keepVaultRootOpen: isKnowledgeVaultRootOpen,
+          });
+        } catch (error) {
+          console.error("[Notes] Failed to refresh knowledge after sync:", error);
+        }
+      })();
+    });
+  }, [
+    isKnowledgeVaultRootOpen,
+    refreshSelectedKnowledgeDocuments,
+    saveActiveKnowledgeDocumentNow,
     selectedKnowledgeBookId,
     selectedKnowledgeDocumentId,
   ]);

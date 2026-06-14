@@ -13,6 +13,9 @@ The branch is ready for final PR review when all of these are true:
 - The worktree is clean and pushed.
 - Core knowledge, AI, sync, export, desktop, and mobile TypeScript checks pass.
 - The desktop Vite production bundle builds successfully.
+- `07-manual-qa-evidence.md` is filled with the commit under test, platforms,
+  screenshots/logs/exports, and pass/fail/blocker status for all required
+  manual checks.
 - Desktop and mobile both show a vault hierarchy before editing.
 - Folder nodes open folder browsers, not empty document editors.
 - Document nodes open a WYSIWYG Tiptap surface with quiet autosave.
@@ -134,6 +137,7 @@ Evidence mapping:
 ## Desktop Manual Checks
 
 Use the desktop app with a book that has existing highlights and notes.
+Record the result in `07-manual-qa-evidence.md` before final PR review.
 
 1. Open the notes/knowledge entry for the book.
 2. Confirm the first visible structure is a left vault tree, center workspace,
@@ -162,6 +166,7 @@ Use the desktop app with a book that has existing highlights and notes.
 
 Use a real iOS or Android device because keyboard, safe area, and WebView focus
 are part of the acceptance criteria.
+Record the result in `07-manual-qa-evidence.md` before final PR review.
 
 1. Open the book knowledge area from the mobile notes screen.
 2. Confirm the first mode is vault browsing, not one long stacked dashboard.

@@ -98,3 +98,4 @@ External docs checked:
 - [Roadmap](04-implementation-roadmap.md)
 - [Vault Workspace Layout](05-vault-workspace-layout.md)
 - [Acceptance Runbook](06-acceptance-runbook.md)
+- [Manual QA Evidence](07-manual-qa-evidence.md)

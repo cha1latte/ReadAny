@@ -88,6 +88,7 @@ Evidence mapping:
 | Legacy highlight/note projections keep old UI compatible while knowledge documents become primary. | `knowledge-source-writeback.test.ts`, `highlight-queries.test.ts`, `note-queries.test.ts`, `document-utils.test.ts` |
 | Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
+| Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |

@@ -76,6 +76,10 @@ export interface KnowledgeFolderDisplaySections {
   documents: KnowledgeDocument[];
 }
 
+export interface KnowledgeRootDisplaySections extends KnowledgeFolderDisplaySections {
+  orphaned: KnowledgeDocument[];
+}
+
 export interface KnowledgeDocumentOutlineItem {
   id: string;
   index: number;
@@ -423,6 +427,28 @@ export function createKnowledgeFolderDisplaySections(
   return { home, folders, documents };
 }
 
+export function createKnowledgeRootDisplaySections(
+  documents: KnowledgeDocument[],
+  homeDocumentId?: string,
+): KnowledgeRootDisplaySections {
+  const tree = buildKnowledgeDocumentTree(documents, homeDocumentId);
+  const orphanedIds = new Set(tree.orphaned.map((document) => document.id));
+  const home: KnowledgeDocument[] = [];
+  const folders: KnowledgeDocument[] = [];
+  const regularDocuments: KnowledgeDocument[] = [];
+  const orphaned: KnowledgeDocument[] = [];
+
+  for (const node of tree.roots) {
+    const document = node.document;
+    if (document.id === homeDocumentId || document.type === "book_home") home.push(document);
+    else if (orphanedIds.has(document.id)) orphaned.push(document);
+    else if (document.type === "folder") folders.push(document);
+    else regularDocuments.push(document);
+  }
+
+  return { home, folders, documents: regularDocuments, orphaned };
+}
+
 export function getKnowledgeDocumentOpenMode(input: {
   document?: Pick<KnowledgeDocument, "type"> | null;
   isVaultRootOpen?: boolean;
@@ -535,7 +561,7 @@ export function buildKnowledgeDocumentTree(
       childDocumentsByParentId.set(parentId, children);
     } else {
       rootDocuments.push(document);
-      if (parentId && parentId !== document.id) orphaned.push(document);
+      if (parentId) orphaned.push(document);
     }
   }
 

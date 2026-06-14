@@ -81,6 +81,7 @@ export {
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
   collectKnowledgeDocumentSubtree,
+  createKnowledgeRootDisplaySections,
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,
@@ -108,6 +109,7 @@ export {
 export type {
   HighlightNoteProjection,
   KnowledgeFolderDisplaySections,
+  KnowledgeRootDisplaySections,
   KnowledgeDocumentMoveTarget,
   KnowledgeDocumentMoveTargetOptions,
   KnowledgeDocumentOpenMode,

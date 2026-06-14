@@ -10,6 +10,7 @@ import {
   createKnowledgeDocumentMoveTargets,
   createKnowledgeDocumentSearchText,
   createKnowledgeExcerpt,
+  createKnowledgeRootDisplaySections,
   createLegacyNoteMarkdown,
   createLegacyNoteProjection,
   createLegacyNoteTitle,
@@ -101,6 +102,32 @@ describe("knowledge document utilities", () => {
       home: [home],
       folders: [],
       documents: [note],
+    });
+  });
+
+  it("keeps orphaned root documents visible in a dedicated root browser section", () => {
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+    const folder = document({ id: "folder", type: "folder", title: "Ideas" });
+    const note = document({ id: "note", title: "Root note" });
+    const orphanedNote = document({
+      id: "orphaned-note",
+      title: "Missing parent",
+      parentId: "missing-folder",
+    });
+    const cyclicFolder = document({
+      id: "cyclic-folder",
+      type: "folder",
+      title: "Cyclic",
+      parentId: "cyclic-folder",
+    });
+
+    expect(
+      createKnowledgeRootDisplaySections([orphanedNote, folder, cyclicFolder, home, note], "home"),
+    ).toEqual({
+      home: [home],
+      folders: [folder],
+      documents: [note],
+      orphaned: [cyclicFolder, orphanedNote],
     });
   });
 

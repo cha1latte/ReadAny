@@ -67,6 +67,7 @@ import {
   createKnowledgeDocumentMoveTargets,
   createKnowledgeExcerpt,
   createKnowledgeFolderDisplaySections,
+  createKnowledgeRootDisplaySections,
   createKnowledgeSummarySourceFingerprint,
   extractKnowledgeDocumentOutline,
   filterKnowledgeDocumentTreeNodesForSearch,
@@ -2618,10 +2619,8 @@ function KnowledgeHomePanel({
   );
   const rootDocuments = useMemo(() => {
     const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
-    return orderKnowledgeDocuments(
-      documents.filter((item) => !item.parentId),
-      homeDocumentId,
-    );
+    const sections = createKnowledgeRootDisplaySections(documents, homeDocumentId);
+    return [...sections.home, ...sections.folders, ...sections.documents, ...sections.orphaned];
   }, [documents]);
   const activeKnowledgeOpenMode = getKnowledgeDocumentOpenMode({ document, isVaultRootOpen });
   const isFolderDocument = activeKnowledgeOpenMode === "folder_browser";
@@ -3174,13 +3173,9 @@ function KnowledgeVaultRootOverview({
     return counts;
   }, [documents]);
   const homeDocumentId = documents.find((document) => document.type === "book_home")?.id;
-  const orderedChildren = useMemo(
-    () => orderKnowledgeDocuments(items, homeDocumentId),
-    [homeDocumentId, items],
-  );
   const childSections = useMemo(
-    () => createKnowledgeFolderDisplaySections(orderedChildren, homeDocumentId),
-    [homeDocumentId, orderedChildren],
+    () => createKnowledgeRootDisplaySections(documents, homeDocumentId),
+    [documents, homeDocumentId],
   );
 
   return (
@@ -3280,6 +3275,17 @@ function KnowledgeVaultRootOverview({
           <KnowledgeFolderBrowserSection
             title={t("notes.knowledgeFolderChildDocuments")}
             items={childSections.documents}
+            documents={documents}
+            childCountByParentId={childCountByParentId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onMove={onMove}
+            onRename={onRename}
+            t={t}
+          />
+          <KnowledgeFolderBrowserSection
+            title={t("notes.knowledgeOrphanedDocument", { defaultValue: "Orphaned" })}
+            items={childSections.orphaned}
             documents={documents}
             childCountByParentId={childCountByParentId}
             onSelect={onSelect}

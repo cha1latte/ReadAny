@@ -1022,6 +1022,56 @@ describe("simple sync convergence", () => {
     );
   });
 
+  it("keeps synced knowledge document tombstones from being resurrected", async () => {
+    const backend = new MemoryBackend();
+    const deviceA = new FakeSyncDb();
+    const deviceB = new FakeSyncDb();
+
+    deviceA.insert("books", bookRow());
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "doc-delete",
+        type: "standalone_note",
+        title: "Delete Candidate",
+        source_kind: null,
+        source_id: null,
+        updated_at: 1100,
+      }),
+    );
+
+    now = 1100;
+    await syncDevice("device-a", deviceA, backend);
+
+    now = 1200;
+    await syncDevice("device-b", deviceB, backend);
+    expect(deviceB.get("knowledge_documents", "doc-delete")).toMatchObject({
+      title: "Delete Candidate",
+    });
+
+    now = 1300;
+    deviceB.deleteWithTombstone("knowledge_documents", "doc-delete", now);
+
+    now = 1400;
+    await syncDevice("device-b", deviceB, backend);
+
+    now = 1500;
+    const result = await syncDevice("device-a", deviceA, backend);
+
+    expect(result.success).toBe(true);
+    expect(deviceA.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceA.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
+
+    now = 1600;
+    await syncDevice("device-b", deviceB, backend);
+
+    expect(deviceB.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceB.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
+    expect(deviceA.exportRecords().knowledge_documents).toEqual(
+      deviceB.exportRecords().knowledge_documents,
+    );
+  });
+
   it("keeps a newer local record when an older remote tombstone arrives", async () => {
     const target = new FakeSyncDb();
     target.insert("books", bookRow({ updated_at: 2500 }));

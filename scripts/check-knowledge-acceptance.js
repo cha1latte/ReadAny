@@ -14,6 +14,10 @@ const mobileChatRendererPath = path.join(
   rootDir,
   "packages/app-expo/src/components/chat/PartRenderer.tsx",
 );
+const desktopChatRendererPath = path.join(
+  rootDir,
+  "packages/app/src/components/chat/PartRenderer.tsx",
+);
 const desktopNotesPagePath = path.join(rootDir, "packages/app/src/components/notes/NotesPage.tsx");
 const mobileNotesViewPath = path.join(rootDir, "packages/app-expo/src/screens/NotesView.tsx");
 
@@ -251,6 +255,23 @@ function verifyMobileAIKnowledgeChatContract() {
   ]);
 }
 
+function verifyDesktopAIKnowledgeChatContract() {
+  verifySourceContract("desktop AI knowledge chat contract", desktopChatRendererPath, [
+    "getKnowledgeWriteProposal(part.result)",
+    "getKnowledgeToolResultDisplay(part.name, part.result",
+    "applyKnowledgeWriteProposal(proposal)",
+    "KnowledgeProposalCard",
+    "KnowledgeToolResultCard",
+    'display.kind === "failure"',
+    "knowledgeProposal.safeHint",
+    "knowledgeToolResult.failureSafeHint",
+    "knowledgeProposal.applyFailed",
+    "knowledgeProposal.applySuccess",
+    "preview.visiblePath",
+    "preview.hasPathChange",
+  ]);
+}
+
 function verifyDesktopKnowledgeWorkspaceContract() {
   verifySourceContract("desktop knowledge workspace contract", desktopNotesPagePath, [
     "KnowledgeDocumentExplorer",
@@ -307,6 +328,7 @@ for (const [command, args, label] of commands) {
 
 verifyDesktopProductionBundleContract();
 verifyKnowledgeEditorBundle();
+verifyDesktopAIKnowledgeChatContract();
 verifyMobileAIKnowledgeChatContract();
 verifyDesktopKnowledgeWorkspaceContract();
 verifyMobileKnowledgeWorkspaceContract();

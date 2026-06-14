@@ -107,6 +107,8 @@ export interface KnowledgeVaultImportPlan {
   missing: KnowledgeVaultImportEntry[];
   unreadable: KnowledgeVaultImportEntry[];
   conflicts: KnowledgeVaultImportEntry[];
+  cardTemplateChanges: KnowledgeVaultImportCardTemplateChange[];
+  cardTemplateConflicts: KnowledgeVaultImportCardTemplateConflict[];
 }
 
 export interface KnowledgeVaultImportPlanInput {
@@ -114,6 +116,22 @@ export interface KnowledgeVaultImportPlanInput {
   files: KnowledgeExportObservedFile[];
   currentFiles?: KnowledgeExportObservedFile[];
   cardTemplates?: KnowledgeCardTemplate[];
+}
+
+export type KnowledgeVaultImportCardTemplateChangeStatus = "missing" | "modified";
+
+export interface KnowledgeVaultImportCardTemplateChange {
+  template: KnowledgeCardTemplate;
+  status: KnowledgeVaultImportCardTemplateChangeStatus;
+  current?: KnowledgeCardTemplate;
+  warnings: string[];
+}
+
+export interface KnowledgeVaultImportCardTemplateConflict {
+  template: KnowledgeCardTemplate;
+  current: KnowledgeCardTemplate;
+  status: "conflict";
+  warnings: string[];
 }
 
 export interface KnowledgeImportProposalOptions {
@@ -138,6 +156,98 @@ function mergeKnowledgeCardTemplates(
     }
   }
   return templatesById.size > 0 ? Array.from(templatesById.values()) : undefined;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+    return `{${entries
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableStringify(child)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function comparableCardTemplateSnapshot(template: KnowledgeCardTemplate): Record<string, unknown> {
+  return {
+    id: template.id,
+    name: template.name,
+    version: template.version,
+    schemaJson: template.schemaJson,
+    builtIn: template.builtIn,
+    enabled: template.enabled,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt,
+  };
+}
+
+function areKnowledgeCardTemplatesEquivalent(
+  left: KnowledgeCardTemplate,
+  right: KnowledgeCardTemplate,
+): boolean {
+  return (
+    stableStringify(comparableCardTemplateSnapshot(left)) ===
+    stableStringify(comparableCardTemplateSnapshot(right))
+  );
+}
+
+function createKnowledgeVaultImportCardTemplateDiff({
+  manifestTemplates,
+  currentTemplates,
+}: {
+  manifestTemplates?: KnowledgeCardTemplate[];
+  currentTemplates?: KnowledgeCardTemplate[];
+}): {
+  changes: KnowledgeVaultImportCardTemplateChange[];
+  conflicts: KnowledgeVaultImportCardTemplateConflict[];
+} {
+  const currentById = new Map((currentTemplates ?? []).map((template) => [template.id, template]));
+  const changes: KnowledgeVaultImportCardTemplateChange[] = [];
+  const conflicts: KnowledgeVaultImportCardTemplateConflict[] = [];
+
+  for (const template of manifestTemplates ?? []) {
+    if (template.builtIn) continue;
+
+    const current = currentById.get(template.id);
+    if (!current) {
+      changes.push({
+        template,
+        status: "missing",
+        warnings: ["card_template_missing"],
+      });
+      continue;
+    }
+
+    if (areKnowledgeCardTemplatesEquivalent(template, current)) continue;
+
+    const manifestIsNewer =
+      template.version > current.version ||
+      (template.version === current.version && template.updatedAt >= current.updatedAt);
+
+    if (manifestIsNewer) {
+      changes.push({
+        template,
+        current,
+        status: "modified",
+        warnings: ["card_template_modified"],
+      });
+      continue;
+    }
+
+    conflicts.push({
+      template,
+      current,
+      status: "conflict",
+      warnings: ["local_card_template_newer"],
+    });
+  }
+
+  return { changes, conflicts };
 }
 
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
@@ -689,6 +799,10 @@ export function createKnowledgeVaultImportPlan(
     input.manifest.cardTemplates,
     input.cardTemplates,
   );
+  const cardTemplateDiff = createKnowledgeVaultImportCardTemplateDiff({
+    manifestTemplates: input.manifest.cardTemplates,
+    currentTemplates: input.cardTemplates,
+  });
   const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
   const filesByDocumentId = createReadAnyFilesByDocumentId(input.files);
   const documentIdsByPath = createManifestDocumentIdsByPath(input.manifest);
@@ -845,6 +959,8 @@ export function createKnowledgeVaultImportPlan(
     missing: entries.filter((entry) => entry.status === "missing"),
     unreadable: entries.filter((entry) => entry.status === "modified_unreadable"),
     conflicts: entries.filter((entry) => entry.status === "conflict"),
+    cardTemplateChanges: cardTemplateDiff.changes,
+    cardTemplateConflicts: cardTemplateDiff.conflicts,
   };
 }
 

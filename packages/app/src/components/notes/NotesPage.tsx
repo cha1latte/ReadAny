@@ -33,6 +33,7 @@ import {
   getKnowledgeDocuments,
   getKnowledgeLinks,
   updateKnowledgeDocument,
+  upsertKnowledgeCardTemplate,
 } from "@/lib/db/database";
 import { pickAndPersistKnowledgeImageAttachment } from "@/lib/knowledge/attachment-assets";
 import { openDesktopBook } from "@/lib/library/open-book";
@@ -2118,12 +2119,15 @@ export function NotesPage() {
         cardTemplates,
       });
       const proposals = createKnowledgeVaultImportWriteProposals(plan);
+      const applicableChangeCount = proposals.length + plan.cardTemplateChanges.length;
 
       if (
         plan.modified.length === 0 &&
         plan.missing.length === 0 &&
         plan.unreadable.length === 0 &&
-        plan.conflicts.length === 0
+        plan.conflicts.length === 0 &&
+        plan.cardTemplateChanges.length === 0 &&
+        plan.cardTemplateConflicts.length === 0
       ) {
         toast.success(t("notes.knowledgeVaultImportUpToDate"));
         return;
@@ -2135,10 +2139,11 @@ export function NotesPage() {
         proposals,
       });
 
-      if (proposals.length > 0) {
+      if (applicableChangeCount > 0) {
         toast.success(t("notes.knowledgeVaultImportReady"), {
-          description: t("notes.knowledgeVaultImportReadyDetail", {
-            count: proposals.length,
+          description: t("notes.knowledgeVaultImportReadyDetailWithTemplates", {
+            documentCount: proposals.length,
+            templateCount: plan.cardTemplateChanges.length,
           }),
         });
       } else {
@@ -2154,7 +2159,10 @@ export function NotesPage() {
 
   const handleApplyKnowledgeVaultImport = async () => {
     if (!knowledgeVaultImportReview || isKnowledgeVaultImportApplying) return;
-    if (knowledgeVaultImportReview.proposals.length === 0) return;
+    const applicableChangeCount =
+      knowledgeVaultImportReview.proposals.length +
+      knowledgeVaultImportReview.plan.cardTemplateChanges.length;
+    if (applicableChangeCount === 0) return;
 
     const saved = await saveActiveKnowledgeDocumentNow();
     if (!saved) return;
@@ -2162,6 +2170,9 @@ export function NotesPage() {
     setIsKnowledgeVaultImportApplying(true);
     try {
       const summaryDocumentIds: string[] = [];
+      for (const change of knowledgeVaultImportReview.plan.cardTemplateChanges) {
+        await upsertKnowledgeCardTemplate(change.template);
+      }
       for (const proposal of knowledgeVaultImportReview.proposals) {
         const result = await applyKnowledgeWriteProposal(proposal);
         if (result.documentId) {
@@ -2171,8 +2182,9 @@ export function NotesPage() {
       await refreshSelectedKnowledgeDocuments(knowledgeHome?.id);
       queueKnowledgeSummaryMaintenance(summaryDocumentIds);
       toast.success(t("notes.knowledgeVaultImportApplied"), {
-        description: t("notes.knowledgeVaultImportAppliedDetail", {
-          count: knowledgeVaultImportReview.proposals.length,
+        description: t("notes.knowledgeVaultImportAppliedDetailWithTemplates", {
+          documentCount: knowledgeVaultImportReview.proposals.length,
+          templateCount: knowledgeVaultImportReview.plan.cardTemplateChanges.length,
         }),
       });
       setKnowledgeVaultImportReview(null);
@@ -5370,14 +5382,28 @@ function KnowledgeVaultImportReviewCard({
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const visibleModified = review.plan.modified.slice(0, 4);
+  const visibleCardTemplateChanges = review.plan.cardTemplateChanges.slice(0, 3);
   const issueEntries = [
     ...review.plan.conflicts,
     ...review.plan.missing,
     ...review.plan.unreadable,
   ];
   const visibleIssues = issueEntries.slice(0, 3);
+  const visibleCardTemplateConflicts = review.plan.cardTemplateConflicts.slice(
+    0,
+    Math.max(0, 3 - visibleIssues.length),
+  );
   const hiddenModifiedCount = Math.max(0, review.plan.modified.length - visibleModified.length);
+  const hiddenCardTemplateChangeCount = Math.max(
+    0,
+    review.plan.cardTemplateChanges.length - visibleCardTemplateChanges.length,
+  );
   const hiddenIssueCount = Math.max(0, issueEntries.length - visibleIssues.length);
+  const hiddenCardTemplateConflictCount = Math.max(
+    0,
+    review.plan.cardTemplateConflicts.length - visibleCardTemplateConflicts.length,
+  );
+  const applicableChangeCount = review.proposals.length + review.plan.cardTemplateChanges.length;
   const proposalByDocumentId = new Map(
     review.proposals.map((proposal) => [proposal.documentId, proposal] as const),
   );
@@ -5406,7 +5432,7 @@ function KnowledgeVaultImportReviewCard({
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <div className="mt-3 grid grid-cols-5 gap-2">
             <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
               <p className="text-base font-semibold text-foreground">
                 {review.plan.modified.length}
@@ -5437,6 +5463,15 @@ function KnowledgeVaultImportReviewCard({
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {t("notes.knowledgeVaultImportUnreadable")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border/45 bg-background/75 px-2.5 py-2">
+              <p className="text-base font-semibold text-foreground">
+                {review.plan.cardTemplateChanges.length +
+                  review.plan.cardTemplateConflicts.length}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {t("notes.knowledgeVaultImportCardTemplates")}
               </p>
             </div>
           </div>
@@ -5482,7 +5517,41 @@ function KnowledgeVaultImportReviewCard({
               </div>
             ) : null}
 
-            {visibleIssues.length > 0 ? (
+            {visibleCardTemplateChanges.length > 0 ? (
+              <div className="mt-2 space-y-1.5">
+                {visibleCardTemplateChanges.map((change) => (
+                  <div
+                    key={change.template.id}
+                    className="rounded-md border border-border/40 bg-card px-2.5 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {change.template.name}
+                        </p>
+                        <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                          {change.template.id}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+                        {change.status === "missing"
+                          ? t("notes.knowledgeVaultImportWillImportTemplate")
+                          : t("notes.knowledgeVaultImportWillUpdateTemplate")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {hiddenCardTemplateChangeCount > 0 ? (
+                  <p className="px-1 text-[11px] text-muted-foreground">
+                    {t("notes.knowledgeVaultImportMoreTemplates", {
+                      count: hiddenCardTemplateChangeCount,
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {visibleIssues.length > 0 || visibleCardTemplateConflicts.length > 0 ? (
               <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
                 <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5" />
@@ -5506,9 +5575,24 @@ function KnowledgeVaultImportReviewCard({
                       </span>
                     </div>
                   ))}
-                  {hiddenIssueCount > 0 ? (
+                  {visibleCardTemplateConflicts.map((entry) => (
+                    <div
+                      key={`card-template:${entry.template.id}`}
+                      className="flex min-w-0 items-center justify-between gap-2"
+                    >
+                      <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+                        {entry.template.name}
+                      </p>
+                      <span className="shrink-0 rounded-md bg-background/75 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        {t("notes.knowledgeVaultImportTemplateConflictIssue")}
+                      </span>
+                    </div>
+                  ))}
+                  {hiddenIssueCount + hiddenCardTemplateConflictCount > 0 ? (
                     <p className="text-[11px] text-muted-foreground">
-                      {t("notes.knowledgeVaultImportMoreIssues", { count: hiddenIssueCount })}
+                      {t("notes.knowledgeVaultImportMoreIssues", {
+                        count: hiddenIssueCount + hiddenCardTemplateConflictCount,
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -5518,9 +5602,9 @@ function KnowledgeVaultImportReviewCard({
 
           <div className="mt-3 flex items-center justify-between gap-3">
             <p className="min-w-0 text-xs text-muted-foreground">
-              {review.plan.conflicts.length > 0
+              {review.plan.conflicts.length > 0 || review.plan.cardTemplateConflicts.length > 0
                 ? t("notes.knowledgeVaultImportConflictSafeHint")
-                : review.proposals.length > 0
+                : applicableChangeCount > 0
                   ? t("notes.knowledgeVaultImportSafeHint")
                   : t("notes.knowledgeVaultImportNoApplicableChanges")}
             </p>
@@ -5532,7 +5616,7 @@ function KnowledgeVaultImportReviewCard({
                 type="button"
                 size="sm"
                 className="h-7"
-                disabled={isApplying || review.proposals.length === 0}
+                disabled={isApplying || applicableChangeCount === 0}
                 onClick={onApply}
               >
                 {isApplying

@@ -971,6 +971,15 @@ Home note.
       cardTemplates: [staleLocalTemplate],
     });
 
+    expect(plan.cardTemplateChanges).toEqual([
+      {
+        template: disabledTemplate,
+        current: staleLocalTemplate,
+        status: "modified",
+        warnings: ["card_template_modified"],
+      },
+    ]);
+    expect(plan.cardTemplateConflicts).toEqual([]);
     expect(plan.modified[0]?.draft?.draft.contentJson).toMatchObject({
       type: "doc",
       content: [
@@ -986,6 +995,79 @@ Home note.
         },
       ],
     });
+  });
+
+  it("plans missing vault manifest card templates for confirmed import", () => {
+    const exporter = new KnowledgeExporter();
+    const disabledTemplate: KnowledgeCardTemplate = {
+      ...readingPromptTemplate,
+      enabled: false,
+    };
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+        cardTemplates: [disabledTemplate],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: documentFile.content }],
+      cardTemplates: [],
+    });
+
+    expect(plan.modified).toEqual([]);
+    expect(plan.cardTemplateChanges).toEqual([
+      {
+        template: disabledTemplate,
+        status: "missing",
+        warnings: ["card_template_missing"],
+      },
+    ]);
+    expect(plan.cardTemplateConflicts).toEqual([]);
+    expect(createKnowledgeVaultImportWriteProposals(plan)).toEqual([]);
+  });
+
+  it("does not auto-apply older vault card templates over newer local templates", () => {
+    const exporter = new KnowledgeExporter();
+    const newerLocalTemplate: KnowledgeCardTemplate = {
+      ...readingPromptTemplate,
+      version: 5,
+      updatedAt: 99,
+      schemaJson: {
+        cardType: "custom:template-reading-question",
+        title: "New Local Prompt",
+        markdown: "Local prompt:",
+      },
+    };
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+        cardTemplates: [readingPromptTemplate],
+      },
+      { exportedAt: 1700000200000 },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: documentFile.content }],
+      cardTemplates: [newerLocalTemplate],
+    });
+
+    expect(plan.cardTemplateChanges).toEqual([]);
+    expect(plan.cardTemplateConflicts).toEqual([
+      {
+        template: readingPromptTemplate,
+        current: newerLocalTemplate,
+        status: "conflict",
+        warnings: ["local_card_template_newer"],
+      },
+    ]);
   });
 
   it("reconciles moved Obsidian files by stable ReadAny document id", () => {

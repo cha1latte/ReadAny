@@ -341,6 +341,8 @@ export async function applyChanges(
           const localState = existingRecords.get(String(pkValue));
           if (!options.forceApply && !shouldApplyRemoteRecord(record, timestampCol, localState)) {
             skipped++;
+          } else if (!(await shouldApplyRemoteRecordIntegrity(db, tableName, safeRecord, pk))) {
+            skipped++;
           } else {
             try {
               await upsertRecord(db, tableName, safeRecord, pk);
@@ -409,6 +411,36 @@ export async function applyChanges(
       return { applied, skipped };
     }, "apply remote changes"),
   );
+}
+
+async function shouldApplyRemoteRecordIntegrity(
+  db: Awaited<ReturnType<typeof getDB>>,
+  tableName: string,
+  record: Record<string, unknown>,
+  pk: string,
+): Promise<boolean> {
+  if (tableName !== "knowledge_links" || record.to_kind !== "document") {
+    return true;
+  }
+
+  const targetDocumentId = record.to_id;
+  if (!targetDocumentId) {
+    console.warn(
+      `[SimpleSync] Skipping orphaned knowledge_links/${String(record[pk])}: missing target document id`,
+    );
+    return false;
+  }
+
+  const rows = await db.select<{ id: string }>(
+    "SELECT id FROM knowledge_documents WHERE id = ? LIMIT 1",
+    [String(targetDocumentId)],
+  );
+  if (rows.length > 0) return true;
+
+  console.warn(
+    `[SimpleSync] Skipping orphaned knowledge_links/${String(record[pk])}: target document ${String(targetDocumentId)} is missing`,
+  );
+  return false;
 }
 
 async function upsertRecord(

@@ -219,6 +219,15 @@ class FakeSyncDb {
       return (value === undefined ? [] : [{ value }]) as T[];
     }
 
+    const existsMatch = normalized.match(/^SELECT (\w+) FROM (\w+) WHERE (\w+) = \? LIMIT 1$/);
+    if (existsMatch) {
+      const [, selectedColumn, table, pk] = existsMatch;
+      const row = this.tables.get(table)?.get(String(params[0]));
+      return row && String(row[pk]) === String(params[0])
+        ? ([{ [selectedColumn]: row[selectedColumn] }] as T[])
+        : [];
+    }
+
     const changedRowsMatch = normalized.match(/^SELECT \* FROM (\w+) WHERE (\w+) > \?$/);
     if (changedRowsMatch) {
       const [, table, timestampCol] = changedRowsMatch;
@@ -700,6 +709,46 @@ describe("simple sync convergence", () => {
     expect(result).toEqual({ applied: 2, skipped: 0 });
     expect(target.get("books", "book-1")).toBeTruthy();
     expect(target.get("highlights", "hl-1")).toBeTruthy();
+  });
+
+  it("skips knowledge links whose document target is missing", async () => {
+    const target = new FakeSyncDb();
+    target.insert("books", bookRow());
+    target.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "doc-source",
+        type: "standalone_note",
+        title: "Source",
+        source_kind: null,
+        source_id: null,
+      }),
+    );
+    dbMocks.currentDb = target;
+    dbMocks.currentDeviceId = "device-local";
+
+    const result = await applyChanges({
+      deviceId: "device-remote",
+      timestamp: now,
+      since: 0,
+      tables: {
+        knowledge_links: {
+          records: [
+            knowledgeLinkRow({
+              id: "stale-doc-link",
+              from_document_id: "doc-source",
+              to_kind: "document",
+              to_id: "doc-missing",
+              updated_at: 1500,
+            }),
+          ],
+          deletedIds: [],
+        },
+      },
+    });
+
+    expect(result).toEqual({ applied: 0, skipped: 1 });
+    expect(target.get("knowledge_links", "stale-doc-link")).toBeUndefined();
   });
 
   it("syncs knowledge documents, links, attachments, and card templates", async () => {

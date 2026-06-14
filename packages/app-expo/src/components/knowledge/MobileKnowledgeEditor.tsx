@@ -69,6 +69,7 @@ import type {
 } from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { generateId } from "@readany/core/utils";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { Asset } from "expo-asset";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -247,6 +248,7 @@ export function MobileKnowledgeEditor({
   const styles = makeStyles(colors);
   const isDocumentLayout = layout === "document";
   const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>([]);
+  const templateLoaderMountedRef = useRef(false);
   const normalizedContentJson = useMemo(
     () =>
       normalizeTiptapDocument(value.contentJson, {
@@ -414,20 +416,31 @@ export function MobileKnowledgeEditor({
     onChange(normalizedValue);
   }, [normalizedValue, onChange, readOnly, value.contentJson, valueFingerprint]);
 
-  useEffect(() => {
-    let mounted = true;
-    void getKnowledgeCardTemplates()
-      .then((templates) => {
-        if (mounted) setCardTemplates(templates.filter((template) => !template.builtIn));
-      })
-      .catch((error) => {
-        console.warn("[MobileKnowledgeEditor] Failed to load card templates:", error);
-      });
-
-    return () => {
-      mounted = false;
-    };
+  const reloadCardTemplates = useCallback(async () => {
+    try {
+      const templates = await getKnowledgeCardTemplates();
+      if (!templateLoaderMountedRef.current) return;
+      setCardTemplates(templates.filter((template) => !template.builtIn));
+    } catch (error) {
+      console.warn("[MobileKnowledgeEditor] Failed to load card templates:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    templateLoaderMountedRef.current = true;
+    void reloadCardTemplates();
+    const offTemplateChange = eventBus.on("knowledge:card-templates-changed", () => {
+      void reloadCardTemplates();
+    });
+    const offSyncCompleted = eventBus.on("sync:completed", () => {
+      void reloadCardTemplates();
+    });
+    return () => {
+      templateLoaderMountedRef.current = false;
+      offTemplateChange();
+      offSyncCompleted();
+    };
+  }, [reloadCardTemplates]);
 
   useEffect(() => {
     return () => {

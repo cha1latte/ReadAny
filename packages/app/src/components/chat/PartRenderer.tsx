@@ -74,7 +74,7 @@ function loadKnowledgeCardTemplatesForPreview(): Promise<KnowledgeCardTemplate[]
   if (knowledgeCardTemplatesCache) return Promise.resolve(knowledgeCardTemplatesCache);
   if (knowledgeCardTemplatesPromise) return knowledgeCardTemplatesPromise;
 
-  knowledgeCardTemplatesPromise = getKnowledgeCardTemplates()
+  knowledgeCardTemplatesPromise = getKnowledgeCardTemplates({ includeDisabled: true })
     .then((templates) => {
       knowledgeCardTemplatesCache = templates;
       return templates;

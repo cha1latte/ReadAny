@@ -486,7 +486,7 @@ async function collectKnowledgeVaultInput(liveDocument: KnowledgeDocument, books
   const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
-    getKnowledgeCardTemplates(),
+    getKnowledgeCardTemplates({ includeDisabled: true }),
   ]);
 
   return {
@@ -512,7 +512,7 @@ async function collectBookKnowledgeExportInput(
   const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
-    getKnowledgeCardTemplates(),
+    getKnowledgeCardTemplates({ includeDisabled: true }),
   ]);
 
   return {
@@ -1946,7 +1946,7 @@ export function NotesPage() {
             content: await readTextFile(path),
           })),
         ),
-        getKnowledgeCardTemplates(),
+        getKnowledgeCardTemplates({ includeDisabled: true }),
       ]);
       const plan = createKnowledgeMarkdownImportPlan({
         bookId: selectedKnowledgeBookId,
@@ -2072,7 +2072,9 @@ export function NotesPage() {
       const currentInput = liveDocument
         ? await collectKnowledgeVaultInput(liveDocument, books)
         : null;
-      const cardTemplates = currentInput?.cardTemplates ?? (await getKnowledgeCardTemplates());
+      const cardTemplates =
+        currentInput?.cardTemplates ??
+        (await getKnowledgeCardTemplates({ includeDisabled: true }));
       const currentFiles = currentInput
         ? knowledgeExporter.buildVaultPackage(currentInput, {
             format: "obsidian",

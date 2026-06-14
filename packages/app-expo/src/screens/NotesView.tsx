@@ -331,7 +331,7 @@ async function collectBookKnowledgeExportInput(
   const [linksByDocument, attachmentsByDocument, cardTemplates] = await Promise.all([
     Promise.all(mergedDocuments.map((document) => getKnowledgeLinks(document.id))),
     Promise.all(mergedDocuments.map((document) => getKnowledgeAttachments(document.id))),
-    getKnowledgeCardTemplates(),
+    getKnowledgeCardTemplates({ includeDisabled: true }),
   ]);
 
   return {
@@ -1860,7 +1860,7 @@ export function NotesView({
             content: await platform.readTextFile(path),
           })),
         ),
-        getKnowledgeCardTemplates(),
+        getKnowledgeCardTemplates({ includeDisabled: true }),
       ]);
       const plan = createKnowledgeMarkdownImportPlan({
         bookId: selectedKnowledgeBookId,

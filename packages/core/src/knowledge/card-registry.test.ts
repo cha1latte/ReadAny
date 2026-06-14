@@ -671,6 +671,45 @@ describe("ReadAny card registry", () => {
     expect(fallbackMarkdown).not.toContain("Should stay hidden");
   });
 
+  it("keeps disabled custom card templates usable for existing card rendering", () => {
+    const template = {
+      ...createCustomReadAnyCardTemplate({
+        id: "template-archive",
+        name: "Archived Prompt",
+        fields: [
+          { key: "question", label: "Question", type: "text" },
+          { key: "answer", label: "Answer", type: "multiline" },
+        ],
+        now: 123,
+      }),
+      enabled: false,
+    };
+
+    const model = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-archive",
+        version: 1,
+        title: "Old prompt",
+        markdown: "Archived prompt body.",
+        data: {
+          question: "What survived sync?",
+          answer: "The old card still has field labels.",
+        },
+      },
+      { body: "", cardTemplates: [template] },
+    );
+
+    expect(model).toMatchObject({
+      state: "custom",
+      isCustomCard: true,
+      insertLabel: "Archived Prompt",
+    });
+    expect(model.structuredFields).toEqual([
+      { key: "question", label: "Question", value: "What survived sync?" },
+      { key: "answer", label: "Answer", value: "The old card still has field labels." },
+    ]);
+  });
+
   it("keeps visible missing required custom card fields readable", () => {
     const template = createCustomReadAnyCardTemplate({
       id: "template-concept",

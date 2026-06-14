@@ -332,7 +332,7 @@ export async function loadKnowledgePromptContext(
             limit: Math.max(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS, 12),
           })
         : Promise.resolve([]),
-      getKnowledgeCardTemplates().catch((error) => {
+      getKnowledgeCardTemplates({ includeDisabled: true }).catch((error) => {
         console.warn("[knowledge-context] Failed to load card templates:", error);
         return [] as KnowledgeCardTemplate[];
       }),

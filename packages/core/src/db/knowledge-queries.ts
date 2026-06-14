@@ -107,6 +107,10 @@ interface KnowledgeCardTemplateRow {
   updated_at: number;
 }
 
+export interface GetKnowledgeCardTemplatesOptions {
+  includeDisabled?: boolean;
+}
+
 export interface CreateKnowledgeDocumentInput {
   id?: string;
   bookId?: string;
@@ -694,10 +698,14 @@ export async function deleteKnowledgeAttachment(id: string): Promise<void> {
   await database.execute("DELETE FROM knowledge_attachments WHERE id = ?", [id]);
 }
 
-export async function getKnowledgeCardTemplates(): Promise<KnowledgeCardTemplate[]> {
+export async function getKnowledgeCardTemplates(
+  options: GetKnowledgeCardTemplatesOptions = {},
+): Promise<KnowledgeCardTemplate[]> {
   const database = await getDB();
   const rows = await database.select<KnowledgeCardTemplateRow>(
-    "SELECT * FROM knowledge_card_templates WHERE enabled = 1 ORDER BY built_in DESC, name ASC",
+    options.includeDisabled
+      ? "SELECT * FROM knowledge_card_templates ORDER BY built_in DESC, enabled DESC, name ASC"
+      : "SELECT * FROM knowledge_card_templates WHERE enabled = 1 ORDER BY built_in DESC, name ASC",
   );
   return rows.map(rowToKnowledgeCardTemplate);
 }

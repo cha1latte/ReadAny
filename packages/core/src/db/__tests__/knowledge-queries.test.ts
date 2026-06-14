@@ -510,6 +510,29 @@ _Source: Chapter 1_`,
       builtIn: true,
       enabled: true,
     });
+    expect(mockSelect.mock.calls[0][0]).toContain("WHERE enabled = 1");
+
+    mockSelect.mockClear();
+    mockSelect.mockResolvedValue([
+      {
+        id: "card-archive",
+        name: "Archived card",
+        version: 2,
+        schema_json: '{"cardType":"custom:card-archive"}',
+        built_in: 0,
+        enabled: 0,
+        created_at: 1000,
+        updated_at: 1200,
+      },
+    ]);
+    const archivedTemplates = await getKnowledgeCardTemplates({ includeDisabled: true });
+    expect(mockSelect.mock.calls[0][0]).not.toContain("WHERE enabled = 1");
+    expect(archivedTemplates[0]).toMatchObject({
+      id: "card-archive",
+      schemaJson: { cardType: "custom:card-archive" },
+      builtIn: false,
+      enabled: false,
+    });
 
     const template: KnowledgeCardTemplate = {
       id: "card-review",

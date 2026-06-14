@@ -448,7 +448,7 @@ export function MobileKnowledgeEditor({
           const cardType = attrs.cardType ?? `custom:${template.id}`;
           return { template, cardType };
         })
-        .filter(({ cardType }) => canInsertCard(cardType))
+        .filter(({ template, cardType }) => template.enabled !== false && canInsertCard(cardType))
         .map<InsertableCardItem>(({ template, cardType }) => ({
           key: `template:${template.id}`,
           cardType,
@@ -515,7 +515,7 @@ export function MobileKnowledgeEditor({
 
   const reloadCardTemplates = useCallback(async () => {
     try {
-      const templates = await getKnowledgeCardTemplates();
+      const templates = await getKnowledgeCardTemplates({ includeDisabled: true });
       if (!templateLoaderMountedRef.current) return;
       setCardTemplates(templates.filter((template) => !template.builtIn));
     } catch (error) {
@@ -1150,7 +1150,11 @@ export function MobileKnowledgeEditor({
               void (async () => {
                 try {
                   await disableKnowledgeCardTemplate(template.id);
-                  setCardTemplates((current) => current.filter((item) => item.id !== template.id));
+                  setCardTemplates((current) =>
+                    current.map((item) =>
+                      item.id === template.id ? { ...item, enabled: false } : item,
+                    ),
+                  );
                   if (editingTemplateId === template.id) {
                     resetTemplateForm();
                     setIsTemplateFormOpen(false);

@@ -139,8 +139,8 @@ knowledge editor shell, AI proposal/result renderers, ReadAny cards,
 internal/source links, Obsidian export markers, and portable attachment URIs.
 The desktop and mobile chat renderer contract checks scan the chat renderer
 sources for AI knowledge proposal/result/failure cards, visible vault paths,
-current-workspace document open actions, safe no-write hints, and
-confirmation-required apply behavior.
+current-workspace document open actions from result and applied proposal cards,
+safe no-write hints, and confirmation-required apply behavior.
 The desktop and mobile knowledge workspace contract checks scan the runtime UI
 sources for the vault tree, root/folder browser, document editor, breadcrumb/path,
 search, create target, import review, and keyboard-safe mobile editor entry
@@ -167,7 +167,7 @@ Evidence mapping:
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 | Draft recovery, mobile WebView messages, and error states are typed and present in the generated bundle. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, mobile WebView bundle contract check, `app-expo` TypeScript |
 | Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
-| AI reads knowledge safely, keeps prompt/exact-read outgoing links, backlinks, relation labels, CFIs, relation directions, and vault paths visible, can open matching result documents in the current knowledge workspace, and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
+| AI reads knowledge safely, keeps prompt/exact-read outgoing links, backlinks, relation labels, CFIs, relation directions, and vault paths visible, can open matching result/applied-proposal documents in the current knowledge workspace, and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
 | Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states, and export as readable Obsidian callouts. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-exporter.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |

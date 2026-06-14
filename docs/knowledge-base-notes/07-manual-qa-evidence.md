@@ -13,7 +13,7 @@ or has an explicit owner-approved exception, and
 | Field | Value |
 | --- | --- |
 | Branch | `feat/knowledge-base-notes-research` |
-| Commit under test | `88c26773` |
+| Commit under test | `c9c1f39f` |
 | Tester | Codex automated baseline |
 | Test date | 2026-06-14 |
 | `pnpm acceptance:knowledge` result | Pass: 32 core test files / 446 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
@@ -43,8 +43,8 @@ or has an explicit owner-approved exception, and
 
 | Check | Expected | Status | Evidence |
 | --- | --- | --- | --- |
-| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Commit `88c26773` was created after the automated gate passed; it is the code baseline for the next manual QA pass. |
-| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-14 for commit `88c26773`: 32 core test files / 446 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
+| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Commit `c9c1f39f` was created after the automated gate passed; it is the code baseline for the next manual QA pass. |
+| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-14 for commit `c9c1f39f`: 32 core test files / 446 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
 | Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. | Pass | The desktop Vite production bundle completed successfully; warnings were the known dynamic-import/chunk-size warnings documented as non-blocking in the runbook. |
 
 ## Desktop QA

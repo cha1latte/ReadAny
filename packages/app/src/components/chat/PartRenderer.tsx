@@ -4,6 +4,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { getKnowledgeCardTemplates } from "@/lib/db/database";
 import {
   getKnowledgeToolResultDisplay,
   getToolResultError,
@@ -26,6 +27,7 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
+import type { KnowledgeCardTemplate } from "@readany/core/types";
 import { cn, providerRequiresApiKey } from "@readany/core/utils";
 import {
   Brain,
@@ -44,6 +46,9 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 
 const TEXT_RENDER_THROTTLE_MS = 100;
 
+let knowledgeCardTemplatesCache: KnowledgeCardTemplate[] | null = null;
+let knowledgeCardTemplatesPromise: Promise<KnowledgeCardTemplate[]> | null = null;
+
 // Lazy load MindmapView to avoid bundling markmap for non-mindmap messages
 const LazyMindmapView = lazy(() =>
   import("@/components/common/MindmapView").then((m) => ({ default: m.MindmapView })),
@@ -60,6 +65,27 @@ function queueKnowledgeProposalSummaryMaintenance(documentId: string | undefined
   void maybeCompressKnowledgeDocumentsById([documentId], aiConfig).catch((error) => {
     console.warn("[KnowledgeProposal] Background summary maintenance failed:", error);
   });
+}
+
+function loadKnowledgeCardTemplatesForPreview(): Promise<KnowledgeCardTemplate[]> {
+  if (knowledgeCardTemplatesCache) return Promise.resolve(knowledgeCardTemplatesCache);
+  if (knowledgeCardTemplatesPromise) return knowledgeCardTemplatesPromise;
+
+  knowledgeCardTemplatesPromise = getKnowledgeCardTemplates()
+    .then((templates) => {
+      knowledgeCardTemplatesCache = templates;
+      return templates;
+    })
+    .catch((error) => {
+      console.warn("[KnowledgeProposal] Failed to load card templates:", error);
+      knowledgeCardTemplatesCache = [];
+      return [];
+    })
+    .finally(() => {
+      knowledgeCardTemplatesPromise = null;
+    });
+
+  return knowledgeCardTemplatesPromise;
 }
 
 function useThrottledText(text: string): string {
@@ -701,7 +727,23 @@ function KnowledgeProposalCard({
   onApply: () => void;
 }) {
   const { t } = useTranslation();
-  const preview = createKnowledgeWriteProposalPreview(proposal);
+  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>(
+    () => knowledgeCardTemplatesCache ?? [],
+  );
+  useEffect(() => {
+    if (knowledgeCardTemplatesCache) return;
+    let mounted = true;
+    void loadKnowledgeCardTemplatesForPreview().then((templates) => {
+      if (mounted) setCardTemplates(templates);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const preview = useMemo(
+    () => createKnowledgeWriteProposalPreview(proposal, { cardTemplates }),
+    [cardTemplates, proposal],
+  );
   const actionLabel =
     preview.action === "create"
       ? t("knowledgeProposal.create")

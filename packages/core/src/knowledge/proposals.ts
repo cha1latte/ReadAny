@@ -9,6 +9,7 @@ import {
 } from "../db/database";
 import type {
   JSONValue,
+  KnowledgeCardTemplate,
   KnowledgeDocument,
   KnowledgeDocumentType,
   KnowledgeLink,
@@ -118,6 +119,10 @@ export interface KnowledgeWriteProposalPreview {
   targetPath?: string;
   visiblePath?: string;
   hasPathChange: boolean;
+}
+
+export interface KnowledgeWriteProposalPreviewOptions {
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
@@ -476,10 +481,13 @@ export function getKnowledgeWriteProposal(value: unknown): KnowledgeWriteProposa
 
 export function createKnowledgeWriteProposalPreview(
   proposal: KnowledgeWriteProposal,
+  options: KnowledgeWriteProposalPreviewOptions = {},
 ): KnowledgeWriteProposalPreview {
   if (proposal.action === "create") {
     const contentPreview = proposal.draft.excerpt || proposal.draft.contentMd || "";
-    const contentPreviewHtml = renderKnowledgeJsonToReadOnlyHtml(proposal.draft.contentJson);
+    const contentPreviewHtml = renderKnowledgeJsonToReadOnlyHtml(proposal.draft.contentJson, {
+      cardTemplates: options.cardTemplates,
+    });
     return {
       action: proposal.action,
       title: proposal.draft.title ?? "",
@@ -499,7 +507,9 @@ export function createKnowledgeWriteProposalPreview(
       proposal.patch.excerpt || proposal.patch.contentMd || proposal.current?.excerpt || "";
     const contentPreviewHtml =
       proposal.patch.contentJson || proposal.patch.contentMd
-        ? renderKnowledgeJsonToReadOnlyHtml(proposal.patch.contentJson)
+        ? renderKnowledgeJsonToReadOnlyHtml(proposal.patch.contentJson, {
+            cardTemplates: options.cardTemplates,
+          })
         : "";
     const currentPath = proposal.current?.path;
     const targetPath = proposal.targetPath;

@@ -11,6 +11,7 @@ import {
   getToolResultError,
   maybeCompressKnowledgeDocumentsById,
 } from "@readany/core/ai";
+import { getKnowledgeCardTemplates } from "@readany/core/db/database";
 import type { KnowledgeToolResultDisplay } from "@readany/core/ai";
 import {
   type KnowledgeWriteProposal,
@@ -28,6 +29,7 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
+import type { KnowledgeCardTemplate } from "@readany/core/types";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -45,6 +47,30 @@ interface PartProps {
   part: Part;
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
+}
+
+let knowledgeCardTemplatesCache: KnowledgeCardTemplate[] | null = null;
+let knowledgeCardTemplatesPromise: Promise<KnowledgeCardTemplate[]> | null = null;
+
+function loadKnowledgeCardTemplatesForPreview(): Promise<KnowledgeCardTemplate[]> {
+  if (knowledgeCardTemplatesCache) return Promise.resolve(knowledgeCardTemplatesCache);
+  if (knowledgeCardTemplatesPromise) return knowledgeCardTemplatesPromise;
+
+  knowledgeCardTemplatesPromise = getKnowledgeCardTemplates()
+    .then((templates) => {
+      knowledgeCardTemplatesCache = templates;
+      return templates;
+    })
+    .catch((error) => {
+      console.warn("[KnowledgeProposal] Failed to load card templates:", error);
+      knowledgeCardTemplatesCache = [];
+      return [];
+    })
+    .finally(() => {
+      knowledgeCardTemplatesPromise = null;
+    });
+
+  return knowledgeCardTemplatesPromise;
 }
 
 function queueKnowledgeProposalSummaryMaintenance(documentId: string | undefined): void {
@@ -590,7 +616,23 @@ function KnowledgeProposalCard({
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
-  const preview = createKnowledgeWriteProposalPreview(proposal);
+  const [cardTemplates, setCardTemplates] = useState<KnowledgeCardTemplate[]>(
+    () => knowledgeCardTemplatesCache ?? [],
+  );
+  useEffect(() => {
+    if (knowledgeCardTemplatesCache) return;
+    let mounted = true;
+    void loadKnowledgeCardTemplatesForPreview().then((templates) => {
+      if (mounted) setCardTemplates(templates);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const preview = useMemo(
+    () => createKnowledgeWriteProposalPreview(proposal, { cardTemplates }),
+    [cardTemplates, proposal],
+  );
   const actionLabel =
     preview.action === "create"
       ? t("knowledgeProposal.create", "创建知识文档")

@@ -157,6 +157,75 @@ describe("knowledge write proposals", () => {
     expect(preview.contentPreviewHtml).not.toContain("private");
   });
 
+  it("migrates custom card templates inside proposal previews", () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      targetPath: "Knowledge base / Concepts / Attention",
+      draft: {
+        id: "proposal-card-migration",
+        type: "standalone_note",
+        title: "Attention",
+        contentMd: "Card migration preview.",
+        contentJson: {
+          type: "doc",
+          content: [
+            {
+              type: "readanyCard",
+              attrs: {
+                cardType: "custom:template-concept",
+                version: 1,
+                title: "Attention",
+                markdown: "User body",
+                data: {
+                  summary: "Ritual attention",
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal, {
+      cardTemplates: [
+        {
+          id: "template-concept",
+          name: "Concept",
+          version: 2,
+          schemaJson: {
+            cardType: "custom:template-concept",
+            title: "Concept",
+            markdown: "Definition:\nEvidence:",
+            migrations: [
+              {
+                fromVersion: 1,
+                toVersion: 2,
+                dataRenames: {
+                  summary: "body.abstract",
+                },
+              },
+            ],
+          },
+          builtIn: false,
+          enabled: true,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    });
+
+    expect(preview.contentPreviewHtml).toContain('data-readany-card-version="2"');
+    expect(preview.contentPreviewHtml).toContain('data-readany-card-state="custom"');
+    expect(preview.contentPreviewHtml).toContain("<h4>Attention</h4>");
+    expect(preview.contentPreviewHtml).toContain("User body");
+  });
+
   it("rejects ordinary tool results and malformed proposal payloads", () => {
     expect(getKnowledgeWriteProposal({ success: true, documents: [] })).toBeNull();
     expect(

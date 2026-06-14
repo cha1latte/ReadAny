@@ -33,7 +33,11 @@ missing:
   - Connects documents to books, highlights, CFIs, URLs, Obsidian paths, and
     other knowledge documents.
 - `knowledge_attachments`
-  - Represents document-owned assets for export and future sync/file workflows.
+  - Represents document-owned assets for editor rendering, export, and file
+    sync workflows.
+  - Desktop and mobile can persist local image attachments into the app data
+    directory, attach them to a knowledge document, and insert portable image
+    nodes that keep the attachment ID.
 - `knowledge_card_templates`
   - Stores built-in and user-created card templates.
 
@@ -121,9 +125,12 @@ The current sync service is per-device JSON changesets:
 - Deletions use `sync_tombstones`.
 - Conflict behavior is mostly last-write-wins based on timestamp columns.
 
-The knowledge tables are now part of simple sync. File-backed attachment sync is
-still the area that needs the most care, because Markdown files, attachments, or
-Obsidian vault outputs must stay represented in file sync manifests.
+The knowledge tables are now part of simple sync. File-backed knowledge
+attachments are also included in file sync manifests: local attachment files can
+upload to `/readany/data/knowledge/attachments`, missing local files can be
+downloaded from manifest paths, and stale local remote paths are reconciled from
+the manifest. Obsidian vault outputs remain export/import artifacts rather than
+the sync backbone.
 
 ## Testing Baseline
 

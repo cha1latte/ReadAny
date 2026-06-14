@@ -807,10 +807,11 @@ Required behavior:
   do not destroy the document.
 - Unsupported card versions must show readable fallback cards rather than raw
   JSON or stripped content.
-- URL images and desktop local image attachments are the first asset slice.
-  Mobile local attachment upload and cross-device file bytes still need to
-  connect to `knowledge_attachments` and file sync before this is advertised as
-  full asset support.
+- URL images plus desktop and mobile local image attachments are the first asset
+  slice. Local image attachments now persist through `knowledge_attachments`,
+  render through portable attachment IDs, and participate in file sync
+  manifests. Broader non-image file cards and deeper Obsidian asset import are
+  still later polish.
 
 Desktop:
 

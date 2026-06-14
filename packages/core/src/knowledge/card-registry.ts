@@ -80,13 +80,27 @@ export interface ReadAnyCardTemplateSchema {
   migrations?: ReadAnyCardTemplateMigration[];
 }
 
-export type ReadAnyCardTemplateFieldType = "text" | "multiline" | "number" | "checkbox";
+export type ReadAnyCardTemplateFieldType =
+  | "text"
+  | "multiline"
+  | "number"
+  | "checkbox"
+  | "select"
+  | "multiselect";
+
+export interface ReadAnyCardTemplateFieldOption {
+  value: string;
+  label: string;
+}
 
 export interface ReadAnyCardTemplateField {
   key: string;
   label: string;
   type: ReadAnyCardTemplateFieldType;
   placeholder?: string;
+  helpText?: string;
+  required?: boolean;
+  options?: ReadAnyCardTemplateFieldOption[];
   defaultValue?: JSONValue;
 }
 
@@ -188,6 +202,8 @@ const READANY_CARD_TEMPLATE_FIELD_TYPES = new Set<ReadAnyCardTemplateFieldType>(
   "multiline",
   "number",
   "checkbox",
+  "select",
+  "multiselect",
 ]);
 
 function normalizeTemplateFieldType(value: unknown): ReadAnyCardTemplateFieldType {
@@ -209,9 +225,57 @@ function normalizeTemplateFieldKey(input: string, fallback: string): string {
   return normalized || fallback;
 }
 
+function normalizeTemplateFieldOptionValue(input: unknown, fallback: string): string {
+  const text =
+    typeof input === "string" || typeof input === "number" || typeof input === "boolean"
+      ? String(input).trim()
+      : "";
+  return text || fallback;
+}
+
+function normalizeReadAnyCardTemplateFieldOptions(
+  options: unknown,
+): ReadAnyCardTemplateFieldOption[] {
+  if (!Array.isArray(options)) return [];
+
+  const usedValues = new Set<string>();
+  const normalizedOptions: ReadAnyCardTemplateFieldOption[] = [];
+  for (const [index, rawOption] of options.entries()) {
+    const fallbackValue = `option_${index + 1}`;
+    const label = isRecord(rawOption)
+      ? (firstString(rawOption.label, rawOption.value) ?? `Option ${index + 1}`)
+      : normalizeTemplateFieldOptionValue(rawOption, `Option ${index + 1}`);
+    const baseValue = normalizeTemplateFieldOptionValue(
+      isRecord(rawOption) ? (rawOption.value ?? rawOption.label) : rawOption,
+      fallbackValue,
+    );
+    let value = baseValue;
+    let suffix = 2;
+    while (usedValues.has(value)) {
+      value = `${baseValue}_${suffix}`;
+      suffix += 1;
+    }
+    usedValues.add(value);
+    normalizedOptions.push({ value, label });
+  }
+
+  return normalizedOptions.slice(0, 24);
+}
+
+function getTemplateFieldOptionValue(
+  options: ReadAnyCardTemplateFieldOption[],
+  value: unknown,
+): string | undefined {
+  const text = normalizeTemplateFieldOptionValue(value, "");
+  if (!text) return undefined;
+  if (options.length === 0) return text;
+  return options.find((option) => option.value === text || option.label === text)?.value;
+}
+
 function normalizeTemplateFieldDefaultValue(
   type: ReadAnyCardTemplateFieldType,
   value: unknown,
+  options: ReadAnyCardTemplateFieldOption[] = [],
 ): JSONValue | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -224,6 +288,23 @@ function normalizeTemplateFieldDefaultValue(
       if (text === "false") return false;
     }
     return undefined;
+  }
+
+  if (type === "select") {
+    const optionValue = getTemplateFieldOptionValue(options, value);
+    return optionValue ?? undefined;
+  }
+
+  if (type === "multiselect") {
+    const values = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? value.split(/[,\n]/)
+        : [];
+    const selectedValues = values
+      .map((item) => getTemplateFieldOptionValue(options, item))
+      .filter((item): item is string => !!item);
+    return [...new Set(selectedValues)];
   }
 
   if (type === "number") {
@@ -265,7 +346,14 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
     };
     const placeholder = stringAttr(rawField.placeholder);
     if (placeholder) field.placeholder = placeholder;
-    const defaultValue = normalizeTemplateFieldDefaultValue(type, rawField.defaultValue);
+    const helpText = firstString(rawField.helpText, rawField.description);
+    if (helpText) field.helpText = helpText;
+    if (rawField.required === true) field.required = true;
+    const options = normalizeReadAnyCardTemplateFieldOptions(rawField.options);
+    if ((type === "select" || type === "multiselect") && options.length > 0) {
+      field.options = options;
+    }
+    const defaultValue = normalizeTemplateFieldDefaultValue(type, rawField.defaultValue, options);
     if (defaultValue !== undefined && isJsonValue(defaultValue)) {
       field.defaultValue = defaultValue;
     }
@@ -1005,8 +1093,34 @@ export function getReadAnyCardTemplateFields(
   return normalizeReadAnyCardTemplateFields(templateSchema(template).fields);
 }
 
-function formatStructuredFieldValue(value: unknown): string | undefined {
+function formatStructuredFieldValue(
+  field: ReadAnyCardTemplateField,
+  value: unknown,
+): string | undefined {
   if (value === undefined || value === null) return undefined;
+
+  if (field.type === "checkbox") {
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return undefined;
+  }
+
+  if (field.type === "select") {
+    const optionValue = getTemplateFieldOptionValue(field.options ?? [], value);
+    if (!optionValue) return undefined;
+    return field.options?.find((option) => option.value === optionValue)?.label ?? optionValue;
+  }
+
+  if (field.type === "multiselect") {
+    const rawValues = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+    const selectedValues = rawValues
+      .map((item) => getTemplateFieldOptionValue(field.options ?? [], item))
+      .filter((item): item is string => !!item);
+    const labels = [...new Set(selectedValues)].map(
+      (item) => field.options?.find((option) => option.value === item)?.label ?? item,
+    );
+    return labels.length > 0 ? labels.join(", ") : undefined;
+  }
+
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
   if (typeof value === "string") {
@@ -1029,7 +1143,7 @@ function createStructuredFieldValues(
   const data = attrs.data;
   return getReadAnyCardTemplateFields(template)
     .map((field) => {
-      const value = formatStructuredFieldValue(data[field.key]);
+      const value = formatStructuredFieldValue(field, data[field.key]);
       return value ? { key: field.key, label: field.label, value } : undefined;
     })
     .filter((field): field is ReadAnyCardStructuredFieldValue => !!field);

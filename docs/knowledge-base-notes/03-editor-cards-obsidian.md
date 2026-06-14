@@ -617,6 +617,10 @@ Each custom card must degrade to readable Markdown.
 If a custom card has structured fields, exported Markdown and AI context should
 render those fields as ordinary labeled text before any hidden ReadAny metadata.
 The user should not need to inspect encoded JSON to understand the card.
+Structured fields can be text, long text, number, checkbox, single choice, or
+multiple choice fields. Choice fields keep stable values in card data while
+rendering their user-facing labels in Markdown export, read-only HTML, and AI
+context.
 
 Recommended syntax:
 

@@ -342,5 +342,17 @@
       "mermaid": "Insert a flowchart, relation map, or sequence diagram.",
       "relatedNotes": "Connect related notes across this book or other books."
     }
-  }
+  },
+  "knowledgeCustomCardFieldTypeSelect": "Single choice",
+  "knowledgeCustomCardFieldTypeMultiselect": "Multiple choice",
+  "knowledgeCustomCardFieldPlaceholder": "Placeholder",
+  "knowledgeCustomCardFieldPlaceholderPlaceholder": "Shown while empty",
+  "knowledgeCustomCardFieldHelpText": "Help text",
+  "knowledgeCustomCardFieldHelpTextPlaceholder": "Short hint under the field",
+  "knowledgeCustomCardFieldRequired": "Required",
+  "knowledgeCustomCardFieldRequiredOn": "Required",
+  "knowledgeCustomCardFieldOptions": "Options",
+  "knowledgeCustomCardFieldOptionsPlaceholder": "Important | important\nLater | later",
+  "knowledgeCustomCardFieldOptionsHint": "One option per line. Use Label | value when you need a stable value.",
+  "knowledgeCardFieldSelectEmpty": "Choose..."
 }

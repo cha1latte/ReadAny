@@ -195,10 +195,12 @@ Verification:
 Status: partially implemented. Built-in card registry, card templates, desktop
 node views, mobile WebView card rendering, Markdown fallbacks, shared card
 attribute upgrades, visible unknown/future-version card fallback metadata,
-user-created custom card templates from the desktop/mobile insert menus, and a
-first desktop/mobile structured-field schema editor exist. Richer card editing
-and JSON-based custom template schema migrations now have a shared core path;
-conditional field logic and a fuller visual schema designer remain future work.
+user-created custom card templates from the desktop/mobile insert menus, and
+desktop/mobile structured-field schema editing exist. The schema editor now
+supports text, long text, number, checkbox, single-choice, and multi-choice
+fields with placeholders, help text, required markers, options, and defaults.
+Richer card editing and JSON-based custom template schema migrations now have a
+shared core path; conditional field visibility logic remains future work.
 
 Goal:
 

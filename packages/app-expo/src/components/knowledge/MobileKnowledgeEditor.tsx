@@ -143,6 +143,60 @@ export interface MobileKnowledgeSourceReferenceRequest {
   cfi?: string;
 }
 
+const customCardFieldTypes = [
+  "text",
+  "multiline",
+  "number",
+  "checkbox",
+  "select",
+  "multiselect",
+] as const satisfies ReadAnyCardTemplateField["type"][];
+
+function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
+  return field.type === "select" || field.type === "multiselect";
+}
+
+function createDefaultTemplateFieldOptions() {
+  return [
+    { label: "选项 1", value: "option_1" },
+    { label: "选项 2", value: "option_2" },
+  ];
+}
+
+function formatTemplateFieldOptionsText(field: ReadAnyCardTemplateField): string {
+  return (field.options ?? [])
+    .map((option) =>
+      option.label === option.value ? option.value : `${option.label} | ${option.value}`,
+    )
+    .join("\n");
+}
+
+function parseTemplateFieldOptionsText(input: string): ReadAnyCardTemplateField["options"] {
+  return input
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const [labelPart, valuePart] = line.split("|").map((part) => part.trim());
+      const label = labelPart || `选项 ${index + 1}`;
+      const value =
+        valuePart ||
+        label
+          .toLowerCase()
+          .replace(/[^a-z0-9_-\s]/g, "")
+          .replace(/[\s-]+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_+|_+$/g, "") ||
+        `option_${index + 1}`;
+      return { label, value };
+    });
+}
+
+function getTemplateFieldDefaultString(field: ReadAnyCardTemplateField): string {
+  if (field.defaultValue === undefined || field.defaultValue === null) return "";
+  return String(field.defaultValue);
+}
+
 interface MobileKnowledgeEditorProps {
   documentId?: string;
   value: MobileKnowledgeEditorValue;
@@ -2252,21 +2306,34 @@ export function MobileKnowledgeEditor({
                                     {t("notes.knowledgeCustomCardFieldType", "类型")}
                                   </Text>
                                   <View style={styles.cardTemplateTypeGrid}>
-                                    {[
-                                      ["text", t("notes.knowledgeCustomCardFieldTypeText", "文本")],
-                                      [
-                                        "multiline",
-                                        t("notes.knowledgeCustomCardFieldTypeMultiline", "长文本"),
-                                      ],
-                                      [
-                                        "number",
-                                        t("notes.knowledgeCustomCardFieldTypeNumber", "数字"),
-                                      ],
-                                      [
-                                        "checkbox",
-                                        t("notes.knowledgeCustomCardFieldTypeCheckbox", "复选框"),
-                                      ],
-                                    ].map(([type, label]) => {
+                                    {customCardFieldTypes.map((type) => {
+                                      const label =
+                                        type === "text"
+                                          ? t("notes.knowledgeCustomCardFieldTypeText", "文本")
+                                          : type === "multiline"
+                                            ? t(
+                                                "notes.knowledgeCustomCardFieldTypeMultiline",
+                                                "长文本",
+                                              )
+                                            : type === "number"
+                                              ? t(
+                                                  "notes.knowledgeCustomCardFieldTypeNumber",
+                                                  "数字",
+                                                )
+                                              : type === "checkbox"
+                                                ? t(
+                                                    "notes.knowledgeCustomCardFieldTypeCheckbox",
+                                                    "复选框",
+                                                  )
+                                                : type === "select"
+                                                  ? t(
+                                                      "notes.knowledgeCustomCardFieldTypeSelect",
+                                                      "单选",
+                                                    )
+                                                  : t(
+                                                      "notes.knowledgeCustomCardFieldTypeMultiselect",
+                                                      "多选",
+                                                    );
                                       const isActive = field.type === type;
                                       return (
                                         <TouchableOpacity
@@ -2278,7 +2345,21 @@ export function MobileKnowledgeEditor({
                                           activeOpacity={0.72}
                                           onPress={() =>
                                             updateTemplateField(index, {
-                                              type: type as ReadAnyCardTemplateField["type"],
+                                              type,
+                                              options:
+                                                type === "select" || type === "multiselect"
+                                                  ? field.options?.length
+                                                    ? field.options
+                                                    : createDefaultTemplateFieldOptions()
+                                                  : undefined,
+                                              defaultValue:
+                                                type === "multiselect"
+                                                  ? []
+                                                  : type === "checkbox"
+                                                    ? undefined
+                                                    : typeof field.defaultValue === "boolean"
+                                                      ? undefined
+                                                      : field.defaultValue,
                                             })
                                           }
                                         >
@@ -2295,27 +2376,120 @@ export function MobileKnowledgeEditor({
                                     })}
                                   </View>
                                   <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldPlaceholder", "占位提示")}
+                                  </Text>
+                                  <TextInput
+                                    value={field.placeholder ?? ""}
+                                    onChangeText={(text) =>
+                                      updateTemplateField(index, {
+                                        placeholder: text || undefined,
+                                      })
+                                    }
+                                    placeholder={t(
+                                      "notes.knowledgeCustomCardFieldPlaceholderPlaceholder",
+                                      "空值时显示",
+                                    )}
+                                    placeholderTextColor={colors.mutedForeground}
+                                    style={styles.linkInput}
+                                  />
+                                  <Text style={styles.cardTemplateLabel}>
+                                    {t("notes.knowledgeCustomCardFieldHelpText", "说明")}
+                                  </Text>
+                                  <TextInput
+                                    value={field.helpText ?? ""}
+                                    onChangeText={(text) =>
+                                      updateTemplateField(index, {
+                                        helpText: text || undefined,
+                                      })
+                                    }
+                                    placeholder={t(
+                                      "notes.knowledgeCustomCardFieldHelpTextPlaceholder",
+                                      "显示在字段下方的短提示",
+                                    )}
+                                    placeholderTextColor={colors.mutedForeground}
+                                    style={styles.linkInput}
+                                  />
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.cardTemplateRequiredButton,
+                                      field.required && styles.cardTemplateRequiredButtonActive,
+                                    ]}
+                                    activeOpacity={0.75}
+                                    onPress={() =>
+                                      updateTemplateField(index, {
+                                        required: field.required ? undefined : true,
+                                      })
+                                    }
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.cardTemplateRequiredText,
+                                        field.required && styles.cardTemplateRequiredTextActive,
+                                      ]}
+                                    >
+                                      {field.required
+                                        ? t("notes.knowledgeCustomCardFieldRequiredOn", "必填")
+                                        : t("notes.knowledgeCustomCardFieldRequired", "设为必填")}
+                                    </Text>
+                                  </TouchableOpacity>
+                                  {isChoiceTemplateField(field) ? (
+                                    <>
+                                      <Text style={styles.cardTemplateLabel}>
+                                        {t("notes.knowledgeCustomCardFieldOptions", "选项")}
+                                      </Text>
+                                      <TextInput
+                                        value={formatTemplateFieldOptionsText(field)}
+                                        onChangeText={(text) =>
+                                          updateTemplateField(index, {
+                                            options: parseTemplateFieldOptionsText(text),
+                                          })
+                                        }
+                                        placeholder={t(
+                                          "notes.knowledgeCustomCardFieldOptionsPlaceholder",
+                                          "重要 | important\n稍后 | later",
+                                        )}
+                                        placeholderTextColor={colors.mutedForeground}
+                                        multiline
+                                        textAlignVertical="top"
+                                        style={[styles.linkInput, styles.cardTemplateOptionsInput]}
+                                      />
+                                      <Text style={styles.cardTemplateFieldHint}>
+                                        {t(
+                                          "notes.knowledgeCustomCardFieldOptionsHint",
+                                          "每行一个选项。需要稳定值时使用 名称 | value。",
+                                        )}
+                                      </Text>
+                                    </>
+                                  ) : null}
+                                  <Text style={styles.cardTemplateLabel}>
                                     {t("notes.knowledgeCustomCardFieldDefault", "默认值")}
                                   </Text>
                                   <TextInput
-                                    value={
-                                      field.defaultValue === undefined ||
-                                      field.defaultValue === null
-                                        ? ""
-                                        : String(field.defaultValue)
-                                    }
+                                    value={getTemplateFieldDefaultString(field)}
                                     onChangeText={(text) =>
                                       updateTemplateField(index, {
-                                        defaultValue: text ? text : undefined,
+                                        defaultValue:
+                                          field.type === "multiselect"
+                                            ? text
+                                                .split(",")
+                                                .map((item) => item.trim())
+                                                .filter(Boolean)
+                                            : text
+                                              ? text
+                                              : undefined,
                                       })
                                     }
                                     placeholder={
                                       field.type === "checkbox"
                                         ? "true / false"
-                                        : t(
-                                            "notes.knowledgeCustomCardFieldDefaultPlaceholder",
-                                            "可选",
-                                          )
+                                        : field.type === "select"
+                                          ? "option_1"
+                                          : field.type === "multiselect"
+                                            ? "option_1, option_2"
+                                            : t(
+                                                "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                                "可选",
+                                              )
                                     }
                                     placeholderTextColor={colors.mutedForeground}
                                     keyboardType={field.type === "number" ? "numeric" : "default"}
@@ -2373,7 +2547,7 @@ export function MobileKnowledgeEditor({
                                 ? t("common.saving", "保存中...")
                                 : editingTemplateId
                                   ? t("notes.knowledgeCustomCardSave", "保存卡片")
-                                  : t("notes.knowledgeCustomCardCreate", "创建卡片")}
+                                  : t("notes.knowledgeCustomCardCreate", "创建并插入")}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -3066,6 +3240,40 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     cardTemplateTypeTextActive: {
       color: colors.primary,
       fontWeight: fontWeight.semibold,
+    },
+    cardTemplateRequiredButton: {
+      minHeight: 32,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.background,
+      paddingHorizontal: 10,
+    },
+    cardTemplateRequiredButtonActive: {
+      borderColor: withOpacity(colors.primary, 0.42),
+      backgroundColor: withOpacity(colors.primary, 0.1),
+    },
+    cardTemplateRequiredText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    cardTemplateRequiredTextActive: {
+      color: colors.primary,
+      fontWeight: fontWeight.semibold,
+    },
+    cardTemplateOptionsInput: {
+      minHeight: 82,
+      paddingTop: 10,
+      paddingBottom: 10,
+      lineHeight: 18,
+      fontFamily: Platform.select({
+        ios: "Menlo",
+        android: "monospace",
+        default: "monospace",
+      }),
     },
     cardTemplateRemoveFieldButton: {
       minHeight: 30,

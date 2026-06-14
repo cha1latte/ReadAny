@@ -364,6 +364,23 @@ describe("ReadAny card registry", () => {
         defaultValue: "true",
       },
       {
+        label: "Priority",
+        type: "select",
+        helpText: "Pick one urgency level.",
+        required: true,
+        options: ["High", { label: "Low", value: "low" }],
+        defaultValue: "Low",
+      },
+      {
+        label: "Themes",
+        type: "multiselect",
+        options: [
+          { label: "Identity", value: "identity" },
+          { label: "Power", value: "power" },
+        ],
+        defaultValue: ["identity", "Power"],
+      },
+      {
         label: "Ignored",
         type: "unsupported",
         defaultValue: { nested: true },
@@ -397,6 +414,28 @@ describe("ReadAny card registry", () => {
         defaultValue: true,
       },
       {
+        key: "priority",
+        label: "Priority",
+        type: "select",
+        helpText: "Pick one urgency level.",
+        required: true,
+        options: [
+          { label: "High", value: "High" },
+          { label: "Low", value: "low" },
+        ],
+        defaultValue: "low",
+      },
+      {
+        key: "themes",
+        label: "Themes",
+        type: "multiselect",
+        options: [
+          { label: "Identity", value: "identity" },
+          { label: "Power", value: "power" },
+        ],
+        defaultValue: ["identity", "power"],
+      },
+      {
         key: "ignored",
         label: "Ignored",
         type: "text",
@@ -407,6 +446,8 @@ describe("ReadAny card registry", () => {
       core_idea_2: "Evidence:",
       confidence: 0.8,
       reviewed: true,
+      priority: "low",
+      themes: ["identity", "power"],
     });
   });
 
@@ -459,6 +500,24 @@ describe("ReadAny card registry", () => {
         { key: "evidence", label: "Evidence", type: "multiline" },
         { key: "confidence", label: "Confidence", type: "number" },
         { key: "reviewed", label: "Reviewed", type: "checkbox" },
+        {
+          key: "priority",
+          label: "Priority",
+          type: "select",
+          options: [
+            { label: "High", value: "high" },
+            { label: "Low", value: "low" },
+          ],
+        },
+        {
+          key: "themes",
+          label: "Themes",
+          type: "multiselect",
+          options: [
+            { label: "Attention", value: "attention" },
+            { label: "Ritual", value: "ritual" },
+          ],
+        },
       ],
       now: 123,
     });
@@ -473,6 +532,8 @@ describe("ReadAny card registry", () => {
           evidence: "Repeated ritual practice\nShared reading notes",
           confidence: 0.92,
           reviewed: false,
+          priority: "high",
+          themes: ["attention", "ritual"],
         },
       },
       { body: "", cardTemplates: [template] },
@@ -487,6 +548,8 @@ describe("ReadAny card registry", () => {
       },
       { key: "confidence", label: "Confidence", value: "0.92" },
       { key: "reviewed", label: "Reviewed", value: "No" },
+      { key: "priority", label: "Priority", value: "High" },
+      { key: "themes", label: "Themes", value: "Attention, Ritual" },
     ]);
     expect(renderReadAnyCardStructuredFieldsMarkdown(model.structuredFields)).toBe(
       [
@@ -496,6 +559,8 @@ describe("ReadAny card registry", () => {
         "  Shared reading notes",
         "- Confidence: 0.92",
         "- Reviewed: No",
+        "- Priority: High",
+        "- Themes: Attention, Ritual",
       ].join("\n"),
     );
     expect(
@@ -510,6 +575,8 @@ describe("ReadAny card registry", () => {
             evidence: "Repeated ritual practice\nShared reading notes",
             confidence: 0.92,
             reviewed: false,
+            priority: "high",
+            themes: ["attention", "ritual"],
           },
         },
         { body: "", cardTemplates: [template] },

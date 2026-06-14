@@ -342,5 +342,17 @@
       "mermaid": "Insérer un organigramme, une carte de relations ou un diagramme de séquence.",
       "relatedNotes": "Relier des notes associées dans ce livre ou dans d'autres livres."
     }
-  }
+  },
+  "knowledgeCustomCardFieldTypeSelect": "Choix unique",
+  "knowledgeCustomCardFieldTypeMultiselect": "Choix multiple",
+  "knowledgeCustomCardFieldPlaceholder": "Espace réservé",
+  "knowledgeCustomCardFieldPlaceholderPlaceholder": "Affiché quand le champ est vide",
+  "knowledgeCustomCardFieldHelpText": "Aide",
+  "knowledgeCustomCardFieldHelpTextPlaceholder": "Courte aide sous le champ",
+  "knowledgeCustomCardFieldRequired": "Obligatoire",
+  "knowledgeCustomCardFieldRequiredOn": "Obligatoire",
+  "knowledgeCustomCardFieldOptions": "Options",
+  "knowledgeCustomCardFieldOptionsPlaceholder": "Important | important\nPlus tard | later",
+  "knowledgeCustomCardFieldOptionsHint": "Une option par ligne. Utilisez Libellé | value pour une valeur stable.",
+  "knowledgeCardFieldSelectEmpty": "Choisir..."
 }

@@ -342,5 +342,17 @@
       "mermaid": "插入流程圖、關係圖或時序圖。",
       "relatedNotes": "連接同書或跨書的相關筆記。"
     }
-  }
+  },
+  "knowledgeCustomCardFieldTypeSelect": "單選",
+  "knowledgeCustomCardFieldTypeMultiselect": "多選",
+  "knowledgeCustomCardFieldPlaceholder": "預留提示",
+  "knowledgeCustomCardFieldPlaceholderPlaceholder": "空值時顯示",
+  "knowledgeCustomCardFieldHelpText": "說明",
+  "knowledgeCustomCardFieldHelpTextPlaceholder": "顯示在欄位下方的短提示",
+  "knowledgeCustomCardFieldRequired": "設為必填",
+  "knowledgeCustomCardFieldRequiredOn": "必填",
+  "knowledgeCustomCardFieldOptions": "選項",
+  "knowledgeCustomCardFieldOptionsPlaceholder": "重要 | important\n稍後 | later",
+  "knowledgeCustomCardFieldOptionsHint": "每行一個選項。需要穩定值時使用 名稱 | value。",
+  "knowledgeCardFieldSelectEmpty": "請選擇..."
 }

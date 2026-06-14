@@ -342,5 +342,17 @@
       "mermaid": "フロー図、関係図、シーケンス図を挿入します。",
       "relatedNotes": "同じ本や別の本の関連ノートをつなぎます。"
     }
-  }
+  },
+  "knowledgeCustomCardFieldTypeSelect": "単一選択",
+  "knowledgeCustomCardFieldTypeMultiselect": "複数選択",
+  "knowledgeCustomCardFieldPlaceholder": "プレースホルダー",
+  "knowledgeCustomCardFieldPlaceholderPlaceholder": "未入力時に表示",
+  "knowledgeCustomCardFieldHelpText": "ヘルプ文",
+  "knowledgeCustomCardFieldHelpTextPlaceholder": "フィールド下に表示する短い説明",
+  "knowledgeCustomCardFieldRequired": "必須にする",
+  "knowledgeCustomCardFieldRequiredOn": "必須",
+  "knowledgeCustomCardFieldOptions": "選択肢",
+  "knowledgeCustomCardFieldOptionsPlaceholder": "重要 | important\n後で | later",
+  "knowledgeCustomCardFieldOptionsHint": "1行に1つの選択肢。安定した値が必要な場合は ラベル | value を使います。",
+  "knowledgeCardFieldSelectEmpty": "選択..."
 }

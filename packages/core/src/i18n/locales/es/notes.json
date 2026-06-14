@@ -342,5 +342,17 @@
       "mermaid": "Inserta un diagrama de flujo, mapa de relaciones o secuencia.",
       "relatedNotes": "Conecta notas relacionadas de este libro u otros libros."
     }
-  }
+  },
+  "knowledgeCustomCardFieldTypeSelect": "Opción única",
+  "knowledgeCustomCardFieldTypeMultiselect": "Opción múltiple",
+  "knowledgeCustomCardFieldPlaceholder": "Marcador",
+  "knowledgeCustomCardFieldPlaceholderPlaceholder": "Se muestra cuando está vacío",
+  "knowledgeCustomCardFieldHelpText": "Ayuda",
+  "knowledgeCustomCardFieldHelpTextPlaceholder": "Ayuda breve bajo el campo",
+  "knowledgeCustomCardFieldRequired": "Obligatorio",
+  "knowledgeCustomCardFieldRequiredOn": "Obligatorio",
+  "knowledgeCustomCardFieldOptions": "Opciones",
+  "knowledgeCustomCardFieldOptionsPlaceholder": "Importante | important\nMás tarde | later",
+  "knowledgeCustomCardFieldOptionsHint": "Una opción por línea. Use Etiqueta | value si necesita un valor estable.",
+  "knowledgeCardFieldSelectEmpty": "Elegir..."
 }

@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIConfig, KnowledgeDocument } from "../../types";
 
 const dbMocks = vi.hoisted(() => ({
+  createKnowledgeDocument: vi.fn(),
   getKnowledgeDocument: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
+  getKnowledgeLinks: vi.fn(),
+  insertKnowledgeLink: vi.fn(),
   searchKnowledgeDocuments: vi.fn(),
+  updateKnowledgeDocument: vi.fn(),
 }));
 const knowledgeMemoryMocks = vi.hoisted(() => ({
   maybeCompressAndPersistKnowledgeSummary: vi.fn(),
@@ -23,6 +27,11 @@ const {
   createProposeKnowledgeLinkCreateTool,
   createSearchKnowledgeBaseTool,
 } = await import("./knowledge-tools");
+const {
+  applyKnowledgeWriteProposal,
+  createKnowledgeWriteProposalPreview,
+  getKnowledgeWriteProposal,
+} = await import("../../knowledge/proposals");
 
 function aiConfig(): AIConfig {
   return {
@@ -976,5 +985,108 @@ describe("knowledge tools", () => {
         label: "Related idea",
       },
     });
+  });
+
+  it("runs a safe AI knowledge read-to-confirmed-update workflow", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const note = doc({
+      id: "doc-note",
+      type: "standalone_note",
+      title: "Tea Ceremony Notes",
+      parentId: "folder-1",
+      contentMd: "Ritual attention starts as a rough observation.",
+      excerpt: "Ritual attention starts as a rough observation.",
+      tags: ["ritual"],
+    });
+
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([note]);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, note]);
+
+    const searchTool = createSearchKnowledgeBaseTool();
+    const searchResult = (await searchTool.execute({
+      reasoning: "Find the user's durable note before editing it",
+      query: "tea ceremony",
+      bookId: "book-1",
+    })) as {
+      documents: Array<{ id: string; path: string }>;
+    };
+
+    expect(searchResult.documents[0]).toMatchObject({
+      id: "doc-note",
+      path: "Knowledge base / Themes / Tea Ceremony Notes",
+    });
+
+    const getTool = createGetKnowledgeDocumentTool();
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(note);
+    const readResult = (await getTool.execute({
+      reasoning: "Read exact document before drafting an update",
+      documentId: "doc-note",
+      includeContent: true,
+    })) as {
+      success: boolean;
+      path: string;
+      document: { content?: string; path: string };
+    };
+
+    expect(readResult).toMatchObject({
+      success: true,
+      path: "Knowledge base / Themes / Tea Ceremony Notes",
+      document: {
+        path: "Knowledge base / Themes / Tea Ceremony Notes",
+        content: "Ritual attention starts as a rough observation.",
+      },
+    });
+
+    const updateTool = createProposeKnowledgeDocumentUpdateTool();
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(note);
+    const proposalResult = await updateTool.execute({
+      reasoning: "Draft a clearer note while keeping the user in control",
+      documentId: "doc-note",
+      contentMd: "Updated durable interpretation with source-aware wording.",
+    });
+
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+    expect(proposalResult).toMatchObject({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-note",
+      targetPath: "Knowledge base / Themes / Tea Ceremony Notes",
+    });
+
+    const proposal = getKnowledgeWriteProposal(proposalResult);
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal);
+    expect(preview).toMatchObject({
+      action: "update",
+      title: "Tea Ceremony Notes",
+      visiblePath: "Knowledge base / Themes / Tea Ceremony Notes",
+      hasPathChange: false,
+    });
+    expect(preview.contentPreviewHtml).toContain("Updated durable interpretation");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValueOnce(note);
+    dbMocks.updateKnowledgeDocument.mockResolvedValueOnce(undefined);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "update",
+      documentId: "doc-note",
+    });
+    expect(dbMocks.updateKnowledgeDocument).toHaveBeenCalledWith(
+      "doc-note",
+      expect.objectContaining({
+        contentMd: "Updated durable interpretation with source-aware wording.",
+      }),
+    );
   });
 });

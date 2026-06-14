@@ -97,3 +97,4 @@ External docs checked:
 - [Editor, Cards, and Obsidian](03-editor-cards-obsidian.md)
 - [Roadmap](04-implementation-roadmap.md)
 - [Vault Workspace Layout](05-vault-workspace-layout.md)
+- [Acceptance Runbook](06-acceptance-runbook.md)

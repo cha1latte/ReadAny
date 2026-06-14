@@ -31,6 +31,7 @@ import {
   XIcon,
 } from "@/components/ui/Icon";
 import { SyncButton } from "@/components/ui/SyncButton";
+import { useKeyboardInsets } from "@/hooks/use-keyboard-insets";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { pickAndPersistMobileKnowledgeImageAttachment } from "@/lib/knowledge/attachment-assets-mobile";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
@@ -2536,6 +2537,10 @@ function KnowledgeHomePanel({
   const [outlineTarget, setOutlineTarget] = useState<MobileKnowledgeEditorOutlineTarget | null>(
     null,
   );
+  const keyboardInsets = useKeyboardInsets();
+  const documentKeyboardBottomPadding = keyboardInsets.isVisible
+    ? Math.max(18, keyboardInsets.safeAreaBottom + 18)
+    : Math.max(12, keyboardInsets.safeAreaBottom + 12);
   const [workspaceMode, setWorkspaceMode] = useState<MobileKnowledgeWorkspaceMode>("vault");
   const [isContextSheetVisible, setIsContextSheetVisible] = useState(false);
   const [actionDocument, setActionDocument] = useState<KnowledgeDocument | null>(null);
@@ -2748,12 +2753,13 @@ function KnowledgeHomePanel({
         </ScrollView>
       ) : (
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={0}
           style={[
             styles.knowledgeDocumentScreen,
             styles.knowledgeDocumentFullScreen,
             styles.knowledgeDocumentKeyboardAvoider,
+            { paddingBottom: documentKeyboardBottomPadding },
           ]}
         >
           <View style={styles.knowledgeDocumentCanvasHeader}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { KnowledgeDocument } from "../types";
+import type { KnowledgeCardTemplate, KnowledgeDocument } from "../types";
 import { KnowledgeExporter } from "./knowledge-exporter";
 import {
   createKnowledgeImportWriteProposal,
@@ -50,6 +50,24 @@ function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): Knowledg
     ...overrides,
   };
 }
+
+const readingPromptTemplate: KnowledgeCardTemplate = {
+  id: "template-reading-question",
+  name: "Reading Prompt",
+  version: 4,
+  schemaJson: {
+    cardType: "custom:template-reading-question",
+    title: "Reading Prompt",
+    markdown: "Prompt:\nResponse:",
+    attrs: {
+      data: { kind: "prompt" },
+    },
+  },
+  builtIn: false,
+  enabled: true,
+  createdAt: 1,
+  updatedAt: 2,
+};
 
 describe("Knowledge markdown importer", () => {
   it("round-trips a ReadAny exported Markdown document into a document draft", () => {
@@ -851,6 +869,56 @@ Home note.
           attrs: {
             cardType: "custom:template-reading-question",
             version: 3,
+            title: "My prompt",
+            markdown: "Question: What changed in Obsidian?",
+            data: { kind: "prompt" },
+          },
+        },
+      ],
+    });
+  });
+
+  it("uses vault manifest card templates when reconciling custom cards", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
+        cardTemplates: [readingPromptTemplate],
+      },
+      { exportedAt: 1700000200000, includeReadAnyCardMetadata: true },
+    );
+    const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
+    if (!documentFile) throw new Error("Expected exported document file");
+
+    const editedContent = [
+      "---",
+      "type: readany-knowledge",
+      'id: "doc-1"',
+      "documentType: standalone_note",
+      'title: "Prompt"',
+      "---",
+      "",
+      "# Prompt",
+      "",
+      ':::readany-card type="custom:template-reading-question" version="1" title="My prompt"',
+      "Question: What changed in Obsidian?",
+      ":::",
+      "",
+    ].join("\n");
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: documentFile.path, content: editedContent }],
+    });
+
+    expect(plan.modified[0]?.draft?.draft.contentJson).toMatchObject({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 4,
             title: "My prompt",
             markdown: "Question: What changed in Obsidian?",
             data: { kind: "prompt" },

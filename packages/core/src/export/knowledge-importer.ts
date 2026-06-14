@@ -123,6 +123,18 @@ export type KnowledgeImportWriteProposal =
   | KnowledgeDocumentCreateProposal
   | KnowledgeDocumentUpdateProposal;
 
+function mergeKnowledgeCardTemplates(
+  ...sources: Array<KnowledgeCardTemplate[] | undefined>
+): KnowledgeCardTemplate[] | undefined {
+  const templatesById = new Map<string, KnowledgeCardTemplate>();
+  for (const source of sources) {
+    for (const template of source ?? []) {
+      templatesById.set(template.id, template);
+    }
+  }
+  return templatesById.size > 0 ? Array.from(templatesById.values()) : undefined;
+}
+
 const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "book_home",
   "folder",
@@ -610,6 +622,10 @@ function createReadAnyFilesByDocumentId(
 export function createKnowledgeVaultImportPlan(
   input: KnowledgeVaultImportPlanInput,
 ): KnowledgeVaultImportPlan {
+  const cardTemplates = mergeKnowledgeCardTemplates(
+    input.manifest.cardTemplates,
+    input.cardTemplates,
+  );
   const filesByPath = new Map(input.files.map((file) => [normalizePath(file.path), file] as const));
   const filesByDocumentId = createReadAnyFilesByDocumentId(input.files);
   const documentIdsByPath = createManifestDocumentIdsByPath(input.manifest);
@@ -731,7 +747,7 @@ export function createKnowledgeVaultImportPlan(
       content: file.content,
       defaultType: manifestDocument.type,
       bookId: manifestDocument.bookId,
-      cardTemplates: input.cardTemplates,
+      cardTemplates,
     });
     draft.draft.contentJson = resolveInternalLinkTargetPaths(
       draft.draft.contentJson ?? ({ type: "doc", content: [] } as unknown as JSONValue),

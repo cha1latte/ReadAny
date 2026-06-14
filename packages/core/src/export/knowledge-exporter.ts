@@ -77,6 +77,7 @@ export interface KnowledgeExportManifest {
   exportedAt: number;
   documents: Record<string, KnowledgeExportManifestDocument>;
   attachments: Record<string, KnowledgeExportManifestAttachment>;
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export interface KnowledgeExportObservedFile {
@@ -584,6 +585,21 @@ function createAttachmentManifestEntries(
   return entries;
 }
 
+function createCardTemplateManifestEntries(input: KnowledgeExportInput): KnowledgeCardTemplate[] {
+  return (input.cardTemplates ?? [])
+    .filter((template) => !template.builtIn && template.enabled)
+    .map((template) => ({
+      id: template.id,
+      name: template.name,
+      version: template.version,
+      schemaJson: template.schemaJson,
+      builtIn: template.builtIn,
+      enabled: template.enabled,
+      createdAt: template.createdAt,
+      updatedAt: template.updatedAt,
+    }));
+}
+
 function createManifest(
   input: KnowledgeExportInput,
   files: DocumentExportFile[],
@@ -592,6 +608,7 @@ function createManifest(
   attachmentExportPathsById = new Map<string, string>(),
 ): KnowledgeExportManifest {
   const documents: Record<string, KnowledgeExportManifestDocument> = {};
+  const cardTemplates = createCardTemplateManifestEntries(input);
 
   for (const file of files) {
     documents[file.documentId] = {
@@ -618,6 +635,7 @@ function createManifest(
     exportedAt,
     documents,
     attachments: createAttachmentManifestEntries(input, options.rootDir, attachmentExportPathsById),
+    ...(cardTemplates.length ? { cardTemplates } : {}),
   };
 }
 

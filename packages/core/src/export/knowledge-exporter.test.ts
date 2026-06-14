@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Book, KnowledgeAttachment, KnowledgeDocument, KnowledgeLink } from "../types";
+import type {
+  Book,
+  KnowledgeAttachment,
+  KnowledgeCardTemplate,
+  KnowledgeDocument,
+  KnowledgeLink,
+} from "../types";
 import {
   KnowledgeExporter,
   createKnowledgeExportHash,
@@ -22,6 +28,24 @@ const baseBook: Book = {
   vectorizeProgress: 0,
   tags: ["philosophy"],
   syncStatus: "local",
+};
+
+const readingPromptTemplate: KnowledgeCardTemplate = {
+  id: "template-reading-question",
+  name: "Reading Prompt",
+  version: 4,
+  schemaJson: {
+    cardType: "custom:template-reading-question",
+    title: "Reading Prompt",
+    markdown: "Prompt:\nResponse:",
+    attrs: {
+      data: { kind: "prompt" },
+    },
+  },
+  builtIn: false,
+  enabled: true,
+  createdAt: 1,
+  updatedAt: 2,
 };
 
 function knowledgeDocument(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
@@ -558,25 +582,7 @@ describe("KnowledgeExporter", () => {
             },
           }),
         ],
-        cardTemplates: [
-          {
-            id: "template-reading-question",
-            name: "Reading Prompt",
-            version: 4,
-            schemaJson: {
-              cardType: "custom:template-reading-question",
-              title: "Reading Prompt",
-              markdown: "Prompt:\nResponse:",
-              attrs: {
-                data: { kind: "prompt" },
-              },
-            },
-            builtIn: false,
-            enabled: true,
-            createdAt: 1,
-            updatedAt: 2,
-          },
-        ],
+        cardTemplates: [readingPromptTemplate],
       },
       { format: "markdown", includeReadAnyCardMetadata: true },
     );
@@ -667,6 +673,34 @@ describe("KnowledgeExporter", () => {
 
     const manifestFile = vault.files.find((file) => file.path.endsWith("manifest.json"));
     expect(JSON.parse(manifestFile?.content ?? "{}")).toEqual(vault.manifest);
+  });
+
+  it("stores custom card template snapshots in vault manifests", () => {
+    const exporter = new KnowledgeExporter();
+    const disabledTemplate: KnowledgeCardTemplate = {
+      ...readingPromptTemplate,
+      id: "template-disabled",
+      enabled: false,
+    };
+    const vault = exporter.buildVaultPackage(
+      {
+        books: [baseBook],
+        documents: [knowledgeDocument()],
+        cardTemplates: [
+          readingPromptTemplate,
+          disabledTemplate,
+          { ...readingPromptTemplate, id: "built-in-template", builtIn: true },
+        ],
+      },
+      { rootDir: "ReadAny", exportedAt: 1700000200000 },
+    );
+
+    expect(vault.manifest.cardTemplates).toEqual([readingPromptTemplate]);
+
+    const manifestFile = vault.files.find((file) => file.path.endsWith("manifest.json"));
+    expect(JSON.parse(manifestFile?.content ?? "{}").cardTemplates).toEqual([
+      readingPromptTemplate,
+    ]);
   });
 
   it("exports local attachments into the vault and links documents to exported assets", () => {

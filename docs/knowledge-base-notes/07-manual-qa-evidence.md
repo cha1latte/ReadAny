@@ -13,10 +13,10 @@ or has an explicit owner-approved exception, and
 | Field | Value |
 | --- | --- |
 | Branch | `feat/knowledge-base-notes-research` |
-| Commit under test | `d83589da` |
+| Commit under test | `1921b7f6` |
 | Tester | Codex automated baseline |
 | Test date | 2026-06-15 |
-| `pnpm acceptance:knowledge` result | Pass on 2026-06-15 for commit `d83589da`: 32 core test files / 455 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
+| `pnpm acceptance:knowledge` result | Pass on 2026-06-15 for commit `1921b7f6`: 32 core test files / 456 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
 | Desktop platform/build | macOS local automated desktop production bundle via `pnpm acceptance:knowledge`; interactive desktop QA still pending. |
 | Mobile platform/build | Expo TypeScript and generated WebView editor bundle via `pnpm acceptance:knowledge`; mobile knowledge workspace/editor contracts include the document editor keyboard-avoidance entry point, shared keyboard inset usage, visible WebView failure states, and draft restore affordances; real-device iOS/Android QA still pending. |
 | Second sync device/build | Pending manual QA. |
@@ -43,8 +43,8 @@ or has an explicit owner-approved exception, and
 
 | Check | Expected | Status | Evidence |
 | --- | --- | --- | --- |
-| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Runtime commit `d83589da` was tested by the automated gate; this manual evidence refresh is docs-only and should be pushed before manual QA starts. |
-| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-15 for commit `d83589da`: 32 core test files / 455 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
+| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Runtime commit `1921b7f6` was tested by the automated gate; this manual evidence refresh is docs-only and should be pushed before manual QA starts. |
+| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-15 for commit `1921b7f6`: 32 core test files / 456 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
 | Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. | Pass | The desktop Vite production bundle completed successfully; warnings were the known dynamic-import/chunk-size warnings documented as non-blocking in the runbook. |
 
 ## Desktop QA

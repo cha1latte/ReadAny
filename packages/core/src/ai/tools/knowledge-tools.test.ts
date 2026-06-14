@@ -14,9 +14,13 @@ const dbMocks = vi.hoisted(() => ({
 const knowledgeMemoryMocks = vi.hoisted(() => ({
   maybeCompressAndPersistKnowledgeSummary: vi.fn(),
 }));
+const internalLinkMocks = vi.hoisted(() => ({
+  syncKnowledgeInternalDocumentLinks: vi.fn(),
+}));
 
 vi.mock("../../db/database", () => dbMocks);
 vi.mock("../knowledge-memory", () => knowledgeMemoryMocks);
+vi.mock("../../knowledge/internal-links", () => internalLinkMocks);
 
 const {
   createCompressKnowledgeDocumentSummaryTool,
@@ -98,6 +102,11 @@ describe("knowledge tools", () => {
         sourceUpdatedAt: 2000,
         compressedAt: 3000,
       },
+    });
+    internalLinkMocks.syncKnowledgeInternalDocumentLinks.mockResolvedValue({
+      targetDocumentIds: [],
+      added: 0,
+      deleted: 0,
     });
   });
 

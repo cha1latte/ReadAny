@@ -17,6 +17,12 @@ const idMocks = vi.hoisted(() => ({
 
 vi.mock("../utils/generate-id", () => idMocks);
 
+const internalLinkMocks = vi.hoisted(() => ({
+  syncKnowledgeInternalDocumentLinks: vi.fn(),
+}));
+
+vi.mock("./internal-links", () => internalLinkMocks);
+
 const { eventBus } = await import("../utils/event-bus");
 const {
   applyKnowledgeWriteProposal,
@@ -29,6 +35,11 @@ describe("knowledge write proposals", () => {
     vi.clearAllMocks();
     eventBus.clear("knowledge:changed");
     dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
+    internalLinkMocks.syncKnowledgeInternalDocumentLinks.mockResolvedValue({
+      targetDocumentIds: [],
+      added: 0,
+      deleted: 0,
+    });
   });
 
   function document(overrides: Record<string, unknown> = {}) {
@@ -447,6 +458,109 @@ describe("knowledge write proposals", () => {
       targetPath: "Knowledge base / Folder / Updated",
       visiblePath: "Knowledge base / Folder / Updated",
       hasPathChange: false,
+    });
+  });
+
+  it("syncs internal document links after applying create proposals", async () => {
+    const contentJson = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "readanyInternalLink",
+              attrs: { documentId: "target-doc", label: "Target" },
+            },
+          ],
+        },
+      ],
+    };
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      draft: {
+        id: "created-doc",
+        type: "standalone_note",
+        title: "Linked Note",
+        bookId: "book-1",
+        contentMd: "[Target](readany://knowledge/target-doc)",
+        contentJson,
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({ id: "target-doc", bookId: "book-1", title: "Target" }),
+    ]);
+    dbMocks.getKnowledgeDocument.mockResolvedValue(null);
+    dbMocks.createKnowledgeDocument.mockResolvedValue(
+      document({ id: "created-doc", bookId: "book-1", title: "Linked Note", contentJson }),
+    );
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "create",
+      documentId: "created-doc",
+    });
+    expect(internalLinkMocks.syncKnowledgeInternalDocumentLinks).toHaveBeenCalledWith({
+      documentId: "created-doc",
+      contentJson,
+      validDocumentIds: expect.arrayContaining(["created-doc", "target-doc"]),
+    });
+  });
+
+  it("syncs internal document links after applying content update proposals", async () => {
+    const contentJson = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "readanyInternalLink",
+              attrs: { documentId: "target-doc", label: "Target" },
+            },
+          ],
+        },
+      ],
+    };
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      patch: {
+        contentMd: "[Target](readany://knowledge/target-doc)",
+        contentJson,
+        excerpt: "Target",
+      },
+      changedFields: ["contentMd", "contentJson", "excerpt"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(document({ id: "doc-1", bookId: "book-1" }));
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      document({ id: "target-doc", bookId: "book-1", title: "Target" }),
+    ]);
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "update",
+      documentId: "doc-1",
+    });
+    expect(dbMocks.updateKnowledgeDocument).toHaveBeenCalledWith("doc-1", {
+      contentMd: "[Target](readany://knowledge/target-doc)",
+      contentJson,
+      excerpt: "Target",
+    });
+    expect(internalLinkMocks.syncKnowledgeInternalDocumentLinks).toHaveBeenCalledWith({
+      documentId: "doc-1",
+      contentJson,
+      validDocumentIds: expect.arrayContaining(["doc-1", "target-doc"]),
     });
   });
 

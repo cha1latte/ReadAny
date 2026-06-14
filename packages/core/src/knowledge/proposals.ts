@@ -24,6 +24,7 @@ import {
   validateKnowledgeDocumentSiblingTitle,
 } from "./document-utils";
 import { renderKnowledgeJsonToReadOnlyHtml } from "./editor-projection";
+import { syncKnowledgeInternalDocumentLinks } from "./internal-links";
 
 export type KnowledgeProposalAction = "create" | "update" | "link";
 export type KnowledgeProposalConfirmationKind =
@@ -240,6 +241,22 @@ function emitKnowledgeChanged(data: {
   eventBus.emit("knowledge:changed", {
     ...data,
     timestamp: Date.now(),
+  });
+}
+
+async function syncAppliedDocumentInternalLinks(
+  document: Pick<KnowledgeDocument, "id" | "bookId">,
+  contentJson: JSONValue,
+) {
+  const documents = await getKnowledgeDocuments({
+    ...(document.bookId ? { bookId: document.bookId } : {}),
+    limit: 5000,
+  });
+  const validDocumentIds = [...new Set([...documents.map((item) => item.id), document.id])];
+  await syncKnowledgeInternalDocumentLinks({
+    documentId: document.id,
+    contentJson,
+    validDocumentIds,
   });
 }
 
@@ -566,6 +583,7 @@ export async function applyKnowledgeWriteProposal(
     await assertCreateProposalParent(proposal);
     await assertCreateProposalTitle(proposal);
     const document = await createKnowledgeDocument(proposal.draft);
+    await syncAppliedDocumentInternalLinks(document, proposal.draft.contentJson ?? null);
     emitKnowledgeChanged({
       action: "create",
       documentId: document.id,
@@ -577,6 +595,9 @@ export async function applyKnowledgeWriteProposal(
   if (proposal.action === "update") {
     const document = await getValidatedUpdateDocument(proposal);
     await updateKnowledgeDocument(proposal.documentId, proposal.patch);
+    if (Object.prototype.hasOwnProperty.call(proposal.patch, "contentJson")) {
+      await syncAppliedDocumentInternalLinks(document, proposal.patch.contentJson ?? null);
+    }
     emitKnowledgeChanged({
       action: "update",
       documentId: proposal.documentId,

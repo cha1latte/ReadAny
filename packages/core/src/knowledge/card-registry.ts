@@ -68,6 +68,15 @@ export interface ReadAnyCardTemplateSchema {
   sourceId?: string;
   cfi?: string;
   attrs?: Record<string, unknown>;
+  migrations?: ReadAnyCardTemplateMigration[];
+}
+
+export interface ReadAnyCardTemplateMigration {
+  fromVersion?: number;
+  toVersion?: number;
+  dataRenames?: Record<string, string>;
+  dataDefaults?: Record<string, unknown>;
+  removeData?: string[];
 }
 
 export interface CreateCustomReadAnyCardTemplateInput {
@@ -273,6 +282,163 @@ function mergeRecordDefaults(defaults: unknown, value: unknown): unknown {
   return merged;
 }
 
+function dataPathSegments(path: string): string[] {
+  return path
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function hasRecordPath(record: Record<string, unknown>, path: string): boolean {
+  const segments = dataPathSegments(path);
+  if (segments.length === 0) return false;
+
+  let current: unknown = record;
+  for (let index = 0; index < segments.length; index += 1) {
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segments[index])) {
+      return false;
+    }
+    if (index === segments.length - 1) return true;
+    current = current[segments[index]];
+  }
+  return false;
+}
+
+function getRecordPath(record: Record<string, unknown>, path: string): unknown {
+  const segments = dataPathSegments(path);
+  let current: unknown = record;
+  for (const segment of segments) {
+    if (!isRecord(current)) return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+function setRecordPath(record: Record<string, unknown>, path: string, value: unknown) {
+  const segments = dataPathSegments(path);
+  if (segments.length === 0) return;
+
+  let current: Record<string, unknown> = record;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const segment = segments[index];
+    const next = current[segment];
+    if (!isRecord(next)) {
+      current[segment] = {};
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+  current[segments[segments.length - 1]] = value;
+}
+
+function deleteRecordPath(record: Record<string, unknown>, path: string) {
+  const segments = dataPathSegments(path);
+  if (segments.length === 0) return;
+
+  let current: unknown = record;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (!isRecord(current)) return;
+    current = current[segments[index]];
+  }
+  if (isRecord(current)) {
+    delete current[segments[segments.length - 1]];
+  }
+}
+
+function cloneJsonLike<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((item) => cloneJsonLike(item)) as T;
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, cloneJsonLike(item)]),
+  ) as T;
+}
+
+function templateMigrations(template: KnowledgeCardTemplate): ReadAnyCardTemplateMigration[] {
+  const migrations = templateSchema(template).migrations;
+  if (!Array.isArray(migrations)) return [];
+  return migrations
+    .filter((migration): migration is ReadAnyCardTemplateMigration => isRecord(migration))
+    .map((migration) => ({
+      fromVersion: numberAttr(migration.fromVersion),
+      toVersion: numberAttr(migration.toVersion),
+      dataRenames: isRecord(migration.dataRenames)
+        ? Object.fromEntries(
+            Object.entries(migration.dataRenames)
+              .map(([fromPath, toPath]) => [fromPath.trim(), String(toPath).trim()])
+              .filter(([fromPath, toPath]) => fromPath && toPath),
+          )
+        : undefined,
+      dataDefaults: isRecord(migration.dataDefaults) ? migration.dataDefaults : undefined,
+      removeData: Array.isArray(migration.removeData)
+        ? migration.removeData.map((item) => String(item).trim()).filter(Boolean)
+        : undefined,
+    }))
+    .filter((migration) => !!migration.toVersion)
+    .sort((left, right) => (left.toVersion ?? 0) - (right.toVersion ?? 0));
+}
+
+function applyTemplateMigrationData(
+  data: unknown,
+  migration: ReadAnyCardTemplateMigration,
+): unknown {
+  if (!isRecord(data)) {
+    return data === undefined && migration.dataDefaults
+      ? cloneJsonLike(migration.dataDefaults)
+      : data;
+  }
+  let nextData = cloneJsonLike(data);
+
+  if (migration.dataRenames) {
+    for (const [fromPath, toPath] of Object.entries(migration.dataRenames)) {
+      if (!fromPath || !toPath || !hasRecordPath(nextData, fromPath)) continue;
+      const value = getRecordPath(nextData, fromPath);
+      if (!hasRecordPath(nextData, toPath)) {
+        setRecordPath(nextData, toPath, cloneJsonLike(value));
+      }
+      deleteRecordPath(nextData, fromPath);
+    }
+  }
+
+  if (migration.dataDefaults) {
+    nextData = mergeRecordDefaults(migration.dataDefaults, nextData) as Record<string, unknown>;
+  }
+
+  if (migration.removeData) {
+    for (const path of migration.removeData) {
+      deleteRecordPath(nextData, path);
+    }
+  }
+
+  return nextData;
+}
+
+function applyTemplateMigrations(
+  attrs: ReadAnyCardAttrs,
+  template: KnowledgeCardTemplate,
+): ReadAnyCardAttrs {
+  const migrations = templateMigrations(template);
+  if (migrations.length === 0) return attrs;
+
+  let nextAttrs = { ...attrs };
+  let workingVersion = numberAttr(nextAttrs.version) ?? 1;
+  const targetVersion = Math.max(numberAttr(template.version) ?? 1, workingVersion);
+
+  for (const migration of migrations) {
+    const toVersion = migration.toVersion ?? 0;
+    const fromVersion = migration.fromVersion ?? 0;
+    if (toVersion <= workingVersion || toVersion > targetVersion) continue;
+    if (fromVersion > 0 && workingVersion < fromVersion) continue;
+
+    nextAttrs = {
+      ...nextAttrs,
+      data: applyTemplateMigrationData(nextAttrs.data, migration),
+      version: toVersion,
+    };
+    workingVersion = toVersion;
+  }
+
+  return nextAttrs;
+}
+
 function customTemplateCardType(template: KnowledgeCardTemplate): string {
   const schema = templateSchema(template);
   return stringAttr(schema.cardType) ?? (template.builtIn ? template.id : `custom:${template.id}`);
@@ -386,22 +552,26 @@ export function upgradeReadAnyCardAttrsWithTemplates(
   const template = findTemplateForCardType(attrs.cardType, templates);
   if (!template) return attrs;
 
+  const migratedAttrs = applyTemplateMigrations(attrs, template);
   const defaults = createReadAnyCardAttrsFromTemplate(template);
-  const version = Math.max(numberAttr(attrs.version) ?? 1, numberAttr(defaults.version) ?? 1);
+  const version = Math.max(
+    numberAttr(migratedAttrs.version) ?? 1,
+    numberAttr(defaults.version) ?? 1,
+  );
   const mergedData =
-    defaults.data === undefined && attrs.data === undefined
+    defaults.data === undefined && migratedAttrs.data === undefined
       ? undefined
-      : mergeRecordDefaults(defaults.data, attrs.data);
+      : mergeRecordDefaults(defaults.data, migratedAttrs.data);
   const mergedAttrs: ReadAnyCardAttrs = {
     ...defaults,
-    ...attrs,
+    ...migratedAttrs,
     version,
-    title: attrs.title ?? defaults.title,
-    markdown: attrs.markdown ?? attrs.text ?? defaults.markdown,
-    text: attrs.text ?? attrs.markdown ?? defaults.text,
-    sourceTitle: attrs.sourceTitle ?? defaults.sourceTitle,
-    sourceId: attrs.sourceId ?? defaults.sourceId,
-    cfi: attrs.cfi ?? defaults.cfi,
+    title: migratedAttrs.title ?? defaults.title,
+    markdown: migratedAttrs.markdown ?? migratedAttrs.text ?? defaults.markdown,
+    text: migratedAttrs.text ?? migratedAttrs.markdown ?? defaults.text,
+    sourceTitle: migratedAttrs.sourceTitle ?? defaults.sourceTitle,
+    sourceId: migratedAttrs.sourceId ?? defaults.sourceId,
+    cfi: migratedAttrs.cfi ?? defaults.cfi,
   };
   if (mergedData !== undefined) mergedAttrs.data = mergedData;
 

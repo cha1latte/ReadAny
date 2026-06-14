@@ -196,7 +196,8 @@ Status: partially implemented. Built-in card registry, card templates, desktop
 node views, mobile WebView card rendering, Markdown fallbacks, shared card
 attribute upgrades, visible unknown/future-version card fallback metadata, and
 user-created custom card templates from the desktop/mobile insert menus exist.
-Richer card editing and complex schema migrations remain future work.
+Richer card editing and JSON-based custom template schema migrations now have a
+shared core path; a visual schema editor remains future work.
 
 Goal:
 

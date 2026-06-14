@@ -19,8 +19,8 @@ The branch is ready for final PR review when all of these are true:
   import/export previews, AI results, proposal cards, and failure cards.
 - AI write tools create confirmation-required proposals only; applying a
   proposal is the first database write.
-- ReadAny cards preserve type, version, source attrs, structured data, and
-  Markdown fallback on desktop, mobile, export, and AI context.
+- ReadAny cards preserve type, version, source attrs, structured data, schema
+  migrations, and Markdown fallback on desktop, mobile, export, and AI context.
 - Unsupported or future card versions render safe fallback cards instead of raw
   JSON or disappearing content.
 
@@ -62,7 +62,7 @@ Evidence mapping:
 | Mobile WebView messages, draft recovery, and error states are typed. | `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |
 | AI reads knowledge safely and writes only through confirmation proposals. | `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts` |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-tools.test.ts` |
-| ReadAny cards preserve attrs, data, fallback rendering, and unknown versions. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
+| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, and unknown versions. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 
 ## Desktop Manual Checks
 
@@ -128,4 +128,3 @@ Reject the branch if any of these appear:
 - Unsupported card versions lose their metadata.
 - Mobile keyboard covers the editor controls.
 - Obsidian export flattens folders or makes duplicate titles ambiguous.
-

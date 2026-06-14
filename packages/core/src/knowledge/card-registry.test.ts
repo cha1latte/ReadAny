@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { JSONValue } from "../types";
 import {
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
@@ -457,6 +458,161 @@ describe("ReadAny card registry", () => {
         [template],
       ).data,
     ).toBe("legacy-data");
+  });
+
+  it("applies synced custom card schema migrations across versions", () => {
+    const migrations: JSONValue[] = [
+      {
+        fromVersion: 1,
+        toVersion: 2,
+        dataRenames: {
+          "meta.oldSource": "source.title",
+          summary: "body.summary",
+        },
+        dataDefaults: {
+          source: {
+            kind: "book",
+          },
+          layout: {
+            tone: "calm",
+          },
+        },
+        removeData: ["meta.legacyFlag"],
+      },
+      {
+        fromVersion: 2,
+        toVersion: 3,
+        dataRenames: {
+          "body.summary": "body.abstract",
+        },
+        dataDefaults: {
+          body: {
+            format: "markdown",
+          },
+        },
+      },
+    ];
+    const template = {
+      id: "template-concept",
+      name: "Concept",
+      version: 3,
+      schemaJson: {
+        cardType: "custom:template-concept",
+        title: "Concept",
+        markdown: "Definition:\nEvidence:",
+        attrs: {
+          data: {
+            schema: "concept-v3",
+            layout: {
+              density: "compact",
+            },
+          },
+        },
+        migrations,
+      },
+      builtIn: false,
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    const migrated = upgradeReadAnyCardAttrsWithTemplates(
+      {
+        cardType: "custom:template-concept",
+        version: 1,
+        title: "My concept",
+        markdown: "User-authored body",
+        data: {
+          summary: "A reusable idea.",
+          meta: {
+            oldSource: "Chapter 4",
+            legacyFlag: true,
+          },
+          layout: {
+            density: "detailed",
+          },
+        },
+      },
+      [template],
+    );
+
+    expect(migrated).toEqual({
+      cardType: "custom:template-concept",
+      version: 3,
+      title: "My concept",
+      markdown: "User-authored body",
+      text: "User-authored body",
+      data: {
+        schema: "concept-v3",
+        source: {
+          kind: "book",
+          title: "Chapter 4",
+        },
+        body: {
+          format: "markdown",
+          abstract: "A reusable idea.",
+        },
+        layout: {
+          tone: "calm",
+          density: "detailed",
+        },
+        meta: {},
+      },
+    });
+  });
+
+  it("does not force custom migrations onto explicit non-object card data", () => {
+    const template = {
+      id: "template-legacy",
+      name: "Legacy",
+      version: 2,
+      schemaJson: {
+        cardType: "custom:template-legacy",
+        title: "Legacy",
+        markdown: "Fallback",
+        attrs: {
+          data: {
+            kind: "default",
+          },
+        },
+        migrations: [
+          {
+            toVersion: 2,
+            dataDefaults: {
+              kind: "migrated",
+            },
+          },
+        ],
+      },
+      builtIn: false,
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    expect(
+      upgradeReadAnyCardAttrsWithTemplates(
+        {
+          cardType: "custom:template-legacy",
+          version: 1,
+          data: "legacy-serialized-data",
+        },
+        [template],
+      ),
+    ).toMatchObject({
+      version: 2,
+      data: "legacy-serialized-data",
+    });
+
+    expect(
+      upgradeReadAnyCardAttrsWithTemplates(
+        {
+          cardType: "custom:template-legacy",
+          version: 1,
+        },
+        [template],
+      ).data,
+    ).toEqual({ kind: "migrated" });
   });
 
   it("formats and parses custom card data safely for editor controls", () => {

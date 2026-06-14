@@ -1,9 +1,9 @@
 /**
  * Knowledge Tools — let AI read the user's ReadAny knowledge base.
  *
- * These tools are intentionally read-only. Mutating knowledge documents should
- * go through a confirmation-capable UI flow so AI never silently overwrites a
- * user's durable notes.
+ * Read tools return exact vault context. Mutating tools only create
+ * confirmation-required proposals so AI never silently overwrites a user's
+ * durable notes.
  */
 import {
   getKnowledgeDocument,

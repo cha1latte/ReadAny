@@ -1200,6 +1200,66 @@ describe("knowledge tools", () => {
     });
   });
 
+  it("runs a safe AI knowledge tag-to-confirmed-update workflow", async () => {
+    const source = doc({
+      id: "doc-tags",
+      title: "Theme Index",
+      tags: ["reading"],
+      contentMd: "Durable notes need lightweight structure.",
+      excerpt: "Durable notes need lightweight structure.",
+    });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(source);
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([source]);
+    dbMocks.updateKnowledgeDocument.mockResolvedValueOnce(undefined);
+
+    const tagTool = createProposeKnowledgeDocumentTagsUpdateTool();
+    const proposalResult = await tagTool.execute({
+      reasoning: "Add durable organization tags after reviewing the note",
+      documentId: "doc-tags",
+      mode: "add",
+      tags: "memory,theme,reading",
+    });
+
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+    expect(proposalResult).toMatchObject({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-tags",
+      targetPath: "Knowledge base / Theme Index",
+      patch: {
+        tags: ["reading", "memory", "theme"],
+      },
+      changedFields: ["tags"],
+      tagMode: "add",
+    });
+
+    const proposal = getKnowledgeWriteProposal(proposalResult);
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected tag update proposal");
+    if (proposal.action !== "update") throw new Error("Expected update proposal action");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal);
+    expect(preview).toMatchObject({
+      action: "update",
+      title: "Theme Index",
+      tags: ["reading", "memory", "theme"],
+      currentPath: "Knowledge base / Theme Index",
+      targetPath: "Knowledge base / Theme Index",
+      visiblePath: "Knowledge base / Theme Index",
+      changedFields: ["tags"],
+    });
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "update",
+      documentId: "doc-tags",
+    });
+    expect(dbMocks.updateKnowledgeDocument).toHaveBeenCalledWith("doc-tags", {
+      tags: ["reading", "memory", "theme"],
+    });
+  });
+
   it("supports tag removal and replacement proposals", async () => {
     dbMocks.getKnowledgeDocument.mockResolvedValue(
       doc({ id: "doc-tags", tags: ["reading", "memory", "draft"] }),

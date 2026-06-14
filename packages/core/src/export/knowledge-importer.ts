@@ -1179,7 +1179,7 @@ export function createKnowledgeVaultImportWriteProposals(
     )
     .map((entry) => {
       const manifestDocument = plan.manifest.documents[entry.documentId];
-      return createKnowledgeImportUpdateProposal(entry.draft, {
+      const proposal = createKnowledgeImportUpdateProposal(entry.draft, {
         mode: "update",
         documentId: entry.documentId,
         message: `Imported changes from ${entry.path}. The knowledge document has not been changed.`,
@@ -1189,8 +1189,11 @@ export function createKnowledgeVaultImportWriteProposals(
           parentId: manifestDocument?.parentId,
           type: manifestDocument?.type,
           title: manifestDocument?.title,
+          path: manifestDocument?.path,
           updatedAt: manifestDocument?.updatedAt,
         },
       });
+      proposal.targetPath = entry.path;
+      return proposal;
     });
 }

@@ -828,10 +828,12 @@ Home note.
         requiresConfirmation: true,
         confirmationKind: "knowledge_document_update",
         documentId: "doc-1",
+        targetPath: documentFile.path,
         current: expect.objectContaining({
           id: "doc-1",
           type: "book_home",
           title: "Book Home",
+          path: documentFile.path,
         }),
         patch: expect.objectContaining({
           title: "Book Home",
@@ -1006,7 +1008,11 @@ Home note.
       expect.objectContaining({
         action: "update",
         documentId: "doc-1",
+        targetPath: movedPath,
         message: `Imported changes from ${movedPath}. The knowledge document has not been changed.`,
+        current: expect.objectContaining({
+          path: documentFile.path,
+        }),
         patch: expect.objectContaining({
           contentMd: expect.stringContaining("moved and edited in Obsidian"),
         }),

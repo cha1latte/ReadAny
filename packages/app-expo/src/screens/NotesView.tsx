@@ -4738,6 +4738,9 @@ function KnowledgeVaultRootOverview({
           accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
         >
           <FolderPlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderIconActionText} numberOfLines={1}>
+            {t("notes.knowledgeDocumentFolder", "文件夹")}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.78}
@@ -4747,6 +4750,9 @@ function KnowledgeVaultRootOverview({
           accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
         >
           <PlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderIconActionText} numberOfLines={1}>
+            {t("notes.knowledgeDocumentNote", "笔记")}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -4894,6 +4900,9 @@ function KnowledgeFolderOverview({
           accessibilityLabel={t("notes.knowledgeNewFolder", "新建文件夹")}
         >
           <FolderPlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderIconActionText} numberOfLines={1}>
+            {t("notes.knowledgeDocumentFolder", "文件夹")}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.78}
@@ -4903,6 +4912,9 @@ function KnowledgeFolderOverview({
           accessibilityLabel={t("notes.knowledgeNewNote", "新建笔记")}
         >
           <PlusIcon size={15} color={colors.primary} />
+          <Text style={styles.knowledgeFolderIconActionText} numberOfLines={1}>
+            {t("notes.knowledgeDocumentNote", "笔记")}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.78}

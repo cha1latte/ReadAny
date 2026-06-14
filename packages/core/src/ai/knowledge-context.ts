@@ -1,6 +1,11 @@
-import { getKnowledgeDocuments, searchKnowledgeDocuments } from "../db/database";
+import {
+  getKnowledgeCardTemplates,
+  getKnowledgeDocuments,
+  searchKnowledgeDocuments,
+} from "../db/database";
 import { formatKnowledgeDocumentPath } from "../knowledge/document-utils";
-import type { KnowledgeDocument } from "../types";
+import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
+import type { KnowledgeCardTemplate, KnowledgeDocument } from "../types";
 
 const DEFAULT_MAX_DOCUMENTS = 6;
 const DEFAULT_MAX_CHARS = 2600;
@@ -14,6 +19,7 @@ export interface KnowledgePromptContextOptions {
   query?: string;
   maxDocuments?: number;
   maxChars?: number;
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 function compactText(value: string): string {
@@ -122,14 +128,30 @@ function sortKnowledgeContextDocuments(
   );
 }
 
-function createDocumentPreview(document: KnowledgeDocument): string {
-  const source = document.summaryMd || document.excerpt || document.contentMd;
+function renderDocumentContentPreviewMarkdown(
+  document: KnowledgeDocument,
+  cardTemplates?: KnowledgeCardTemplate[],
+): string {
+  if (!document.contentJson) return document.contentMd;
+  const rendered = renderKnowledgeJsonToMarkdown(document.contentJson, { cardTemplates }).trim();
+  return rendered || document.contentMd;
+}
+
+function createDocumentPreview(
+  document: KnowledgeDocument,
+  cardTemplates?: KnowledgeCardTemplate[],
+): string {
+  const source =
+    document.summaryMd ||
+    document.excerpt ||
+    renderDocumentContentPreviewMarkdown(document, cardTemplates);
   return source ? truncateText(stripMarkdown(source), 280) : "";
 }
 
 function formatDocumentForPrompt(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],
+  cardTemplates?: KnowledgeCardTemplate[],
 ): string {
   const title = compactText(document.title) || UNTITLED_TITLE;
   const path = formatKnowledgeDocumentPath(document, documents, {
@@ -139,7 +161,7 @@ function formatDocumentForPrompt(
     includeOrphanedParent: true,
   });
   const tags = document.tags.length > 0 ? `\n  tags: ${document.tags.join(", ")}` : "";
-  const preview = createDocumentPreview(document);
+  const preview = createDocumentPreview(document, cardTemplates);
   const previewLine = preview ? `\n  note: ${preview}` : "";
 
   return `- [${document.type}] ${title}\n  id: ${document.id}\n  path: ${path}${tags}${previewLine}`;
@@ -163,7 +185,7 @@ export function buildKnowledgePromptContext(
   const lines = [intro];
 
   for (const document of candidates) {
-    const nextLine = formatDocumentForPrompt(document, documents);
+    const nextLine = formatDocumentForPrompt(document, documents, options.cardTemplates);
     const nextText = [...lines, nextLine].join("\n");
     if (nextText.length > maxChars) {
       if (lines.length === 1) {
@@ -185,7 +207,7 @@ export async function loadKnowledgePromptContext(
 
   try {
     const query = normalizeQuery(options.query);
-    const [documents, queryMatches] = await Promise.all([
+    const [documents, queryMatches, cardTemplates] = await Promise.all([
       getKnowledgeDocuments({ bookId, limit: DOCUMENT_SCAN_LIMIT }),
       query
         ? searchKnowledgeDocuments({
@@ -194,11 +216,15 @@ export async function loadKnowledgePromptContext(
             limit: Math.max(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS, 12),
           })
         : Promise.resolve([]),
+      getKnowledgeCardTemplates().catch((error) => {
+        console.warn("[knowledge-context] Failed to load card templates:", error);
+        return [] as KnowledgeCardTemplate[];
+      }),
     ]);
     const mergedDocuments = Array.from(
       new Map([...queryMatches, ...documents].map((document) => [document.id, document])).values(),
     );
-    return buildKnowledgePromptContext(mergedDocuments, options);
+    return buildKnowledgePromptContext(mergedDocuments, { ...options, cardTemplates });
   } catch (error) {
     console.warn("[knowledge-context] Failed to load knowledge prompt context:", error);
     return undefined;

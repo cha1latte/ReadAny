@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { KnowledgeDocument } from "../../types";
+import type { KnowledgeCardTemplate, KnowledgeDocument } from "../../types";
 import { buildKnowledgePromptContext, loadKnowledgePromptContext } from "../knowledge-context";
 
 const dbMocks = vi.hoisted(() => ({
   getKnowledgeDocuments: vi.fn(),
   searchKnowledgeDocuments: vi.fn(),
+  getKnowledgeCardTemplates: vi.fn(),
 }));
 
 vi.mock("../../db/database", () => dbMocks);
@@ -27,7 +28,26 @@ function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  dbMocks.getKnowledgeCardTemplates.mockResolvedValue([]);
 });
+
+const readingPromptTemplate: KnowledgeCardTemplate = {
+  id: "template-reading-question",
+  name: "Reading Prompt",
+  version: 4,
+  schemaJson: {
+    cardType: "custom:template-reading-question",
+    title: "Reading Prompt",
+    markdown: "Prompt:\nResponse:",
+    attrs: {
+      data: { kind: "prompt" },
+    },
+  },
+  builtIn: false,
+  enabled: true,
+  createdAt: 1,
+  updatedAt: 2,
+};
 
 describe("buildKnowledgePromptContext", () => {
   it("includes document ids, vault paths, tags, and compact durable summaries", () => {
@@ -156,6 +176,37 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).toContain("Long Note");
     expect(context).toContain("...");
   });
+
+  it("projects ReadAny cards from canonical JSON with synced templates", () => {
+    const context = buildKnowledgePromptContext(
+      [
+        doc({
+          id: "custom-card-doc",
+          title: "Custom Card Note",
+          contentMd: "Stale markdown fallback",
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "readanyCard",
+                attrs: {
+                  cardType: "custom:template-reading-question",
+                  version: 1,
+                  title: "Prompt",
+                  markdown: "Question: What changed?",
+                },
+              },
+            ],
+          },
+        }),
+      ],
+      { cardTemplates: [readingPromptTemplate] },
+    );
+
+    expect(context).toContain("[standalone_note] Custom Card Note");
+    expect(context).toContain("Question: What changed?");
+    expect(context).not.toContain("Stale markdown fallback");
+  });
 });
 
 describe("loadKnowledgePromptContext", () => {
@@ -174,6 +225,57 @@ describe("loadKnowledgePromptContext", () => {
 
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
     expect(dbMocks.searchKnowledgeDocuments).not.toHaveBeenCalled();
+    expect(dbMocks.getKnowledgeCardTemplates).toHaveBeenCalled();
+    expect(context).toContain("Reading Review");
+    expect(context).toContain("This is the user's own review.");
+  });
+
+  it("loads card templates before building AI context previews", async () => {
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      doc({
+        id: "custom-card-doc",
+        title: "Custom Card Note",
+        contentMd: "Stale markdown fallback",
+        contentJson: {
+          type: "doc",
+          content: [
+            {
+              type: "readanyCard",
+              attrs: {
+                cardType: "custom:template-reading-question",
+                version: 1,
+                title: "Prompt",
+                markdown: "Question: What changed?",
+              },
+            },
+          ],
+        },
+      }),
+    ]);
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([]);
+    dbMocks.getKnowledgeCardTemplates.mockResolvedValue([readingPromptTemplate]);
+
+    const context = await loadKnowledgePromptContext({ bookId: "book-1" });
+
+    expect(dbMocks.getKnowledgeCardTemplates).toHaveBeenCalled();
+    expect(context).toContain("Question: What changed?");
+    expect(context).not.toContain("Stale markdown fallback");
+  });
+
+  it("keeps knowledge context available when card template loading fails", async () => {
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([
+      doc({
+        id: "review-1",
+        type: "review",
+        title: "Reading Review",
+        excerpt: "This is the user's own review.",
+      }),
+    ]);
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([]);
+    dbMocks.getKnowledgeCardTemplates.mockRejectedValue(new Error("template table busy"));
+
+    const context = await loadKnowledgePromptContext({ bookId: "book-1" });
+
     expect(context).toContain("Reading Review");
     expect(context).toContain("This is the user's own review.");
   });
@@ -214,6 +316,7 @@ describe("loadKnowledgePromptContext", () => {
   it("does not query when no current book is attached", async () => {
     await expect(loadKnowledgePromptContext({ bookId: null })).resolves.toBeUndefined();
     expect(dbMocks.getKnowledgeDocuments).not.toHaveBeenCalled();
+    expect(dbMocks.getKnowledgeCardTemplates).not.toHaveBeenCalled();
   });
 
   it("keeps AI streaming usable when the knowledge lookup fails", async () => {

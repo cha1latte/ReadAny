@@ -811,11 +811,12 @@ describe("KnowledgeExporter", () => {
       { rootDir: "ReadAny", exportedAt: 1700000200000 },
     );
 
-    expect(vault.manifest.cardTemplates).toEqual([readingPromptTemplate]);
+    expect(vault.manifest.cardTemplates).toEqual([readingPromptTemplate, disabledTemplate]);
 
     const manifestFile = vault.files.find((file) => file.path.endsWith("manifest.json"));
     expect(JSON.parse(manifestFile?.content ?? "{}").cardTemplates).toEqual([
       readingPromptTemplate,
+      disabledTemplate,
     ]);
   });
 

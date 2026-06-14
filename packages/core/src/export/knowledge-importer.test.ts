@@ -919,15 +919,20 @@ Home note.
     });
   });
 
-  it("uses vault manifest card templates when reconciling custom cards", () => {
+  it("uses disabled vault manifest card templates when reconciling existing custom cards", () => {
     const exporter = new KnowledgeExporter();
+    const disabledTemplate: KnowledgeCardTemplate = {
+      ...readingPromptTemplate,
+      enabled: false,
+    };
     const vault = exporter.buildVaultPackage(
       {
         documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
-        cardTemplates: [readingPromptTemplate],
+        cardTemplates: [disabledTemplate],
       },
       { exportedAt: 1700000200000, includeReadAnyCardMetadata: true },
     );
+    expect(vault.manifest.cardTemplates).toEqual([disabledTemplate]);
     const documentFile = vault.files.find((file) => file.path.endsWith(".md"));
     if (!documentFile) throw new Error("Expected exported document file");
 

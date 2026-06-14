@@ -587,7 +587,7 @@ function createAttachmentManifestEntries(
 
 function createCardTemplateManifestEntries(input: KnowledgeExportInput): KnowledgeCardTemplate[] {
   return (input.cardTemplates ?? [])
-    .filter((template) => !template.builtIn && template.enabled)
+    .filter((template) => !template.builtIn)
     .map((template) => ({
       id: template.id,
       name: template.name,

@@ -315,6 +315,25 @@ Why does this matter?
     });
   });
 
+  it("imports ordinary Obsidian Markdown with inline frontmatter tag arrays", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Vault/Ideas/Inline Tags.md",
+      content: [
+        "---",
+        'title: "Inline Tags"',
+        "tags: [reading, \"slow method\", 'reader''s note']",
+        "---",
+        "# Inline Tags",
+        "",
+        "Keep Obsidian frontmatter portable.",
+      ].join("\n"),
+    });
+
+    expect(imported.warnings).toEqual(["frontmatter_not_readany"]);
+    expect(imported.draft.tags).toEqual(["reading", "slow method", "reader's note"]);
+    expect(imported.draft.contentMd).toBe("Keep Obsidian frontmatter portable.");
+  });
+
   it("places ordinary Markdown in the provided default parent folder", () => {
     const imported = parseKnowledgeMarkdownDocument({
       path: "Vault/Ideas/Slow Reading.md",

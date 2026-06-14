@@ -163,12 +163,66 @@ function parseQuotedValue(value: string): string {
       .replace(/\\(["\\])/g, "$1")
       .trim();
   }
+  if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/''/g, "'").trim();
+  }
   return trimmed;
+}
+
+function parseInlineListValue(value: string): string[] | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
+
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return [];
+
+  const values: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+
+  for (let index = 0; index < inner.length; index += 1) {
+    const char = inner[index];
+    if (quote) {
+      current += char;
+      if (char === quote) {
+        if (quote === "'" && inner[index + 1] === "'") {
+          current += inner[index + 1];
+          index += 1;
+        } else if (quote === '"' && inner[index - 1] === "\\") {
+          continue;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === ",") {
+      const parsed = parseQuotedValue(current);
+      if (parsed) values.push(parsed);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  const parsed = parseQuotedValue(current);
+  if (parsed) values.push(parsed);
+  return values;
 }
 
 function parseScalar(value: string): string | string[] {
   const trimmed = value.trim();
   if (trimmed === "[]") return [];
+  const inlineList = parseInlineListValue(trimmed);
+  if (inlineList) return inlineList;
   return parseQuotedValue(trimmed);
 }
 

@@ -52,6 +52,7 @@ const commands = [
   ],
   ["pnpm", ["--filter", "@readany/core", "exec", "tsc", "--noEmit"], "core TypeScript"],
   ["pnpm", ["--filter", "app", "exec", "tsc", "--noEmit"], "desktop TypeScript"],
+  ["pnpm", ["--filter", "app", "exec", "vite", "build"], "desktop production bundle"],
   [
     "pnpm",
     ["--filter", "@readany/app-expo", "exec", "tsc", "--noEmit"],

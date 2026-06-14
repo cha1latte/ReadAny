@@ -12,6 +12,7 @@ The branch is ready for final PR review when all of these are true:
 
 - The worktree is clean and pushed.
 - Core knowledge, AI, sync, export, desktop, and mobile TypeScript checks pass.
+- The desktop Vite production bundle builds successfully.
 - Desktop and mobile both show a vault hierarchy before editing.
 - Folder nodes open folder browsers, not empty document editors.
 - Document nodes open a WYSIWYG Tiptap surface with quiet autosave.
@@ -70,6 +71,7 @@ pnpm --filter @readany/core exec vitest run \
 
 pnpm --filter @readany/core exec tsc --noEmit
 pnpm --filter app exec tsc --noEmit
+pnpm --filter app exec vite build
 pnpm --filter @readany/app-expo exec tsc --noEmit
 pnpm --filter @readany/app-expo exec node scripts/build-knowledge-editor.js
 git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
@@ -91,6 +93,7 @@ Evidence mapping:
 | Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
 | Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
+| Desktop knowledge workspace code is included in a valid production browser bundle. | Desktop production bundle check |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 | Draft recovery, mobile WebView messages, and error states are typed. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |

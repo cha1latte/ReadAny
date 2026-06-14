@@ -228,6 +228,10 @@ function createInvalidTitleError(reason: string): Error {
   return new Error(`Invalid knowledge document title: ${reason}`);
 }
 
+function createInvalidCreateError(reason: string): Error {
+  return new Error(`Invalid knowledge document create: ${reason}`);
+}
+
 function createInvalidLinkError(reason: string): Error {
   return new Error(`Invalid knowledge link: ${reason}`);
 }
@@ -288,6 +292,17 @@ async function assertCreateProposalTitle(proposal: KnowledgeDocumentCreatePropos
     documents,
   });
   if (!validation.ok) throw createInvalidTitleError(validation.reason);
+}
+
+function isExistingCreateProposalDocument(
+  proposal: KnowledgeDocumentCreateProposal,
+  existing: KnowledgeDocument,
+): boolean {
+  if (existing.type !== proposal.draft.type) return false;
+  if (!sameOptionalString(existing.bookId, proposal.draft.bookId)) return false;
+  if (!sameOptionalString(existing.sourceKind, proposal.draft.sourceKind)) return false;
+  if (!sameOptionalString(existing.sourceId, proposal.draft.sourceId)) return false;
+  return true;
 }
 
 async function getValidatedUpdateDocument(
@@ -577,6 +592,9 @@ export async function applyKnowledgeWriteProposal(
     if (proposal.draft.id) {
       const existing = await getKnowledgeDocument(proposal.draft.id);
       if (existing) {
+        if (!isExistingCreateProposalDocument(proposal, existing)) {
+          throw createInvalidCreateError("create_id_conflict");
+        }
         return { action: "create", documentId: existing.id, alreadyApplied: true };
       }
     }

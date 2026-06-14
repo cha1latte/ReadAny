@@ -384,7 +384,9 @@ describe("knowledge write proposals", () => {
     expect(proposal).not.toBeNull();
     if (!proposal) throw new Error("Expected create proposal");
 
-    dbMocks.getKnowledgeDocument.mockResolvedValue({ id: "proposal-doc-1" });
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "proposal-doc-1", bookId: undefined, sourceKind: undefined }),
+    );
 
     const result = await applyKnowledgeWriteProposal(proposal);
 
@@ -393,6 +395,42 @@ describe("knowledge write proposals", () => {
       documentId: "proposal-doc-1",
       alreadyApplied: true,
     });
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects create proposals whose draft id collides with a different document", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      draft: {
+        id: "proposal-doc-1",
+        type: "summary",
+        title: "Imported Summary",
+        bookId: "book-1",
+        contentMd: "Body",
+        contentJson: { type: "doc", content: [] },
+        sourceKind: "obsidian",
+        sourceId: "Vault/Summary.md",
+      },
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({
+        id: "proposal-doc-1",
+        type: "standalone_note",
+        bookId: "book-2",
+        sourceKind: "book",
+        sourceId: "book-2",
+      }),
+    );
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document create: create_id_conflict",
+    );
     expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
   });
 

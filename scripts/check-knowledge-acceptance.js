@@ -320,6 +320,13 @@ function verifyDesktopKnowledgeEditorContract() {
 
 function verifyMobileKnowledgeEditorContract() {
   verifySourceContract("mobile knowledge editor contract", mobileKnowledgeEditorPath, [
+    "EditorIssueBanner",
+    "useMarkdownFallback",
+    "pendingDraft",
+    "knowledgeEditorLoadFailed",
+    "knowledgeEditorRetry",
+    "knowledgeEditorDraftRestore",
+    "onContentProcessDidTerminate",
     "getReadAnyCardTemplateFields",
     "normalizeReadAnyCardTemplateFields",
     "knowledgeCustomCardFields",

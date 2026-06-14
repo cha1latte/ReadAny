@@ -900,14 +900,14 @@ export function NotesView({
   ]);
 
   const openKnowledgeDocument = useCallback(
-    async (document: KnowledgeDocument) => {
+    async (document: KnowledgeDocument): Promise<boolean> => {
       if (document.id === knowledgeHome?.id) {
         setSelectedKnowledgeDocumentId(document.id);
         setIsKnowledgeVaultRootOpen(false);
-        return;
+        return true;
       }
       const saved = await saveActiveKnowledgeDocumentNow();
-      if (!saved) return;
+      if (!saved) return false;
 
       knowledgeSaveVersionRef.current += 1;
       const nextValue = await createResolvedKnowledgeValue(document);
@@ -922,17 +922,19 @@ export function NotesView({
         knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
       );
       setIsKnowledgeSaving(false);
+      return true;
     },
     [knowledgeHome?.id, saveActiveKnowledgeDocumentNow],
   );
 
   const openKnowledgeVaultRoot = useCallback(async () => {
-    if (isKnowledgeVaultRootOpen) return;
+    if (isKnowledgeVaultRootOpen) return true;
     const saved = await saveActiveKnowledgeDocumentNow();
-    if (!saved) return;
+    if (!saved) return false;
     setSelectedKnowledgeDocumentId(null);
     setIsKnowledgeVaultRootOpen(true);
     setKnowledgeSourceReferenceRequest(null);
+    return true;
   }, [isKnowledgeVaultRootOpen, saveActiveKnowledgeDocumentNow]);
 
   const refreshSelectedKnowledgeDocuments = useCallback(
@@ -2431,8 +2433,8 @@ function KnowledgeHomePanel({
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: MobileKnowledgeEditorValue) => void;
-  onOpenVaultRoot: () => void;
-  onSelectDocument: (document: KnowledgeDocument) => void;
+  onOpenVaultRoot: () => boolean | Promise<boolean>;
+  onSelectDocument: (document: KnowledgeDocument) => boolean | Promise<boolean>;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;
@@ -2592,16 +2594,22 @@ function KnowledgeHomePanel({
   }, [onRenameDocument, renameDocument, renameDraft]);
 
   const handleSelectKnowledgeDocument = useCallback(
-    (nextDocument: KnowledgeDocument) => {
-      onSelectDocument(nextDocument);
+    async (nextDocument: KnowledgeDocument) => {
+      const opened = await onSelectDocument(nextDocument);
+      if (opened === false) return;
       setWorkspaceMode(getKnowledgeDocumentWorkspaceMode(nextDocument));
     },
     [onSelectDocument],
   );
+  const handleOpenVaultRoot = useCallback(async () => {
+    const opened = await onOpenVaultRoot();
+    if (opened === false) return;
+    setWorkspaceMode("vault");
+  }, [onOpenVaultRoot]);
   const handleSelectContextDocument = useCallback(
     (nextDocument: KnowledgeDocument) => {
       setIsContextSheetVisible(false);
-      handleSelectKnowledgeDocument(nextDocument);
+      void handleSelectKnowledgeDocument(nextDocument);
     },
     [handleSelectKnowledgeDocument],
   );
@@ -2662,7 +2670,7 @@ function KnowledgeHomePanel({
                 items={activePathItems}
                 activeId={activePathLastId}
                 documents={documents}
-                onSelectRoot={onOpenVaultRoot}
+                onSelectRoot={handleOpenVaultRoot}
                 onSelectDocument={handleSelectKnowledgeDocument}
                 styles={styles}
                 colors={colors}
@@ -2676,7 +2684,7 @@ function KnowledgeHomePanel({
             activeDocumentId={activeDocumentId}
             isRootActive={isVaultRootOpen}
             isCreating={isCreatingDocument}
-            onSelectRoot={onOpenVaultRoot}
+            onSelectRoot={handleOpenVaultRoot}
             onSelect={handleSelectKnowledgeDocument}
             onCreate={onCreateDocument}
             t={t}
@@ -2740,12 +2748,9 @@ function KnowledgeHomePanel({
                 items={activePathItems}
                 activeId={activePathLastId}
                 documents={documents}
-                onSelectRoot={() => {
-                  onOpenVaultRoot();
-                  setWorkspaceMode("vault");
-                }}
+                onSelectRoot={handleOpenVaultRoot}
                 onSelectDocument={(targetDocument) => {
-                  handleSelectKnowledgeDocument(targetDocument);
+                  void handleSelectKnowledgeDocument(targetDocument);
                 }}
                 styles={styles}
                 colors={colors}

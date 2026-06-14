@@ -372,6 +372,8 @@ function verifyMobileKnowledgeWorkspaceContract() {
     "getKnowledgeDocumentWorkspaceMode",
     "getKnowledgeDocumentOpenMode",
     "getKnowledgeDocumentCreateParentId",
+    "boolean | Promise<boolean>",
+    "opened === false",
     "filterKnowledgeDocumentTreeNodesForSearch",
     "knowledgeDocumentPathText",
     "knowledge:open-document",

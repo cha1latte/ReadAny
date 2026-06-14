@@ -411,7 +411,11 @@ class FakeSyncDb {
     for (const table of ["knowledge_links", "knowledge_attachments"]) {
       const rows = this.tables.get(table);
       for (const [id, row] of rows ?? []) {
-        if (row.from_document_id === documentId || row.document_id === documentId) {
+        if (
+          row.from_document_id === documentId ||
+          (row.to_kind === "document" && row.to_id === documentId) ||
+          row.document_id === documentId
+        ) {
           rows?.delete(id);
         }
       }
@@ -1041,10 +1045,30 @@ describe("simple sync convergence", () => {
       }),
     );
     deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        id: "doc-source",
+        type: "standalone_note",
+        title: "Source Note",
+        source_kind: null,
+        source_id: null,
+        updated_at: 1100,
+      }),
+    );
+    deviceA.insert(
       "knowledge_links",
       knowledgeLinkRow({
         id: "link-delete",
         from_document_id: "doc-delete",
+      }),
+    );
+    deviceA.insert(
+      "knowledge_links",
+      knowledgeLinkRow({
+        id: "incoming-link-delete",
+        from_document_id: "doc-source",
+        to_kind: "document",
+        to_id: "doc-delete",
       }),
     );
     deviceA.insert(
@@ -1063,8 +1087,15 @@ describe("simple sync convergence", () => {
     expect(deviceB.get("knowledge_documents", "doc-delete")).toMatchObject({
       title: "Delete Candidate",
     });
+    expect(deviceB.get("knowledge_documents", "doc-source")).toMatchObject({
+      title: "Source Note",
+    });
     expect(deviceB.get("knowledge_links", "link-delete")).toMatchObject({
       from_document_id: "doc-delete",
+    });
+    expect(deviceB.get("knowledge_links", "incoming-link-delete")).toMatchObject({
+      from_document_id: "doc-source",
+      to_id: "doc-delete",
     });
     expect(deviceB.get("knowledge_attachments", "attachment-delete")).toMatchObject({
       document_id: "doc-delete",
@@ -1072,6 +1103,7 @@ describe("simple sync convergence", () => {
 
     now = 1300;
     deviceB.deleteWithTombstone("knowledge_links", "link-delete", now);
+    deviceB.deleteWithTombstone("knowledge_links", "incoming-link-delete", now);
     deviceB.deleteWithTombstone("knowledge_attachments", "attachment-delete", now);
     deviceB.deleteWithTombstone("knowledge_documents", "doc-delete", now);
 
@@ -1083,10 +1115,15 @@ describe("simple sync convergence", () => {
 
     expect(result.success).toBe(true);
     expect(deviceA.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceA.get("knowledge_documents", "doc-source")).toMatchObject({
+      title: "Source Note",
+    });
     expect(deviceA.get("knowledge_links", "link-delete")).toBeUndefined();
+    expect(deviceA.get("knowledge_links", "incoming-link-delete")).toBeUndefined();
     expect(deviceA.get("knowledge_attachments", "attachment-delete")).toBeUndefined();
     expect(deviceA.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
     expect(deviceA.tombstones.get("knowledge_links:link-delete")?.deleted_at).toBe(1300);
+    expect(deviceA.tombstones.get("knowledge_links:incoming-link-delete")?.deleted_at).toBe(1300);
     expect(deviceA.tombstones.get("knowledge_attachments:attachment-delete")?.deleted_at).toBe(
       1300,
     );
@@ -1095,10 +1132,15 @@ describe("simple sync convergence", () => {
     await syncDevice("device-b", deviceB, backend);
 
     expect(deviceB.get("knowledge_documents", "doc-delete")).toBeUndefined();
+    expect(deviceB.get("knowledge_documents", "doc-source")).toMatchObject({
+      title: "Source Note",
+    });
     expect(deviceB.get("knowledge_links", "link-delete")).toBeUndefined();
+    expect(deviceB.get("knowledge_links", "incoming-link-delete")).toBeUndefined();
     expect(deviceB.get("knowledge_attachments", "attachment-delete")).toBeUndefined();
     expect(deviceB.tombstones.get("knowledge_documents:doc-delete")?.deleted_at).toBe(1300);
     expect(deviceB.tombstones.get("knowledge_links:link-delete")?.deleted_at).toBe(1300);
+    expect(deviceB.tombstones.get("knowledge_links:incoming-link-delete")?.deleted_at).toBe(1300);
     expect(deviceB.tombstones.get("knowledge_attachments:attachment-delete")?.deleted_at).toBe(
       1300,
     );

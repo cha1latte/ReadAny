@@ -337,23 +337,36 @@ _Source: Chapter 1_`,
 
   it("deletes a knowledge document with a tombstone", async () => {
     mockSelect
-      .mockResolvedValueOnce([{ id: "link-1" }, { id: "link-2" }])
+      .mockResolvedValueOnce([{ id: "link-out-1" }, { id: "link-out-2" }, { id: "link-in-1" }])
       .mockResolvedValueOnce([{ id: "att-1" }]);
 
     await deleteKnowledgeDocument("doc-1");
 
     expect(mockSelect).toHaveBeenNthCalledWith(
       1,
-      "SELECT id FROM knowledge_links WHERE from_document_id = ?",
-      ["doc-1"],
+      expect.stringContaining("to_kind = 'document'"),
+      ["doc-1", "doc-1"],
     );
     expect(mockSelect).toHaveBeenNthCalledWith(
       2,
       "SELECT id FROM knowledge_attachments WHERE document_id = ?",
       ["doc-1"],
     );
-    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-1", "knowledge_links");
-    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "link-2", "knowledge_links");
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+      mockDb,
+      "link-out-1",
+      "knowledge_links",
+    );
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+      mockDb,
+      "link-out-2",
+      "knowledge_links",
+    );
+    expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
+      mockDb,
+      "link-in-1",
+      "knowledge_links",
+    );
     expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
       mockDb,
       "att-1",
@@ -362,8 +375,8 @@ _Source: Chapter 1_`,
     expect(coreMocks.insertTombstone).toHaveBeenCalledWith(mockDb, "doc-1", "knowledge_documents");
     expect(mockExecute).toHaveBeenNthCalledWith(
       1,
-      "DELETE FROM knowledge_links WHERE from_document_id = ?",
-      ["doc-1"],
+      expect.stringContaining("to_kind = 'document'"),
+      ["doc-1", "doc-1"],
     );
     expect(mockExecute).toHaveBeenNthCalledWith(
       2,

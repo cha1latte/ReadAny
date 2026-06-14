@@ -374,11 +374,14 @@ export async function deleteBook(id: string, options: DeleteBookOptions = {}): P
     database.select<{ id: string }>("SELECT id FROM notes WHERE book_id = ?", [id]),
     database.select<{ id: string }>("SELECT id FROM knowledge_documents WHERE book_id = ?", [id]),
     database.select<{ id: string }>(
-      `SELECT kl.id
+      `SELECT DISTINCT kl.id
        FROM knowledge_links kl
-       INNER JOIN knowledge_documents kd ON kl.from_document_id = kd.id
-       WHERE kd.book_id = ?`,
-      [id],
+       WHERE kl.from_document_id IN (SELECT id FROM knowledge_documents WHERE book_id = ?)
+          OR (
+            kl.to_kind = 'document'
+            AND kl.to_id IN (SELECT id FROM knowledge_documents WHERE book_id = ?)
+          )`,
+      [id, id],
     ),
     database.select<{ id: string }>(
       `SELECT ka.id
@@ -413,8 +416,12 @@ export async function deleteBook(id: string, options: DeleteBookOptions = {}): P
   await database.execute("DELETE FROM notes WHERE book_id = ?", [id]);
   await database.execute(
     `DELETE FROM knowledge_links
-     WHERE from_document_id IN (SELECT id FROM knowledge_documents WHERE book_id = ?)`,
-    [id],
+     WHERE from_document_id IN (SELECT id FROM knowledge_documents WHERE book_id = ?)
+        OR (
+          to_kind = 'document'
+          AND to_id IN (SELECT id FROM knowledge_documents WHERE book_id = ?)
+        )`,
+    [id, id],
   );
   await database.execute(
     `DELETE FROM knowledge_attachments

@@ -312,7 +312,7 @@ describe("book-queries", () => {
       expect(mockExecute).toHaveBeenCalledWith("DELETE FROM notes WHERE book_id = ?", ["book-1"]);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM knowledge_links"),
-        ["book-1"],
+        ["book-1", "book-1"],
       );
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining("DELETE FROM knowledge_attachments"),
@@ -335,6 +335,11 @@ describe("book-queries", () => {
         mockDb,
         "knowledge-link-1",
         "knowledge_links",
+      );
+      expect(mockSelect).toHaveBeenNthCalledWith(
+        4,
+        expect.stringContaining("kl.to_kind = 'document'"),
+        ["book-1", "book-1"],
       );
       expect(coreMocks.insertTombstone).toHaveBeenCalledWith(
         mockDb,

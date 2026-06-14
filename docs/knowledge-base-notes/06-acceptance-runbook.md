@@ -157,10 +157,10 @@ Evidence mapping:
 | Knowledge tables, queries, tombstones, and sync metadata exist. | `knowledge-queries.test.ts`, `simple-sync.integration.test.ts` |
 | Legacy highlight/note projections keep old UI compatible while knowledge documents become primary. | `knowledge-source-writeback.test.ts`, `highlight-queries.test.ts`, `note-queries.test.ts`, `document-utils.test.ts` |
 | Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
-| Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
+| Vault paths survive folders, moves, orphans, search, AI, import, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts`, `knowledge-importer.test.ts` |
 | Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
 | Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
-| Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
+| Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. Folder-level `README.md` and `index.md` links resolve back to the manifest document id. | `document-utils.test.ts`, `knowledge-importer.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
 | Knowledge and card UI strings and interpolation placeholders stay available across supported locales. | `locales.test.ts`, desktop and mobile TypeScript checks |
 | Desktop knowledge workspace code is included in a valid production browser bundle. | Desktop production bundle contract check |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |

@@ -1137,6 +1137,77 @@ Home note.
     });
   });
 
+  it("resolves folder index aliases to manifest document ids during vault import", () => {
+    const exporter = new KnowledgeExporter();
+    const source = knowledgeDocument({
+      id: "doc-1",
+      bookId: undefined,
+      sourceKind: undefined,
+      contentJson: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Home body." }],
+          },
+        ],
+      },
+      contentMd: "",
+    });
+    const folder = knowledgeDocument({
+      id: "folder-1",
+      bookId: undefined,
+      parentId: undefined,
+      type: "folder",
+      title: "Ideas",
+      sourceKind: undefined,
+      contentJson: { type: "doc", content: [] },
+      contentMd: "",
+      tags: [],
+    });
+    const vault = exporter.buildVaultPackage(
+      {
+        documents: [source, folder],
+      },
+      { rootDir: "ReadAny", exportedAt: 1700000200000 },
+    );
+    const sourceFile = vault.files.find(
+      (file) => file.path === vault.manifest.documents["doc-1"].path,
+    );
+    if (!sourceFile) throw new Error("Expected exported source document");
+
+    const editedContent = sourceFile.content.replace(
+      "Home body.",
+      "Home body.\n\nSee [[Ideas/index|Ideas]].",
+    );
+
+    const plan = createKnowledgeVaultImportPlan({
+      manifest: vault.manifest,
+      files: [{ path: sourceFile.path, content: editedContent }],
+    });
+
+    expect(plan.modified).toHaveLength(1);
+    expect(plan.modified[0].draft?.draft.contentJson).toMatchObject({
+      type: "doc",
+      content: expect.arrayContaining([
+        {
+          type: "paragraph",
+          content: expect.arrayContaining([
+            {
+              type: "readanyInternalLink",
+              attrs: {
+                documentId: "folder-1",
+                targetPath: "Ideas/index",
+                label: "Ideas",
+                title: "Ideas",
+              },
+            },
+          ]),
+        },
+      ]),
+    });
+  });
+
   it("detects local and Obsidian edits as vault import conflicts", () => {
     const exporter = new KnowledgeExporter();
     const original = knowledgeDocument({ bookId: undefined, sourceKind: undefined });

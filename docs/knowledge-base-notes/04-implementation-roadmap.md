@@ -134,6 +134,8 @@ picker import is now available, while mobile inbound share-extension import and
 deeper conflict resolution remain future work. Document export, vault package
 generation, manifests, attachment path planning, conflict detection, ReadAny
 card fallbacks, Markdown file import, and linked-folder import/reconcile exist.
+Linked-folder import also recognizes folder-level `README.md` and `index.md`
+aliases when resolving path-backed internal links.
 
 Goal:
 

@@ -352,8 +352,8 @@ function stripMarkdownExtension(path: string): string {
   return normalizePath(path).replace(/\.md$/i, "");
 }
 
-function stripReadmeIndex(path: string): string {
-  return path.replace(/\/README$/i, "");
+function stripFolderIndex(path: string): string {
+  return path.replace(/\/(?:README|index)$/i, "");
 }
 
 function stripRootDir(path: string, rootDir: string): string {
@@ -374,9 +374,9 @@ function createManifestDocumentIdsByPath(manifest: KnowledgeExportManifest): Map
     const withoutRoot = stripRootDir(normalized, manifest.rootDir);
     const aliases = new Set([
       normalized,
-      stripReadmeIndex(normalized),
+      stripFolderIndex(normalized),
       withoutRoot,
-      stripReadmeIndex(withoutRoot),
+      stripFolderIndex(withoutRoot),
     ]);
 
     for (const alias of aliases) {
@@ -392,7 +392,7 @@ function resolveManifestDocumentIdByPath(
   documentIdsByPath: Map<string, string>,
 ): string | undefined {
   const normalized = stripMarkdownExtension(targetPath);
-  return documentIdsByPath.get(normalized) ?? documentIdsByPath.get(stripReadmeIndex(normalized));
+  return documentIdsByPath.get(normalized) ?? documentIdsByPath.get(stripFolderIndex(normalized));
 }
 
 function resolveInternalLinkTargetPaths(

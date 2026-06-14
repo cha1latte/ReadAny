@@ -746,6 +746,108 @@ describe("simple sync convergence", () => {
     });
   });
 
+  it("preserves rich knowledge editor JSON through sync apply", async () => {
+    const backend = new MemoryBackend();
+    const deviceA = new FakeSyncDb();
+    const deviceB = new FakeSyncDb();
+    const richContentJson = JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 2 },
+          content: [{ type: "text", text: "Reading thread" }],
+        },
+        {
+          type: "taskList",
+          content: [
+            {
+              type: "taskItem",
+              attrs: { checked: true },
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Preserve the task" }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Cite " },
+            {
+              type: "readanySourceReference",
+              attrs: {
+                label: "Chapter 1",
+                sourceId: "hl-1",
+                cfi: "epubcfi(/6/2)",
+              },
+            },
+          ],
+        },
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "aiSummary",
+            version: 1,
+            title: "AI memory",
+            markdown: "Durable summary",
+            data: { citations: [{ cfi: "epubcfi(/6/2)", text: "Marked text" }] },
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            attachmentId: "knowledge-attachment-1",
+            src: "readany-attachment://knowledge-attachment-1",
+            alt: "quote.png",
+          },
+        },
+      ],
+    });
+    const richContentMd = [
+      "## Reading thread",
+      "",
+      "- [x] Preserve the task",
+      "",
+      "Cite [Chapter 1](readany://cfi/epubcfi%28%2F6%2F2%29?sourceId=hl-1)",
+      "",
+      ":::readany-card type=\"aiSummary\" version=\"1\" title=\"AI memory\" data=\"%7B%22citations%22%3A%5B%7B%22cfi%22%3A%22epubcfi(%2F6%2F2)%22%2C%22text%22%3A%22Marked%20text%22%7D%5D%7D\"",
+      "Durable summary",
+      ":::",
+      "",
+      "![quote.png](readany-attachment://knowledge-attachment-1)",
+    ].join("\n");
+
+    deviceA.insert("books", bookRow());
+    deviceA.insert("highlights", highlightRow());
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        content_json: richContentJson,
+        content_md: richContentMd,
+        excerpt: "Reading thread Preserve the task",
+        tags: '["source","ai"]',
+      }),
+    );
+    deviceA.insert("knowledge_attachments", knowledgeAttachmentRow());
+
+    now = 1100;
+    await syncDevice("device-a", deviceA, backend);
+
+    now = 1200;
+    const result = await syncDevice("device-b", deviceB, backend);
+
+    expect(result.success).toBe(true);
+    expect(deviceB.get("knowledge_documents", "doc-1")).toMatchObject({
+      content_json: richContentJson,
+      content_md: richContentMd,
+      tags: '["source","ai"]',
+    });
+  });
+
   it("syncs knowledge vault folder moves without flattening child documents", async () => {
     const backend = new MemoryBackend();
     const deviceA = new FakeSyncDb();

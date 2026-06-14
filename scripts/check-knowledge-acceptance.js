@@ -18,6 +18,10 @@ const desktopChatRendererPath = path.join(
   rootDir,
   "packages/app/src/components/chat/PartRenderer.tsx",
 );
+const desktopKnowledgeEditorPath = path.join(
+  rootDir,
+  "packages/app/src/components/knowledge/KnowledgeEditor.tsx",
+);
 const desktopNotesPagePath = path.join(rootDir, "packages/app/src/components/notes/NotesPage.tsx");
 const mobileNotesViewPath = path.join(rootDir, "packages/app-expo/src/screens/NotesView.tsx");
 
@@ -65,11 +69,7 @@ const commands = [
   ["pnpm", ["--filter", "@readany/core", "exec", "tsc", "--noEmit"], "core TypeScript"],
   ["pnpm", ["--filter", "app", "exec", "tsc", "--noEmit"], "desktop TypeScript"],
   ["pnpm", ["--filter", "app", "exec", "vite", "build"], "desktop production bundle"],
-  [
-    "pnpm",
-    ["--filter", "@readany/app-expo", "exec", "tsc", "--noEmit"],
-    "mobile TypeScript",
-  ],
+  ["pnpm", ["--filter", "@readany/app-expo", "exec", "tsc", "--noEmit"], "mobile TypeScript"],
 ];
 
 function readFile(pathname) {
@@ -221,6 +221,8 @@ function verifyKnowledgeEditorBundleContract(bundle) {
     "insertSourceReference",
     "insertCard",
     "readany-card",
+    "readany-card-convert",
+    "Convert card to normal text",
     "readany-internal-link",
     "readany-source-reference",
     "readany-image-missing",
@@ -272,6 +274,17 @@ function verifyDesktopAIKnowledgeChatContract() {
   ]);
 }
 
+function verifyDesktopKnowledgeEditorContract() {
+  verifySourceContract("desktop knowledge editor contract", desktopKnowledgeEditorPath, [
+    "createReadAnyCardTiptapContent",
+    "convertToBlocks",
+    "insertContentAt",
+    "knowledgeCardConvertToText",
+    "data-readany-card-control",
+    "parseReadAnyCardDataFromEditor",
+  ]);
+}
+
 function verifyDesktopKnowledgeWorkspaceContract() {
   verifySourceContract("desktop knowledge workspace contract", desktopNotesPagePath, [
     "KnowledgeDocumentExplorer",
@@ -293,7 +306,7 @@ function verifyDesktopKnowledgeWorkspaceContract() {
     "knowledgeDocumentPath",
     'role="tree"',
     'activeKnowledgeOpenMode === "folder_browser"',
-    'isVaultRootOpen ? (',
+    "isVaultRootOpen ? (",
   ]);
 }
 
@@ -328,6 +341,7 @@ for (const [command, args, label] of commands) {
 
 verifyDesktopProductionBundleContract();
 verifyKnowledgeEditorBundle();
+verifyDesktopKnowledgeEditorContract();
 verifyDesktopAIKnowledgeChatContract();
 verifyMobileAIKnowledgeChatContract();
 verifyDesktopKnowledgeWorkspaceContract();

@@ -1466,7 +1466,9 @@ export function MobileKnowledgeEditor({
   const hasBlockInsertItems =
     canUse("heading1") ||
     canUse("heading2") ||
+    canUse("heading3") ||
     canUse("bulletList") ||
+    canUse("orderedList") ||
     canUse("taskList") ||
     canUse("blockquote") ||
     canUse("codeBlock") ||
@@ -1747,6 +1749,18 @@ export function MobileKnowledgeEditor({
                   }}
                 />
               ) : null}
+              {canUse("heading3") ? (
+                <BlockSheetOption
+                  icon={<Heading3Icon size={18} color={colors.primary} />}
+                  title={t("editor.heading3", "三级标题")}
+                  hint={t("notes.knowledgeInsertMinorHeadingHint", "添加更小的小节")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("heading", { level: 3 });
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
               {canUse("bulletList") ? (
                 <BlockSheetOption
                   icon={<ListIcon size={18} color={colors.primary} />}
@@ -1755,6 +1769,18 @@ export function MobileKnowledgeEditor({
                   styles={styles}
                   onPress={() => {
                     runCommand("bulletList");
+                    setShowBlockInsertMenu(false);
+                  }}
+                />
+              ) : null}
+              {canUse("orderedList") ? (
+                <BlockSheetOption
+                  icon={<ListOrderedIcon size={18} color={colors.primary} />}
+                  title={t("editor.orderedList", "有序列表")}
+                  hint={t("notes.knowledgeInsertOrderedListHint", "书写步骤或顺序")}
+                  styles={styles}
+                  onPress={() => {
+                    runCommand("orderedList");
                     setShowBlockInsertMenu(false);
                   }}
                 />

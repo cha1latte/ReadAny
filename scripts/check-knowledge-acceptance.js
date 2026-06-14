@@ -307,6 +307,8 @@ function verifyDesktopKnowledgeEditorContract() {
     "knowledgeCustomCardFields",
     "knowledgeCardStructuredFields",
     "knowledgeCardFieldRequiredMissing",
+    "knowledgeInsertMinorHeadingHint",
+    "knowledgeInsertOrderedListHint",
     "data-readany-card-field-state",
     "data-readany-card-control",
     "parseReadAnyCardDataFromEditor",
@@ -321,6 +323,8 @@ function verifyMobileKnowledgeEditorContract() {
     "knowledgeCustomCardFieldType",
     "knowledgeCustomCardFieldDefault",
     "knowledgeCustomCardRemoveField",
+    "knowledgeInsertMinorHeadingHint",
+    "knowledgeInsertOrderedListHint",
     "createCustomReadAnyCardTemplate",
     "updateCustomReadAnyCardTemplate",
   ]);

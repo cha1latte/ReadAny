@@ -1170,7 +1170,9 @@ export function KnowledgeEditor({
   const hasBlockInsertItems =
     canUse("heading1") ||
     canUse("heading2") ||
+    canUse("heading3") ||
     canUse("bulletList") ||
+    canUse("orderedList") ||
     canUse("taskList") ||
     canUse("blockquote") ||
     canUse("codeBlock") ||
@@ -1227,6 +1229,19 @@ export function KnowledgeEditor({
                       }}
                     />
                   ) : null}
+                  {canUse("heading3") ? (
+                    <BlockInsertButton
+                      icon={<Heading3 className="h-3.5 w-3.5" />}
+                      title={t("editor.heading3")}
+                      hint={t("notes.knowledgeInsertMinorHeadingHint", {
+                        defaultValue: "Add a small subsection",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleHeading({ level: 3 }).run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
                   {canUse("bulletList") ? (
                     <BlockInsertButton
                       icon={<List className="h-3.5 w-3.5" />}
@@ -1236,6 +1251,19 @@ export function KnowledgeEditor({
                       })}
                       onClick={() => {
                         editor.chain().focus().toggleBulletList().run();
+                        setIsBlockInsertOpen(false);
+                      }}
+                    />
+                  ) : null}
+                  {canUse("orderedList") ? (
+                    <BlockInsertButton
+                      icon={<ListOrdered className="h-3.5 w-3.5" />}
+                      title={t("editor.orderedList")}
+                      hint={t("notes.knowledgeInsertOrderedListHint", {
+                        defaultValue: "Write ordered steps",
+                      })}
+                      onClick={() => {
+                        editor.chain().focus().toggleOrderedList().run();
                         setIsBlockInsertOpen(false);
                       }}
                     />

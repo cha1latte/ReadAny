@@ -13,16 +13,16 @@ or has an explicit owner-approved exception, and
 | Field | Value |
 | --- | --- |
 | Branch | `feat/knowledge-base-notes-research` |
-| Commit under test |  |
-| Tester |  |
-| Test date |  |
-| `pnpm acceptance:knowledge` result |  |
-| Desktop platform/build |  |
-| Mobile platform/build |  |
-| Second sync device/build |  |
-| Sync backend and account |  |
-| AI provider/model |  |
-| Obsidian/export test folder |  |
+| Commit under test | `56121aa6` |
+| Tester | Codex automated baseline |
+| Test date | 2026-06-14 |
+| `pnpm acceptance:knowledge` result | Pass: 32 core test files / 439 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
+| Desktop platform/build | macOS local automated desktop production bundle via `pnpm acceptance:knowledge`; interactive desktop QA still pending. |
+| Mobile platform/build | Expo TypeScript and generated WebView editor bundle via `pnpm acceptance:knowledge`; real-device iOS/Android QA still pending. |
+| Second sync device/build | Pending manual QA. |
+| Sync backend and account | Pending manual QA. |
+| AI provider/model | Pending manual QA. |
+| Obsidian/export test folder | Pending manual QA. |
 
 ## Evidence Rules
 
@@ -43,9 +43,9 @@ or has an explicit owner-approved exception, and
 
 | Check | Expected | Status | Evidence |
 | --- | --- | --- | --- |
-| Clean branch | Worktree is clean and pushed before manual QA starts. |  |  |
-| Full automated gate | `pnpm acceptance:knowledge` passes. |  |  |
-| Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. |  |  |
+| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Commit `56121aa6` was created after a clean automated gate; it is the code baseline for the next manual QA pass. |
+| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-14 for commit `56121aa6`: 32 core test files / 439 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
+| Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. | Pass | The desktop Vite production bundle completed successfully; warnings were the known dynamic-import/chunk-size warnings documented as non-blocking in the runbook. |
 
 ## Desktop QA
 

@@ -85,6 +85,9 @@ git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 # The acceptance script also checks the mobile chat renderer source for
 # knowledge proposal, result, failure-card, path, and confirmation-write UI
 # contracts.
+# The acceptance script also checks desktop and mobile knowledge workspace
+# source contracts for vault trees, root/folder browser surfaces, WYSIWYG
+# document editors, path-aware creation/search, and import/review surfaces.
 git diff --check
 ```
 
@@ -100,6 +103,10 @@ internal/source links, Obsidian export markers, and portable attachment URIs.
 The mobile chat renderer contract check scans the Expo chat renderer source for
 AI knowledge proposal/result/failure cards, visible vault paths, safe no-write
 hints, and confirmation-required apply behavior.
+The desktop and mobile knowledge workspace contract checks scan the runtime UI
+sources for the vault tree, root/folder browser, document editor, breadcrumb/path,
+search, create target, import review, and keyboard-safe mobile editor entry
+points that make the vault mental model visible before editing.
 
 Evidence mapping:
 
@@ -109,9 +116,9 @@ Evidence mapping:
 | Legacy highlight/note projections keep old UI compatible while knowledge documents become primary. | `knowledge-source-writeback.test.ts`, `highlight-queries.test.ts`, `note-queries.test.ts`, `document-utils.test.ts` |
 | Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
-| Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
-| Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
-| Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop and mobile TypeScript checks |
+| Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
+| Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
+| Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
 | Knowledge and card UI strings and interpolation placeholders stay available across supported locales. | `locales.test.ts`, desktop and mobile TypeScript checks |
 | Desktop knowledge workspace code is included in a valid production browser bundle. | Desktop production bundle contract check |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |

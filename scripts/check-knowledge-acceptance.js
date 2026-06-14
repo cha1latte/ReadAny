@@ -14,6 +14,8 @@ const mobileChatRendererPath = path.join(
   rootDir,
   "packages/app-expo/src/components/chat/PartRenderer.tsx",
 );
+const desktopNotesPagePath = path.join(rootDir, "packages/app/src/components/notes/NotesPage.tsx");
+const mobileNotesViewPath = path.join(rootDir, "packages/app-expo/src/screens/NotesView.tsx");
 
 const knowledgeTests = [
   "src/db/__tests__/knowledge-queries.test.ts",
@@ -110,6 +112,26 @@ function runCommand(command, args, label) {
   if (result.status !== 0) {
     console.error(`[knowledge-acceptance] ${label} failed with exit code ${result.status}`);
     process.exit(result.status || 1);
+  }
+}
+
+function verifySourceContract(label, pathname, requiredFragments) {
+  console.log(`\n[knowledge-acceptance] ${label}`);
+  const source = readFile(pathname);
+  if (!source) {
+    console.error(`[knowledge-acceptance] source file is missing: ${pathname}`);
+    process.exit(1);
+  }
+
+  const missingFragments = requiredFragments.filter((fragment) => !source.includes(fragment));
+  if (missingFragments.length > 0) {
+    console.error(
+      [
+        `[knowledge-acceptance] ${label} is missing required fragments:`,
+        ...missingFragments.map((fragment) => `- ${fragment}`),
+      ].join("\n"),
+    );
+    process.exit(1);
   }
 }
 
@@ -213,16 +235,7 @@ function verifyKnowledgeEditorBundleContract(bundle) {
 }
 
 function verifyMobileAIKnowledgeChatContract() {
-  console.log("\n[knowledge-acceptance] mobile AI knowledge chat contract");
-  const source = readFile(mobileChatRendererPath);
-  if (!source) {
-    console.error(
-      `[knowledge-acceptance] mobile chat renderer is missing: ${mobileChatRendererPath}`,
-    );
-    process.exit(1);
-  }
-
-  const requiredFragments = [
+  verifySourceContract("mobile AI knowledge chat contract", mobileChatRendererPath, [
     "getKnowledgeWriteProposal(part.result)",
     "getKnowledgeToolResultDisplay(part.name, part.result",
     "applyKnowledgeWriteProposal(proposal)",
@@ -235,17 +248,57 @@ function verifyMobileAIKnowledgeChatContract() {
     "proposalApplyButton",
     "preview.visiblePath",
     "preview.hasPathChange",
-  ];
-  const missingFragments = requiredFragments.filter((fragment) => !source.includes(fragment));
-  if (missingFragments.length > 0) {
-    console.error(
-      [
-        "[knowledge-acceptance] mobile chat renderer is missing AI knowledge features:",
-        ...missingFragments.map((fragment) => `- ${fragment}`),
-      ].join("\n"),
-    );
-    process.exit(1);
-  }
+  ]);
+}
+
+function verifyDesktopKnowledgeWorkspaceContract() {
+  verifySourceContract("desktop knowledge workspace contract", desktopNotesPagePath, [
+    "KnowledgeDocumentExplorer",
+    "KnowledgeVaultRootOverview",
+    "KnowledgeFolderOverview",
+    "KnowledgeFolderBrowserSection",
+    "KnowledgeFolderBrowserRow",
+    "buildKnowledgeDocumentTree",
+    "createKnowledgeRootDisplaySections",
+    "createKnowledgeFolderDisplaySections",
+    "getKnowledgeDocumentOpenMode",
+    "KnowledgeDocumentBreadcrumbs",
+    "KnowledgePathInline",
+    "KnowledgeEditor",
+    "getKnowledgeEditorSurfaceForDocumentType",
+    "KnowledgeMarkdownImportReviewCard",
+    "KnowledgeVaultImportReviewCard",
+    "KnowledgeVaultConflictCard",
+    "knowledgeDocumentPath",
+    'role="tree"',
+    'activeKnowledgeOpenMode === "folder_browser"',
+    'isVaultRootOpen ? (',
+  ]);
+}
+
+function verifyMobileKnowledgeWorkspaceContract() {
+  verifySourceContract("mobile knowledge workspace contract", mobileNotesViewPath, [
+    'type MobileKnowledgeWorkspaceMode = "vault" | "document"',
+    "MobileKnowledgeEditor",
+    "KnowledgeDocumentExplorer",
+    "KnowledgeDocumentTreeRow",
+    "KnowledgeVaultRootOverview",
+    "KnowledgeFolderOverview",
+    "KnowledgeFolderBrowserGroup",
+    "KnowledgeFolderBrowserItem",
+    "buildKnowledgeDocumentTree",
+    "createKnowledgeRootDisplaySections",
+    "createKnowledgeFolderDisplaySections",
+    "getKnowledgeDocumentWorkspaceMode",
+    "getKnowledgeDocumentOpenMode",
+    "getKnowledgeDocumentCreateParentId",
+    "filterKnowledgeDocumentTreeNodesForSearch",
+    "knowledgeDocumentPathText",
+    "KnowledgeMarkdownImportReviewSheet",
+    "applyKnowledgeWriteProposal",
+    "KeyboardAvoidingView",
+    "SafeAreaView",
+  ]);
 }
 
 for (const [command, args, label] of commands) {
@@ -255,6 +308,8 @@ for (const [command, args, label] of commands) {
 verifyDesktopProductionBundleContract();
 verifyKnowledgeEditorBundle();
 verifyMobileAIKnowledgeChatContract();
+verifyDesktopKnowledgeWorkspaceContract();
+verifyMobileKnowledgeWorkspaceContract();
 runCommand("git", ["diff", "--check"], "diff whitespace check");
 
 console.log("\n[knowledge-acceptance] all automated checks passed");

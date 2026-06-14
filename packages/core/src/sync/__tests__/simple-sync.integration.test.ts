@@ -848,6 +848,102 @@ describe("simple sync convergence", () => {
     });
   });
 
+  it("syncs custom card template updates without losing existing card documents", async () => {
+    const backend = new MemoryBackend();
+    const deviceA = new FakeSyncDb();
+    const deviceB = new FakeSyncDb();
+    const customTemplate = knowledgeCardTemplateRow({
+      id: "template-reading-question",
+      name: "Reading question",
+      version: 1,
+      schema_json: JSON.stringify({
+        cardType: "custom:template-reading-question",
+        title: "Reading question",
+      }),
+      built_in: 0,
+      enabled: 1,
+    });
+    const documentContentJson = JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-reading-question",
+            version: 1,
+            title: "Question",
+            markdown: "What changed after the conflict?",
+            data: { kind: "prompt" },
+          },
+        },
+      ],
+    });
+    const documentContentMd = [
+      ':::readany-card type="custom:template-reading-question" version="1" title="Question" data="%7B%22kind%22%3A%22prompt%22%7D"',
+      "What changed after the conflict?",
+      ":::",
+    ].join("\n");
+
+    deviceA.insert("books", bookRow());
+    deviceA.insert(
+      "knowledge_documents",
+      knowledgeDocumentRow({
+        content_json: documentContentJson,
+        content_md: documentContentMd,
+        excerpt: "What changed after the conflict?",
+      }),
+    );
+    deviceA.insert("knowledge_card_templates", customTemplate);
+
+    now = 1100;
+    await syncDevice("device-a", deviceA, backend);
+
+    now = 1200;
+    await syncDevice("device-b", deviceB, backend);
+    expect(deviceB.get("knowledge_card_templates", "template-reading-question")).toMatchObject({
+      enabled: 1,
+      version: 1,
+    });
+
+    now = 1300;
+    deviceB.patch("knowledge_card_templates", "template-reading-question", {
+      name: "Reading question archive",
+      version: 2,
+      schema_json: JSON.stringify({
+        cardType: "custom:template-reading-question",
+        title: "Reading question archive",
+        fields: [{ key: "answer", label: "Answer" }],
+      }),
+      enabled: 0,
+      updated_at: now,
+    });
+
+    now = 1400;
+    await syncDevice("device-b", deviceB, backend);
+
+    now = 1500;
+    const result = await syncDevice("device-a", deviceA, backend);
+
+    expect(result.success).toBe(true);
+    expect(deviceA.get("knowledge_card_templates", "template-reading-question")).toMatchObject({
+      name: "Reading question archive",
+      version: 2,
+      enabled: 0,
+      updated_at: 1300,
+    });
+    expect(deviceA.get("knowledge_card_templates", "template-reading-question")?.schema_json).toBe(
+      JSON.stringify({
+        cardType: "custom:template-reading-question",
+        title: "Reading question archive",
+        fields: [{ key: "answer", label: "Answer" }],
+      }),
+    );
+    expect(deviceA.get("knowledge_documents", "doc-1")).toMatchObject({
+      content_json: documentContentJson,
+      content_md: documentContentMd,
+    });
+  });
+
   it("syncs knowledge vault folder moves without flattening child documents", async () => {
     const backend = new MemoryBackend();
     const deviceA = new FakeSyncDb();

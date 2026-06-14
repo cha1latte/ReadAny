@@ -220,7 +220,9 @@ function contextDocumentsFromResult(result: Record<string, unknown>): KnowledgeT
   const documentId = asString(result.documentId) || asString(result.fromDocumentId);
   const path =
     asString(result.path) ||
+    asString(result.visiblePath) ||
     asString(result.targetPath) ||
+    asString(result.currentPath) ||
     (isRecord(result.target) ? asString(result.target.path) : undefined) ||
     (isRecord(result.current) ? asString(result.current.path) : undefined);
   const title = asString(result.title) || path;

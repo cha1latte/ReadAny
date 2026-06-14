@@ -97,7 +97,7 @@ Evidence mapping:
 | Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
 | AI reads knowledge safely and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts` |
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
-| Failed tool calls become visible failure cards instead of endless loading states. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts` |
+| Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts` |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |
 | ReadAny cards preserve attrs, data, schema migrations, fallback rendering, and unknown versions. | `card-registry.test.ts`, `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 

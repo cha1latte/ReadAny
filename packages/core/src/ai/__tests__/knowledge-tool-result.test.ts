@@ -214,6 +214,34 @@ describe("knowledge tool result display", () => {
     );
   });
 
+  it("keeps proposal preview paths visible on failure cards", () => {
+    const display = getKnowledgeToolResultDisplay("proposeKnowledgeDocumentUpdate", {
+      success: false,
+      status: "failed",
+      error: "Move target is no longer available",
+      documentId: "doc-1",
+      currentPath: "Knowledge base / Inbox / Draft",
+      targetPath: "Knowledge base / Missing Folder / Draft",
+      visiblePath: "Knowledge base / Inbox / Draft -> Knowledge base / Missing Folder / Draft",
+    });
+
+    expect(display).toMatchObject({
+      kind: "failure",
+      toolName: "proposeKnowledgeDocumentUpdate",
+      documentId: "doc-1",
+      documents: [
+        {
+          id: "doc-1",
+          title: "Knowledge base / Inbox / Draft -> Knowledge base / Missing Folder / Draft",
+          path: "Knowledge base / Inbox / Draft -> Knowledge base / Missing Folder / Draft",
+        },
+      ],
+    });
+    expect(display?.failureCardMarkdown).toContain(
+      "> Path: Knowledge base / Inbox / Draft -> Knowledge base / Missing Folder / Draft",
+    );
+  });
+
   it("parses JSON string failures from knowledge tools", () => {
     const display = getKnowledgeToolResultDisplay(
       "compressKnowledgeDocumentSummary",

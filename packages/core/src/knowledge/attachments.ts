@@ -137,11 +137,15 @@ function resolveKnowledgeAttachmentImageSourcesNode(
 
   if (value.type === "image" && value.attrs && typeof value.attrs === "object") {
     const attrs = value.attrs as Record<string, JSONValue>;
-    const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId.trim() : "";
+    const src = typeof attrs.src === "string" ? attrs.src.trim() : "";
+    const explicitAttachmentId =
+      typeof attrs.attachmentId === "string" ? attrs.attachmentId.trim() : "";
+    const attachmentId = explicitAttachmentId || parseKnowledgeAttachmentUri(src) || "";
     const resolvedSrc = attachmentId ? resolveSrc(attachmentId) : undefined;
-    if (resolvedSrc && attrs.src !== resolvedSrc) {
+    if (resolvedSrc && (attrs.src !== resolvedSrc || attrs.attachmentId !== attachmentId)) {
       next.attrs = {
         ...attrs,
+        attachmentId,
         src: resolvedSrc,
       };
       changed = true;

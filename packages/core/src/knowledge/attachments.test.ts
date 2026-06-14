@@ -107,6 +107,39 @@ describe("knowledge attachments", () => {
     expect(resolveKnowledgeAttachmentImageSources(contentJson, () => undefined)).toBe(contentJson);
   });
 
+  it("resolves portable attachment image URIs when attachmentId is missing", () => {
+    const contentJson: JSONValue = {
+      type: "doc",
+      content: [
+        {
+          type: "image",
+          attrs: {
+            src: "readany-attachment://att-portable",
+            alt: "Portable",
+          },
+        },
+      ],
+    };
+
+    expect(
+      resolveKnowledgeAttachmentImageSources(contentJson, (attachmentId) =>
+        attachmentId === "att-portable" ? "asset://local/portable.png" : undefined,
+      ),
+    ).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "image",
+          attrs: {
+            src: "asset://local/portable.png",
+            attachmentId: "att-portable",
+            alt: "Portable",
+          },
+        },
+      ],
+    });
+  });
+
   it("canonicalizes image attachment sources to portable attachment URIs", () => {
     const contentJson: JSONValue = {
       type: "doc",
@@ -124,6 +157,13 @@ describe("knowledge attachments", () => {
           attrs: {
             src: "https://example.com/remote.png",
             alt: "Remote",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "readany-attachment://att-2",
+            alt: "Already portable",
           },
         },
       ],
@@ -146,6 +186,14 @@ describe("knowledge attachments", () => {
           attrs: {
             src: "https://example.com/remote.png",
             alt: "Remote",
+          },
+        },
+        {
+          type: "image",
+          attrs: {
+            src: "readany-attachment://att-2",
+            attachmentId: "att-2",
+            alt: "Already portable",
           },
         },
       ],

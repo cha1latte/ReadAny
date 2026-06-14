@@ -1,18 +1,27 @@
 import {
+  getKnowledgeBacklinks,
   getKnowledgeCardTemplates,
   getKnowledgeDocuments,
+  getKnowledgeLinks,
   searchKnowledgeDocuments,
 } from "../db/database";
+import type { KnowledgeBacklink } from "../db/database";
 import { formatKnowledgeDocumentPath } from "../knowledge/document-utils";
 import { renderKnowledgeJsonToMarkdown } from "../knowledge/editor-projection";
-import type { KnowledgeCardTemplate, KnowledgeDocument } from "../types";
+import type { KnowledgeCardTemplate, KnowledgeDocument, KnowledgeLink } from "../types";
 
 const DEFAULT_MAX_DOCUMENTS = 6;
 const DEFAULT_MAX_CHARS = 2600;
 const DOCUMENT_SCAN_LIMIT = 5000;
+const MAX_PROMPT_LINKS_PER_DOCUMENT = 3;
 const ROOT_TITLE = "Knowledge base";
 const UNTITLED_TITLE = "Untitled document";
 const ORPHANED_TITLE = "Orphaned";
+
+interface KnowledgePromptRelationContext {
+  backlinks: string[];
+  outgoing: string[];
+}
 
 export interface KnowledgePromptContextOptions {
   bookId?: string | null;
@@ -20,6 +29,7 @@ export interface KnowledgePromptContextOptions {
   maxDocuments?: number;
   maxChars?: number;
   cardTemplates?: KnowledgeCardTemplate[];
+  relationContextByDocumentId?: Map<string, KnowledgePromptRelationContext>;
 }
 
 function compactText(value: string): string {
@@ -128,6 +138,16 @@ function sortKnowledgeContextDocuments(
   );
 }
 
+function selectKnowledgeContextDocuments(
+  documents: KnowledgeDocument[],
+  normalizedQuery: string,
+  maxDocuments: number,
+): KnowledgeDocument[] {
+  return sortKnowledgeContextDocuments(documents, normalizedQuery)
+    .filter((document) => !document.deletedAt && document.type !== "folder")
+    .slice(0, maxDocuments);
+}
+
 function renderDocumentContentPreviewMarkdown(
   document: KnowledgeDocument,
   cardTemplates?: KnowledgeCardTemplate[],
@@ -151,7 +171,7 @@ function createDocumentPreview(
 function formatDocumentForPrompt(
   document: KnowledgeDocument,
   documents: KnowledgeDocument[],
-  cardTemplates?: KnowledgeCardTemplate[],
+  options: Pick<KnowledgePromptContextOptions, "cardTemplates" | "relationContextByDocumentId">,
 ): string {
   const title = compactText(document.title) || UNTITLED_TITLE;
   const path = formatKnowledgeDocumentPath(document, documents, {
@@ -161,10 +181,94 @@ function formatDocumentForPrompt(
     includeOrphanedParent: true,
   });
   const tags = document.tags.length > 0 ? `\n  tags: ${document.tags.join(", ")}` : "";
-  const preview = createDocumentPreview(document, cardTemplates);
+  const relations = options.relationContextByDocumentId?.get(document.id);
+  const outgoing = relations?.outgoing.length ? `\n  links: ${relations.outgoing.join("; ")}` : "";
+  const backlinks = relations?.backlinks.length
+    ? `\n  backlinks: ${relations.backlinks.join("; ")}`
+    : "";
+  const preview = createDocumentPreview(document, options.cardTemplates);
   const previewLine = preview ? `\n  note: ${preview}` : "";
 
-  return `- [${document.type}] ${title}\n  id: ${document.id}\n  path: ${path}${tags}${previewLine}`;
+  return `- [${document.type}] ${title}\n  id: ${document.id}\n  path: ${path}${tags}${outgoing}${backlinks}${previewLine}`;
+}
+
+function formatPromptDocumentPath(
+  document: KnowledgeDocument,
+  documents: KnowledgeDocument[],
+): string {
+  return formatKnowledgeDocumentPath(document, documents, {
+    rootTitle: ROOT_TITLE,
+    untitledTitle: UNTITLED_TITLE,
+    orphanedParentTitle: ORPHANED_TITLE,
+    includeOrphanedParent: true,
+  });
+}
+
+function formatOutgoingKnowledgeLink(
+  link: KnowledgeLink,
+  documentsById: Map<string, KnowledgeDocument>,
+  documents: KnowledgeDocument[],
+): string {
+  if (link.toKind === "document") {
+    const target = documentsById.get(link.toId);
+    if (target) {
+      return `${link.relation} -> ${formatPromptDocumentPath(target, documents)}`;
+    }
+  }
+
+  const label = compactText(link.label || link.toId);
+  const cfi = link.cfi ? ` @ ${link.cfi}` : "";
+  return `${link.relation} -> ${link.toKind}: ${label}${cfi}`;
+}
+
+function formatKnowledgeBacklink(
+  backlink: KnowledgeBacklink,
+  documents: KnowledgeDocument[],
+): string {
+  return `${backlink.link.relation} <- ${formatPromptDocumentPath(backlink.fromDocument, documents)}`;
+}
+
+async function loadKnowledgeRelationPromptContext(
+  candidates: KnowledgeDocument[],
+  contextDocuments: KnowledgeDocument[],
+): Promise<Map<string, KnowledgePromptRelationContext>> {
+  if (candidates.length === 0) return new Map();
+
+  try {
+    const rows = await Promise.all(
+      candidates.map(async (document) => {
+        const [outgoingLinks, backlinks] = await Promise.all([
+          getKnowledgeLinks(document.id),
+          getKnowledgeBacklinks(document.id, MAX_PROMPT_LINKS_PER_DOCUMENT),
+        ]);
+        return { backlinks, document, outgoingLinks };
+      }),
+    );
+    const documents = [
+      ...contextDocuments,
+      ...rows.flatMap((row) => row.backlinks.map((backlink) => backlink.fromDocument)),
+    ];
+    const documentsById = new Map(documents.map((document) => [document.id, document]));
+    const relationContextByDocumentId = new Map<string, KnowledgePromptRelationContext>();
+
+    for (const row of rows) {
+      const outgoing = row.outgoingLinks
+        .slice(0, MAX_PROMPT_LINKS_PER_DOCUMENT)
+        .map((link) => formatOutgoingKnowledgeLink(link, documentsById, documents));
+      const backlinks = row.backlinks
+        .slice(0, MAX_PROMPT_LINKS_PER_DOCUMENT)
+        .map((backlink) => formatKnowledgeBacklink(backlink, documents));
+
+      if (outgoing.length > 0 || backlinks.length > 0) {
+        relationContextByDocumentId.set(row.document.id, { backlinks, outgoing });
+      }
+    }
+
+    return relationContextByDocumentId;
+  } catch (error) {
+    console.warn("[knowledge-context] Failed to load knowledge relation context:", error);
+    return new Map();
+  }
 }
 
 export function buildKnowledgePromptContext(
@@ -174,9 +278,7 @@ export function buildKnowledgePromptContext(
   const maxDocuments = Math.max(1, Math.floor(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS));
   const maxChars = Math.max(600, Math.floor(options.maxChars ?? DEFAULT_MAX_CHARS));
   const normalizedQuery = normalizeQuery(options.query);
-  const candidates = sortKnowledgeContextDocuments(documents, normalizedQuery)
-    .filter((document) => !document.deletedAt && document.type !== "folder")
-    .slice(0, maxDocuments);
+  const candidates = selectKnowledgeContextDocuments(documents, normalizedQuery, maxDocuments);
 
   if (candidates.length === 0) return undefined;
 
@@ -185,7 +287,7 @@ export function buildKnowledgePromptContext(
   const lines = [intro];
 
   for (const document of candidates) {
-    const nextLine = formatDocumentForPrompt(document, documents, options.cardTemplates);
+    const nextLine = formatDocumentForPrompt(document, documents, options);
     const nextText = [...lines, nextLine].join("\n");
     if (nextText.length > maxChars) {
       if (lines.length === 1) {
@@ -224,7 +326,20 @@ export async function loadKnowledgePromptContext(
     const mergedDocuments = Array.from(
       new Map([...queryMatches, ...documents].map((document) => [document.id, document])).values(),
     );
-    return buildKnowledgePromptContext(mergedDocuments, { ...options, cardTemplates });
+    const candidates = selectKnowledgeContextDocuments(
+      mergedDocuments,
+      query,
+      Math.max(1, Math.floor(options.maxDocuments ?? DEFAULT_MAX_DOCUMENTS)),
+    );
+    const relationContextByDocumentId = await loadKnowledgeRelationPromptContext(
+      candidates,
+      mergedDocuments,
+    );
+    return buildKnowledgePromptContext(mergedDocuments, {
+      ...options,
+      cardTemplates,
+      relationContextByDocumentId,
+    });
   } catch (error) {
     console.warn("[knowledge-context] Failed to load knowledge prompt context:", error);
     return undefined;

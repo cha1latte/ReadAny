@@ -3,7 +3,9 @@ import type { KnowledgeCardTemplate, KnowledgeDocument } from "../../types";
 import { buildKnowledgePromptContext, loadKnowledgePromptContext } from "../knowledge-context";
 
 const dbMocks = vi.hoisted(() => ({
+  getKnowledgeBacklinks: vi.fn(),
   getKnowledgeDocuments: vi.fn(),
+  getKnowledgeLinks: vi.fn(),
   searchKnowledgeDocuments: vi.fn(),
   getKnowledgeCardTemplates: vi.fn(),
 }));
@@ -29,6 +31,8 @@ function doc(overrides: Partial<KnowledgeDocument> = {}): KnowledgeDocument {
 beforeEach(() => {
   vi.clearAllMocks();
   dbMocks.getKnowledgeCardTemplates.mockResolvedValue([]);
+  dbMocks.getKnowledgeLinks.mockResolvedValue([]);
+  dbMocks.getKnowledgeBacklinks.mockResolvedValue([]);
 });
 
 const readingPromptTemplate: KnowledgeCardTemplate = {
@@ -157,6 +161,51 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).toContain("Reading Thread");
     expect(context).toContain("path: Knowledge base / Themes / Reading Thread");
     expect(context).not.toContain("Book Home");
+  });
+
+  it("keeps outgoing links and backlinks visible in bounded prompt snapshots", () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+    });
+    const source = doc({
+      id: "source-1",
+      parentId: "folder-1",
+      title: "Source Note",
+      excerpt: "Original interpretation.",
+    });
+    const target = doc({
+      id: "target-1",
+      parentId: "folder-1",
+      title: "Related Idea",
+      excerpt: "Related interpretation.",
+    });
+    const backlinkSource = doc({
+      id: "backlink-1",
+      parentId: "folder-1",
+      title: "Earlier Note",
+      excerpt: "Earlier context.",
+    });
+
+    const context = buildKnowledgePromptContext([folder, source, target, backlinkSource], {
+      maxDocuments: 1,
+      query: "source",
+      relationContextByDocumentId: new Map([
+        [
+          "source-1",
+          {
+            outgoing: ["related -> Knowledge base / Themes / Related Idea"],
+            backlinks: ["references <- Knowledge base / Themes / Earlier Note"],
+          },
+        ],
+      ]),
+    });
+
+    expect(context).toContain("[standalone_note] Source Note");
+    expect(context).toContain("links: related -> Knowledge base / Themes / Related Idea");
+    expect(context).toContain("backlinks: references <- Knowledge base / Themes / Earlier Note");
   });
 
   it("keeps the prompt snapshot bounded", () => {
@@ -416,6 +465,80 @@ describe("loadKnowledgePromptContext", () => {
     });
     expect(context).toContain("Ada Notes");
     expect(context).toContain("path: Knowledge base / Characters / Ada Notes");
+  });
+
+  it("loads outgoing links and backlinks for the bounded knowledge prompt context", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+    });
+    const source = doc({
+      id: "source-1",
+      parentId: "folder-1",
+      title: "Source Note",
+      excerpt: "Original interpretation.",
+    });
+    const target = doc({
+      id: "target-1",
+      parentId: "folder-1",
+      title: "Related Idea",
+      excerpt: "Related interpretation.",
+    });
+    const backlinkSource = doc({
+      id: "backlink-1",
+      parentId: "folder-1",
+      title: "Earlier Note",
+      excerpt: "Earlier context.",
+    });
+
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder, source, target, backlinkSource]);
+    dbMocks.searchKnowledgeDocuments.mockResolvedValue([]);
+    dbMocks.getKnowledgeLinks.mockImplementation(async (documentId: string) =>
+      documentId === "source-1"
+        ? [
+            {
+              id: "link-out",
+              fromDocumentId: "source-1",
+              toKind: "document",
+              toId: "target-1",
+              relation: "related",
+              createdAt: 1000,
+              updatedAt: 1000,
+            },
+          ]
+        : [],
+    );
+    dbMocks.getKnowledgeBacklinks.mockImplementation(async (documentId: string) =>
+      documentId === "source-1"
+        ? [
+            {
+              link: {
+                id: "link-back",
+                fromDocumentId: "backlink-1",
+                toKind: "document",
+                toId: "source-1",
+                relation: "references",
+                createdAt: 1000,
+                updatedAt: 1000,
+              },
+              fromDocument: backlinkSource,
+            },
+          ]
+        : [],
+    );
+
+    const context = await loadKnowledgePromptContext({
+      bookId: "book-1",
+      query: "source",
+      maxDocuments: 1,
+    });
+
+    expect(dbMocks.getKnowledgeLinks).toHaveBeenCalledWith("source-1");
+    expect(dbMocks.getKnowledgeBacklinks).toHaveBeenCalledWith("source-1", 3);
+    expect(context).toContain("links: related -> Knowledge base / Themes / Related Idea");
+    expect(context).toContain("backlinks: references <- Knowledge base / Themes / Earlier Note");
   });
 
   it("does not query when no current book is attached", async () => {

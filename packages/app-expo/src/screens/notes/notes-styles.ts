@@ -357,6 +357,9 @@ export const makeStyles = (colors: ThemeColors) =>
       paddingTop: 8,
       paddingBottom: 12,
     },
+    knowledgeDocumentKeyboardAvoider: {
+      flex: 1,
+    },
     knowledgeDocumentCanvasHeader: {
       minHeight: 66,
       flexDirection: "row",

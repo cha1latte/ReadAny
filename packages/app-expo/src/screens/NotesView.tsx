@@ -2720,7 +2720,15 @@ function KnowledgeHomePanel({
           ) : null}
         </ScrollView>
       ) : (
-        <View style={[styles.knowledgeDocumentScreen, styles.knowledgeDocumentFullScreen]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={0}
+          style={[
+            styles.knowledgeDocumentScreen,
+            styles.knowledgeDocumentFullScreen,
+            styles.knowledgeDocumentKeyboardAvoider,
+          ]}
+        >
           <View style={styles.knowledgeDocumentCanvasHeader}>
             <TouchableOpacity
               activeOpacity={0.76}
@@ -2814,7 +2822,7 @@ function KnowledgeHomePanel({
               )}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
 
       <Modal

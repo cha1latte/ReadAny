@@ -385,6 +385,7 @@ function verifyMobileKnowledgeWorkspaceContract() {
     "KnowledgeMarkdownImportReviewSheet",
     "applyKnowledgeWriteProposal",
     "KeyboardAvoidingView",
+    "knowledgeDocumentKeyboardAvoider",
     "SafeAreaView",
   ]);
 }

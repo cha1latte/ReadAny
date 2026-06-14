@@ -131,6 +131,9 @@
     "relationOutgoing": "연결 대상",
     "relationBacklink": "연결 원본",
     "moreRelations": "{{count}}개 관계 더 있음",
+    "open": "열기",
+    "openDocument": "문서 열기",
+    "openUnavailable": "이 문서를 보려면 먼저 이 책의 지식 베이스 탭을 열어 주세요.",
     "types": {
       "book_home": "책 홈",
       "folder": "폴더",

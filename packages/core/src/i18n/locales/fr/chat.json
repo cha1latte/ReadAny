@@ -131,6 +131,9 @@
     "relationOutgoing": "Lié vers",
     "relationBacklink": "Lié depuis",
     "moreRelations": "{{count}} relations de plus",
+    "open": "Ouvrir",
+    "openDocument": "Ouvrir le document",
+    "openUnavailable": "Ouvrez d'abord l'onglet de connaissances du livre pour voir ce document.",
     "types": {
       "book_home": "Accueil du livre",
       "folder": "Dossier",

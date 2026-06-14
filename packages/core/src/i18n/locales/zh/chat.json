@@ -131,6 +131,9 @@
     "relationOutgoing": "链接到",
     "relationBacklink": "被引用自",
     "moreRelations": "还有 {{count}} 条关联",
+    "open": "打开",
+    "openDocument": "打开文档",
+    "openUnavailable": "请先打开这本书的知识库页，再查看这个文档。",
     "types": {
       "book_home": "书籍主页",
       "folder": "文件夹",

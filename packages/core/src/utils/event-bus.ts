@@ -26,6 +26,15 @@ type EventMap = {
     bookId?: string;
     timestamp: number;
   };
+  "knowledge:open-document": {
+    documentId: string;
+    bookId?: string;
+    title?: string;
+    path?: string;
+    source?: "ai_result" | "ai_relation" | "ai_proposal" | "internal_link";
+    timestamp: number;
+    respond?: (handled: boolean) => void;
+  };
   "knowledge:card-templates-changed": {
     action: "upsert" | "disable";
     templateId: string;

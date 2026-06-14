@@ -35,6 +35,7 @@ import {
   CheckCircle,
   ChevronDown,
   Circle,
+  FileText,
   Loader2,
   OctagonX,
   Wrench,
@@ -288,6 +289,26 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
 
+function requestKnowledgeDocumentOpen(
+  document: KnowledgeToolResultDisplay["documents"][number],
+  source: "ai_result" | "ai_relation",
+): boolean {
+  if (!document.id) return false;
+  let handled = false;
+  eventBus.emit("knowledge:open-document", {
+    documentId: document.id,
+    bookId: document.bookId,
+    title: document.title,
+    path: document.path,
+    source,
+    timestamp: Date.now(),
+    respond: (nextHandled) => {
+      handled = handled || nextHandled;
+    },
+  });
+  return handled;
+}
+
 const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
   book_home: "knowledgeProposal.types.bookHome",
   folder: "knowledgeProposal.types.folder",
@@ -330,6 +351,14 @@ function KnowledgeToolResultDocumentRows({
   max?: number;
 }) {
   const { t } = useTranslation();
+  const handleOpenDocument = (document: KnowledgeToolResultDisplay["documents"][number]) => {
+    if (requestKnowledgeDocumentOpen(document, "ai_result")) return;
+    toast.info(
+      t("knowledgeToolResult.openUnavailable", {
+        defaultValue: "Open the book knowledge tab to view this document.",
+      }),
+    );
+  };
 
   return (
     <>
@@ -348,11 +377,38 @@ function KnowledgeToolResultDocumentRows({
               ) : null}
             </div>
             {document.type ? (
-              <span className="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {t(`knowledgeToolResult.types.${document.type}`, {
-                  defaultValue: document.type,
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {t(`knowledgeToolResult.types.${document.type}`, {
+                    defaultValue: document.type,
+                  })}
+                </span>
+                {document.id ? (
+                  <button
+                    type="button"
+                    className="inline-flex h-6 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    onClick={() => handleOpenDocument(document)}
+                    title={t("knowledgeToolResult.openDocument", {
+                      defaultValue: "Open document",
+                    })}
+                  >
+                    <FileText className="h-3 w-3" />
+                    {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+                  </button>
+                ) : null}
+              </div>
+            ) : document.id ? (
+              <button
+                type="button"
+                className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                onClick={() => handleOpenDocument(document)}
+                title={t("knowledgeToolResult.openDocument", {
+                  defaultValue: "Open document",
                 })}
-              </span>
+              >
+                <FileText className="h-3 w-3" />
+                {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+              </button>
             ) : null}
           </div>
           {document.snippet ? (
@@ -375,6 +431,15 @@ function KnowledgeToolResultRelationRows({
 }) {
   const { t } = useTranslation();
   if (relations.length === 0) return null;
+
+  const handleOpenDocument = (document: KnowledgeToolResultDisplay["documents"][number]) => {
+    if (requestKnowledgeDocumentOpen(document, "ai_relation")) return;
+    toast.info(
+      t("knowledgeToolResult.openUnavailable", {
+        defaultValue: "Open the book knowledge tab to view this document.",
+      }),
+    );
+  };
 
   return (
     <div className="rounded-md border border-border/70 bg-muted/10 p-2.5">
@@ -415,6 +480,19 @@ function KnowledgeToolResultRelationRows({
                   <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {relation.document.path}
                   </div>
+                ) : null}
+                {relation.document.id ? (
+                  <button
+                    type="button"
+                    className="mt-1.5 inline-flex h-6 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    onClick={() => handleOpenDocument(relation.document)}
+                    title={t("knowledgeToolResult.openDocument", {
+                      defaultValue: "Open document",
+                    })}
+                  >
+                    <FileText className="h-3 w-3" />
+                    {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+                  </button>
                 ) : null}
               </div>
             </div>

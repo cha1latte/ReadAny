@@ -131,6 +131,9 @@
     "relationOutgoing": "Enlaza con",
     "relationBacklink": "Enlazado desde",
     "moreRelations": "{{count}} relaciones más",
+    "open": "Abrir",
+    "openDocument": "Abrir documento",
+    "openUnavailable": "Abre primero la pestaña de conocimiento del libro para ver este documento.",
     "types": {
       "book_home": "Inicio del libro",
       "folder": "Carpeta",

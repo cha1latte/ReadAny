@@ -10,6 +10,7 @@ export type KnowledgeToolResultKind =
 
 export interface KnowledgeToolResultDocument {
   id?: string;
+  bookId?: string;
   title: string;
   path?: string;
   type?: string;
@@ -206,6 +207,7 @@ function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
 
   return {
     id: asString(value.id),
+    bookId: asString(value.bookId),
     title,
     path: asString(value.path),
     type: asString(value.type),

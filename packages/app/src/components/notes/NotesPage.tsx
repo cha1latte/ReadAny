@@ -1185,6 +1185,49 @@ export function NotesPage() {
   ]);
 
   useEffect(() => {
+    return eventBus.on("knowledge:open-document", (event) => {
+      if (activeTabId !== "notes" || !selectedKnowledgeBookId) {
+        event.respond?.(false);
+        return;
+      }
+      if (event.bookId && event.bookId !== selectedKnowledgeBookId) {
+        event.respond?.(false);
+        return;
+      }
+      const localDocument = knowledgeDocuments.find((document) => document.id === event.documentId);
+      if (!localDocument && event.bookId !== selectedKnowledgeBookId) {
+        event.respond?.(false);
+        return;
+      }
+      event.respond?.(true);
+
+      void (async () => {
+        try {
+          const targetDocument = localDocument ?? (await getKnowledgeDocument(event.documentId));
+          if (!targetDocument || targetDocument.bookId !== selectedKnowledgeBookId) {
+            return;
+          }
+
+          setDetailTab("knowledge");
+          if (localDocument) {
+            await openKnowledgeDocument(localDocument);
+          } else {
+            await refreshSelectedKnowledgeDocuments(event.documentId);
+          }
+        } catch (error) {
+          console.error("[Notes] Failed to open knowledge document from event:", error);
+        }
+      })();
+    });
+  }, [
+    activeTabId,
+    knowledgeDocuments,
+    openKnowledgeDocument,
+    refreshSelectedKnowledgeDocuments,
+    selectedKnowledgeBookId,
+  ]);
+
+  useEffect(() => {
     return eventBus.on("sync:completed", () => {
       if (activeTabId !== "notes") return;
       if (!selectedKnowledgeBookId) return;

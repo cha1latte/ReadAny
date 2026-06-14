@@ -1,6 +1,13 @@
 import { MermaidView } from "@/components/common/MermaidView";
 import { MindmapView } from "@/components/common/MindmapView";
-import { BrainIcon, CheckIcon, ChevronDownIcon, OctagonXIcon, XIcon } from "@/components/ui/Icon";
+import {
+  BrainIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  NotebookPenIcon,
+  OctagonXIcon,
+  XIcon,
+} from "@/components/ui/Icon";
 import { useThrottledValue } from "@/hooks";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { useSettingsStore } from "@/stores";
@@ -231,6 +238,26 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
 
 type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
 
+function requestKnowledgeDocumentOpen(
+  document: KnowledgeToolResultDisplay["documents"][number],
+  source: "ai_result" | "ai_relation",
+): boolean {
+  if (!document.id) return false;
+  let handled = false;
+  eventBus.emit("knowledge:open-document", {
+    documentId: document.id,
+    bookId: document.bookId,
+    title: document.title,
+    path: document.path,
+    source,
+    timestamp: Date.now(),
+    respond: (nextHandled) => {
+      handled = handled || nextHandled;
+    },
+  });
+  return handled;
+}
+
 const KNOWLEDGE_DOCUMENT_TYPE_KEYS: Record<string, string> = {
   book_home: "knowledgeProposal.types.bookHome",
   folder: "knowledgeProposal.types.folder",
@@ -275,6 +302,14 @@ function KnowledgeToolResultDocumentRows({
   max?: number;
 }) {
   const { t } = useTranslation();
+  const colors = useColors();
+  const handleOpenDocument = (document: KnowledgeToolResultDisplay["documents"][number]) => {
+    if (requestKnowledgeDocumentOpen(document, "ai_result")) return;
+    Alert.alert(
+      t("knowledgeToolResult.openDocument", "打开文档"),
+      t("knowledgeToolResult.openUnavailable", "请先打开这本书的知识库页，再查看这个文档。"),
+    );
+  };
 
   return (
     <>
@@ -288,13 +323,41 @@ function KnowledgeToolResultDocumentRows({
               {document.title}
             </Text>
             {!!document.type && (
-              <View style={styles.knowledgeResultTypeBadge}>
-                <Text style={styles.knowledgeResultTypeText} numberOfLines={1}>
-                  {t(`knowledgeToolResult.types.${document.type}`, {
-                    defaultValue: document.type,
-                  })}
-                </Text>
+              <View style={styles.knowledgeResultItemActions}>
+                <View style={styles.knowledgeResultTypeBadge}>
+                  <Text style={styles.knowledgeResultTypeText} numberOfLines={1}>
+                    {t(`knowledgeToolResult.types.${document.type}`, {
+                      defaultValue: document.type,
+                    })}
+                  </Text>
+                </View>
+                {!!document.id && (
+                  <TouchableOpacity
+                    style={styles.knowledgeResultOpenButton}
+                    onPress={() => handleOpenDocument(document)}
+                    activeOpacity={0.75}
+                    accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+                  >
+                    <NotebookPenIcon size={12} color={colors.primary} />
+                    <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
+                      {t("knowledgeToolResult.open", "打开")}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
+            )}
+            {!document.type && !!document.id && (
+              <TouchableOpacity
+                style={styles.knowledgeResultOpenButton}
+                onPress={() => handleOpenDocument(document)}
+                activeOpacity={0.75}
+                accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+              >
+                <NotebookPenIcon size={12} color={colors.primary} />
+                <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
+                  {t("knowledgeToolResult.open", "打开")}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
           {!!document.path && (
@@ -323,7 +386,15 @@ function KnowledgeToolResultRelationRows({
   max?: number;
 }) {
   const { t } = useTranslation();
+  const colors = useColors();
   if (relations.length === 0) return null;
+  const handleOpenDocument = (document: KnowledgeToolResultDisplay["documents"][number]) => {
+    if (requestKnowledgeDocumentOpen(document, "ai_relation")) return;
+    Alert.alert(
+      t("knowledgeToolResult.openDocument", "打开文档"),
+      t("knowledgeToolResult.openUnavailable", "请先打开这本书的知识库页，再查看这个文档。"),
+    );
+  };
 
   return (
     <View style={styles.knowledgeResultRelations}>
@@ -365,6 +436,19 @@ function KnowledgeToolResultRelationRows({
                 <Text style={styles.knowledgeResultRelationPath} numberOfLines={1}>
                   {relation.document.path}
                 </Text>
+              )}
+              {!!relation.document.id && (
+                <TouchableOpacity
+                  style={styles.knowledgeResultRelationOpenButton}
+                  onPress={() => handleOpenDocument(relation.document)}
+                  activeOpacity={0.75}
+                  accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+                >
+                  <NotebookPenIcon size={12} color={colors.primary} />
+                  <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
+                    {t("knowledgeToolResult.open", "打开")}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -1147,6 +1231,12 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontWeight: fw.semibold,
       color: colors.foreground,
     },
+    knowledgeResultItemActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flexShrink: 0,
+    },
     knowledgeResultTypeBadge: {
       maxWidth: 96,
       borderRadius: radius.sm,
@@ -1157,6 +1247,24 @@ const makeToolStyles = (colors: ThemeColors) =>
     knowledgeResultTypeText: {
       fontSize: fs.xs,
       color: colors.mutedForeground,
+    },
+    knowledgeResultOpenButton: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.card,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+    },
+    knowledgeResultOpenText: {
+      fontSize: fs.xs,
+      lineHeight: 14,
+      fontWeight: fw.medium,
+      color: colors.primary,
     },
     knowledgeResultPath: {
       marginTop: 4,
@@ -1235,6 +1343,19 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontSize: fs.xs,
       lineHeight: 16,
       color: colors.mutedForeground,
+    },
+    knowledgeResultRelationOpenButton: {
+      alignSelf: "flex-start",
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.card,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
     },
     knowledgeResultEmpty: {
       borderWidth: 0.5,

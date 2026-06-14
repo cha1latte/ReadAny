@@ -131,6 +131,9 @@
     "relationOutgoing": "連結到",
     "relationBacklink": "被引用自",
     "moreRelations": "還有 {{count}} 條關聯",
+    "open": "打開",
+    "openDocument": "打開文件",
+    "openUnavailable": "請先打開這本書的知識庫頁，再查看這個文件。",
     "types": {
       "book_home": "書籍主頁",
       "folder": "資料夾",

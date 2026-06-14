@@ -9,6 +9,7 @@ describe("knowledge tool result display", () => {
       documents: [
         {
           id: "doc-1",
+          bookId: "book-1",
           title: "Chapter Notes",
           type: "standalone_note",
           path: "Knowledge base / Chapter Notes",
@@ -26,6 +27,7 @@ describe("knowledge tool result display", () => {
       documents: [
         {
           id: "doc-1",
+          bookId: "book-1",
           title: "Chapter Notes",
           type: "standalone_note",
           path: "Knowledge base / Chapter Notes",

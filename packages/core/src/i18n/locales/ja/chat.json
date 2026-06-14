@@ -131,6 +131,9 @@
     "relationOutgoing": "リンク先",
     "relationBacklink": "リンク元",
     "moreRelations": "ほか {{count}} 件の関連",
+    "open": "開く",
+    "openDocument": "文書を開く",
+    "openUnavailable": "この文書を見るには、先にこの本のナレッジタブを開いてください。",
     "types": {
       "book_home": "本のホーム",
       "folder": "フォルダー",

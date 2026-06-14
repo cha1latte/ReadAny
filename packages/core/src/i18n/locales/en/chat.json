@@ -131,6 +131,9 @@
     "relationOutgoing": "Links to",
     "relationBacklink": "Linked from",
     "moreRelations": "{{count}} more relations",
+    "open": "Open",
+    "openDocument": "Open document",
+    "openUnavailable": "Open the book knowledge tab to view this document.",
     "types": {
       "book_home": "Book home",
       "folder": "Folder",

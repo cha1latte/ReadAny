@@ -143,7 +143,9 @@ export {
   normalizeReadAnyCardTemplateFields,
   normalizeReadAnyCardAttrs,
   parseReadAnyCardDataFromEditor,
+  appendReadAnyCardStructuredFieldsMarkdown,
   renderReadAnyCardMarkdownFallback,
+  renderReadAnyCardStructuredFieldsMarkdown,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
   upgradeReadAnyCardAttrsWithTemplates,
@@ -160,6 +162,7 @@ export type {
   ReadAnyCardTemplateSchema,
   ReadAnyCardTemplateField,
   ReadAnyCardTemplateFieldType,
+  ReadAnyCardStructuredFieldValue,
   ReadAnyCardDataParseResult,
 } from "./card-registry";
 export {

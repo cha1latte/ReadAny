@@ -14,6 +14,7 @@ import {
   normalizeReadAnyCardTemplateFields,
   parseReadAnyCardDataFromEditor,
   renderReadAnyCardMarkdownFallback,
+  renderReadAnyCardStructuredFieldsMarkdown,
   updateCustomReadAnyCardTemplate,
   upgradeReadAnyCardAttrs,
   upgradeReadAnyCardAttrsWithTemplates,
@@ -446,6 +447,74 @@ describe("ReadAny card registry", () => {
         confidence: 1,
       },
     });
+  });
+
+  it("keeps structured custom card fields readable in fallback Markdown", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-concept",
+      name: "Concept",
+      markdown: "Definition:",
+      fields: [
+        { key: "term", label: "Term", type: "text" },
+        { key: "evidence", label: "Evidence", type: "multiline" },
+        { key: "confidence", label: "Confidence", type: "number" },
+        { key: "reviewed", label: "Reviewed", type: "checkbox" },
+      ],
+      now: 123,
+    });
+    const model = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-concept",
+        version: 1,
+        title: "Attention",
+        markdown: "Definition: directed perception",
+        data: {
+          term: "Attention",
+          evidence: "Repeated ritual practice\nShared reading notes",
+          confidence: 0.92,
+          reviewed: false,
+        },
+      },
+      { body: "", cardTemplates: [template] },
+    );
+
+    expect(model.structuredFields).toEqual([
+      { key: "term", label: "Term", value: "Attention" },
+      {
+        key: "evidence",
+        label: "Evidence",
+        value: "Repeated ritual practice\nShared reading notes",
+      },
+      { key: "confidence", label: "Confidence", value: "0.92" },
+      { key: "reviewed", label: "Reviewed", value: "No" },
+    ]);
+    expect(renderReadAnyCardStructuredFieldsMarkdown(model.structuredFields)).toBe(
+      [
+        "Fields:",
+        "- Term: Attention",
+        "- Evidence: Repeated ritual practice",
+        "  Shared reading notes",
+        "- Confidence: 0.92",
+        "- Reviewed: No",
+      ].join("\n"),
+    );
+    expect(
+      renderReadAnyCardMarkdownFallback(
+        {
+          cardType: "custom:template-concept",
+          version: 1,
+          title: "Attention",
+          markdown: "Definition: directed perception",
+          data: {
+            term: "Attention",
+            evidence: "Repeated ritual practice\nShared reading notes",
+            confidence: 0.92,
+            reviewed: false,
+          },
+        },
+        { body: "", cardTemplates: [template] },
+      ),
+    ).toContain("> - Confidence: 0.92");
   });
 
   it("updates custom card templates without changing their stable card type", () => {

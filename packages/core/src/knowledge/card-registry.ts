@@ -15,6 +15,7 @@ export interface ReadAnyCardAttrs {
 
 export interface ReadAnyCardMarkdownContext {
   body: string;
+  cardTemplates?: KnowledgeCardTemplate[];
 }
 
 export interface ReadAnyCardDefinition {
@@ -33,12 +34,19 @@ export interface ReadAnyCardReadOnlyMetadataItem {
   value: string;
 }
 
+export interface ReadAnyCardStructuredFieldValue {
+  key: string;
+  label: string;
+  value: string;
+}
+
 export interface ReadAnyCardReadOnlyModel {
   attrs: ReadAnyCardAttrs;
   cardType: string;
   version: number;
   title: string;
   body: string;
+  structuredFields: ReadAnyCardStructuredFieldValue[];
   state: ReadAnyCardReadOnlyState;
   stateLabel?: string;
   insertLabel?: string;
@@ -997,6 +1005,56 @@ export function getReadAnyCardTemplateFields(
   return normalizeReadAnyCardTemplateFields(templateSchema(template).fields);
 }
 
+function formatStructuredFieldValue(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text || undefined;
+  }
+  if (!isJsonValue(value)) return undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function createStructuredFieldValues(
+  attrs: ReadAnyCardAttrs,
+  template: KnowledgeCardTemplate | undefined,
+): ReadAnyCardStructuredFieldValue[] {
+  if (!template || !isRecord(attrs.data)) return [];
+  const data = attrs.data;
+  return getReadAnyCardTemplateFields(template)
+    .map((field) => {
+      const value = formatStructuredFieldValue(data[field.key]);
+      return value ? { key: field.key, label: field.label, value } : undefined;
+    })
+    .filter((field): field is ReadAnyCardStructuredFieldValue => !!field);
+}
+
+export function renderReadAnyCardStructuredFieldsMarkdown(
+  fields: ReadAnyCardStructuredFieldValue[],
+): string {
+  if (fields.length === 0) return "";
+  const lines = fields.map((field) => {
+    const valueLines = field.value.split("\n");
+    const [firstLine = "", ...restLines] = valueLines;
+    return [`- ${field.label}: ${firstLine}`, ...restLines.map((line) => `  ${line}`)].join("\n");
+  });
+  return ["Fields:", ...lines].join("\n");
+}
+
+export function appendReadAnyCardStructuredFieldsMarkdown(
+  body: string,
+  fields: ReadAnyCardStructuredFieldValue[],
+): string {
+  const fieldMarkdown = renderReadAnyCardStructuredFieldsMarkdown(fields);
+  return [body.trim(), fieldMarkdown].filter(Boolean).join("\n\n");
+}
+
 export function createReadAnyCardReadOnlyModel(
   attrs: ReadAnyCardAttrs | Record<string, unknown> | null | undefined,
   options: CreateReadAnyCardReadOnlyModelOptions = { body: "" },
@@ -1055,6 +1113,7 @@ export function createReadAnyCardReadOnlyModel(
     version,
     title,
     body,
+    structuredFields: createStructuredFieldValues(normalizedAttrs, template),
     state,
     stateLabel,
     insertLabel,
@@ -1073,12 +1132,13 @@ export function renderReadAnyCardMarkdownFallback(
   attrs: ReadAnyCardAttrs,
   context: ReadAnyCardMarkdownContext,
 ): string {
-  const normalizedAttrs = normalizeReadAnyCardAttrs(attrs);
-  const cardType = normalizedAttrs.cardType || "custom";
+  const model = createReadAnyCardReadOnlyModel(attrs, context);
+  const normalizedAttrs = model.attrs;
+  const cardType = model.cardType;
   const definition = getReadAnyCardDefinition(cardType);
-  const body = bodyFromAttrs(normalizedAttrs, context);
+  const body = appendReadAnyCardStructuredFieldsMarkdown(model.body, model.structuredFields);
   if (definition && (normalizedAttrs.version ?? 1) <= definition.version) {
-    return definition.markdownFallback(normalizedAttrs, context);
+    return definition.markdownFallback(normalizedAttrs, { ...context, body });
   }
 
   return unsupportedCardCallout(normalizedAttrs, body);

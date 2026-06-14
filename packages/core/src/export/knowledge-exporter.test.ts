@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getKnowledgeToolResultDisplay } from "../ai/knowledge-tool-result";
 import type {
   Book,
+  JSONValue,
   KnowledgeAttachment,
   KnowledgeCardTemplate,
   KnowledgeDocument,
   KnowledgeLink,
-  JSONValue,
 } from "../types";
 import {
   KnowledgeExporter,
@@ -596,6 +596,62 @@ describe("KnowledgeExporter", () => {
     expect(file.content).not.toContain("Prompt:\\nResponse:");
   });
 
+  it("exports structured custom card fields as readable Markdown", () => {
+    const exporter = new KnowledgeExporter();
+    const [file] = exporter.export(
+      {
+        documents: [
+          knowledgeDocument({
+            bookId: undefined,
+            contentJson: {
+              type: "doc",
+              content: [
+                {
+                  type: "readanyCard",
+                  attrs: {
+                    cardType: "custom:template-concept",
+                    version: 1,
+                    title: "Attention",
+                    markdown: "Definition: directed perception",
+                    data: {
+                      term: "Attention",
+                      confidence: 0.92,
+                    },
+                  },
+                },
+              ],
+            },
+          }),
+        ],
+        cardTemplates: [
+          {
+            id: "template-concept",
+            name: "Concept",
+            version: 1,
+            schemaJson: {
+              cardType: "custom:template-concept",
+              title: "Concept",
+              fields: [
+                { key: "term", label: "Term", type: "text" },
+                { key: "confidence", label: "Confidence", type: "number" },
+              ],
+            },
+            builtIn: false,
+            enabled: true,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      },
+      { format: "markdown", includeReadAnyCardMetadata: true },
+    );
+
+    expect(file.content).toContain("Definition: directed perception");
+    expect(file.content).toContain("Fields:");
+    expect(file.content).toContain("- Term: Attention");
+    expect(file.content).toContain("- Confidence: 0.92");
+  });
+
   it("exports AI tool failure cards with paths and safe no-write hints", () => {
     const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
       success: false,
@@ -646,9 +702,7 @@ describe("KnowledgeExporter", () => {
     expect(exported?.content).toContain("> Error: Model request failed");
     expect(exported?.content).toContain("> Reason: model_error");
     expect(exported?.content).toContain("> Document: doc-1");
-    expect(exported?.content).toContain(
-      "> Path: Knowledge base / Chapter Notes / Durable Memory",
-    );
+    expect(exported?.content).toContain("> Path: Knowledge base / Chapter Notes / Durable Memory");
     expect(exported?.content).toContain(
       "> No knowledge document or link was saved or changed by this failed tool call.",
     );

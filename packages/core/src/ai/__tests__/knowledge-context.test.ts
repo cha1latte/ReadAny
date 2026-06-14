@@ -172,7 +172,7 @@ describe("buildKnowledgePromptContext", () => {
     );
 
     expect(context).toBeTruthy();
-    expect(context!.length).toBeLessThanOrEqual(700);
+    expect(context?.length).toBeLessThanOrEqual(700);
     expect(context).toContain("Long Note");
     expect(context).toContain("...");
   });
@@ -205,6 +205,62 @@ describe("buildKnowledgePromptContext", () => {
 
     expect(context).toContain("[standalone_note] Custom Card Note");
     expect(context).toContain("Question: What changed?");
+    expect(context).not.toContain("Stale markdown fallback");
+  });
+
+  it("includes structured custom card fields in AI context previews", () => {
+    const conceptTemplate: KnowledgeCardTemplate = {
+      id: "template-concept",
+      name: "Concept",
+      version: 1,
+      schemaJson: {
+        cardType: "custom:template-concept",
+        title: "Concept",
+        markdown: "Definition:",
+        fields: [
+          { key: "term", label: "Term", type: "text" },
+          { key: "confidence", label: "Confidence", type: "number" },
+        ],
+      },
+      builtIn: false,
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    const context = buildKnowledgePromptContext(
+      [
+        doc({
+          id: "structured-card-doc",
+          title: "Structured Card Note",
+          contentMd: "Stale markdown fallback",
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "readanyCard",
+                attrs: {
+                  cardType: "custom:template-concept",
+                  version: 1,
+                  title: "Attention",
+                  markdown: "Definition: directed perception",
+                  data: {
+                    term: "Attention",
+                    confidence: 0.92,
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      ],
+      { cardTemplates: [conceptTemplate] },
+    );
+
+    expect(context).toContain("[standalone_note] Structured Card Note");
+    expect(context).toContain("Definition: directed perception");
+    expect(context).toContain("Term: Attention");
+    expect(context).toContain("Confidence: 0.92");
     expect(context).not.toContain("Stale markdown fallback");
   });
 

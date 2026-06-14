@@ -4,8 +4,8 @@ import {
   createReadAnyCardTiptapContent,
   markdownToBasicTiptap,
   normalizeTiptapDocument,
-  renderKnowledgeJsonToReadOnlyHtml,
   renderKnowledgeJsonToMarkdown,
+  renderKnowledgeJsonToReadOnlyHtml,
 } from "./editor-projection";
 
 describe("editor projection", () => {
@@ -700,6 +700,68 @@ describe("editor projection", () => {
     );
   });
 
+  it("projects custom card structured fields into readable Markdown and HTML", () => {
+    const cardTemplates = [
+      {
+        id: "template-concept",
+        name: "Concept",
+        version: 1,
+        schemaJson: {
+          cardType: "custom:template-concept",
+          title: "Concept",
+          markdown: "Definition:",
+          fields: [
+            { key: "term", label: "Term", type: "text" },
+            { key: "evidence", label: "Evidence", type: "multiline" },
+            { key: "confidence", label: "Confidence", type: "number" },
+          ],
+        },
+        builtIn: false,
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-concept",
+            version: 1,
+            title: "Attention",
+            markdown: "Definition: directed perception",
+            data: {
+              term: "Attention",
+              evidence: "Ritual practice",
+              confidence: 0.92,
+            },
+          },
+        },
+      ],
+    };
+
+    const markdown = renderKnowledgeJsonToMarkdown(content as unknown as JSONValue, {
+      cardTemplates,
+      includeReadAnyCardMetadata: true,
+    });
+    const fallbackMarkdown = renderKnowledgeJsonToMarkdown(content as unknown as JSONValue, {
+      cardTemplates,
+    });
+    const html = renderKnowledgeJsonToReadOnlyHtml(content as unknown as JSONValue, {
+      cardTemplates,
+    });
+
+    expect(markdown).toContain("Definition: directed perception\n\nFields:");
+    expect(markdown).toContain("- Term: Attention");
+    expect(markdown).toContain("- Confidence: 0.92");
+    expect(fallbackMarkdown).toContain("> Fields:");
+    expect(fallbackMarkdown).toContain("> - Evidence: Ritual practice");
+    expect(html).toContain('class="readany-card-fields"');
+    expect(html).toContain("<dt>Confidence</dt><dd>0.92</dd>");
+  });
+
   it("preserves normalized legacy card metadata when requested", () => {
     const markdown = renderKnowledgeJsonToMarkdown(
       {
@@ -1154,9 +1216,7 @@ describe("editor projection", () => {
       },
       {
         resolveInternalLinkTarget: (_attrs, fallbackTarget) =>
-          fallbackTarget === "doc-1"
-            ? "Books/The Book/Reading Trail/Question Log"
-            : fallbackTarget,
+          fallbackTarget === "doc-1" ? "Books/The Book/Reading Trail/Question Log" : fallbackTarget,
       },
     );
 

@@ -3,6 +3,7 @@ import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { createKnowledgeAttachmentUri, parseKnowledgeAttachmentUri } from "./attachments";
 import {
   type ReadAnyCardAttrs,
+  appendReadAnyCardStructuredFieldsMarkdown,
   createReadAnyCardReadOnlyModel,
   normalizeReadAnyCardAttrs,
   renderReadAnyCardMarkdownFallback,
@@ -138,8 +139,9 @@ function safeHref(value: unknown): string {
 }
 
 export function encodeReadAnyUriComponent(value: string): string {
-  return encodeURIComponent(value).replace(/[()]/g, (char) =>
-    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  return encodeURIComponent(value).replace(
+    /[()]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 
@@ -177,8 +179,7 @@ function renderInternalLink(node: TiptapNode, options: MarkdownProjectionOptions
   const targetPath = typeof node.attrs?.targetPath === "string" ? node.attrs.targetPath.trim() : "";
   const fallbackTarget = targetPath || documentId;
   const target =
-    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ??
-    fallbackTarget;
+    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ?? fallbackTarget;
   const label =
     typeof node.attrs?.label === "string"
       ? node.attrs.label.trim()
@@ -249,8 +250,14 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
       .trim();
 
   if (!options.includeReadAnyCardMetadata) {
-    return renderReadAnyCardMarkdownFallback(attrs, { body });
+    return renderReadAnyCardMarkdownFallback(attrs, { body, cardTemplates: options.cardTemplates });
   }
+
+  const model = createReadAnyCardReadOnlyModel(attrs, {
+    body,
+    cardTemplates: options.cardTemplates,
+  });
+  const fallbackBody = appendReadAnyCardStructuredFieldsMarkdown(body, model.structuredFields);
 
   const attr = (name: string, value: string | number | undefined) => {
     if (value === undefined || value === "") return "";
@@ -279,7 +286,7 @@ function renderReadAnyCard(node: TiptapNode, options: MarkdownProjectionOptions)
     .filter(Boolean)
     .join(" ");
 
-  return [`:::readany-card ${attrText}`, body, ":::"].filter(Boolean).join("\n");
+  return [`:::readany-card ${attrText}`, fallbackBody, ":::"].filter(Boolean).join("\n");
 }
 
 export function createReadAnyCardTiptapContent(
@@ -293,9 +300,7 @@ export function createReadAnyCardTiptapContent(
   const title = model.title.trim();
   const body = model.body.trim();
   const source = model.sourceTitle?.trim();
-  const markdown = [title ? `### ${title}` : "", body]
-    .filter(Boolean)
-    .join("\n\n");
+  const markdown = [title ? `### ${title}` : "", body].filter(Boolean).join("\n\n");
   const document = markdownToBasicTiptap(markdown || model.cardType, {
     cardTemplates: options.cardTemplates,
   });
@@ -352,10 +357,16 @@ function renderBlock(
         .filter(Boolean)
         .join("\n\n");
     case "paragraph":
-      return (node.content ?? []).map((child) => renderInline(child, options)).join("").trim();
+      return (node.content ?? [])
+        .map((child) => renderInline(child, options))
+        .join("")
+        .trim();
     case "heading": {
       const level = Math.min(Math.max(Number(node.attrs?.level ?? 1), 1), 6);
-      const text = (node.content ?? []).map((child) => renderInline(child, options)).join("").trim();
+      const text = (node.content ?? [])
+        .map((child) => renderInline(child, options))
+        .join("")
+        .trim();
       return `${"#".repeat(level)} ${text}`.trimEnd();
     }
     case "blockquote": {
@@ -451,16 +462,12 @@ function applyHtmlMark(html: string, mark: TiptapMark): string {
   }
 }
 
-function renderHtmlInternalLink(
-  node: TiptapNode,
-  options: ReadOnlyHtmlProjectionOptions,
-): string {
+function renderHtmlInternalLink(node: TiptapNode, options: ReadOnlyHtmlProjectionOptions): string {
   const documentId = typeof node.attrs?.documentId === "string" ? node.attrs.documentId.trim() : "";
   const targetPath = typeof node.attrs?.targetPath === "string" ? node.attrs.targetPath.trim() : "";
   const fallbackTarget = targetPath || documentId;
   const target =
-    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ??
-    fallbackTarget;
+    options.resolveInternalLinkTarget?.(node.attrs ?? {}, fallbackTarget)?.trim() ?? fallbackTarget;
   const label =
     typeof node.attrs?.label === "string"
       ? node.attrs.label.trim()
@@ -510,10 +517,7 @@ function renderPlainTextHtmlBlock(text: string, options: ReadOnlyHtmlProjectionO
   return `<pre class="${className(options, "card-pre")}">${escapeHtml(text)}</pre>`;
 }
 
-function renderReadAnyCardHtml(
-  node: TiptapNode,
-  options: ReadOnlyHtmlProjectionOptions,
-): string {
+function renderReadAnyCardHtml(node: TiptapNode, options: ReadOnlyHtmlProjectionOptions): string {
   const model = createReadAnyCardReadOnlyModel(node.attrs ?? {}, {
     body: (node.content ?? [])
       .map((child) => renderBlock(child, 0, options))
@@ -542,11 +546,20 @@ function renderReadAnyCardHtml(
         options,
       )}</div>`
     : "";
+  const structuredFieldsHtml = model.structuredFields.length
+    ? `<dl class="${className(options, "card-fields")}">${model.structuredFields
+        .map(
+          (field) =>
+            `<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`,
+        )
+        .join("")}</dl>`
+    : "";
 
   return [
     `<article class="${className(options, "card")} ${className(options, `card-${model.state}`)}" data-readany-card-type="${escapeHtml(model.cardType)}" data-readany-card-version="${escapeHtml(String(model.version))}" data-readany-card-state="${escapeHtml(model.state)}">`,
     `<header class="${className(options, "card-header")}"><span class="${className(options, "card-type")}">${escapeHtml(model.cardType)}</span>${stateLabel}<h4>${escapeHtml(model.title)}</h4></header>`,
     bodyHtml,
+    structuredFieldsHtml,
     metadataHtml,
     "</article>",
   ]
@@ -1085,17 +1098,15 @@ export function markdownToBasicTiptap(
       const body = readAnyCard[2].trim();
       return {
         type: "readanyCard",
-        attrs: (
-          options.cardTemplates?.length
-            ? upgradeReadAnyCardAttrsWithTemplates(
-                { ...attrs, markdown: body },
-                options.cardTemplates,
-              )
-            : upgradeReadAnyCardAttrs({
-                ...attrs,
-                markdown: body,
-              })
-        ) as Record<string, unknown>,
+        attrs: (options.cardTemplates?.length
+          ? upgradeReadAnyCardAttrsWithTemplates(
+              { ...attrs, markdown: body },
+              options.cardTemplates,
+            )
+          : upgradeReadAnyCardAttrs({
+              ...attrs,
+              markdown: body,
+            })) as Record<string, unknown>,
       };
     }
 

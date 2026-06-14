@@ -614,6 +614,9 @@ Initial built-in cards:
 ## Markdown Fallback
 
 Each custom card must degrade to readable Markdown.
+If a custom card has structured fields, exported Markdown and AI context should
+render those fields as ordinary labeled text before any hidden ReadAny metadata.
+The user should not need to inspect encoded JSON to understand the card.
 
 Recommended syntax:
 

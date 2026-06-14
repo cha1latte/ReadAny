@@ -5104,14 +5104,23 @@ function KnowledgeMarkdownImportReviewCard({
   );
   const importDestinationLabel = useCallback(
     (proposal: KnowledgeImportWriteProposal): string | null => {
+      if (proposal.targetPath) return proposal.targetPath;
+      if (proposal.action === "update") return proposal.current?.path ?? null;
       if (proposal.action !== "create") return null;
       const parentId = proposal.draft.parentId;
-      if (!parentId) return t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" });
+      const title = proposal.draft.title?.trim() || t("notes.knowledgeUntitledDocument");
+      if (!parentId) {
+        return [
+          t("notes.knowledgeVaultRoot", { defaultValue: "Knowledge base" }),
+          title,
+        ].join(" / ");
+      }
       const parent = documentById.get(parentId);
-      if (!parent) return parentId;
-      return knowledgeDocumentPath(parent, documents, t)
-        .map((item) => item.title)
-        .join(" / ");
+      if (!parent) return [parentId, title].join(" / ");
+      return [
+        ...knowledgeDocumentPath(parent, documents, t).map((item) => item.title),
+        title,
+      ].join(" / ");
     },
     [documentById, documents, t],
   );

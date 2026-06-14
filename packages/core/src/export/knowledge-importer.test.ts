@@ -408,9 +408,17 @@ Why does this matter?
   });
 
   it("creates folder proposals for ordinary Markdown path hierarchy", () => {
+    const currentFolder = knowledgeDocument({
+      id: "folder-current",
+      bookId: "book-1",
+      type: "folder",
+      title: "Current Folder",
+    });
+
     const plan = createKnowledgeMarkdownImportPlan({
       bookId: "book-1",
       defaultParentId: "folder-current",
+      currentDocuments: [currentFolder],
       files: [
         {
           path: "/Users/me/Vault/Ideas/Slow Reading.md",
@@ -446,7 +454,7 @@ Why does this matter?
 
     expect(ideasFolder.proposal).toMatchObject({
       action: "create",
-      targetPath: "Ideas",
+      targetPath: "Knowledge base / Current Folder / Ideas",
       draft: {
         type: "folder",
         title: "Ideas",
@@ -456,7 +464,7 @@ Why does this matter?
     });
     expect(themesFolder.proposal).toMatchObject({
       action: "create",
-      targetPath: "Ideas/Themes",
+      targetPath: "Knowledge base / Current Folder / Ideas / Themes",
       draft: {
         type: "folder",
         title: "Themes",
@@ -466,7 +474,7 @@ Why does this matter?
     });
     expect(slowReadingDocument.proposal).toMatchObject({
       action: "create",
-      targetPath: "Ideas/Slow Reading.md",
+      targetPath: "Knowledge base / Current Folder / Ideas / Slow Reading",
       draft: {
         title: "Slow Reading",
         parentId: ideasFolder.proposal.draft.id,
@@ -475,7 +483,7 @@ Why does this matter?
     });
     expect(attentionDocument.proposal).toMatchObject({
       action: "create",
-      targetPath: "Ideas/Themes/Attention.md",
+      targetPath: "Knowledge base / Current Folder / Ideas / Themes / Attention",
       draft: {
         title: "Attention",
         parentId: themesFolder.proposal.draft.id,
@@ -485,6 +493,12 @@ Why does this matter?
   });
 
   it("reuses existing destination folders when importing Markdown path hierarchy", () => {
+    const currentFolder = knowledgeDocument({
+      id: "folder-current",
+      bookId: "book-1",
+      type: "folder",
+      title: "Current Folder",
+    });
     const existingIdeasFolder = knowledgeDocument({
       id: "folder-ideas",
       bookId: "book-1",
@@ -496,7 +510,7 @@ Why does this matter?
     const plan = createKnowledgeMarkdownImportPlan({
       bookId: "book-1",
       defaultParentId: "folder-current",
-      currentDocuments: [existingIdeasFolder],
+      currentDocuments: [currentFolder, existingIdeasFolder],
       files: [
         {
           path: "/Users/me/Vault/Ideas/Slow Reading.md",
@@ -518,7 +532,7 @@ Why does this matter?
     }
     expect(themesFolder.proposal).toMatchObject({
       action: "create",
-      targetPath: "Ideas/Themes",
+      targetPath: "Knowledge base / Current Folder / Ideas / Themes",
       draft: {
         type: "folder",
         title: "Themes",
@@ -535,7 +549,13 @@ Why does this matter?
       throw new Error("Expected document create proposals");
     }
     expect(slowReadingDocument.proposal.draft.parentId).toBe("folder-ideas");
+    expect(slowReadingDocument.proposal.targetPath).toBe(
+      "Knowledge base / Current Folder / Ideas / Slow Reading",
+    );
     expect(attentionDocument.proposal.draft.parentId).toBe(themesFolder.proposal.draft.id);
+    expect(attentionDocument.proposal.targetPath).toBe(
+      "Knowledge base / Current Folder / Ideas / Themes / Attention",
+    );
   });
 
   it("warns when imported Markdown would duplicate a sibling document title", () => {

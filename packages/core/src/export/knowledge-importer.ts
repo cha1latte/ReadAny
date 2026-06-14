@@ -1,5 +1,9 @@
 import type { CreateKnowledgeDocumentInput } from "../db/database";
-import { createKnowledgeExcerpt, markdownToBasicTiptap } from "../knowledge";
+import {
+  createKnowledgeExcerpt,
+  formatKnowledgeDocumentPath,
+  markdownToBasicTiptap,
+} from "../knowledge";
 import type {
   KnowledgeDocumentCreateProposal,
   KnowledgeDocumentUpdateProposal,
@@ -144,6 +148,10 @@ const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "summary",
   "imported_markdown",
 ]);
+
+const KNOWLEDGE_ROOT_TITLE = "Knowledge base";
+const UNTITLED_DOCUMENT_TITLE = "Untitled document";
+const ORPHANED_PARENT_TITLE = "Orphaned";
 
 const SOURCE_KINDS = new Set<KnowledgeSourceKind>([
   "book",
@@ -924,12 +932,14 @@ function createKnowledgeImportFolderProposal({
   parentId,
   bookId,
   targetPath,
+  sourcePath,
 }: {
   id: string;
   title: string;
   parentId?: string;
   bookId?: string;
   targetPath: string;
+  sourcePath: string;
 }): KnowledgeDocumentCreateProposal {
   return {
     success: true,
@@ -949,9 +959,49 @@ function createKnowledgeImportFolderProposal({
       contentSchemaVersion: 1,
       tags: [],
       sourceKind: "obsidian",
-      sourceId: targetPath,
+      sourceId: sourcePath,
     },
   };
+}
+
+function joinImportVaultPath(...parts: Array<string | undefined>): string {
+  return parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(" / ");
+}
+
+function createImportBaseVaultPath({
+  parentId,
+  documents,
+}: {
+  parentId?: string;
+  documents: KnowledgeDocument[];
+}): string {
+  if (!parentId) return KNOWLEDGE_ROOT_TITLE;
+
+  const parent = documents.find((document) => document.id === parentId);
+  if (!parent) return joinImportVaultPath(KNOWLEDGE_ROOT_TITLE, parentId);
+
+  return formatKnowledgeDocumentPath(parent, documents, {
+    rootTitle: KNOWLEDGE_ROOT_TITLE,
+    untitledTitle: UNTITLED_DOCUMENT_TITLE,
+    orphanedParentTitle: ORPHANED_PARENT_TITLE,
+    includeOrphanedParent: true,
+  });
+}
+
+function createImportDraftVaultPath({
+  draft,
+  documents,
+}: {
+  draft: CreateKnowledgeDocumentInput;
+  documents: KnowledgeDocument[];
+}): string {
+  return joinImportVaultPath(
+    createImportBaseVaultPath({ parentId: draft.parentId, documents }),
+    draft.title || UNTITLED_DOCUMENT_TITLE,
+  );
 }
 
 function importRelativePathForFile(
@@ -1000,11 +1050,16 @@ export function createKnowledgeMarkdownImportPlan(
   );
   const folderItemsById = new Map<string, KnowledgeMarkdownImportPlanItem>();
   const documentItems: KnowledgeMarkdownImportPlanItem[] = [];
+  const currentDocuments = [...(input.currentDocuments ?? [])];
 
   for (const file of input.files) {
     const relativePath = importRelativePathForFile(file, commonParts);
     const bookId = file.bookId ?? input.bookId;
     const baseParentId = file.defaultParentId ?? input.defaultParentId;
+    const baseVaultPath = createImportBaseVaultPath({
+      parentId: baseParentId,
+      documents: currentDocuments,
+    });
     const imported = parseKnowledgeMarkdownDocument({
       ...file,
       relativePath,
@@ -1019,10 +1074,12 @@ export function createKnowledgeMarkdownImportPlan(
       const directorySegments = segments.slice(0, -1);
       let parentId = baseParentId;
       const pathSegments: string[] = [];
+      const generatedFolderDocuments: KnowledgeDocument[] = [];
 
       for (const segment of directorySegments) {
         pathSegments.push(segment);
         const relativeDirPath = pathSegments.join("/");
+        const vaultDirPath = joinImportVaultPath(baseVaultPath, ...pathSegments);
         const titleKey = importSiblingKey({ bookId, parentId, title: segment });
         const existingFolderId = existingFolderIdBySiblingKey.get(titleKey);
         const folderId =
@@ -1033,7 +1090,8 @@ export function createKnowledgeMarkdownImportPlan(
             title: segment,
             parentId,
             bookId,
-            targetPath: relativeDirPath,
+            targetPath: vaultDirPath,
+            sourcePath: relativeDirPath,
           });
           folderItemsById.set(folderId, {
             path: relativeDirPath,
@@ -1043,6 +1101,21 @@ export function createKnowledgeMarkdownImportPlan(
           });
           existingFolderIdBySiblingKey.set(titleKey, folderId);
           siblingDocumentIdByTitleKey.set(titleKey, folderId);
+          generatedFolderDocuments.push({
+            id: folderId,
+            bookId,
+            parentId,
+            type: "folder",
+            title: segment,
+            contentJson: { type: "doc", content: [] },
+            contentMd: "",
+            contentSchemaVersion: 1,
+            tags: [],
+            sourceKind: "obsidian",
+            sourceId: relativeDirPath,
+            createdAt: 0,
+            updatedAt: 0,
+          });
         }
         parentId = folderId;
       }
@@ -1050,13 +1123,22 @@ export function createKnowledgeMarkdownImportPlan(
       if (directorySegments.length > 0) {
         imported.draft.parentId = parentId;
       }
+      if (generatedFolderDocuments.length > 0) {
+        currentDocuments.push(...generatedFolderDocuments);
+      }
     }
 
     const proposal = createKnowledgeImportWriteProposal(imported, {
       message: "Imported knowledge draft generated. No document has been saved.",
     });
     if (proposal.action === "create" || proposal.action === "update") {
-      proposal.targetPath = relativePath;
+      proposal.targetPath =
+        proposal.action === "create"
+          ? createImportDraftVaultPath({
+              draft: proposal.draft,
+              documents: currentDocuments,
+            })
+          : relativePath;
     }
     const warnings = [...imported.warnings];
     if (proposal.action === "create") {

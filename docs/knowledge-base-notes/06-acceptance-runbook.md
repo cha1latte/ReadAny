@@ -37,6 +37,9 @@ The script above runs the full automated gate. Expanded manually, it is:
 ```bash
 pnpm --filter @readany/core exec vitest run \
   src/db/__tests__/knowledge-queries.test.ts \
+  src/db/__tests__/knowledge-source-writeback.test.ts \
+  src/db/__tests__/highlight-queries.test.ts \
+  src/db/__tests__/note-queries.test.ts \
   src/sync/__tests__/simple-sync.integration.test.ts \
   src/sync/__tests__/sync-files.test.ts \
   src/knowledge/document-utils.test.ts \
@@ -75,6 +78,7 @@ Evidence mapping:
 | Contract | Evidence |
 | --- | --- |
 | Knowledge tables, queries, tombstones, and sync metadata exist. | `knowledge-queries.test.ts`, `simple-sync.integration.test.ts` |
+| Legacy highlight/note projections keep old UI compatible while knowledge documents become primary. | `knowledge-source-writeback.test.ts`, `highlight-queries.test.ts`, `note-queries.test.ts`, `document-utils.test.ts` |
 | Knowledge attachment files upload, download, and reconcile manifest paths during file sync. | `sync-files.test.ts` |
 | Vault paths survive folders, moves, orphans, search, AI, and export. | `document-utils.test.ts`, `vault-path-fidelity.test.ts`, `knowledge-tools.test.ts` |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |

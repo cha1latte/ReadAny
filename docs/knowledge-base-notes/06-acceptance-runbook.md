@@ -75,12 +75,18 @@ pnpm --filter app exec vite build
 pnpm --filter @readany/app-expo exec tsc --noEmit
 pnpm --filter @readany/app-expo exec node scripts/build-knowledge-editor.js
 git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
+# The acceptance script also checks the generated WebView bundle for required
+# bridge messages, commands, cards, internal/source links, and image attachment
+# fallbacks.
 git diff --check
 ```
 
 `pnpm acceptance:knowledge` compares the mobile WebView editor bundle before and
 after rebuilding it. If the generated HTML changes, commit
 `packages/app-expo/assets/editor/knowledge-editor.html` and rerun the gate.
+It also verifies that the generated HTML still contains the RN bridge entry
+point, ready/error/content/selection messages, command routing, ReadAny cards,
+internal/source links, and image attachment fallback UI.
 
 Evidence mapping:
 
@@ -96,7 +102,7 @@ Evidence mapping:
 | Desktop knowledge workspace code is included in a valid production browser bundle. | Desktop production bundle check |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
-| Draft recovery, mobile WebView messages, and error states are typed. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, `app-expo` TypeScript |
+| Draft recovery, mobile WebView messages, and error states are typed and present in the generated bundle. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, mobile WebView bundle contract check, `app-expo` TypeScript |
 | Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
 | AI reads knowledge safely and writes only through confirmation proposals. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts` |
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |

@@ -99,6 +99,54 @@ function verifyKnowledgeEditorBundle() {
     );
     process.exit(1);
   }
+  verifyKnowledgeEditorBundleContract(after);
+}
+
+function verifyKnowledgeEditorBundleContract(bundle) {
+  if (!bundle) {
+    console.error("[knowledge-acceptance] mobile knowledge editor bundle is missing.");
+    process.exit(1);
+  }
+
+  const requiredFragments = [
+    "window.__ReadAnyKnowledgeEditor",
+    "ReactNativeWebView",
+    "postMessage",
+    "loaded",
+    "ready",
+    "selectionChanged",
+    "contentChanged",
+    "heightChanged",
+    "focusChanged",
+    "error",
+    "unknown_command",
+    "unknown_message",
+    "bridge_error",
+    "parse_error",
+    "setContent",
+    "setEditable",
+    "requestContent",
+    "runCommand",
+    "insertImage",
+    "insertInternalLink",
+    "insertSourceReference",
+    "insertCard",
+    "readany-card",
+    "readany-internal-link",
+    "readany-source-reference",
+    "readany-image-missing",
+    "readany-attachment://",
+  ];
+  const missingFragments = requiredFragments.filter((fragment) => !bundle.includes(fragment));
+  if (missingFragments.length > 0) {
+    console.error(
+      [
+        "[knowledge-acceptance] mobile knowledge editor bundle is missing bridge features:",
+        ...missingFragments.map((fragment) => `- ${fragment}`),
+      ].join("\n"),
+    );
+    process.exit(1);
+  }
 }
 
 for (const [command, args, label] of commands) {

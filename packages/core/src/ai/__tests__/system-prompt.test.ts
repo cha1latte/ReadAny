@@ -100,6 +100,27 @@ describe("buildSystemPrompt citations", () => {
     expect(promptWithCompression).toContain("must never be described as editing");
   });
 
+  it("lists all always-registered library management tools", () => {
+    const prompt = buildSystemPrompt({
+      book: makeBook(),
+      semanticContext: null,
+      enabledSkills: [],
+      isVectorized: false,
+      userLanguage: "en",
+    });
+
+    expect(prompt).toContain("- **listBooks**");
+    expect(prompt).toContain("- **searchAllHighlights**");
+    expect(prompt).toContain("- **searchAllNotes**");
+    expect(prompt).toContain("- **getReadingStats**");
+    expect(prompt).toContain("- **mindmap**");
+    expect(prompt).toContain("- **classifyBooks**");
+    expect(prompt).toContain("- **tagBooks**");
+    expect(prompt).toContain("- **updateBookMetadata**");
+    expect(prompt).toContain("- **manageBookTags**");
+    expect(prompt).toContain("- **manageBookGroups**");
+  });
+
   it("allows fallback citations only when a returned CFI can be validated", () => {
     const prompt = buildSystemPrompt({
       book: makeBook(),

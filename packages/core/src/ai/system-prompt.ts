@@ -149,7 +149,16 @@ function buildToolsSection(
     "- **mindmap**: Generate an interactive mindmap visualization (params: reasoning, title, markdown)",
   );
   tools.push(
+    "- **classifyBooks**: Inspect book metadata, TOC, and content samples before categorizing or tagging books (params: reasoning, bookId)",
+  );
+  tools.push(
+    "- **tagBooks**: Apply representative tags to one or more books after classifyBooks has returned concrete book ids (params: reasoning, assignments JSON)",
+  );
+  tools.push(
     "- **updateBookMetadata**: Edit a book's library metadata when the user explicitly asks to modify it (params: reasoning, bookId, updates JSON)",
+  );
+  tools.push(
+    "- **manageBookTags**: Create, rename, delete, remove, or replace book tags when the user explicitly asks to organize tags (params: reasoning, action, tag, newTag, bookId, tags JSON)",
   );
   tools.push(
     "- **manageBookGroups**: List/create/rename/delete groups or move books between groups (params: reasoning, action, groupId, name, bookIds)",

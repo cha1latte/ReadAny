@@ -101,6 +101,23 @@ function markdownImageDestination(src: string): string {
   return `<${src.replace(/</g, "%3C").replace(/>/g, "%3E")}>`;
 }
 
+function imageAttachmentContext(
+  attrs: Record<string, unknown> | undefined,
+  src: string,
+): { attrs: Record<string, unknown>; attachmentId: string } {
+  const explicitAttachmentId =
+    typeof attrs?.attachmentId === "string" ? attrs.attachmentId.trim() : "";
+  const attachmentId = explicitAttachmentId || parseKnowledgeAttachmentUri(src) || "";
+  const resolvedAttrs =
+    attachmentId && attrs?.attachmentId !== attachmentId
+      ? { ...(attrs ?? {}), attachmentId }
+      : attrs;
+  return {
+    attrs: resolvedAttrs ?? {},
+    attachmentId,
+  };
+}
+
 function escapeMarkdownLinkLabel(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/([\[\]])/g, "\\$1");
 }
@@ -385,10 +402,9 @@ function renderBlock(
     case "image": {
       const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
-      const attachmentId =
-        typeof node.attrs?.attachmentId === "string" ? node.attrs.attachmentId : "";
+      const { attrs, attachmentId } = imageAttachmentContext(node.attrs, src);
       const resolvedSrc =
-        options.resolveImageSrc?.(node.attrs ?? {}, src) ||
+        options.resolveImageSrc?.(attrs, src) ||
         (attachmentId ? createKnowledgeAttachmentUri(attachmentId) : src);
       return resolvedSrc
         ? `![${escapeMarkdownImageAlt(alt)}](${markdownImageDestination(resolvedSrc)})`
@@ -592,10 +608,9 @@ function renderHtmlBlock(node: TiptapNode, options: ReadOnlyHtmlProjectionOption
       const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
       const title = typeof node.attrs?.title === "string" ? node.attrs.title : "";
-      const attachmentId =
-        typeof node.attrs?.attachmentId === "string" ? node.attrs.attachmentId : "";
+      const { attrs, attachmentId } = imageAttachmentContext(node.attrs, src);
       const resolvedSrc =
-        options.resolveImageSrc?.(node.attrs ?? {}, src) ||
+        options.resolveImageSrc?.(attrs, src) ||
         (attachmentId ? createKnowledgeAttachmentUri(attachmentId) : src);
       if (!resolvedSrc) return "";
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";

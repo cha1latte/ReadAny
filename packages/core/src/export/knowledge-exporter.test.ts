@@ -789,6 +789,46 @@ describe("KnowledgeExporter", () => {
     expect(document?.content).not.toContain("asset://localhost");
   });
 
+  it("rewrites portable attachment image URIs even when attachment ids are implicit", () => {
+    const exporter = new KnowledgeExporter();
+    const vault = exporter.buildVaultPackage({
+      books: [baseBook],
+      documents: [
+        knowledgeDocument({
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "image",
+                attrs: {
+                  src: "readany-attachment://att-1",
+                  alt: "Synced cover",
+                },
+              },
+            ],
+          },
+        }),
+      ],
+      attachments: [
+        {
+          id: "att-1",
+          documentId: "doc-1",
+          kind: "image",
+          fileName: "cover.png",
+          mimeType: "image/png",
+          localPath: "local/cover.png",
+          size: 42,
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ],
+    });
+
+    const document = vault.files.find((file) => file.path.endsWith("README.md"));
+    expect(document?.content).toContain("![Synced cover](../../Assets/cover.png)");
+    expect(document?.content).not.toContain("readany-attachment://att-1");
+  });
+
   it("keeps duplicate attachment paths unique and synced with the manifest", () => {
     const exporter = new KnowledgeExporter();
     const vault = exporter.buildVaultPackage({

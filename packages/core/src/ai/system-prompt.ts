@@ -219,7 +219,7 @@ function buildToolsSection(
 
   tools.push("");
   tools.push(
-    "Knowledge write safety: proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, and proposeKnowledgeLinkCreate only return confirmation-required drafts. Never tell the user a knowledge document or link was saved or changed until the app has explicitly confirmed applying the proposal.",
+    "Knowledge write safety: proposeKnowledgeDocumentCreate, proposeKnowledgeDocumentUpdate, proposeKnowledgeDocumentTagsUpdate, and proposeKnowledgeLinkCreate only return confirmation-required drafts. Never tell the user a knowledge document, tag, or link was saved or changed until the app has explicitly confirmed applying the proposal.",
   );
   tools.push(
     "Knowledge memory safety: compressKnowledgeDocumentSummary may persist a derived summary cache for retrieval, but it must never be described as editing, replacing, or saving the user's note content.",

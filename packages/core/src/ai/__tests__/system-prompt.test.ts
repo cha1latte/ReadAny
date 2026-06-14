@@ -60,6 +60,24 @@ describe("buildSystemPrompt citations", () => {
     expect(prompt).toContain("getKnowledgeDocument");
   });
 
+  it("lists every knowledge write tool in the confirmation-only safety rule", () => {
+    const prompt = buildSystemPrompt({
+      book: makeBook(),
+      semanticContext: null,
+      enabledSkills: [],
+      isVectorized: false,
+      userLanguage: "en",
+    });
+
+    expect(prompt).toContain("Knowledge write safety");
+    expect(prompt).toContain("proposeKnowledgeDocumentCreate");
+    expect(prompt).toContain("proposeKnowledgeDocumentUpdate");
+    expect(prompt).toContain("proposeKnowledgeDocumentTagsUpdate");
+    expect(prompt).toContain("proposeKnowledgeLinkCreate");
+    expect(prompt).toContain("only return confirmation-required drafts");
+    expect(prompt).toContain("knowledge document, tag, or link");
+  });
+
   it("allows fallback citations only when a returned CFI can be validated", () => {
     const prompt = buildSystemPrompt({
       book: makeBook(),

@@ -17,6 +17,14 @@ export interface KnowledgeToolResultDocument {
   childCount?: number;
 }
 
+export interface KnowledgeToolResultRelation {
+  id?: string;
+  direction: "outgoing" | "backlink";
+  relation?: string;
+  label?: string;
+  document: KnowledgeToolResultDocument;
+}
+
 export interface KnowledgeToolResultDisplay {
   kind: KnowledgeToolResultKind;
   toolName?: string;
@@ -34,6 +42,7 @@ export interface KnowledgeToolResultDisplay {
   failureCardAttrs?: ReadAnyCardAttrs;
   failureCardMarkdown?: string;
   documents: KnowledgeToolResultDocument[];
+  relations?: KnowledgeToolResultRelation[];
 }
 
 export interface KnowledgeToolResultDisplayOptions {
@@ -214,6 +223,65 @@ function asDocumentList(value: unknown): KnowledgeToolResultDocument[] {
   return value.map(asDocumentSummary).filter((item): item is KnowledgeToolResultDocument => !!item);
 }
 
+function relationDocumentsFromResult(
+  result: Record<string, unknown>,
+): KnowledgeToolResultRelation[] {
+  const relations: KnowledgeToolResultRelation[] = [];
+  const seen = new Set<string>();
+  const addRelation = (
+    relation: Omit<KnowledgeToolResultRelation, "document"> & {
+      document: KnowledgeToolResultDocument | null;
+    },
+  ) => {
+    if (!relation.document) return;
+    const key = [
+      relation.direction,
+      relation.id,
+      relation.relation,
+      relation.label,
+      relation.document.id,
+      relation.document.path,
+      relation.document.title,
+    ]
+      .filter(Boolean)
+      .join("|");
+    if (seen.has(key)) return;
+    seen.add(key);
+    relations.push({
+      ...relation,
+      document: relation.document,
+    });
+  };
+
+  if (Array.isArray(result.outgoingLinks)) {
+    for (const link of result.outgoingLinks) {
+      if (!isRecord(link)) continue;
+      addRelation({
+        id: asString(link.id),
+        direction: "outgoing",
+        relation: asString(link.relation),
+        label: asString(link.label),
+        document: isRecord(link.target) ? asDocumentSummary(link.target) : null,
+      });
+    }
+  }
+
+  if (Array.isArray(result.backlinks)) {
+    for (const backlink of result.backlinks) {
+      if (!isRecord(backlink)) continue;
+      addRelation({
+        id: asString(backlink.id),
+        direction: "backlink",
+        relation: asString(backlink.relation),
+        label: asString(backlink.label),
+        document: isRecord(backlink.from) ? asDocumentSummary(backlink.from) : null,
+      });
+    }
+  }
+
+  return relations;
+}
+
 function contextDocumentsFromResult(
   result: Record<string, unknown>,
 ): KnowledgeToolResultDocument[] {
@@ -309,6 +377,7 @@ export function getKnowledgeToolResultDisplay(
       bookId: asString(resultRecord.bookId),
       documentId: asString(resultRecord.documentId),
       documents: contextDocumentsFromResult(resultRecord),
+      relations: relationDocumentsFromResult(resultRecord),
     };
   }
 

@@ -127,6 +127,10 @@
     "reason": "原因：{{reason}}",
     "empty": "沒有符合的知識文件",
     "more": "還有 {{count}} 個",
+    "relations": "關聯路徑",
+    "relationOutgoing": "連結到",
+    "relationBacklink": "被引用自",
+    "moreRelations": "還有 {{count}} 條關聯",
     "types": {
       "book_home": "書籍主頁",
       "folder": "資料夾",

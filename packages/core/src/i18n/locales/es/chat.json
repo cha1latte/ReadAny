@@ -127,6 +127,10 @@
     "reason": "Motivo: {{reason}}",
     "empty": "No hay documentos de conocimiento coincidentes",
     "more": "{{count}} más",
+    "relations": "Rutas relacionadas",
+    "relationOutgoing": "Enlaza con",
+    "relationBacklink": "Enlazado desde",
+    "moreRelations": "{{count}} relaciones más",
     "types": {
       "book_home": "Inicio del libro",
       "folder": "Carpeta",

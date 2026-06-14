@@ -75,6 +75,7 @@ describe("knowledge tool result display", () => {
         {
           id: "link-out",
           relation: "related",
+          label: "Compare with",
           target: {
             id: "doc-2",
             title: "Related Note",
@@ -87,6 +88,7 @@ describe("knowledge tool result display", () => {
         {
           id: "link-back",
           relation: "references",
+          label: "Mentioned by",
           from: {
             id: "doc-3",
             title: "Earlier Note",
@@ -124,6 +126,69 @@ describe("knowledge tool result display", () => {
           path: "Knowledge base / Chapter Notes / Earlier Note",
         },
       ],
+      relations: [
+        {
+          id: "link-out",
+          direction: "outgoing",
+          relation: "related",
+          label: "Compare with",
+          document: {
+            id: "doc-2",
+            title: "Related Note",
+            type: "standalone_note",
+            path: "Knowledge base / Chapter Notes / Related Note",
+          },
+        },
+        {
+          id: "link-back",
+          direction: "backlink",
+          relation: "references",
+          label: "Mentioned by",
+          document: {
+            id: "doc-3",
+            title: "Earlier Note",
+            type: "standalone_note",
+            path: "Knowledge base / Chapter Notes / Earlier Note",
+          },
+        },
+      ],
+    });
+  });
+
+  it("omits unresolved exact-read relations instead of rendering empty rows", () => {
+    const display = getKnowledgeToolResultDisplay("getKnowledgeDocument", {
+      success: true,
+      documentId: "doc-1",
+      document: {
+        id: "doc-1",
+        title: "Theme Map",
+        path: "Knowledge base / Theme Map",
+      },
+      outgoingLinks: [
+        {
+          id: "missing-target",
+          relation: "related",
+          toId: "missing-doc",
+        },
+      ],
+      backlinks: [
+        {
+          id: "missing-source",
+          relation: "references",
+        },
+      ],
+    });
+
+    expect(display).toMatchObject({
+      kind: "document",
+      documents: [
+        {
+          id: "doc-1",
+          title: "Theme Map",
+          path: "Knowledge base / Theme Map",
+        },
+      ],
+      relations: [],
     });
   });
 

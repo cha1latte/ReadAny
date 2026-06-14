@@ -366,6 +366,73 @@ function KnowledgeToolResultDocumentRows({
   );
 }
 
+function KnowledgeToolResultRelationRows({
+  relations = [],
+  max = 4,
+}: {
+  relations?: NonNullable<KnowledgeToolResultDisplay["relations"]>;
+  max?: number;
+}) {
+  const { t } = useTranslation();
+  if (relations.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-border/70 bg-muted/10 p-2.5">
+      <div className="mb-2 text-[11px] font-medium text-muted-foreground">
+        {t("knowledgeToolResult.relations", { defaultValue: "Related paths" })}
+      </div>
+      <div className="space-y-1.5">
+        {relations.slice(0, max).map((relation) => {
+          const direction =
+            relation.direction === "outgoing"
+              ? t("knowledgeToolResult.relationOutgoing", { defaultValue: "Links to" })
+              : t("knowledgeToolResult.relationBacklink", { defaultValue: "Linked from" });
+          const relationLabel = relation.label || relation.relation;
+
+          return (
+            <div
+              key={
+                relation.id ??
+                `${relation.direction}-${relation.document.id ?? relation.document.path ?? relation.document.title}`
+              }
+              className="grid grid-cols-[auto,minmax(0,1fr)] gap-2 rounded bg-background/65 px-2 py-1.5"
+            >
+              <span className="mt-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                {direction}
+              </span>
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-xs font-medium text-foreground">
+                    {relation.document.title}
+                  </span>
+                  {relationLabel ? (
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {relationLabel}
+                    </span>
+                  ) : null}
+                </div>
+                {relation.document.path ? (
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {relation.document.path}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {relations.length > max ? (
+        <div className="mt-2 text-[11px] text-muted-foreground">
+          {t("knowledgeToolResult.moreRelations", {
+            count: relations.length - max,
+            defaultValue: `+${relations.length - max} more relations`,
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
   const { t } = useTranslation();
   const toolLabel =
@@ -532,7 +599,10 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             {t("knowledgeToolResult.empty", { defaultValue: "No matching knowledge documents." })}
           </p>
         ) : (
-          <KnowledgeToolResultDocumentRows documents={display.documents} />
+          <>
+            <KnowledgeToolResultDocumentRows documents={display.documents} />
+            <KnowledgeToolResultRelationRows relations={display.relations} />
+          </>
         )}
 
         {display.documents.length > 5 ? (

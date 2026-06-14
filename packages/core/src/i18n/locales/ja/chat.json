@@ -127,6 +127,10 @@
     "reason": "理由：{{reason}}",
     "empty": "一致するナレッジ文書はありません",
     "more": "ほか {{count}} 件",
+    "relations": "関連パス",
+    "relationOutgoing": "リンク先",
+    "relationBacklink": "リンク元",
+    "moreRelations": "ほか {{count}} 件の関連",
     "types": {
       "book_home": "本のホーム",
       "folder": "フォルダー",

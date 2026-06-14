@@ -127,6 +127,10 @@
     "reason": "Reason: {{reason}}",
     "empty": "No matching knowledge documents",
     "more": "{{count}} more",
+    "relations": "Related paths",
+    "relationOutgoing": "Links to",
+    "relationBacklink": "Linked from",
+    "moreRelations": "{{count}} more relations",
     "types": {
       "book_home": "Book home",
       "folder": "Folder",

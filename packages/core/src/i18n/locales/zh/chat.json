@@ -127,6 +127,10 @@
     "reason": "原因：{{reason}}",
     "empty": "没有匹配的知识文档",
     "more": "还有 {{count}} 个",
+    "relations": "关联路径",
+    "relationOutgoing": "链接到",
+    "relationBacklink": "被引用自",
+    "moreRelations": "还有 {{count}} 条关联",
     "types": {
       "book_home": "书籍主页",
       "folder": "文件夹",

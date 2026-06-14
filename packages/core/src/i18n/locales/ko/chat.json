@@ -127,6 +127,10 @@
     "reason": "이유: {{reason}}",
     "empty": "일치하는 지식 문서가 없어요",
     "more": "{{count}}개 더 있음",
+    "relations": "연결된 경로",
+    "relationOutgoing": "연결 대상",
+    "relationBacklink": "연결 원본",
+    "moreRelations": "{{count}}개 관계 더 있음",
     "types": {
       "book_home": "책 홈",
       "folder": "폴더",

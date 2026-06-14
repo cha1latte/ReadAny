@@ -41,6 +41,7 @@ export type {
   KnowledgeToolResultDisplay,
   KnowledgeToolResultDocument,
   KnowledgeToolResultKind,
+  KnowledgeToolResultRelation,
 } from "./knowledge-tool-result";
 
 export { BUILTIN_EMBEDDING_MODELS } from "./builtin-embedding-models";

@@ -313,6 +313,72 @@ function KnowledgeToolResultDocumentRows({
   );
 }
 
+function KnowledgeToolResultRelationRows({
+  relations = [],
+  styles,
+  max = 4,
+}: {
+  relations?: NonNullable<KnowledgeToolResultDisplay["relations"]>;
+  styles: ReturnType<typeof makeToolStyles>;
+  max?: number;
+}) {
+  const { t } = useTranslation();
+  if (relations.length === 0) return null;
+
+  return (
+    <View style={styles.knowledgeResultRelations}>
+      <Text style={styles.knowledgeResultRelationsTitle}>
+        {t("knowledgeToolResult.relations", "关联路径")}
+      </Text>
+      {relations.slice(0, max).map((relation) => {
+        const direction =
+          relation.direction === "outgoing"
+            ? t("knowledgeToolResult.relationOutgoing", "链接到")
+            : t("knowledgeToolResult.relationBacklink", "被引用自");
+        const relationLabel = relation.label || relation.relation;
+
+        return (
+          <View
+            key={
+              relation.id ??
+              `${relation.direction}-${relation.document.id ?? relation.document.path ?? relation.document.title}`
+            }
+            style={styles.knowledgeResultRelationItem}
+          >
+            <View style={styles.knowledgeResultRelationBadge}>
+              <Text style={styles.knowledgeResultRelationBadgeText} numberOfLines={1}>
+                {direction}
+              </Text>
+            </View>
+            <View style={styles.knowledgeResultRelationBody}>
+              <View style={styles.knowledgeResultRelationHeader}>
+                <Text style={styles.knowledgeResultRelationTitle} numberOfLines={1}>
+                  {relation.document.title}
+                </Text>
+                {!!relationLabel && (
+                  <Text style={styles.knowledgeResultRelationMeta} numberOfLines={1}>
+                    {relationLabel}
+                  </Text>
+                )}
+              </View>
+              {!!relation.document.path && (
+                <Text style={styles.knowledgeResultRelationPath} numberOfLines={1}>
+                  {relation.document.path}
+                </Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
+      {relations.length > max ? (
+        <Text style={styles.knowledgeResultMore}>
+          {t("knowledgeToolResult.moreRelations", { count: relations.length - max })}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisplay }) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -445,7 +511,10 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             {t("knowledgeToolResult.empty", "没有匹配的知识文档")}
           </Text>
         ) : (
-          <KnowledgeToolResultDocumentRows documents={display.documents} styles={s} />
+          <>
+            <KnowledgeToolResultDocumentRows documents={display.documents} styles={s} />
+            <KnowledgeToolResultRelationRows relations={display.relations} styles={s} />
+          </>
         )}
         {display.documents.length > 5 ? (
           <Text style={s.knowledgeResultMore}>
@@ -1100,6 +1169,72 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontSize: fs.xs,
       lineHeight: 17,
       color: colors.foreground,
+    },
+    knowledgeResultRelations: {
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: withOpacity(colors.muted, 0.18),
+      borderRadius: radius.sm,
+      paddingHorizontal: 9,
+      paddingVertical: 8,
+      gap: 7,
+    },
+    knowledgeResultRelationsTitle: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      fontWeight: fw.medium,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultRelationItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.card, 0.72),
+      paddingHorizontal: 8,
+      paddingVertical: 7,
+    },
+    knowledgeResultRelationBadge: {
+      maxWidth: 76,
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+    },
+    knowledgeResultRelationBadgeText: {
+      fontSize: fs.xs,
+      lineHeight: 14,
+      fontWeight: fw.medium,
+      color: colors.primary,
+    },
+    knowledgeResultRelationBody: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    knowledgeResultRelationHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    knowledgeResultRelationTitle: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: fs.xs,
+      lineHeight: 16,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    knowledgeResultRelationMeta: {
+      maxWidth: 84,
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultRelationPath: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: colors.mutedForeground,
     },
     knowledgeResultEmpty: {
       borderWidth: 0.5,

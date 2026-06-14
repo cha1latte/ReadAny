@@ -127,6 +127,10 @@
     "reason": "Raison : {{reason}}",
     "empty": "Aucun document de connaissance correspondant",
     "more": "{{count}} de plus",
+    "relations": "Chemins liés",
+    "relationOutgoing": "Lié vers",
+    "relationBacklink": "Lié depuis",
+    "moreRelations": "{{count}} relations de plus",
     "types": {
       "book_home": "Accueil du livre",
       "folder": "Dossier",

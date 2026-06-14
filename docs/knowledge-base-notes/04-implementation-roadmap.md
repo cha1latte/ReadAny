@@ -170,8 +170,9 @@ Verification:
 Status: partially implemented. Search/get/propose/create/update/tag/link
 tooling, confirmation proposals, compact summaries, proposal cards,
 vault-aware result context, prompt snapshots and exact document reads with
-outgoing-link/backlink context, and structured failure cards exist. Broader
-retrieval UX and end-to-end validation still need work.
+outgoing-link/backlink context, relation-aware desktop/mobile result cards, and
+structured failure cards exist. Broader retrieval UX and end-to-end validation
+still need work.
 
 Goal:
 

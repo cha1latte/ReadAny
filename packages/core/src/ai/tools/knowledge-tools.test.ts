@@ -1426,4 +1426,117 @@ describe("knowledge tools", () => {
       }),
     );
   });
+
+  it("runs a safe AI knowledge read-to-confirmed-link workflow", async () => {
+    const sourceFolder = doc({
+      id: "folder-source",
+      type: "folder",
+      title: "Chapter Notes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const targetFolder = doc({
+      id: "folder-target",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const source = doc({
+      id: "doc-source",
+      type: "standalone_note",
+      title: "Opening Question",
+      parentId: "folder-source",
+      contentMd: "Why does the chapter begin with a question?",
+      excerpt: "Why does the chapter begin with a question?",
+      tags: ["question"],
+    });
+    const target = doc({
+      id: "doc-target",
+      type: "standalone_note",
+      title: "Attention Theme",
+      parentId: "folder-target",
+      contentMd: "Attention is treated as a practice.",
+      excerpt: "Attention is treated as a practice.",
+      tags: ["theme"],
+    });
+    const documents = [sourceFolder, targetFolder, source, target];
+    const documentsById = new Map(documents.map((document) => [document.id, document]));
+
+    dbMocks.getKnowledgeDocument.mockImplementation(async (documentId: string) => {
+      return documentsById.get(documentId) ?? null;
+    });
+    dbMocks.getKnowledgeDocuments.mockResolvedValue(documents);
+    dbMocks.getKnowledgeLinks.mockResolvedValue([]);
+
+    const linkTool = createProposeKnowledgeLinkCreateTool();
+    const proposalResult = await linkTool.execute({
+      reasoning: "Connect the user's question note to a theme note for review",
+      fromDocumentId: "doc-source",
+      toKind: "document",
+      toId: "doc-target",
+      relation: "references",
+      label: "Supports attention theme",
+      cfi: "epubcfi(/6/4!/4/2)",
+    });
+
+    expect(dbMocks.insertKnowledgeLink).not.toHaveBeenCalled();
+    expect(proposalResult).toMatchObject({
+      success: true,
+      action: "link",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_link_create",
+      source: {
+        id: "doc-source",
+        path: "Knowledge base / Chapter Notes / Opening Question",
+      },
+      target: {
+        id: "doc-target",
+        path: "Knowledge base / Themes / Attention Theme",
+      },
+      link: {
+        fromDocumentId: "doc-source",
+        toKind: "document",
+        toId: "doc-target",
+        relation: "references",
+        label: "Supports attention theme",
+        cfi: "epubcfi(/6/4!/4/2)",
+      },
+    });
+
+    const proposal = getKnowledgeWriteProposal(proposalResult);
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected link proposal");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal);
+    expect(preview).toMatchObject({
+      action: "link",
+      currentPath: "Knowledge base / Chapter Notes / Opening Question",
+      targetPath: "Knowledge base / Themes / Attention Theme",
+      visiblePath:
+        "Knowledge base / Chapter Notes / Opening Question -> Knowledge base / Themes / Attention Theme",
+      changedFields: ["references"],
+    });
+    expect(preview.contentPreview).toContain(
+      "From: Knowledge base / Chapter Notes / Opening Question",
+    );
+    expect(preview.contentPreview).toContain("To: Knowledge base / Themes / Attention Theme");
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toMatchObject({
+      action: "link",
+      documentId: "doc-source",
+    });
+    expect(dbMocks.insertKnowledgeLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromDocumentId: "doc-source",
+        toKind: "document",
+        toId: "doc-target",
+        relation: "references",
+        label: "Supports attention theme",
+        cfi: "epubcfi(/6/4!/4/2)",
+      }),
+    );
+  });
 });

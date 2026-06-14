@@ -296,6 +296,8 @@
     "knowledgeCustomCardBodyPlaceholder": "問題：\n回答：\n來源：",
     "knowledgeCardStructuredFields": "結構化欄位",
     "knowledgeCardFieldNumberInvalid": "{{field}} 必須是有效數字。",
+    "knowledgeCardFieldRequiredMissing": "必填內容缺失。",
+    "knowledgeCardFieldMissingCount": "缺少 {{count}} 項",
     "knowledgeCustomCardFields": "欄位",
     "knowledgeCustomCardFieldsHint": "把卡片資料變成可編輯欄位，而不是只編輯原始 JSON。",
     "knowledgeCustomCardAddField": "新增",

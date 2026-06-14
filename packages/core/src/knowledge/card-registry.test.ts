@@ -12,6 +12,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   getVisibleReadAnyCardTemplateFields,
   isReadAnyCardTemplateFieldVisible,
+  isReadAnyCardTemplateRequiredValueMissing,
   normalizeReadAnyCardAttrs,
   normalizeReadAnyCardTemplateFields,
   parseReadAnyCardDataFromEditor,
@@ -725,6 +726,51 @@ describe("ReadAny card registry", () => {
     expect(fallbackMarkdown).toContain("> - Term: Missing required value");
     expect(fallbackMarkdown).toContain("> - Reviewed: Missing required value");
     expect(fallbackMarkdown).not.toContain("Private note");
+  });
+
+  it("detects missing required custom card values without treating falsey values as empty", () => {
+    expect(
+      isReadAnyCardTemplateRequiredValueMissing(
+        { key: "term", label: "Term", type: "text", required: true },
+        "  ",
+      ),
+    ).toBe(true);
+    expect(
+      isReadAnyCardTemplateRequiredValueMissing(
+        { key: "confidence", label: "Confidence", type: "number", required: true },
+        0,
+      ),
+    ).toBe(false);
+    expect(
+      isReadAnyCardTemplateRequiredValueMissing(
+        { key: "reviewed", label: "Reviewed", type: "checkbox", required: true },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      isReadAnyCardTemplateRequiredValueMissing(
+        {
+          key: "priority",
+          label: "Priority",
+          type: "select",
+          required: true,
+          options: [{ label: "High", value: "high" }],
+        },
+        "",
+      ),
+    ).toBe(true);
+    expect(
+      isReadAnyCardTemplateRequiredValueMissing(
+        {
+          key: "themes",
+          label: "Themes",
+          type: "multiselect",
+          required: true,
+          options: [{ label: "Attention", value: "attention" }],
+        },
+        [],
+      ),
+    ).toBe(true);
   });
 
   it("updates custom card templates without changing their stable card type", () => {

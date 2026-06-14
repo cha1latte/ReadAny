@@ -28,6 +28,8 @@ async function buildKnowledgeEditor() {
       createReadAnyCardTiptapContent,
       formatReadAnyCardDataForEditor,
       getReadAnyCardTemplateFields,
+      getVisibleReadAnyCardTemplateFields,
+      isReadAnyCardTemplateRequiredValueMissing,
       parseReadAnyCardDataFromEditor,
     } from "@readany/core/knowledge";
 
@@ -68,6 +70,8 @@ async function buildKnowledgeEditor() {
     const getCardDataRecord = (value) =>
       value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
     const getFieldInputValue = (value) => (value === undefined || value === null ? "" : String(value));
+    const getFieldSelectedValues = (value) =>
+      Array.isArray(value) ? value.map(String) : typeof value === "string" && value ? [value] : [];
 
     const setTheme = (theme = {}) => {
       const root = document.documentElement;
@@ -365,7 +369,9 @@ async function buildKnowledgeEditor() {
           const renderStructuredFields = (model) => {
             structuredFields.textContent = "";
             const template = findCardTemplate(model.cardType);
-            const fields = template ? getReadAnyCardTemplateFields(template) : [];
+            const currentData = getCardDataRecord(model.attrs?.data);
+            const allFields = template ? getReadAnyCardTemplateFields(template) : [];
+            const fields = template ? getVisibleReadAnyCardTemplateFields(template, currentData) : [];
             if (fields.length === 0) {
               structuredFields.style.display = "none";
               return;
@@ -377,20 +383,54 @@ async function buildKnowledgeEditor() {
             heading.textContent = "Structured fields";
             const count = document.createElement("span");
             count.className = "readany-card-structured-count";
-            count.textContent = String(fields.length);
+            count.textContent = allFields.length === fields.length ? String(fields.length) : fields.length + "/" + allFields.length;
             heading.appendChild(count);
+            const missingCount = fields.filter((field) =>
+              isReadAnyCardTemplateRequiredValueMissing(field, currentData[field.key]),
+            ).length;
+            if (missingCount > 0) {
+              const missing = document.createElement("span");
+              missing.className = "readany-card-structured-missing-count";
+              missing.textContent = missingCount + " missing";
+              heading.appendChild(missing);
+            }
             structuredFields.appendChild(heading);
 
             const grid = document.createElement("div");
             grid.className = "readany-card-structured-grid";
-            const currentData = getCardDataRecord(model.attrs?.data);
             fields.forEach((field) => {
+              const currentValue = currentData[field.key];
+              const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(field, currentValue);
+              const applyMissingState = (element) => {
+                element.classList.toggle("readany-card-field-missing", isRequiredMissing);
+                if (isRequiredMissing) {
+                  element.setAttribute("data-readany-card-field-state", "missing");
+                } else {
+                  element.removeAttribute("data-readany-card-field-state");
+                }
+              };
+              const appendRequiredMarker = (element) => {
+                if (!field.required) return;
+                const marker = document.createElement("span");
+                marker.className = "readany-card-field-required-marker";
+                marker.textContent = " *";
+                element.appendChild(marker);
+              };
+              const appendMissingHint = (element) => {
+                if (!isRequiredMissing) return;
+                const hint = document.createElement("span");
+                hint.className = "readany-card-field-missing-hint";
+                hint.textContent = "Required value missing.";
+                element.appendChild(hint);
+              };
               if (field.type === "checkbox") {
                 const label = document.createElement("label");
                 label.className = "readany-card-structured-checkbox";
+                applyMissingState(label);
                 const input = document.createElement("input");
                 input.type = "checkbox";
-                input.checked = currentData[field.key] === true;
+                input.checked = currentValue === true;
+                if (isRequiredMissing) input.setAttribute("aria-invalid", "true");
                 input.disabled = editor?.isEditable === false;
                 input.addEventListener("change", () => {
                   if (!editor?.isEditable) return;
@@ -399,38 +439,89 @@ async function buildKnowledgeEditor() {
                 label.appendChild(input);
                 const text = document.createElement("span");
                 text.textContent = field.label;
+                appendRequiredMarker(text);
                 label.appendChild(text);
+                appendMissingHint(label);
                 grid.appendChild(label);
                 return;
               }
 
               const label = document.createElement("label");
               label.className = "readany-card-field-label";
+              applyMissingState(label);
               const caption = document.createElement("span");
               caption.textContent = field.label;
+              appendRequiredMarker(caption);
               label.appendChild(caption);
 
               if (field.type === "multiline") {
                 const textarea = document.createElement("textarea");
                 textarea.className = "readany-card-data readany-card-structured-textarea";
-                textarea.value = getFieldInputValue(currentData[field.key]);
+                textarea.value = getFieldInputValue(currentValue);
                 textarea.placeholder = field.placeholder || "";
                 textarea.rows = 3;
                 textarea.readOnly = editor?.isEditable === false;
                 textarea.tabIndex = editor?.isEditable === false ? -1 : 0;
+                if (isRequiredMissing) textarea.setAttribute("aria-invalid", "true");
                 textarea.addEventListener("blur", () => {
                   if (!editor?.isEditable) return;
                   updateStructuredData(field.key, textarea.value);
                 });
                 label.appendChild(textarea);
+              } else if (field.type === "select") {
+                const select = document.createElement("select");
+                select.className = "readany-card-field readany-card-select";
+                select.value = getFieldInputValue(currentValue);
+                select.disabled = editor?.isEditable === false;
+                select.tabIndex = editor?.isEditable === false ? -1 : 0;
+                if (isRequiredMissing) select.setAttribute("aria-invalid", "true");
+                const emptyOption = document.createElement("option");
+                emptyOption.value = "";
+                emptyOption.textContent = field.placeholder || "Choose...";
+                select.appendChild(emptyOption);
+                for (const option of field.options || []) {
+                  const optionElement = document.createElement("option");
+                  optionElement.value = option.value;
+                  optionElement.textContent = option.label;
+                  select.appendChild(optionElement);
+                }
+                select.addEventListener("change", () => {
+                  if (!editor?.isEditable) return;
+                  updateStructuredData(field.key, select.value || null);
+                });
+                label.appendChild(select);
+              } else if (field.type === "multiselect") {
+                const selectedValues = getFieldSelectedValues(currentValue);
+                const choices = document.createElement("div");
+                choices.className = "readany-card-multiselect";
+                if (isRequiredMissing) choices.setAttribute("aria-invalid", "true");
+                for (const option of field.options || []) {
+                  const button = document.createElement("button");
+                  button.type = "button";
+                  button.className = "readany-card-choice";
+                  const isSelected = selectedValues.includes(option.value);
+                  button.classList.toggle("readany-card-choice-selected", isSelected);
+                  button.textContent = option.label;
+                  button.disabled = editor?.isEditable === false;
+                  button.addEventListener("click", () => {
+                    if (!editor?.isEditable) return;
+                    const nextValues = isSelected
+                      ? selectedValues.filter((value) => value !== option.value)
+                      : [...selectedValues, option.value];
+                    updateStructuredData(field.key, nextValues);
+                  });
+                  choices.appendChild(button);
+                }
+                label.appendChild(choices);
               } else {
                 const input = document.createElement("input");
                 input.className = "readany-card-field";
                 input.type = field.type === "number" ? "number" : "text";
-                input.value = getFieldInputValue(currentData[field.key]);
+                input.value = getFieldInputValue(currentValue);
                 input.placeholder = field.placeholder || "";
                 input.readOnly = editor?.isEditable === false;
                 input.tabIndex = editor?.isEditable === false ? -1 : 0;
+                if (isRequiredMissing) input.setAttribute("aria-invalid", "true");
                 input.addEventListener("blur", () => {
                   if (!editor?.isEditable) return;
                   if (field.type === "number") {
@@ -454,6 +545,7 @@ async function buildKnowledgeEditor() {
                 });
                 label.appendChild(input);
               }
+              appendMissingHint(label);
               grid.appendChild(label);
             });
             structuredFields.appendChild(grid);

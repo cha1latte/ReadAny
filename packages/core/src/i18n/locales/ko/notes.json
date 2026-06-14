@@ -296,6 +296,8 @@
     "knowledgeCustomCardBodyPlaceholder": "질문:\n답변:\n출처:",
     "knowledgeCardStructuredFields": "구조화 필드",
     "knowledgeCardFieldNumberInvalid": "{{field}}은(는) 유효한 숫자여야 합니다.",
+    "knowledgeCardFieldRequiredMissing": "필수 값이 비어 있습니다.",
+    "knowledgeCardFieldMissingCount": "{{count}}개 누락",
     "knowledgeCustomCardFields": "필드",
     "knowledgeCustomCardFieldsHint": "카드 데이터를 원시 JSON 대신 편집 가능한 필드로 바꿉니다.",
     "knowledgeCustomCardAddField": "추가",

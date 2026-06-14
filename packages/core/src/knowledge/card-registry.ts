@@ -1269,6 +1269,13 @@ function formatStructuredFieldValue(
   }
 }
 
+export function isReadAnyCardTemplateRequiredValueMissing(
+  field: ReadAnyCardTemplateField,
+  value: unknown,
+): boolean {
+  return field.required === true && formatStructuredFieldValue(field, value) === undefined;
+}
+
 function createStructuredFieldValues(
   attrs: ReadAnyCardAttrs,
   template: KnowledgeCardTemplate | undefined,
@@ -1279,7 +1286,7 @@ function createStructuredFieldValues(
     .map((field) => {
       const value = formatStructuredFieldValue(field, data[field.key]);
       if (value) return { key: field.key, label: field.label, value };
-      if (field.required) {
+      if (isReadAnyCardTemplateRequiredValueMissing(field, data[field.key])) {
         return {
           key: field.key,
           label: field.label,

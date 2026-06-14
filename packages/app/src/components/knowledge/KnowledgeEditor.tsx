@@ -25,6 +25,7 @@ import {
   getReadAnyCardTemplateInsertLabel,
   getVisibleReadAnyCardTemplateFields,
   hasKnowledgeEditorFeature,
+  isReadAnyCardTemplateRequiredValueMissing,
   normalizeReadAnyCardTemplateFields,
   normalizeTiptapDocument,
   parseReadAnyCardDataFromEditor,
@@ -2741,6 +2742,9 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const cardFields = cardTemplate
     ? getVisibleReadAnyCardTemplateFields(cardTemplate, structuredData)
     : [];
+  const missingRequiredFieldCount = cardFields.filter((field) =>
+    isReadAnyCardTemplateRequiredValueMissing(field, structuredData[field.key]),
+  ).length;
   const isFallbackCard = readOnlyModel.state === "unsupported";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
@@ -2789,6 +2793,9 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
     setDataInput(formatReadAnyCardDataForEditor(nextData));
     updateAttributes({ data: nextData });
   };
+  const missingRequiredFieldText = t("notes.knowledgeCardFieldRequiredMissing", {
+    defaultValue: "Required value missing.",
+  });
   const updateNumberField = (field: ReadAnyCardTemplateField, rawValue: string) => {
     const trimmedValue = rawValue.trim();
     if (!trimmedValue) {
@@ -3026,19 +3033,45 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                         ? cardFields.length
                         : `${cardFields.length}/${allCardFields.length}`}
                     </span>
+                    {missingRequiredFieldCount > 0 ? (
+                      <span className="rounded-sm bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                        {t("notes.knowledgeCardFieldMissingCount", {
+                          count: missingRequiredFieldCount,
+                          defaultValue: "{{count}} missing",
+                        })}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {cardFields.map((field) => {
                       const currentValue = structuredData[field.key];
+                      const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(
+                        field,
+                        currentValue,
+                      );
+                      const missingHint = isRequiredMissing ? (
+                        <span className="mt-1 block text-[10px] leading-4 text-destructive">
+                          {missingRequiredFieldText}
+                        </span>
+                      ) : null;
                       if (field.type === "checkbox") {
                         return (
                           <label
                             key={field.key}
-                            className="flex min-h-9 items-start gap-2 rounded-md border border-border/45 bg-muted/20 px-2.5 py-2"
+                            className={cn(
+                              "flex min-h-9 items-start gap-2 rounded-md border px-2.5 py-2",
+                              isRequiredMissing
+                                ? "border-destructive/45 bg-destructive/5"
+                                : "border-border/45 bg-muted/20",
+                            )}
+                            data-readany-card-field-state={
+                              isRequiredMissing ? "missing" : undefined
+                            }
                           >
                             <input
                               type="checkbox"
                               defaultChecked={currentValue === true}
+                              aria-invalid={isRequiredMissing || undefined}
                               onChange={(event) =>
                                 updateStructuredData(field.key, event.currentTarget.checked)
                               }
@@ -3058,6 +3091,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                                   {field.helpText}
                                 </span>
                               ) : null}
+                              {missingHint}
                             </span>
                           </label>
                         );
@@ -3085,10 +3119,20 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               }
                               readOnly={!isEditable}
                               rows={3}
-                              className="min-h-20 w-full resize-y rounded-md border border-border/55 bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                              aria-invalid={isRequiredMissing || undefined}
+                              data-readany-card-field-state={
+                                isRequiredMissing ? "missing" : undefined
+                              }
+                              className={cn(
+                                "min-h-20 w-full resize-y rounded-md border bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/60",
+                                isRequiredMissing
+                                  ? "border-destructive/50 focus:border-destructive/70"
+                                  : "border-border/55 focus:border-primary/45",
+                              )}
                               placeholder={field.placeholder}
                             />
                             {helpText}
+                            {missingHint}
                           </label>
                         );
                       }
@@ -3103,7 +3147,16 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                                 updateStructuredData(field.key, event.currentTarget.value || null)
                               }
                               disabled={!isEditable}
-                              className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45 disabled:opacity-70"
+                              aria-invalid={isRequiredMissing || undefined}
+                              data-readany-card-field-state={
+                                isRequiredMissing ? "missing" : undefined
+                              }
+                              className={cn(
+                                "h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground outline-none disabled:opacity-70",
+                                isRequiredMissing
+                                  ? "border-destructive/50 focus:border-destructive/70"
+                                  : "border-border/55 focus:border-primary/45",
+                              )}
                             >
                               <option value="">
                                 {field.placeholder ||
@@ -3118,6 +3171,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               ))}
                             </select>
                             {helpText}
+                            {missingHint}
                           </label>
                         );
                       }
@@ -3127,7 +3181,15 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                         return (
                           <div key={field.key} className="space-y-1 sm:col-span-2">
                             {label}
-                            <div className="flex flex-wrap gap-1 rounded-md border border-border/55 bg-background p-1">
+                            <div
+                              className={cn(
+                                "flex flex-wrap gap-1 rounded-md border bg-background p-1",
+                                isRequiredMissing ? "border-destructive/50" : "border-border/55",
+                              )}
+                              data-readany-card-field-state={
+                                isRequiredMissing ? "missing" : undefined
+                              }
+                            >
                               {(field.options ?? []).map((option) => {
                                 const isSelected = selectedValues.includes(option.value);
                                 return (
@@ -3154,6 +3216,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               })}
                             </div>
                             {helpText}
+                            {missingHint}
                           </div>
                         );
                       }
@@ -3170,10 +3233,20 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                                 : updateStructuredData(field.key, event.currentTarget.value)
                             }
                             readOnly={!isEditable}
-                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                            aria-invalid={isRequiredMissing || undefined}
+                            data-readany-card-field-state={
+                              isRequiredMissing ? "missing" : undefined
+                            }
+                            className={cn(
+                              "h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60",
+                              isRequiredMissing
+                                ? "border-destructive/50 focus:border-destructive/70"
+                                : "border-border/55 focus:border-primary/45",
+                            )}
                             placeholder={field.placeholder}
                           />
                           {helpText}
+                          {missingHint}
                         </label>
                       );
                     })}

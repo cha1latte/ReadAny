@@ -296,6 +296,8 @@
     "knowledgeCustomCardBodyPlaceholder": "Question :\nRéponse :\nSource :",
     "knowledgeCardStructuredFields": "Champs structurés",
     "knowledgeCardFieldNumberInvalid": "{{field}} doit être un nombre valide.",
+    "knowledgeCardFieldRequiredMissing": "Valeur obligatoire manquante.",
+    "knowledgeCardFieldMissingCount": "{{count}} manquant(s)",
     "knowledgeCustomCardFields": "Champs",
     "knowledgeCustomCardFieldsHint": "Transforme les données de carte en champs modifiables au lieu de JSON brut.",
     "knowledgeCustomCardAddField": "Ajouter",

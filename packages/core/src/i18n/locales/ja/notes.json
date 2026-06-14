@@ -296,6 +296,8 @@
     "knowledgeCustomCardBodyPlaceholder": "質問：\n回答：\n出典：",
     "knowledgeCardStructuredFields": "構造化フィールド",
     "knowledgeCardFieldNumberInvalid": "{{field}} は有効な数値である必要があります。",
+    "knowledgeCardFieldRequiredMissing": "必須値が未入力です。",
+    "knowledgeCardFieldMissingCount": "{{count}} 件未入力",
     "knowledgeCustomCardFields": "フィールド",
     "knowledgeCustomCardFieldsHint": "カードデータを生の JSON ではなく編集可能なフィールドにします。",
     "knowledgeCustomCardAddField": "追加",

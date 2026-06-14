@@ -142,6 +142,7 @@ export {
   getReadAnyCardTemplateInsertLabel,
   getVisibleReadAnyCardTemplateFields,
   isReadAnyCardTemplateFieldVisible,
+  isReadAnyCardTemplateRequiredValueMissing,
   normalizeReadAnyCardTemplateFields,
   normalizeReadAnyCardAttrs,
   parseReadAnyCardDataFromEditor,

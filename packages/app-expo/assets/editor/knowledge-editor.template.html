@@ -479,6 +479,17 @@
         text-align: center;
       }
 
+      .readany-card-structured-missing-count {
+        min-width: 18px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--destructive) 12%, transparent);
+        color: var(--destructive);
+        font-size: 10px;
+        line-height: 18px;
+        padding: 0 6px;
+        text-align: center;
+      }
+
       .readany-card-structured-grid {
         display: grid;
         gap: 8px;
@@ -498,6 +509,11 @@
         padding: 0 9px;
       }
 
+      .readany-card-structured-checkbox.readany-card-field-missing {
+        border-color: color-mix(in srgb, var(--destructive) 46%, var(--border));
+        background: color-mix(in srgb, var(--destructive) 7%, transparent);
+      }
+
       .readany-card-structured-checkbox input {
         width: 16px;
         height: 16px;
@@ -514,6 +530,10 @@
         text-transform: uppercase;
       }
 
+      .readany-card-field-required-marker {
+        color: var(--primary);
+      }
+
       .readany-card-field,
       .readany-card-data {
         display: block;
@@ -525,6 +545,13 @@
         background: var(--background);
         color: var(--foreground);
         font-size: 12px;
+      }
+
+      .readany-card-field-label.readany-card-field-missing .readany-card-field,
+      .readany-card-field-label.readany-card-field-missing .readany-card-data,
+      .readany-card-field-label.readany-card-field-missing .readany-card-multiselect {
+        border-color: color-mix(in srgb, var(--destructive) 46%, var(--border));
+        background: color-mix(in srgb, var(--destructive) 5%, var(--background));
       }
 
       .readany-card-field {
@@ -541,10 +568,48 @@
         resize: vertical;
       }
 
+      .readany-card-multiselect {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 4px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--background);
+        padding: 4px;
+      }
+
+      .readany-card-choice {
+        min-height: 28px;
+        border: 0;
+        border-radius: 5px;
+        background: color-mix(in srgb, var(--muted) 44%, transparent);
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        padding: 0 8px;
+      }
+
+      .readany-card-choice-selected {
+        background: color-mix(in srgb, var(--primary) 14%, transparent);
+        color: var(--primary);
+      }
+
       .readany-card-field:focus,
       .readany-card-data:focus {
         border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
         background: color-mix(in srgb, var(--primary) 5%, var(--background));
+      }
+
+      .readany-card-field-missing-hint {
+        display: block;
+        margin-top: 4px;
+        color: var(--destructive);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0;
+        line-height: 1.35;
+        text-transform: none;
       }
 
       .readany-card-data-label {

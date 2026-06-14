@@ -34,6 +34,7 @@ async function buildKnowledgeEditor() {
     let ready = false;
     let pendingInit = null;
     let changeTimer = null;
+    let cardTemplates = [];
     let cardBodyPlaceholder = "Write inside this card...";
     let cardConvertToTextLabel = "Convert card to normal text";
     let imageUnavailableTitle = "Image attachment is not available on this device yet.";
@@ -51,6 +52,13 @@ async function buildKnowledgeEditor() {
 
     const isDoc = (value) => value && typeof value === "object" && value.type === "doc";
     const normalizeDoc = (value) => (isDoc(value) ? value : EMPTY_DOC);
+    const setCardTemplates = (value) => {
+      cardTemplates = Array.isArray(value)
+        ? value.filter((template) => template && typeof template === "object" && !template.builtIn)
+        : [];
+    };
+    const createCardModel = (attrs = {}) =>
+      createReadAnyCardReadOnlyModel(attrs, { body: "", cardTemplates });
 
     const setTheme = (theme = {}) => {
       const root = document.documentElement;
@@ -174,7 +182,7 @@ async function buildKnowledgeEditor() {
     };
 
     const cardMetaText = (attrs = {}) => {
-      const model = createReadAnyCardReadOnlyModel(attrs, { body: "" });
+      const model = createCardModel(attrs);
       return [
         model.cardType,
         model.state === "supported" ? "" : model.stateLabel || "v" + model.version,
@@ -223,7 +231,8 @@ async function buildKnowledgeEditor() {
         return ({ node, getPos }) => {
           let currentNode = node;
           const attrs = currentNode.attrs || {};
-          const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, { body: "" });
+          const readOnlyModel = createCardModel(attrs);
+          const modelAttrs = readOnlyModel.attrs || attrs;
           const dom = document.createElement("div");
           dom.className = "readany-card";
           dom.contentEditable = "false";
@@ -263,7 +272,9 @@ async function buildKnowledgeEditor() {
               .focus()
               .insertContentAt(
                 { from: pos, to: pos + currentNode.nodeSize },
-                createReadAnyCardTiptapContent(currentNode.attrs || {}),
+                createReadAnyCardTiptapContent(
+                  createCardModel(currentNode.attrs || {}).attrs || currentNode.attrs || {},
+                ),
               )
               .run();
           });
@@ -273,7 +284,7 @@ async function buildKnowledgeEditor() {
           const title = document.createElement("input");
           title.className = "readany-card-title";
           title.type = "text";
-          title.value = attrs.title || "";
+          title.value = modelAttrs.title || "";
           title.placeholder = readOnlyModel.title;
           title.readOnly = editor?.isEditable === false;
           title.tabIndex = editor?.isEditable === false ? -1 : 0;
@@ -331,7 +342,7 @@ async function buildKnowledgeEditor() {
             input.className = "readany-card-field";
             input.type = "text";
             input.placeholder = placeholder;
-            input.value = currentNode.attrs?.[key] || "";
+            input.value = modelAttrs?.[key] || "";
             input.readOnly = editor?.isEditable === false;
             input.tabIndex = editor?.isEditable === false ? -1 : 0;
             input.addEventListener("blur", () => {
@@ -354,7 +365,7 @@ async function buildKnowledgeEditor() {
           dataLabel.appendChild(dataCaption);
           const dataInput = document.createElement("textarea");
           dataInput.className = "readany-card-data";
-          dataInput.value = formatReadAnyCardDataForEditor(currentNode.attrs?.data);
+          dataInput.value = formatReadAnyCardDataForEditor(modelAttrs?.data);
           dataInput.placeholder = '{"key":"value"}';
           dataInput.rows = 4;
           dataInput.readOnly = editor?.isEditable === false;
@@ -392,10 +403,11 @@ async function buildKnowledgeEditor() {
               if (nextNode.type.name !== "readanyCard") return false;
               currentNode = nextNode;
               const nextAttrs = nextNode.attrs || {};
-              const nextModel = createReadAnyCardReadOnlyModel(nextAttrs, { body: "" });
+              const nextModel = createCardModel(nextAttrs);
+              const nextModelAttrs = nextModel.attrs || nextAttrs;
               dom.dataset.cardType = nextModel.cardType;
               meta.textContent = cardMetaText(nextAttrs);
-              title.value = nextAttrs.title || "";
+              title.value = nextModelAttrs.title || "";
               title.placeholder = nextModel.title;
               title.readOnly = editor?.isEditable === false;
               title.tabIndex = editor?.isEditable === false ? -1 : 0;
@@ -416,16 +428,16 @@ async function buildKnowledgeEditor() {
                 field.setAttribute("aria-readonly", editable ? "false" : "true");
               });
               if (document.activeElement !== sourceTitleInput) {
-                sourceTitleInput.value = nextAttrs.sourceTitle || "";
+                sourceTitleInput.value = nextModelAttrs.sourceTitle || "";
               }
               if (document.activeElement !== sourceIdInput) {
-                sourceIdInput.value = nextAttrs.sourceId || "";
+                sourceIdInput.value = nextModelAttrs.sourceId || "";
               }
               if (document.activeElement !== cfiInput) {
-                cfiInput.value = nextAttrs.cfi || "";
+                cfiInput.value = nextModelAttrs.cfi || "";
               }
               if (document.activeElement !== dataInput) {
-                dataInput.value = formatReadAnyCardDataForEditor(nextAttrs.data);
+                dataInput.value = formatReadAnyCardDataForEditor(nextModelAttrs.data);
                 dataError.style.display = "none";
                 dataError.textContent = "";
               }
@@ -697,6 +709,7 @@ async function buildKnowledgeEditor() {
       const el = document.getElementById("editor");
       if (!el) throw new Error("Editor root not found");
       setTheme(payload.theme);
+      setCardTemplates(payload.cardTemplates);
       cardBodyPlaceholder =
         typeof payload.cardBodyPlaceholder === "string" && payload.cardBodyPlaceholder
           ? payload.cardBodyPlaceholder
@@ -979,8 +992,12 @@ async function buildKnowledgeEditor() {
             createEditor(message);
             break;
           case "setContent":
+            if ("cardTemplates" in message) setCardTemplates(message.cardTemplates);
             editor?.commands.setContent(normalizeDoc(message.contentJson));
             postContent();
+            break;
+          case "setCardTemplates":
+            setCardTemplates(message.cardTemplates);
             break;
           case "setTheme":
             setTheme(message.theme);

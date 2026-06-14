@@ -174,9 +174,11 @@ type EditorCommand =
       cardConvertToTextLabel?: string;
       imageUnavailableTitle?: string;
       imageUnavailableHint?: string;
+      cardTemplates?: KnowledgeCardTemplate[];
       readOnly?: boolean;
     }
-  | { type: "setContent"; contentJson: JSONValue }
+  | { type: "setContent"; contentJson: JSONValue; cardTemplates?: KnowledgeCardTemplate[] }
+  | { type: "setCardTemplates"; cardTemplates: KnowledgeCardTemplate[] }
   | { type: "focus"; position?: "start" | "end" }
   | { type: "blur" }
   | { type: "setEditable"; editable: boolean }
@@ -586,13 +588,19 @@ export function MobileKnowledgeEditor({
         "notes.knowledgeAttachmentUnavailableHint",
         "重新同步，或让原设备保持在线后再试。",
       ),
+      cardTemplates,
       readOnly,
       theme,
     });
     if (autoFocus && !readOnly) {
       injectCommand({ type: "focus", position: "end" });
     }
-  }, [autoFocus, injectCommand, placeholder, readOnly, t, theme]);
+  }, [autoFocus, cardTemplates, injectCommand, placeholder, readOnly, t, theme]);
+
+  useEffect(() => {
+    if (!isBridgeReady || !isEditorReady) return;
+    injectCommand({ type: "setCardTemplates", cardTemplates });
+  }, [cardTemplates, injectCommand, isBridgeReady, isEditorReady]);
 
   useEffect(() => {
     if (!isBridgeReady) return;
@@ -617,8 +625,19 @@ export function MobileKnowledgeEditor({
     if (!isBridgeReady || !isEditorReady) return;
     if (valueFingerprint === localFingerprintRef.current) return;
     localFingerprintRef.current = valueFingerprint;
-    injectCommand({ type: "setContent", contentJson: normalizedValue.contentJson });
-  }, [injectCommand, isBridgeReady, isEditorReady, normalizedValue.contentJson, valueFingerprint]);
+    injectCommand({
+      type: "setContent",
+      contentJson: normalizedValue.contentJson,
+      cardTemplates,
+    });
+  }, [
+    cardTemplates,
+    injectCommand,
+    isBridgeReady,
+    isEditorReady,
+    normalizedValue.contentJson,
+    valueFingerprint,
+  ]);
 
   useEffect(() => {
     if (!outlineTarget || !isBridgeReady || !isEditorReady || useMarkdownFallback) return;

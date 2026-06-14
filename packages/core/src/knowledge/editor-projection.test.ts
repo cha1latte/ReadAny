@@ -418,6 +418,78 @@ describe("editor projection", () => {
     expect((content.content[1] as { attrs: { version: number } }).attrs.version).toBe(1);
   });
 
+  it("projects migrated custom card templates to Markdown and read-only HTML", () => {
+    const migrations: JSONValue[] = [
+      {
+        fromVersion: 1,
+        toVersion: 2,
+        dataRenames: {
+          summary: "body.abstract",
+        },
+        dataDefaults: {
+          body: {
+            format: "markdown",
+          },
+        },
+      },
+    ];
+    const cardTemplates = [
+      {
+        id: "template-concept",
+        name: "Concept",
+        version: 2,
+        schemaJson: {
+          cardType: "custom:template-concept",
+          title: "Concept",
+          markdown: "Definition:\nEvidence:",
+          attrs: {
+            data: {
+              schema: "concept-v2",
+            },
+          },
+          migrations,
+        },
+        builtIn: false,
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-concept",
+            version: 1,
+            title: "Attention",
+            markdown: "User body",
+            data: {
+              summary: "Ritual attention",
+            },
+          },
+        },
+      ],
+    };
+
+    const markdown = renderKnowledgeJsonToMarkdown(content as unknown as JSONValue, {
+      cardTemplates,
+      includeReadAnyCardMetadata: true,
+    });
+    const html = renderKnowledgeJsonToReadOnlyHtml(content as unknown as JSONValue, {
+      cardTemplates,
+    });
+
+    expect(markdown).toContain('version="2"');
+    expect(markdown).toContain("User body");
+    expect(markdown).toContain(encodeURIComponent('"abstract":"Ritual attention"'));
+    expect(html).toContain('data-readany-card-version="2"');
+    expect(html).toContain('data-readany-card-state="custom"');
+    expect(html).toContain("Attention");
+    expect(html).toContain("User body");
+  });
+
   it("converts ReadAny cards into normal editable Tiptap content", () => {
     expect(
       createReadAnyCardTiptapContent({

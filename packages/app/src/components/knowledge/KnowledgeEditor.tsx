@@ -167,6 +167,12 @@ const ReadAnyCardExtension = Node.create({
   atom: true,
   draggable: true,
 
+  addStorage() {
+    return {
+      cardTemplates: [] as KnowledgeCardTemplate[],
+    };
+  },
+
   addAttributes() {
     return {
       cardType: { default: "callout" },
@@ -620,6 +626,15 @@ export function KnowledgeEditor({
     },
     immediatelyRender: false,
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage as unknown as Record<string, unknown>;
+    const readAnyCardStorage =
+      (storage.readanyCard as { cardTemplates?: KnowledgeCardTemplate[] } | undefined) ?? {};
+    readAnyCardStorage.cardTemplates = cardTemplates;
+    storage.readanyCard = readAnyCardStorage;
+  }, [cardTemplates, editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -1927,15 +1942,24 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
   const isEditable = editor.isEditable;
-  const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, { body: "" });
+  const storage = editor.storage as unknown as Record<string, unknown>;
+  const cardTemplates =
+    (storage.readanyCard as { cardTemplates?: KnowledgeCardTemplate[] } | undefined)
+      ?.cardTemplates ?? [];
+  const readOnlyModel = createReadAnyCardReadOnlyModel(attrs, {
+    body: "",
+    cardTemplates,
+  });
+  const modelAttrs = readOnlyModel.attrs;
   const { cardType, version, isFutureVersion, isCustomCard } = readOnlyModel;
   const isFallbackCard = readOnlyModel.state === "unsupported";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
-  const title = attrs.title || "";
+  const title = modelAttrs.title || "";
   const body = readOnlyModel.body;
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [dataInput, setDataInput] = useState(() => formatReadAnyCardDataForEditor(attrs.data));
+  const formattedDataInput = formatReadAnyCardDataForEditor(modelAttrs.data);
+  const [dataInput, setDataInput] = useState(() => formattedDataInput);
   const [dataError, setDataError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const resizeBody = useCallback((element = bodyRef.current) => {
@@ -1950,9 +1974,9 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   }, [body, resizeBody]);
 
   useEffect(() => {
-    setDataInput(formatReadAnyCardDataForEditor(attrs.data));
+    setDataInput(formattedDataInput);
     setDataError(null);
-  }, [attrs.data]);
+  }, [formattedDataInput]);
 
   const updateTitle = (nextTitle: string) => {
     if (!isEditable) return;
@@ -1986,7 +2010,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
       .focus()
       .insertContentAt(
         { from: position, to: position + node.nodeSize },
-        createReadAnyCardTiptapContent(attrs),
+        createReadAnyCardTiptapContent(modelAttrs),
       )
       .run();
   };
@@ -2138,7 +2162,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                     {t("notes.knowledgeCardSourceTitle", { defaultValue: "Source title" })}
                   </span>
                   <input
-                    defaultValue={attrs.sourceTitle || ""}
+                    defaultValue={modelAttrs.sourceTitle || ""}
                     onBlur={(event) => updateTextAttr("sourceTitle", event.currentTarget.value)}
                     readOnly={!isEditable}
                     className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
@@ -2152,7 +2176,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                     {t("notes.knowledgeCardSourceId", { defaultValue: "Source ID" })}
                   </span>
                   <input
-                    defaultValue={attrs.sourceId || ""}
+                    defaultValue={modelAttrs.sourceId || ""}
                     onBlur={(event) => updateTextAttr("sourceId", event.currentTarget.value)}
                     readOnly={!isEditable}
                     className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
@@ -2164,7 +2188,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                     CFI
                   </span>
                   <input
-                    defaultValue={attrs.cfi || ""}
+                    defaultValue={modelAttrs.cfi || ""}
                     onBlur={(event) => updateTextAttr("cfi", event.currentTarget.value)}
                     readOnly={!isEditable}
                     className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"

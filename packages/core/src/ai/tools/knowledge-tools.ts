@@ -753,8 +753,8 @@ export function createProposeKnowledgeDocumentCreateTool(): ToolDefinition {
       },
       contentMd: {
         type: "string",
-        description: "Proposed Markdown content for the document",
-        required: true,
+        description:
+          "Proposed Markdown content for the document. Omit or pass an empty string when creating a structural folder.",
       },
       type: {
         type: "string",

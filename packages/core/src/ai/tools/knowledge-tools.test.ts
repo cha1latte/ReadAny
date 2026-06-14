@@ -768,6 +768,45 @@ describe("knowledge tools", () => {
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
   });
 
+  it("creates structural folder proposals without requiring body content", async () => {
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
+
+    const tool = createProposeKnowledgeDocumentCreateTool();
+    const result = (await tool.execute({
+      reasoning: "Create a vault folder for chapter notes",
+      title: "Chapter Notes",
+      type: "folder",
+      bookId: "book-1",
+    })) as {
+      success: boolean;
+      requiresConfirmation: boolean;
+      targetPath: string;
+      draft: {
+        type: string;
+        title: string;
+        bookId?: string;
+        contentMd: string;
+        contentJson: { type: string; content?: unknown[] };
+        excerpt?: string;
+      };
+    };
+
+    expect(result).toMatchObject({
+      success: true,
+      requiresConfirmation: true,
+      targetPath: "Knowledge base / Chapter Notes",
+      draft: {
+        type: "folder",
+        title: "Chapter Notes",
+        bookId: "book-1",
+        contentMd: "",
+        contentJson: { type: "doc" },
+      },
+    });
+    expect(result.draft.excerpt).toBeUndefined();
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+  });
+
   it("rejects create drafts that would duplicate a sibling vault path", async () => {
     const folder = doc({ id: "folder-1", type: "folder", title: "Folder" });
     const existing = doc({

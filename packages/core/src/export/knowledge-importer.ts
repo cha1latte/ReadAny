@@ -133,6 +133,7 @@ function mergeKnowledgeCardTemplates(
   const templatesById = new Map<string, KnowledgeCardTemplate>();
   for (const source of sources) {
     for (const template of source ?? []) {
+      if (templatesById.has(template.id)) continue;
       templatesById.set(template.id, template);
     }
   }

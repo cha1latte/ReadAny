@@ -925,6 +925,19 @@ Home note.
       ...readingPromptTemplate,
       enabled: false,
     };
+    const staleLocalTemplate: KnowledgeCardTemplate = {
+      ...readingPromptTemplate,
+      version: 1,
+      schemaJson: {
+        cardType: "custom:template-reading-question",
+        title: "Stale Local Prompt",
+        markdown: "Old prompt:",
+        attrs: {
+          data: { kind: "stale-local" },
+        },
+      },
+      updatedAt: 1,
+    };
     const vault = exporter.buildVaultPackage(
       {
         documents: [knowledgeDocument({ bookId: undefined, sourceKind: undefined })],
@@ -955,6 +968,7 @@ Home note.
     const plan = createKnowledgeVaultImportPlan({
       manifest: vault.manifest,
       files: [{ path: documentFile.path, content: editedContent }],
+      cardTemplates: [staleLocalTemplate],
     });
 
     expect(plan.modified[0]?.draft?.draft.contentJson).toMatchObject({

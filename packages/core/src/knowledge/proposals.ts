@@ -232,6 +232,10 @@ function createInvalidCreateError(reason: string): Error {
   return new Error(`Invalid knowledge document create: ${reason}`);
 }
 
+function createInvalidUpdateError(reason: string): Error {
+  return new Error(`Invalid knowledge document update: ${reason}`);
+}
+
 function createInvalidLinkError(reason: string): Error {
   return new Error(`Invalid knowledge link: ${reason}`);
 }
@@ -310,6 +314,12 @@ async function getValidatedUpdateDocument(
 ): Promise<KnowledgeDocument> {
   const document = await getKnowledgeDocument(proposal.documentId);
   if (!document) throw createInvalidParentError("missing_document");
+  if (
+    typeof proposal.current?.updatedAt === "number" &&
+    proposal.current.updatedAt !== document.updatedAt
+  ) {
+    throw createInvalidUpdateError("stale_document");
+  }
 
   const hasParentPatch = Object.prototype.hasOwnProperty.call(proposal.patch, "parentId");
   const hasTitlePatch = Object.prototype.hasOwnProperty.call(proposal.patch, "title");

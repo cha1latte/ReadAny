@@ -462,6 +462,10 @@ describe("knowledge write proposals", () => {
       requiresConfirmation: true,
       confirmationKind: "knowledge_document_update",
       documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        updatedAt: 2000,
+      },
       patch: {
         parentId: "folder-1",
         title: "Updated",
@@ -497,6 +501,35 @@ describe("knowledge write proposals", () => {
       visiblePath: "Knowledge base / Folder / Updated",
       hasPathChange: false,
     });
+  });
+
+  it("rejects stale update proposals before overwriting changed documents", async () => {
+    const proposal = getKnowledgeWriteProposal({
+      success: true,
+      action: "update",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_update",
+      documentId: "doc-1",
+      current: {
+        id: "doc-1",
+        updatedAt: 1000,
+      },
+      patch: {
+        title: "Outdated AI Patch",
+      },
+      changedFields: ["title"],
+    });
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected update proposal");
+
+    dbMocks.getKnowledgeDocument.mockResolvedValue(
+      document({ id: "doc-1", title: "User changed this", updatedAt: 2000 }),
+    );
+
+    await expect(applyKnowledgeWriteProposal(proposal)).rejects.toThrow(
+      "Invalid knowledge document update: stale_document",
+    );
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
   });
 
   it("syncs internal document links after applying create proposals", async () => {

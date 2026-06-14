@@ -768,6 +768,89 @@ describe("knowledge tools", () => {
     expect(dbMocks.getKnowledgeDocuments).toHaveBeenCalledWith({ bookId: "book-1", limit: 5000 });
   });
 
+  it("runs a safe AI knowledge create-to-confirmed-document workflow", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Reviews",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    dbMocks.getKnowledgeDocument.mockImplementation(async (documentId: string) => {
+      return documentId === "folder-1" ? folder : null;
+    });
+    dbMocks.getKnowledgeDocuments.mockResolvedValue([folder]);
+    dbMocks.createKnowledgeDocument.mockImplementation(async (draft: Partial<KnowledgeDocument>) =>
+      doc({
+        ...draft,
+        id: draft.id ?? "created-review",
+        title: draft.title ?? "AI Review Draft",
+        type: draft.type ?? "review",
+        createdAt: 3000,
+        updatedAt: 3000,
+      }),
+    );
+
+    const createTool = createProposeKnowledgeDocumentCreateTool();
+    const proposalResult = await createTool.execute({
+      reasoning: "Draft a review note, but let the user confirm saving it",
+      title: "AI Review Draft",
+      contentMd: "## Review\nThis book rewards slow rereading.",
+      type: "review",
+      bookId: "book-1",
+      parentId: "folder-1",
+      tags: "review,ai",
+    });
+
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+    expect(proposalResult).toMatchObject({
+      success: true,
+      action: "create",
+      requiresConfirmation: true,
+      confirmationKind: "knowledge_document_create",
+      targetPath: "Knowledge base / Reviews / AI Review Draft",
+      draft: {
+        title: "AI Review Draft",
+        type: "review",
+        bookId: "book-1",
+        parentId: "folder-1",
+        tags: ["review", "ai"],
+        contentMd: "## Review\nThis book rewards slow rereading.",
+      },
+    });
+
+    const proposal = getKnowledgeWriteProposal(proposalResult);
+    expect(proposal).not.toBeNull();
+    if (!proposal) throw new Error("Expected create proposal");
+    if (proposal.action !== "create") throw new Error("Expected create proposal action");
+
+    const preview = createKnowledgeWriteProposalPreview(proposal);
+    expect(preview).toMatchObject({
+      action: "create",
+      title: "AI Review Draft",
+      documentType: "review",
+      targetPath: "Knowledge base / Reviews / AI Review Draft",
+      visiblePath: "Knowledge base / Reviews / AI Review Draft",
+    });
+    expect(preview.contentPreviewHtml).toContain("This book rewards slow rereading.");
+
+    await expect(applyKnowledgeWriteProposal(proposal)).resolves.toEqual({
+      action: "create",
+      documentId: proposal.draft.id,
+    });
+    expect(dbMocks.createKnowledgeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: proposal.draft.id,
+        title: "AI Review Draft",
+        type: "review",
+        bookId: "book-1",
+        parentId: "folder-1",
+        contentMd: "## Review\nThis book rewards slow rereading.",
+      }),
+    );
+  });
+
   it("creates structural folder proposals without requiring body content", async () => {
     dbMocks.getKnowledgeDocuments.mockResolvedValue([]);
 

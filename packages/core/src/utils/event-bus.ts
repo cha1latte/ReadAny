@@ -26,6 +26,11 @@ type EventMap = {
     bookId?: string;
     timestamp: number;
   };
+  "knowledge:card-templates-changed": {
+    action: "upsert" | "disable";
+    templateId: string;
+    timestamp: number;
+  };
   "vectorize:started": { bookId: string };
   "vectorize:progress": { bookId: string; progress: number; status: string };
   "vectorize:completed": { bookId: string; chunksCount: number };

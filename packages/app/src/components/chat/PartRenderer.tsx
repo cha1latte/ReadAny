@@ -29,6 +29,7 @@ import type {
 } from "@readany/core/types/message";
 import type { KnowledgeCardTemplate } from "@readany/core/types";
 import { cn, providerRequiresApiKey } from "@readany/core/utils";
+import { eventBus } from "@readany/core/utils/event-bus";
 import {
   Brain,
   CheckCircle,
@@ -86,6 +87,11 @@ function loadKnowledgeCardTemplatesForPreview(): Promise<KnowledgeCardTemplate[]
     });
 
   return knowledgeCardTemplatesPromise;
+}
+
+function clearKnowledgeCardTemplatesForPreview(): void {
+  knowledgeCardTemplatesCache = null;
+  knowledgeCardTemplatesPromise = null;
 }
 
 function useThrottledText(text: string): string {
@@ -731,13 +737,25 @@ function KnowledgeProposalCard({
     () => knowledgeCardTemplatesCache ?? [],
   );
   useEffect(() => {
-    if (knowledgeCardTemplatesCache) return;
     let mounted = true;
-    void loadKnowledgeCardTemplatesForPreview().then((templates) => {
-      if (mounted) setCardTemplates(templates);
-    });
+    const refreshTemplates = () => {
+      void loadKnowledgeCardTemplatesForPreview().then((templates) => {
+        if (mounted) setCardTemplates(templates);
+      });
+    };
+    const invalidateTemplates = () => {
+      clearKnowledgeCardTemplatesForPreview();
+      refreshTemplates();
+    };
+
+    refreshTemplates();
+    const offTemplateChange = eventBus.on("knowledge:card-templates-changed", invalidateTemplates);
+    const offSyncCompleted = eventBus.on("sync:completed", invalidateTemplates);
+
     return () => {
       mounted = false;
+      offTemplateChange();
+      offSyncCompleted();
     };
   }, []);
   const preview = useMemo(

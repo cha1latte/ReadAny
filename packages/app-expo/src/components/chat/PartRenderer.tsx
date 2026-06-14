@@ -30,6 +30,7 @@ import type {
   ToolCallPart,
 } from "@readany/core/types/message";
 import type { KnowledgeCardTemplate } from "@readany/core/types";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -71,6 +72,11 @@ function loadKnowledgeCardTemplatesForPreview(): Promise<KnowledgeCardTemplate[]
     });
 
   return knowledgeCardTemplatesPromise;
+}
+
+function clearKnowledgeCardTemplatesForPreview(): void {
+  knowledgeCardTemplatesCache = null;
+  knowledgeCardTemplatesPromise = null;
 }
 
 function queueKnowledgeProposalSummaryMaintenance(documentId: string | undefined): void {
@@ -620,13 +626,25 @@ function KnowledgeProposalCard({
     () => knowledgeCardTemplatesCache ?? [],
   );
   useEffect(() => {
-    if (knowledgeCardTemplatesCache) return;
     let mounted = true;
-    void loadKnowledgeCardTemplatesForPreview().then((templates) => {
-      if (mounted) setCardTemplates(templates);
-    });
+    const refreshTemplates = () => {
+      void loadKnowledgeCardTemplatesForPreview().then((templates) => {
+        if (mounted) setCardTemplates(templates);
+      });
+    };
+    const invalidateTemplates = () => {
+      clearKnowledgeCardTemplatesForPreview();
+      refreshTemplates();
+    };
+
+    refreshTemplates();
+    const offTemplateChange = eventBus.on("knowledge:card-templates-changed", invalidateTemplates);
+    const offSyncCompleted = eventBus.on("sync:completed", invalidateTemplates);
+
     return () => {
       mounted = false;
+      offTemplateChange();
+      offSyncCompleted();
     };
   }, []);
   const preview = useMemo(

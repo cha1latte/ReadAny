@@ -13,6 +13,7 @@ import type {
 import type { KnowledgeSummaryCompressionState } from "../knowledge/compact-summary";
 import { EMPTY_TIPTAP_DOCUMENT } from "../types";
 import { generateId } from "../utils/generate-id";
+import { eventBus } from "../utils/event-bus";
 import {
   getDB,
   getDeviceId,
@@ -733,6 +734,12 @@ export async function upsertKnowledgeCardTemplate(template: KnowledgeCardTemplat
       deviceId,
     ],
   );
+
+  eventBus.emit("knowledge:card-templates-changed", {
+    action: "upsert",
+    templateId: template.id,
+    timestamp: Date.now(),
+  });
 }
 
 export async function disableKnowledgeCardTemplate(id: string): Promise<void> {
@@ -750,4 +757,10 @@ export async function disableKnowledgeCardTemplate(id: string): Promise<void> {
      WHERE id = ? AND built_in = 0`,
     [now, syncVersion, deviceId, trimmedId],
   );
+
+  eventBus.emit("knowledge:card-templates-changed", {
+    action: "disable",
+    templateId: trimmedId,
+    timestamp: now,
+  });
 }

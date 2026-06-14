@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KnowledgeAttachment, KnowledgeCardTemplate, KnowledgeLink } from "../../types";
+import type { EventMap } from "../../utils/event-bus";
 
 const mockExecute = vi.fn();
 const mockSelect = vi.fn();
@@ -28,6 +29,7 @@ const idMocks = vi.hoisted(() => ({
 vi.mock("../db-core", () => coreMocks);
 vi.mock("../../utils/generate-id", () => idMocks);
 
+const { eventBus } = await import("../../utils/event-bus");
 const {
   createKnowledgeDocument,
   deleteKnowledgeAttachment,
@@ -83,9 +85,11 @@ describe("knowledge-queries", () => {
     coreMocks.insertTombstone.mockResolvedValue(undefined);
     mockSelect.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
+    eventBus.clear("knowledge:card-templates-changed");
   });
 
   afterEach(() => {
+    eventBus.clear("knowledge:card-templates-changed");
     vi.restoreAllMocks();
   });
 
@@ -481,6 +485,11 @@ _Source: Chapter 1_`,
   });
 
   it("maps and upserts card templates", async () => {
+    const events: EventMap["knowledge:card-templates-changed"][] = [];
+    const unsubscribe = eventBus.on("knowledge:card-templates-changed", (event) => {
+      events.push(event);
+    });
+
     mockSelect.mockResolvedValue([
       {
         id: "card-quote",
@@ -517,9 +526,22 @@ _Source: Chapter 1_`,
     expect(sql).toContain("INSERT INTO knowledge_card_templates");
     expect(sql).toContain("ON CONFLICT(id) DO UPDATE");
     expect(params[3]).toBe('{"type":"object"}');
+    expect(events).toEqual([
+      {
+        action: "upsert",
+        templateId: "card-review",
+        timestamp: 1234,
+      },
+    ]);
+    unsubscribe();
   });
 
   it("soft-disables user card templates for sync-safe template management", async () => {
+    const events: EventMap["knowledge:card-templates-changed"][] = [];
+    const unsubscribe = eventBus.on("knowledge:card-templates-changed", (event) => {
+      events.push(event);
+    });
+
     await disableKnowledgeCardTemplate("card-review");
 
     const [sql, params] = mockExecute.mock.calls[0];
@@ -527,5 +549,13 @@ _Source: Chapter 1_`,
     expect(sql).toContain("enabled = 0");
     expect(sql).toContain("built_in = 0");
     expect(params[3]).toBe("card-review");
+    expect(events).toEqual([
+      {
+        action: "disable",
+        templateId: "card-review",
+        timestamp: 1234,
+      },
+    ]);
+    unsubscribe();
   });
 });

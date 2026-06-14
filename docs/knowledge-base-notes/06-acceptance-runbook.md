@@ -29,6 +29,12 @@ The branch is ready for final PR review when all of these are true:
 Run these before each stable commit:
 
 ```bash
+pnpm acceptance:knowledge
+```
+
+The script above runs the full automated gate. Expanded manually, it is:
+
+```bash
 pnpm --filter @readany/core exec vitest run \
   src/db/__tests__/knowledge-queries.test.ts \
   src/sync/__tests__/simple-sync.integration.test.ts \
@@ -43,11 +49,13 @@ pnpm --filter @readany/core exec vitest run \
   src/knowledge/compact-summary.test.ts \
   src/ai/__tests__/knowledge-context.test.ts \
   src/ai/__tests__/knowledge-tool-result.test.ts \
-  src/ai/tools/knowledge-tools.test.ts
+  src/ai/tools/knowledge-tools.test.ts \
+  src/export/knowledge-exporter.test.ts \
+  src/export/knowledge-importer.test.ts
 
 pnpm --filter @readany/core exec tsc --noEmit
 pnpm --filter app exec tsc --noEmit
-pnpm --filter app-expo exec tsc --noEmit
+pnpm --filter @readany/app-expo exec tsc --noEmit
 git diff --check
 ```
 

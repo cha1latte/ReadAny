@@ -204,6 +204,14 @@ function formatPromptDocumentPath(
   });
 }
 
+function formatKnowledgeLinkDetails(link: Pick<KnowledgeLink, "label" | "cfi">): string {
+  const details = [
+    link.label ? compactText(link.label) : "",
+    link.cfi ? `cfi: ${link.cfi}` : "",
+  ].filter(Boolean);
+  return details.length > 0 ? ` (${details.join("; ")})` : "";
+}
+
 function formatOutgoingKnowledgeLink(
   link: KnowledgeLink,
   documentsById: Map<string, KnowledgeDocument>,
@@ -212,7 +220,10 @@ function formatOutgoingKnowledgeLink(
   if (link.toKind === "document") {
     const target = documentsById.get(link.toId);
     if (target) {
-      return `${link.relation} -> ${formatPromptDocumentPath(target, documents)}`;
+      return `${link.relation} -> ${formatPromptDocumentPath(
+        target,
+        documents,
+      )}${formatKnowledgeLinkDetails(link)}`;
     }
   }
 
@@ -225,7 +236,10 @@ function formatKnowledgeBacklink(
   backlink: KnowledgeBacklink,
   documents: KnowledgeDocument[],
 ): string {
-  return `${backlink.link.relation} <- ${formatPromptDocumentPath(backlink.fromDocument, documents)}`;
+  return `${backlink.link.relation} <- ${formatPromptDocumentPath(
+    backlink.fromDocument,
+    documents,
+  )}${formatKnowledgeLinkDetails(backlink.link)}`;
 }
 
 async function loadKnowledgeRelationPromptContext(

@@ -506,6 +506,8 @@ describe("loadKnowledgePromptContext", () => {
               toKind: "document",
               toId: "target-1",
               relation: "related",
+              label: "Compare with",
+              cfi: "epubcfi(/6/10)",
               createdAt: 1000,
               updatedAt: 1000,
             },
@@ -522,6 +524,8 @@ describe("loadKnowledgePromptContext", () => {
                 toKind: "document",
                 toId: "source-1",
                 relation: "references",
+                label: "Earlier mention",
+                cfi: "epubcfi(/6/2)",
                 createdAt: 1000,
                 updatedAt: 1000,
               },
@@ -539,8 +543,12 @@ describe("loadKnowledgePromptContext", () => {
 
     expect(dbMocks.getKnowledgeLinks).toHaveBeenCalledWith("source-1");
     expect(dbMocks.getKnowledgeBacklinks).toHaveBeenCalledWith("source-1", 3);
-    expect(context).toContain("links: related -> Knowledge base / Themes / Related Idea");
-    expect(context).toContain("backlinks: references <- Knowledge base / Themes / Earlier Note");
+    expect(context).toContain(
+      "links: related -> Knowledge base / Themes / Related Idea (Compare with; cfi: epubcfi(/6/10))",
+    );
+    expect(context).toContain(
+      "backlinks: references <- Knowledge base / Themes / Earlier Note (Earlier mention; cfi: epubcfi(/6/2))",
+    );
   });
 
   it("does not query when no current book is attached", async () => {

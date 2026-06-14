@@ -987,6 +987,74 @@ describe("knowledge tools", () => {
     });
   });
 
+  it("keeps every AI write tool proposal-only until the user confirms", async () => {
+    const folder = doc({
+      id: "folder-1",
+      type: "folder",
+      title: "Themes",
+      contentMd: "",
+      excerpt: undefined,
+      tags: [],
+    });
+    const note = doc({
+      id: "doc-1",
+      type: "standalone_note",
+      title: "Source Note",
+      parentId: "folder-1",
+      tags: ["reading"],
+    });
+    const related = doc({
+      id: "doc-2",
+      type: "standalone_note",
+      title: "Related Note",
+      parentId: "folder-1",
+      tags: [],
+    });
+    const documents = [folder, note, related];
+    const documentsById = new Map(documents.map((document) => [document.id, document]));
+    dbMocks.getKnowledgeDocument.mockImplementation(async (documentId: string) => {
+      return documentsById.get(documentId) ?? null;
+    });
+    dbMocks.getKnowledgeDocuments.mockResolvedValue(documents);
+
+    const createResult = await createProposeKnowledgeDocumentCreateTool().execute({
+      reasoning: "Draft a summary",
+      title: "New Summary",
+      contentMd: "A proposed note body.",
+      type: "summary",
+      bookId: "book-1",
+      parentId: "folder-1",
+    });
+    const updateResult = await createProposeKnowledgeDocumentUpdateTool().execute({
+      reasoning: "Draft an update",
+      documentId: "doc-1",
+      contentMd: "Updated proposed body.",
+    });
+    const tagsResult = await createProposeKnowledgeDocumentTagsUpdateTool().execute({
+      reasoning: "Draft tag organization",
+      documentId: "doc-1",
+      mode: "add",
+      tags: "memory",
+    });
+    const linkResult = await createProposeKnowledgeLinkCreateTool().execute({
+      reasoning: "Draft a relation",
+      fromDocumentId: "doc-1",
+      toKind: "document",
+      toId: "doc-2",
+      relation: "related",
+    });
+
+    for (const result of [createResult, updateResult, tagsResult, linkResult]) {
+      expect(result).toMatchObject({
+        success: true,
+        requiresConfirmation: true,
+      });
+    }
+    expect(dbMocks.createKnowledgeDocument).not.toHaveBeenCalled();
+    expect(dbMocks.updateKnowledgeDocument).not.toHaveBeenCalled();
+    expect(dbMocks.insertKnowledgeLink).not.toHaveBeenCalled();
+  });
+
   it("runs a safe AI knowledge read-to-confirmed-update workflow", async () => {
     const folder = doc({
       id: "folder-1",

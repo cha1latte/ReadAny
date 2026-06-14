@@ -461,6 +461,21 @@ export async function updateKnowledgeDocument(
   const database = await getDB();
   const sets: string[] = [];
   const values: unknown[] = [];
+  const summarySourceFields: Array<keyof typeof updates> = [
+    "bookId",
+    "type",
+    "title",
+    "contentJson",
+    "contentMd",
+    "contentSchemaVersion",
+    "excerpt",
+    "tags",
+    "sourceKind",
+    "sourceId",
+  ];
+  const shouldClearSummary = summarySourceFields.some((field) =>
+    Object.prototype.hasOwnProperty.call(updates, field),
+  );
 
   const setNullable = (column: string, value: unknown) => {
     sets.push(`${column} = ?`);
@@ -508,6 +523,14 @@ export async function updateKnowledgeDocument(
   }
   if (Object.prototype.hasOwnProperty.call(updates, "deletedAt")) {
     setNullable("deleted_at", updates.deletedAt);
+  }
+  if (shouldClearSummary) {
+    sets.push(
+      "summary_md = NULL",
+      "summary_source_fingerprint = NULL",
+      "summary_source_updated_at = NULL",
+      "summary_updated_at = NULL",
+    );
   }
 
   if (sets.length === 0) return;

@@ -252,6 +252,10 @@ describe("knowledge-queries", () => {
     expect(sql).toContain("title = ?");
     expect(sql).toContain("content_json = ?");
     expect(sql).toContain("content_md = ?");
+    expect(sql).toContain("summary_md = NULL");
+    expect(sql).toContain("summary_source_fingerprint = NULL");
+    expect(sql).toContain("summary_source_updated_at = NULL");
+    expect(sql).toContain("summary_updated_at = NULL");
     expect(sql).toContain("excerpt = ?");
     expect(sql).toContain("source_kind = ?");
     expect(sql).toContain("updated_at = ?");
@@ -262,6 +266,18 @@ describe("knowledge-queries", () => {
     expect(params).toContain(2345);
     expect(params).toContain(7);
     expect(params).toContain("device-1");
+  });
+
+  it("keeps compact summary state when only moving documents", async () => {
+    await updateKnowledgeDocument("doc-1", {
+      parentId: "folder-1",
+    });
+
+    const [sql, params] = mockExecute.mock.calls[0];
+    expect(sql).toContain("parent_id = ?");
+    expect(sql).not.toContain("summary_md = NULL");
+    expect(sql).not.toContain("summary_source_fingerprint = NULL");
+    expect(params).toContain("folder-1");
   });
 
   it("updates compact summary state without writing back to legacy notes", async () => {

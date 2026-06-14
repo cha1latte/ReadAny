@@ -1053,14 +1053,14 @@ export function NotesPage() {
     }
   };
 
-  const openKnowledgeDocument = async (document: KnowledgeDocument) => {
+  const openKnowledgeDocument = async (document: KnowledgeDocument): Promise<boolean> => {
     if (document.id === knowledgeHome?.id) {
       setSelectedKnowledgeDocumentId(document.id);
       setIsKnowledgeVaultRootOpen(false);
-      return;
+      return true;
     }
     const saved = await saveActiveKnowledgeDocumentNow();
-    if (!saved) return;
+    if (!saved) return false;
 
     knowledgeSaveVersionRef.current += 1;
     const nextValue = await createResolvedKnowledgeValueFromDocument(document);
@@ -1075,15 +1075,17 @@ export function NotesPage() {
       knowledgeDocumentFingerprint(document.title, nextValue, document.tags),
     );
     setIsKnowledgeSaving(false);
+    return true;
   };
 
-  const openKnowledgeVaultRoot = async () => {
-    if (isKnowledgeVaultRootOpen) return;
+  const openKnowledgeVaultRoot = async (): Promise<boolean> => {
+    if (isKnowledgeVaultRootOpen) return true;
     const saved = await saveActiveKnowledgeDocumentNow();
-    if (!saved) return;
+    if (!saved) return false;
     setSelectedKnowledgeDocumentId(null);
     setIsKnowledgeVaultRootOpen(true);
     setKnowledgeSourceReferenceRequest(null);
+    return true;
   };
 
   const refreshSelectedKnowledgeDocuments = useCallback(
@@ -2574,8 +2576,8 @@ interface KnowledgeHomePanelProps {
   onTitleChange: (title: string) => void;
   onTagsChange: (tags: string[]) => void;
   onChange: (value: KnowledgeEditorValue) => void;
-  onOpenVaultRoot: () => void;
-  onSelectDocument: (document: KnowledgeDocument) => void;
+  onOpenVaultRoot: () => boolean | Promise<boolean>;
+  onSelectDocument: (document: KnowledgeDocument) => boolean | Promise<boolean>;
   onCreateDocument: (type?: CreatableKnowledgeDocumentType, parentId?: string) => void;
   onDeleteDocument: (document: KnowledgeDocument) => void;
   onMoveDocument: (document: KnowledgeDocument, parentId?: string | null) => void;

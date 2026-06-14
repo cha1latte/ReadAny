@@ -341,6 +341,8 @@ function verifyDesktopKnowledgeWorkspaceContract() {
     "createKnowledgeRootDisplaySections",
     "createKnowledgeFolderDisplaySections",
     "getKnowledgeDocumentOpenMode",
+    "boolean | Promise<boolean>",
+    "return false",
     "KnowledgeDocumentBreadcrumbs",
     "KnowledgePathInline",
     "KnowledgeEditor",

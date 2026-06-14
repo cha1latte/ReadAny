@@ -57,6 +57,7 @@
     "knowledgeMarkdownImportApplyFailed": "Markdown 読み込みの適用に失敗しました",
     "knowledgeMarkdownImportTitle": "Markdown をナレッジドキュメントとして読み込む",
     "knowledgeMarkdownImportDescription": "{{count}} 件の Markdown ファイルをこの本のナレッジベースに読み込みます。確認後にのみ保存されます。",
+    "knowledgeImportSource": "読み込み元 {{path}}",
     "knowledgeImportDestination": "{{path}} に読み込む",
     "knowledgeMarkdownImportWillCreate": "作成予定",
     "knowledgeMarkdownImportWarningCount": "{{count}} 件の注意",

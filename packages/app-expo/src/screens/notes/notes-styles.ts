@@ -597,6 +597,12 @@ export const makeStyles = (colors: ThemeColors) =>
       lineHeight: 15,
       color: colors.mutedForeground,
     },
+    knowledgeImportSourcePath: {
+      marginTop: 1,
+      fontSize: 10,
+      lineHeight: 14,
+      color: withOpacity(colors.mutedForeground, 0.78),
+    },
     knowledgeImportDestination: {
       marginTop: 5,
       minHeight: 18,

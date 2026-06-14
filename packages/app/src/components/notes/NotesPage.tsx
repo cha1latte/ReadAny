@@ -172,6 +172,7 @@ interface KnowledgeVaultImportReview {
 
 interface KnowledgeMarkdownImportReviewItem {
   path: string;
+  sourcePath: string;
   proposal: KnowledgeImportWriteProposal;
   warnings: string[];
 }
@@ -1913,6 +1914,7 @@ export function NotesPage() {
       });
       const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
         path: item.path,
+        sourcePath: item.path,
         proposal: {
           ...item.proposal,
           message: t("notes.knowledgeMarkdownImportProposalMessage", {
@@ -5172,6 +5174,12 @@ function KnowledgeMarkdownImportReviewCard({
                   <p className="truncate text-xs font-semibold text-foreground">{title}</p>
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
                     {desktopFileName(item.path)}
+                  </p>
+                  <p
+                    className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/80"
+                    title={item.sourcePath}
+                  >
+                    {t("notes.knowledgeImportSource", { path: item.sourcePath })}
                   </p>
                   {destinationLabel ? (
                     <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">

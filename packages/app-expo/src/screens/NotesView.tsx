@@ -155,6 +155,7 @@ const KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS = 45_000;
 
 interface KnowledgeMarkdownImportReviewItem {
   path: string;
+  sourcePath: string;
   proposal: KnowledgeImportWriteProposal;
   warnings: string[];
 }
@@ -1828,6 +1829,7 @@ export function NotesView({
       });
       const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
         path: item.path,
+        sourcePath: item.path,
         proposal: {
           ...item.proposal,
           message: t("notes.knowledgeMarkdownImportProposalMessage", {
@@ -3871,6 +3873,9 @@ function KnowledgeMarkdownImportReviewSheet({
                     </Text>
                     <Text style={styles.knowledgeImportItemPath} numberOfLines={1}>
                       {mobileFileName(item.path)}
+                    </Text>
+                    <Text style={styles.knowledgeImportSourcePath} numberOfLines={1}>
+                      {t("notes.knowledgeImportSource", { path: item.sourcePath })}
                     </Text>
                     {!!destinationLabel && (
                       <View style={styles.knowledgeImportDestination}>

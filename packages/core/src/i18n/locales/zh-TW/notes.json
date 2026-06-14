@@ -57,6 +57,7 @@
     "knowledgeMarkdownImportApplyFailed": "套用 Markdown 匯入失敗",
     "knowledgeMarkdownImportTitle": "匯入 Markdown 為知識文件",
     "knowledgeMarkdownImportDescription": "將 {{count}} 個 Markdown 檔案匯入目前書籍的知識庫，確認後才會儲存。",
+    "knowledgeImportSource": "來源 {{path}}",
     "knowledgeImportDestination": "匯入到 {{path}}",
     "knowledgeMarkdownImportWillCreate": "將建立",
     "knowledgeMarkdownImportWarningCount": "{{count}} 個提醒",

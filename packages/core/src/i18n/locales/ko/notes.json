@@ -57,6 +57,7 @@
     "knowledgeMarkdownImportApplyFailed": "Markdown 가져오기 적용 실패",
     "knowledgeMarkdownImportTitle": "Markdown을 지식 문서로 가져오기",
     "knowledgeMarkdownImportDescription": "{{count}}개 Markdown 파일을 현재 책의 지식 보관함으로 가져와요. 확인한 뒤에만 저장돼요.",
+    "knowledgeImportSource": "원본 {{path}}",
     "knowledgeImportDestination": "{{path}}에 가져오기",
     "knowledgeMarkdownImportWillCreate": "생성 예정",
     "knowledgeMarkdownImportWarningCount": "{{count}}개 알림",

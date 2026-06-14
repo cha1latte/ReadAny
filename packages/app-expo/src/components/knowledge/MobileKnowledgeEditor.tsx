@@ -40,6 +40,8 @@ import {
   type KnowledgeEditorTier,
   builtInReadAnyCards,
   clearKnowledgeEditorDraft,
+  KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
+  clampKnowledgeEditorBridgeHeight,
   createCustomReadAnyCardTemplate,
   createDefaultReadAnyCardAttrs,
   createKnowledgeEditorDraftKey,
@@ -50,6 +52,7 @@ import {
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
   hasKnowledgeEditorFeature,
+  isKnowledgeEditorBridgeJsonValue,
   isKnowledgeEditorDraftRestorable,
   knowledgeEditorDraftFingerprint,
   loadKnowledgeEditorDraft,
@@ -57,9 +60,13 @@ import {
   normalizeTiptapDocument,
   renderKnowledgeJsonToMarkdown,
   saveKnowledgeEditorDraft,
+  parseKnowledgeEditorBridgeMessage,
   updateCustomReadAnyCardTemplate,
 } from "@readany/core/knowledge";
-import type { KnowledgeEditorDraft } from "@readany/core/knowledge";
+import type {
+  KnowledgeEditorBridgeSelectionState,
+  KnowledgeEditorDraft,
+} from "@readany/core/knowledge";
 import type { JSONValue, KnowledgeCardTemplate } from "@readany/core/types";
 import { generateId } from "@readany/core/utils";
 import { Asset } from "expo-asset";
@@ -149,56 +156,12 @@ interface MobileKnowledgeEditorProps {
   onPickLocalImage?: () => Promise<MobileKnowledgeImageInsertAttrs | null>;
 }
 
-interface SelectionState {
-  marks: {
-    bold?: boolean;
-    italic?: boolean;
-    strike?: boolean;
-    code?: boolean;
-    bulletList?: boolean;
-    orderedList?: boolean;
-    taskList?: boolean;
-    blockquote?: boolean;
-    link?: boolean;
-  };
-  linkHref: string | null;
-  headingLevel: number | null;
-  canUndo: boolean;
-  canRedo: boolean;
-}
-
-type EditorBridgeMessage =
-  | { type: "loaded" }
-  | { type: "ready" }
-  | { type: "heightChanged"; height?: unknown }
-  | {
-      type: "contentChanged";
-      requestId?: unknown;
-      contentJson?: unknown;
-      plainText?: unknown;
-    }
-  | {
-      type: "selectionChanged";
-      marks?: SelectionState["marks"];
-      linkHref?: string | null;
-      headingLevel?: number | null;
-      canUndo?: boolean;
-      canRedo?: boolean;
-    }
-  | { type: "focusChanged"; focused?: unknown }
-  | { type: "error"; code?: string; message?: string };
-
 type EditorIssueKind = "asset" | "timeout" | "bridge" | "webview" | "process";
 
 interface EditorIssue {
   kind: EditorIssueKind;
   code?: string;
   message: string;
-}
-
-interface BridgeParseResult {
-  message: EditorBridgeMessage | null;
-  error?: "invalid_json" | "missing_type";
 }
 
 type EditorCommand =
@@ -240,8 +203,6 @@ interface InsertableCardItem {
   createAttrs: () => Record<string, unknown>;
 }
 
-const MIN_EDITOR_HEIGHT = 260;
-const MAX_EDITOR_HEIGHT = 560;
 const EDITOR_READY_TIMEOUT_MS = 8000;
 const DRAFT_SAVE_DELAY_MS = 650;
 const cardIconMap: Record<string, typeof SparklesIcon> = {
@@ -257,42 +218,8 @@ const cardIconMap: Record<string, typeof SparklesIcon> = {
   relatedNotes: BrainIcon,
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isJsonValue(value: unknown): value is JSONValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return true;
-  }
-  if (Array.isArray(value)) return value.every(isJsonValue);
-  if (!isRecord(value)) return false;
-  return Object.values(value).every(isJsonValue);
-}
-
-function parseBridgeMessage(data: string): BridgeParseResult {
-  try {
-    const parsed = JSON.parse(data);
-    if (!isRecord(parsed) || typeof parsed.type !== "string") {
-      return { message: null, error: "missing_type" };
-    }
-    return { message: parsed as EditorBridgeMessage };
-  } catch {
-    return { message: null, error: "invalid_json" };
-  }
-}
-
 function fingerprintJson(value: JSONValue): string {
   return knowledgeEditorDraftFingerprint(value);
-}
-
-function clampEditorHeight(height: number): number {
-  return Math.min(Math.max(Math.ceil(height), MIN_EDITOR_HEIGHT), MAX_EDITOR_HEIGHT);
 }
 
 export function MobileKnowledgeEditor({
@@ -348,11 +275,11 @@ export function MobileKnowledgeEditor({
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
-  const [editorHeight, setEditorHeight] = useState(MIN_EDITOR_HEIGHT);
+  const [editorHeight, setEditorHeight] = useState(KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT);
   const [editorIssue, setEditorIssue] = useState<EditorIssue | null>(null);
   const [useMarkdownFallback, setUseMarkdownFallback] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<KnowledgeEditorDraft | null>(null);
-  const [selection, setSelection] = useState<SelectionState>({
+  const [selection, setSelection] = useState<KnowledgeEditorBridgeSelectionState>({
     marks: {},
     linkHref: null,
     headingLevel: null,
@@ -735,7 +662,7 @@ export function MobileKnowledgeEditor({
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      const { message, error } = parseBridgeMessage(event.nativeEvent.data);
+      const { message, error } = parseKnowledgeEditorBridgeMessage(event.nativeEvent.data);
       if (!message) {
         if (error) {
           console.error("[MobileKnowledgeEditor] Invalid bridge message:", {
@@ -766,7 +693,7 @@ export function MobileKnowledgeEditor({
           break;
         case "heightChanged":
           if (typeof message.height === "number" && Number.isFinite(message.height)) {
-            setEditorHeight(clampEditorHeight(message.height));
+            setEditorHeight(clampKnowledgeEditorBridgeHeight(message.height));
           }
           break;
         case "selectionChanged":
@@ -780,7 +707,7 @@ export function MobileKnowledgeEditor({
           break;
         case "contentChanged": {
           if (readOnly) return;
-          if (!isJsonValue(message.contentJson)) {
+          if (!isKnowledgeEditorBridgeJsonValue(message.contentJson)) {
             console.error("[MobileKnowledgeEditor] Invalid contentChanged payload:", message);
             setEditorIssue({
               kind: "bridge",
@@ -2357,7 +2284,7 @@ function BlockSheetOption({
 const makeStyles = (colors: ReturnType<typeof useColors>) =>
   StyleSheet.create({
     container: {
-      minHeight: MIN_EDITOR_HEIGHT,
+      minHeight: KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
       overflow: "hidden",
       borderRadius: radius.lg,
       backgroundColor: colors.background,
@@ -2377,7 +2304,7 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     },
     readOnlyFallback: {
       flex: 1,
-      minHeight: MIN_EDITOR_HEIGHT,
+      minHeight: KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderRadius: radius.lg,
@@ -2425,7 +2352,7 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       backgroundColor: colors.border,
     },
     webViewFrame: {
-      minHeight: MIN_EDITOR_HEIGHT,
+      minHeight: KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
       backgroundColor: colors.background,
@@ -2443,7 +2370,7 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
     },
     loadingWrap: {
       flex: 1,
-      minHeight: MIN_EDITOR_HEIGHT,
+      minHeight: KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
       alignItems: "center",
       justifyContent: "center",
       gap: 8,

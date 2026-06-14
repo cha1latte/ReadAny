@@ -53,6 +53,19 @@ export {
   saveKnowledgeEditorDraft,
 } from "./editor-draft";
 export type { KnowledgeEditorDraft, KnowledgeEditorDraftValue } from "./editor-draft";
+export {
+  KNOWLEDGE_MOBILE_EDITOR_MAX_HEIGHT,
+  KNOWLEDGE_MOBILE_EDITOR_MIN_HEIGHT,
+  clampKnowledgeEditorBridgeHeight,
+  isKnowledgeEditorBridgeJsonValue,
+  parseKnowledgeEditorBridgeMessage,
+} from "./mobile-editor-bridge";
+export type {
+  KnowledgeEditorBridgeMessage,
+  KnowledgeEditorBridgeParseError,
+  KnowledgeEditorBridgeParseResult,
+  KnowledgeEditorBridgeSelectionState,
+} from "./mobile-editor-bridge";
 export type {
   KnowledgeEditorFeature,
   KnowledgeEditorProfile,

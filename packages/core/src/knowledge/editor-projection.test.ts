@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { JSONValue } from "../types";
 import {
   createReadAnyCardTiptapContent,
   markdownToBasicTiptap,
@@ -360,7 +361,7 @@ describe("editor projection", () => {
       ],
     };
 
-    const normalized = normalizeTiptapDocument(content, {
+    const normalized = normalizeTiptapDocument(content as unknown as JSONValue, {
       cardTemplates: [
         {
           id: "template-reading-question",
@@ -466,10 +467,14 @@ describe("editor projection", () => {
       sourceId: "doc-home",
     });
 
-    const markdown = renderKnowledgeJsonToMarkdown({ type: "doc", content });
+    const markdown = renderKnowledgeJsonToMarkdown({
+      type: "doc",
+      content: content as unknown as JSONValue[],
+    });
+    const roundTrippedContent = markdownToBasicTiptap(markdown).content ?? [];
 
     expect(markdown).toContain("Source: [Book Home](readany://source/doc-home)");
-    expect(markdownToBasicTiptap(markdown).content?.at(-1)).toEqual({
+    expect(roundTrippedContent[roundTrippedContent.length - 1]).toEqual({
       type: "paragraph",
       content: [
         { type: "text", text: "Source: " },

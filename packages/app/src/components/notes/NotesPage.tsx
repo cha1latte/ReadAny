@@ -1552,6 +1552,28 @@ export function NotesPage() {
     return aiConfig;
   };
 
+  const applyBackgroundKnowledgeSummaryUpdate = (document: KnowledgeDocument) => {
+    const summaryPatch = {
+      summaryMd: document.summaryMd,
+      summarySourceFingerprint: document.summarySourceFingerprint,
+      summarySourceUpdatedAt: document.summarySourceUpdatedAt,
+      summaryUpdatedAt: document.summaryUpdatedAt,
+      updatedAt: document.updatedAt,
+    };
+
+    setKnowledgeDocuments((documents) =>
+      orderKnowledgeDocuments(
+        documents.map((item) =>
+          item.id === document.id ? { ...item, ...summaryPatch } : item,
+        ),
+        documents.find((item) => item.type === "book_home")?.id,
+      ),
+    );
+    setKnowledgeHome((current) =>
+      current?.id === document.id ? { ...current, ...summaryPatch } : current,
+    );
+  };
+
   const queueKnowledgeSummaryMaintenance = (
     documentIds: string[],
     options: {
@@ -1584,10 +1606,15 @@ export function NotesPage() {
       const timer = window.setTimeout(() => {
         knowledgeSummaryMaintenanceTimersRef.current.delete(documentId);
         void maybeCompressKnowledgeDocumentsById([documentId], config)
-          .then((results) => {
+          .then(async (results) => {
             const result = results[0];
             if (result?.status === "failed" || result?.status === "missing") {
               knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+              return;
+            }
+            if (result?.persisted) {
+              const refreshedDocument = await getKnowledgeDocument(documentId);
+              if (refreshedDocument) applyBackgroundKnowledgeSummaryUpdate(refreshedDocument);
             }
           })
           .catch((error) => {

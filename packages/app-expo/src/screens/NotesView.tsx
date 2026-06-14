@@ -1462,6 +1462,28 @@ export function NotesView({
     [isKnowledgeVaultRootOpen, knowledgeHome, t],
   );
 
+  const applyBackgroundKnowledgeSummaryUpdate = useCallback((document: KnowledgeDocument) => {
+    const summaryPatch = {
+      summaryMd: document.summaryMd,
+      summarySourceFingerprint: document.summarySourceFingerprint,
+      summarySourceUpdatedAt: document.summarySourceUpdatedAt,
+      summaryUpdatedAt: document.summaryUpdatedAt,
+      updatedAt: document.updatedAt,
+    };
+
+    setKnowledgeDocuments((documents) =>
+      orderKnowledgeDocuments(
+        documents.map((item) =>
+          item.id === document.id ? { ...item, ...summaryPatch } : item,
+        ),
+        documents.find((item) => item.type === "book_home")?.id,
+      ),
+    );
+    setKnowledgeHome((current) =>
+      current?.id === document.id ? { ...current, ...summaryPatch } : current,
+    );
+  }, []);
+
   const queueKnowledgeSummaryMaintenance = useCallback((
     documentIds: string[],
     options: {
@@ -1500,6 +1522,11 @@ export function NotesView({
           const result = results[0];
           if (result?.status === "failed" || result?.status === "missing") {
             knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
+            return;
+          }
+          if (result?.persisted) {
+            const refreshedDocument = await getKnowledgeDocument(documentId);
+            if (refreshedDocument) applyBackgroundKnowledgeSummaryUpdate(refreshedDocument);
           }
         })().catch((error) => {
           knowledgeSummaryMaintenanceFingerprintsRef.current.delete(documentId);
@@ -1508,7 +1535,7 @@ export function NotesView({
       }, delayMs);
       knowledgeSummaryMaintenanceTimersRef.current.set(documentId, timer);
     }
-  }, []);
+  }, [applyBackgroundKnowledgeSummaryUpdate]);
 
   useEffect(() => {
     if (!knowledgeHome || knowledgeHome.type === "folder") return;

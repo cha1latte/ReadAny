@@ -354,5 +354,18 @@
   "knowledgeCustomCardFieldOptions": "Opciones",
   "knowledgeCustomCardFieldOptionsPlaceholder": "Importante | important\nMás tarde | later",
   "knowledgeCustomCardFieldOptionsHint": "Una opción por línea. Use Etiqueta | value si necesita un valor estable.",
+  "knowledgeCustomCardFieldVisibleWhen": "Mostrar si",
+  "knowledgeCustomCardFieldAlwaysVisible": "Siempre visible",
+  "knowledgeCustomCardFieldAlwaysVisibleHint": "Sin condición. Este campo siempre se muestra.",
+  "knowledgeCustomCardFieldConditionOperator": "Regla",
+  "knowledgeCustomCardFieldConditionValue": "Valor",
+  "knowledgeCustomCardFieldConditionValuePlaceholder": "Valor esperado",
+  "knowledgeCustomCardFieldConditionNoValue": "Esta regla no necesita valor.",
+  "knowledgeCustomCardConditionEquals": "igual a",
+  "knowledgeCustomCardConditionNotEquals": "no es",
+  "knowledgeCustomCardConditionContains": "contiene",
+  "knowledgeCustomCardConditionNotContains": "no contiene",
+  "knowledgeCustomCardConditionEmpty": "está vacío",
+  "knowledgeCustomCardConditionNotEmpty": "no está vacío",
   "knowledgeCardFieldSelectEmpty": "Elegir..."
 }

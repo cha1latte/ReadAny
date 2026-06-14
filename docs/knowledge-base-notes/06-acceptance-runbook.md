@@ -127,11 +127,13 @@ the ReadAny card conversion control so AI/card blocks can be turned back into
 ordinary editable content instead of becoming permanent special blocks.
 Custom card field schema editing is checked in the desktop and mobile editor
 sources, including text, long-text, number, checkbox, single-choice, and
-multi-choice fields with required markers, help text, options, and defaults.
-The WebView bundle is checked for structured-field rendering so synced custom
-cards can be edited without dropping to raw JSON. The core card, projection,
-export, and AI context tests also verify that structured field values and choice
-labels stay readable in Markdown/Obsidian output and prompt previews.
+multi-choice fields with required markers, help text, options, defaults, and
+simple visibility rules. The WebView bundle is checked for structured-field
+rendering so synced custom cards can be edited without dropping to raw JSON. The
+core card, projection, export, and AI context tests also verify that visible
+structured field values and choice labels stay readable in Markdown/Obsidian
+output and prompt previews while hidden fields stay out of those readable
+surfaces.
 The desktop production bundle check scans the built browser assets for the
 knowledge editor shell, AI proposal/result renderers, ReadAny cards,
 internal/source links, Obsidian export markers, and portable attachment URIs.

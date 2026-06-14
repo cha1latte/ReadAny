@@ -354,5 +354,18 @@
   "knowledgeCustomCardFieldOptions": "選項",
   "knowledgeCustomCardFieldOptionsPlaceholder": "重要 | important\n稍後 | later",
   "knowledgeCustomCardFieldOptionsHint": "每行一個選項。需要穩定值時使用 名稱 | value。",
+  "knowledgeCustomCardFieldVisibleWhen": "顯示條件",
+  "knowledgeCustomCardFieldAlwaysVisible": "永遠顯示",
+  "knowledgeCustomCardFieldAlwaysVisibleHint": "未設定條件時，這個欄位會一直顯示。",
+  "knowledgeCustomCardFieldConditionOperator": "規則",
+  "knowledgeCustomCardFieldConditionValue": "條件值",
+  "knowledgeCustomCardFieldConditionValuePlaceholder": "期望值",
+  "knowledgeCustomCardFieldConditionNoValue": "這個規則不需要填寫條件值。",
+  "knowledgeCustomCardConditionEquals": "等於",
+  "knowledgeCustomCardConditionNotEquals": "不等於",
+  "knowledgeCustomCardConditionContains": "包含",
+  "knowledgeCustomCardConditionNotContains": "不包含",
+  "knowledgeCustomCardConditionEmpty": "為空",
+  "knowledgeCustomCardConditionNotEmpty": "不為空",
   "knowledgeCardFieldSelectEmpty": "請選擇..."
 }

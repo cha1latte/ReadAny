@@ -621,6 +621,10 @@ Structured fields can be text, long text, number, checkbox, single choice, or
 multiple choice fields. Choice fields keep stable values in card data while
 rendering their user-facing labels in Markdown export, read-only HTML, and AI
 context.
+Fields can also declare simple visibility rules based on another field's value.
+Hidden fields are kept in card data for safety, but they are not rendered in the
+card details, read-only output, Markdown export, or AI context until their rule
+matches.
 
 Recommended syntax:
 

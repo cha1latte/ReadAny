@@ -23,6 +23,7 @@ import {
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
+  getVisibleReadAnyCardTemplateFields,
   hasKnowledgeEditorFeature,
   normalizeReadAnyCardTemplateFields,
   normalizeTiptapDocument,
@@ -174,6 +175,15 @@ const customCardFieldTypes = [
   "multiselect",
 ] as const satisfies ReadAnyCardTemplateField["type"][];
 
+const customCardFieldConditionOperators = [
+  "equals",
+  "notEquals",
+  "contains",
+  "notContains",
+  "empty",
+  "notEmpty",
+] as const satisfies NonNullable<ReadAnyCardTemplateField["visibleWhen"]>["operator"][];
+
 function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
   return field.type === "select" || field.type === "multiselect";
 }
@@ -217,6 +227,25 @@ function parseTemplateFieldOptionsText(input: string): ReadAnyCardTemplateField[
 function getTemplateFieldDefaultString(field: ReadAnyCardTemplateField): string {
   if (field.defaultValue === undefined || field.defaultValue === null) return "";
   return String(field.defaultValue);
+}
+
+function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
+  const value = field.visibleWhen?.value;
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.length > 0 ? String(value[0]) : "";
+  return String(value);
+}
+
+function parseTemplateFieldConditionValue(
+  sourceField: ReadAnyCardTemplateField | undefined,
+  value: string,
+) {
+  if (sourceField?.type === "checkbox") return value === "true";
+  if (sourceField?.type === "number") {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : value;
+  }
+  return value;
 }
 
 const ReadAnyCardExtension = Node.create({
@@ -1854,351 +1883,596 @@ export function KnowledgeEditor({
                             </div>
                             {templateFields.length > 0 ? (
                               <div className="space-y-1.5">
-                                {templateFields.map((field, index) => (
-                                  <div
-                                    key={`${field.key}-${index}`}
-                                    className="grid gap-1.5 rounded-md border border-border/45 bg-muted/20 p-2"
-                                  >
-                                    <div className="grid gap-1.5 sm:grid-cols-[1fr_0.9fr]">
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldLabel", {
-                                            defaultValue: "Label",
-                                          })}
-                                        </span>
-                                        <input
-                                          value={field.label}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              label: event.currentTarget.value,
-                                            })
-                                          }
-                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
-                                          placeholder={t(
-                                            "notes.knowledgeCustomCardFieldLabelPlaceholder",
-                                            {
-                                              defaultValue: "Question, evidence, confidence...",
-                                            },
-                                          )}
-                                        />
-                                      </label>
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldKey", {
-                                            defaultValue: "Data key",
-                                          })}
-                                        </span>
-                                        <input
-                                          value={field.key}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              key: event.currentTarget.value,
-                                            })
-                                          }
-                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
-                                          placeholder="field_key"
-                                        />
-                                      </label>
-                                    </div>
-                                    <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_auto]">
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldType", {
-                                            defaultValue: "Type",
-                                          })}
-                                        </span>
-                                        <select
-                                          value={field.type}
-                                          onChange={(event) => {
-                                            const nextType = event.currentTarget
-                                              .value as ReadAnyCardTemplateField["type"];
-                                            updateTemplateField(index, {
-                                              type: nextType,
-                                              options:
-                                                nextType === "select" || nextType === "multiselect"
-                                                  ? field.options?.length
-                                                    ? field.options
-                                                    : createDefaultTemplateFieldOptions()
-                                                  : undefined,
-                                              defaultValue:
-                                                nextType === "multiselect"
-                                                  ? []
-                                                  : nextType === "checkbox"
-                                                    ? undefined
-                                                    : typeof field.defaultValue === "boolean"
-                                                      ? undefined
-                                                      : field.defaultValue,
-                                            });
-                                          }}
-                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
-                                        >
-                                          {customCardFieldTypes.map((type) => (
-                                            <option key={type} value={type}>
-                                              {type === "text"
-                                                ? t("notes.knowledgeCustomCardFieldTypeText", {
-                                                    defaultValue: "Text",
-                                                  })
-                                                : type === "multiline"
-                                                  ? t(
-                                                      "notes.knowledgeCustomCardFieldTypeMultiline",
-                                                      { defaultValue: "Long text" },
-                                                    )
-                                                  : type === "number"
-                                                    ? t(
-                                                        "notes.knowledgeCustomCardFieldTypeNumber",
-                                                        { defaultValue: "Number" },
-                                                      )
-                                                    : type === "checkbox"
-                                                      ? t(
-                                                          "notes.knowledgeCustomCardFieldTypeCheckbox",
-                                                          { defaultValue: "Checkbox" },
-                                                        )
-                                                      : type === "select"
-                                                        ? t(
-                                                            "notes.knowledgeCustomCardFieldTypeSelect",
-                                                            { defaultValue: "Single choice" },
-                                                          )
-                                                        : t(
-                                                            "notes.knowledgeCustomCardFieldTypeMultiselect",
-                                                            { defaultValue: "Multiple choice" },
-                                                          )}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                      <div className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldDefault", {
-                                            defaultValue: "Default",
-                                          })}
-                                        </span>
-                                        {field.type === "checkbox" ? (
-                                          <select
-                                            value={
-                                              field.defaultValue === undefined
-                                                ? ""
-                                                : field.defaultValue
-                                                  ? "true"
-                                                  : "false"
-                                            }
-                                            onChange={(event) =>
-                                              updateTemplateField(index, {
-                                                defaultValue:
-                                                  event.currentTarget.value === ""
-                                                    ? undefined
-                                                    : event.currentTarget.value === "true",
-                                              })
-                                            }
-                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
-                                          >
-                                            <option value="">
-                                              {t("notes.knowledgeCustomCardFieldDefaultEmpty", {
-                                                defaultValue: "No default",
-                                              })}
-                                            </option>
-                                            <option value="true">
-                                              {t("common.yes", { defaultValue: "Yes" })}
-                                            </option>
-                                            <option value="false">
-                                              {t("common.no", { defaultValue: "No" })}
-                                            </option>
-                                          </select>
-                                        ) : field.type === "select" ? (
-                                          <select
-                                            value={getTemplateFieldDefaultString(field)}
-                                            onChange={(event) =>
-                                              updateTemplateField(index, {
-                                                defaultValue:
-                                                  event.currentTarget.value === ""
-                                                    ? undefined
-                                                    : event.currentTarget.value,
-                                              })
-                                            }
-                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
-                                          >
-                                            <option value="">
-                                              {t("notes.knowledgeCustomCardFieldDefaultEmpty", {
-                                                defaultValue: "No default",
-                                              })}
-                                            </option>
-                                            {(field.options ?? []).map((option) => (
-                                              <option key={option.value} value={option.value}>
-                                                {option.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        ) : field.type === "multiselect" ? (
-                                          <div className="flex min-h-8 flex-wrap gap-1 rounded-md border border-border/55 bg-background p-1">
-                                            {(field.options ?? []).map((option) => {
-                                              const selectedValues = Array.isArray(
-                                                field.defaultValue,
-                                              )
-                                                ? field.defaultValue.map(String)
-                                                : [];
-                                              const isSelected = selectedValues.includes(
-                                                option.value,
-                                              );
-                                              return (
-                                                <button
-                                                  key={option.value}
-                                                  type="button"
-                                                  className={cn(
-                                                    "rounded-sm px-1.5 py-0.5 text-[11px] transition-colors",
-                                                    isSelected
-                                                      ? "bg-primary/12 text-primary"
-                                                      : "bg-muted/45 text-muted-foreground hover:bg-muted",
-                                                  )}
-                                                  onClick={() => {
-                                                    const nextValues = isSelected
-                                                      ? selectedValues.filter(
-                                                          (value) => value !== option.value,
-                                                        )
-                                                      : [...selectedValues, option.value];
-                                                    updateTemplateField(index, {
-                                                      defaultValue: nextValues,
-                                                    });
-                                                  }}
-                                                >
-                                                  {option.label}
-                                                </button>
-                                              );
+                                {templateFields.map((field, index) => {
+                                  const conditionSourceFields = templateFields.filter(
+                                    (candidate, candidateIndex) =>
+                                      candidateIndex !== index && candidate.key !== field.key,
+                                  );
+                                  const conditionSourceField = conditionSourceFields.find(
+                                    (candidate) => candidate.key === field.visibleWhen?.fieldKey,
+                                  );
+                                  const conditionOperator = field.visibleWhen?.operator ?? "equals";
+                                  const conditionNeedsValue =
+                                    conditionOperator !== "empty" &&
+                                    conditionOperator !== "notEmpty";
+
+                                  return (
+                                    <div
+                                      key={`${field.key}-${index}`}
+                                      className="grid gap-1.5 rounded-md border border-border/45 bg-muted/20 p-2"
+                                    >
+                                      <div className="grid gap-1.5 sm:grid-cols-[1fr_0.9fr]">
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldLabel", {
+                                              defaultValue: "Label",
                                             })}
-                                          </div>
-                                        ) : (
+                                          </span>
                                           <input
-                                            value={
-                                              field.defaultValue === undefined ||
-                                              field.defaultValue === null
-                                                ? ""
-                                                : String(field.defaultValue)
-                                            }
+                                            value={field.label}
                                             onChange={(event) =>
                                               updateTemplateField(index, {
-                                                defaultValue:
-                                                  event.currentTarget.value === ""
-                                                    ? undefined
-                                                    : event.currentTarget.value,
+                                                label: event.currentTarget.value,
                                               })
                                             }
                                             className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
                                             placeholder={t(
-                                              "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                              "notes.knowledgeCustomCardFieldLabelPlaceholder",
                                               {
-                                                defaultValue: "Optional",
+                                                defaultValue: "Question, evidence, confidence...",
                                               },
                                             )}
                                           />
-                                        )}
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldKey", {
+                                              defaultValue: "Data key",
+                                            })}
+                                          </span>
+                                          <input
+                                            value={field.key}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                key: event.currentTarget.value,
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder="field_key"
+                                          />
+                                        </label>
                                       </div>
-                                      <button
-                                        type="button"
-                                        className="mt-5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                                        onClick={() => removeTemplateField(index)}
-                                        aria-label={t("notes.knowledgeCustomCardRemoveField", {
-                                          defaultValue: "Remove field",
-                                        })}
-                                        title={t("notes.knowledgeCustomCardRemoveField", {
-                                          defaultValue: "Remove field",
-                                        })}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </button>
+                                      <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_auto]">
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldType", {
+                                              defaultValue: "Type",
+                                            })}
+                                          </span>
+                                          <select
+                                            value={field.type}
+                                            onChange={(event) => {
+                                              const nextType = event.currentTarget
+                                                .value as ReadAnyCardTemplateField["type"];
+                                              updateTemplateField(index, {
+                                                type: nextType,
+                                                options:
+                                                  nextType === "select" ||
+                                                  nextType === "multiselect"
+                                                    ? field.options?.length
+                                                      ? field.options
+                                                      : createDefaultTemplateFieldOptions()
+                                                    : undefined,
+                                                defaultValue:
+                                                  nextType === "multiselect"
+                                                    ? []
+                                                    : nextType === "checkbox"
+                                                      ? undefined
+                                                      : typeof field.defaultValue === "boolean"
+                                                        ? undefined
+                                                        : field.defaultValue,
+                                              });
+                                            }}
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                          >
+                                            {customCardFieldTypes.map((type) => (
+                                              <option key={type} value={type}>
+                                                {type === "text"
+                                                  ? t("notes.knowledgeCustomCardFieldTypeText", {
+                                                      defaultValue: "Text",
+                                                    })
+                                                  : type === "multiline"
+                                                    ? t(
+                                                        "notes.knowledgeCustomCardFieldTypeMultiline",
+                                                        { defaultValue: "Long text" },
+                                                      )
+                                                    : type === "number"
+                                                      ? t(
+                                                          "notes.knowledgeCustomCardFieldTypeNumber",
+                                                          { defaultValue: "Number" },
+                                                        )
+                                                      : type === "checkbox"
+                                                        ? t(
+                                                            "notes.knowledgeCustomCardFieldTypeCheckbox",
+                                                            { defaultValue: "Checkbox" },
+                                                          )
+                                                        : type === "select"
+                                                          ? t(
+                                                              "notes.knowledgeCustomCardFieldTypeSelect",
+                                                              { defaultValue: "Single choice" },
+                                                            )
+                                                          : t(
+                                                              "notes.knowledgeCustomCardFieldTypeMultiselect",
+                                                              { defaultValue: "Multiple choice" },
+                                                            )}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldDefault", {
+                                              defaultValue: "Default",
+                                            })}
+                                          </span>
+                                          {field.type === "checkbox" ? (
+                                            <select
+                                              value={
+                                                field.defaultValue === undefined
+                                                  ? ""
+                                                  : field.defaultValue
+                                                    ? "true"
+                                                    : "false"
+                                              }
+                                              onChange={(event) =>
+                                                updateTemplateField(index, {
+                                                  defaultValue:
+                                                    event.currentTarget.value === ""
+                                                      ? undefined
+                                                      : event.currentTarget.value === "true",
+                                                })
+                                              }
+                                              className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                            >
+                                              <option value="">
+                                                {t("notes.knowledgeCustomCardFieldDefaultEmpty", {
+                                                  defaultValue: "No default",
+                                                })}
+                                              </option>
+                                              <option value="true">
+                                                {t("common.yes", { defaultValue: "Yes" })}
+                                              </option>
+                                              <option value="false">
+                                                {t("common.no", { defaultValue: "No" })}
+                                              </option>
+                                            </select>
+                                          ) : field.type === "select" ? (
+                                            <select
+                                              value={getTemplateFieldDefaultString(field)}
+                                              onChange={(event) =>
+                                                updateTemplateField(index, {
+                                                  defaultValue:
+                                                    event.currentTarget.value === ""
+                                                      ? undefined
+                                                      : event.currentTarget.value,
+                                                })
+                                              }
+                                              className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                            >
+                                              <option value="">
+                                                {t("notes.knowledgeCustomCardFieldDefaultEmpty", {
+                                                  defaultValue: "No default",
+                                                })}
+                                              </option>
+                                              {(field.options ?? []).map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                  {option.label}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          ) : field.type === "multiselect" ? (
+                                            <div className="flex min-h-8 flex-wrap gap-1 rounded-md border border-border/55 bg-background p-1">
+                                              {(field.options ?? []).map((option) => {
+                                                const selectedValues = Array.isArray(
+                                                  field.defaultValue,
+                                                )
+                                                  ? field.defaultValue.map(String)
+                                                  : [];
+                                                const isSelected = selectedValues.includes(
+                                                  option.value,
+                                                );
+                                                return (
+                                                  <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    className={cn(
+                                                      "rounded-sm px-1.5 py-0.5 text-[11px] transition-colors",
+                                                      isSelected
+                                                        ? "bg-primary/12 text-primary"
+                                                        : "bg-muted/45 text-muted-foreground hover:bg-muted",
+                                                    )}
+                                                    onClick={() => {
+                                                      const nextValues = isSelected
+                                                        ? selectedValues.filter(
+                                                            (value) => value !== option.value,
+                                                          )
+                                                        : [...selectedValues, option.value];
+                                                      updateTemplateField(index, {
+                                                        defaultValue: nextValues,
+                                                      });
+                                                    }}
+                                                  >
+                                                    {option.label}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          ) : (
+                                            <input
+                                              value={
+                                                field.defaultValue === undefined ||
+                                                field.defaultValue === null
+                                                  ? ""
+                                                  : String(field.defaultValue)
+                                              }
+                                              onChange={(event) =>
+                                                updateTemplateField(index, {
+                                                  defaultValue:
+                                                    event.currentTarget.value === ""
+                                                      ? undefined
+                                                      : event.currentTarget.value,
+                                                })
+                                              }
+                                              className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                              placeholder={t(
+                                                "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                                {
+                                                  defaultValue: "Optional",
+                                                },
+                                              )}
+                                            />
+                                          )}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="mt-5 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                          onClick={() => removeTemplateField(index)}
+                                          aria-label={t("notes.knowledgeCustomCardRemoveField", {
+                                            defaultValue: "Remove field",
+                                          })}
+                                          title={t("notes.knowledgeCustomCardRemoveField", {
+                                            defaultValue: "Remove field",
+                                          })}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                      <div className="grid gap-1.5 sm:grid-cols-[1fr_1fr_auto]">
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldPlaceholder", {
+                                              defaultValue: "Placeholder",
+                                            })}
+                                          </span>
+                                          <input
+                                            value={field.placeholder ?? ""}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                placeholder: event.currentTarget.value || undefined,
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder={t(
+                                              "notes.knowledgeCustomCardFieldPlaceholderPlaceholder",
+                                              { defaultValue: "Shown while empty" },
+                                            )}
+                                          />
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldHelpText", {
+                                              defaultValue: "Help text",
+                                            })}
+                                          </span>
+                                          <input
+                                            value={field.helpText ?? ""}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                helpText: event.currentTarget.value || undefined,
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder={t(
+                                              "notes.knowledgeCustomCardFieldHelpTextPlaceholder",
+                                              { defaultValue: "Short hint under the field" },
+                                            )}
+                                          />
+                                        </label>
+                                        <label className="mt-5 flex h-8 items-center gap-2 rounded-md border border-border/45 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground">
+                                          <input
+                                            type="checkbox"
+                                            checked={field.required === true}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                required: event.currentTarget.checked || undefined,
+                                              })
+                                            }
+                                            className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary/30"
+                                          />
+                                          {t("notes.knowledgeCustomCardFieldRequired", {
+                                            defaultValue: "Required",
+                                          })}
+                                        </label>
+                                      </div>
+                                      {isChoiceTemplateField(field) ? (
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldOptions", {
+                                              defaultValue: "Options",
+                                            })}
+                                          </span>
+                                          <textarea
+                                            value={formatTemplateFieldOptionsText(field)}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                options: parseTemplateFieldOptionsText(
+                                                  event.currentTarget.value,
+                                                ),
+                                              })
+                                            }
+                                            rows={Math.max(
+                                              2,
+                                              Math.min(5, field.options?.length ?? 2),
+                                            )}
+                                            className="min-h-16 w-full resize-y rounded-md border border-border/55 bg-background px-2.5 py-2 font-mono text-[11px] leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder={t(
+                                              "notes.knowledgeCustomCardFieldOptionsPlaceholder",
+                                              {
+                                                defaultValue:
+                                                  "Important | important\nLater | later",
+                                              },
+                                            )}
+                                          />
+                                          <p className="text-[10px] leading-4 text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldOptionsHint", {
+                                              defaultValue:
+                                                "One option per line. Use Label | value when you need a stable value.",
+                                            })}
+                                          </p>
+                                        </label>
+                                      ) : null}
+                                      <div className="rounded-md border border-border/45 bg-background/55 p-2">
+                                        <div className="grid gap-1.5 sm:grid-cols-[0.9fr_0.8fr_1fr]">
+                                          <label className="space-y-1">
+                                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                              {t("notes.knowledgeCustomCardFieldVisibleWhen", {
+                                                defaultValue: "Show when",
+                                              })}
+                                            </span>
+                                            <select
+                                              value={field.visibleWhen?.fieldKey ?? ""}
+                                              onChange={(event) => {
+                                                const fieldKey = event.currentTarget.value;
+                                                updateTemplateField(index, {
+                                                  visibleWhen: fieldKey
+                                                    ? {
+                                                        fieldKey,
+                                                        operator:
+                                                          field.visibleWhen?.operator ?? "equals",
+                                                        value: field.visibleWhen?.value ?? "",
+                                                      }
+                                                    : undefined,
+                                                });
+                                              }}
+                                              className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                            >
+                                              <option value="">
+                                                {t("notes.knowledgeCustomCardFieldAlwaysVisible", {
+                                                  defaultValue: "Always visible",
+                                                })}
+                                              </option>
+                                              {conditionSourceFields.map((candidate) => (
+                                                <option key={candidate.key} value={candidate.key}>
+                                                  {candidate.label}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          {field.visibleWhen ? (
+                                            <>
+                                              <label className="space-y-1">
+                                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                  {t(
+                                                    "notes.knowledgeCustomCardFieldConditionOperator",
+                                                    { defaultValue: "Rule" },
+                                                  )}
+                                                </span>
+                                                <select
+                                                  value={conditionOperator}
+                                                  onChange={(event) => {
+                                                    const operator = event.currentTarget
+                                                      .value as NonNullable<
+                                                      ReadAnyCardTemplateField["visibleWhen"]
+                                                    >["operator"];
+                                                    updateTemplateField(index, {
+                                                      visibleWhen: {
+                                                        fieldKey: field.visibleWhen?.fieldKey ?? "",
+                                                        operator,
+                                                        value:
+                                                          operator === "empty" ||
+                                                          operator === "notEmpty"
+                                                            ? undefined
+                                                            : (field.visibleWhen?.value ?? ""),
+                                                      },
+                                                    });
+                                                  }}
+                                                  className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                >
+                                                  {customCardFieldConditionOperators.map(
+                                                    (operator) => (
+                                                      <option key={operator} value={operator}>
+                                                        {operator === "equals"
+                                                          ? t(
+                                                              "notes.knowledgeCustomCardConditionEquals",
+                                                              { defaultValue: "equals" },
+                                                            )
+                                                          : operator === "notEquals"
+                                                            ? t(
+                                                                "notes.knowledgeCustomCardConditionNotEquals",
+                                                                { defaultValue: "is not" },
+                                                              )
+                                                            : operator === "contains"
+                                                              ? t(
+                                                                  "notes.knowledgeCustomCardConditionContains",
+                                                                  { defaultValue: "contains" },
+                                                                )
+                                                              : operator === "notContains"
+                                                                ? t(
+                                                                    "notes.knowledgeCustomCardConditionNotContains",
+                                                                    {
+                                                                      defaultValue:
+                                                                        "does not contain",
+                                                                    },
+                                                                  )
+                                                                : operator === "empty"
+                                                                  ? t(
+                                                                      "notes.knowledgeCustomCardConditionEmpty",
+                                                                      {
+                                                                        defaultValue: "is empty",
+                                                                      },
+                                                                    )
+                                                                  : t(
+                                                                      "notes.knowledgeCustomCardConditionNotEmpty",
+                                                                      {
+                                                                        defaultValue:
+                                                                          "is not empty",
+                                                                      },
+                                                                    )}
+                                                      </option>
+                                                    ),
+                                                  )}
+                                                </select>
+                                              </label>
+                                              {conditionNeedsValue ? (
+                                                <div className="space-y-1">
+                                                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                    {t(
+                                                      "notes.knowledgeCustomCardFieldConditionValue",
+                                                      { defaultValue: "Value" },
+                                                    )}
+                                                  </span>
+                                                  {conditionSourceField?.type === "checkbox" ? (
+                                                    <select
+                                                      value={getTemplateFieldConditionValueString(
+                                                        field,
+                                                      )}
+                                                      onChange={(event) =>
+                                                        updateTemplateField(index, {
+                                                          visibleWhen: {
+                                                            fieldKey:
+                                                              field.visibleWhen?.fieldKey ?? "",
+                                                            operator: conditionOperator,
+                                                            value:
+                                                              event.currentTarget.value === "true",
+                                                          },
+                                                        })
+                                                      }
+                                                      className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                    >
+                                                      <option value="true">
+                                                        {t("common.yes", { defaultValue: "Yes" })}
+                                                      </option>
+                                                      <option value="false">
+                                                        {t("common.no", { defaultValue: "No" })}
+                                                      </option>
+                                                    </select>
+                                                  ) : isChoiceTemplateField(
+                                                      conditionSourceField ??
+                                                        ({
+                                                          type: "text",
+                                                        } as ReadAnyCardTemplateField),
+                                                    ) ? (
+                                                    <select
+                                                      value={getTemplateFieldConditionValueString(
+                                                        field,
+                                                      )}
+                                                      onChange={(event) =>
+                                                        updateTemplateField(index, {
+                                                          visibleWhen: {
+                                                            fieldKey:
+                                                              field.visibleWhen?.fieldKey ?? "",
+                                                            operator: conditionOperator,
+                                                            value: event.currentTarget.value,
+                                                          },
+                                                        })
+                                                      }
+                                                      className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                    >
+                                                      {(conditionSourceField?.options ?? []).map(
+                                                        (option) => (
+                                                          <option
+                                                            key={option.value}
+                                                            value={option.value}
+                                                          >
+                                                            {option.label}
+                                                          </option>
+                                                        ),
+                                                      )}
+                                                    </select>
+                                                  ) : (
+                                                    <input
+                                                      value={getTemplateFieldConditionValueString(
+                                                        field,
+                                                      )}
+                                                      onChange={(event) =>
+                                                        updateTemplateField(index, {
+                                                          visibleWhen: {
+                                                            fieldKey:
+                                                              field.visibleWhen?.fieldKey ?? "",
+                                                            operator: conditionOperator,
+                                                            value: parseTemplateFieldConditionValue(
+                                                              conditionSourceField,
+                                                              event.currentTarget.value,
+                                                            ),
+                                                          },
+                                                        })
+                                                      }
+                                                      className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                                      placeholder={t(
+                                                        "notes.knowledgeCustomCardFieldConditionValuePlaceholder",
+                                                        { defaultValue: "Expected value" },
+                                                      )}
+                                                    />
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <div className="self-end rounded-md border border-border/40 bg-muted/25 px-2 py-2 text-[11px] leading-4 text-muted-foreground">
+                                                  {t(
+                                                    "notes.knowledgeCustomCardFieldConditionNoValue",
+                                                    {
+                                                      defaultValue:
+                                                        "This rule does not need a value.",
+                                                    },
+                                                  )}
+                                                </div>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <div className="self-end rounded-md border border-dashed border-border/50 bg-muted/20 px-2 py-2 text-[11px] leading-4 text-muted-foreground sm:col-span-2">
+                                              {t(
+                                                "notes.knowledgeCustomCardFieldAlwaysVisibleHint",
+                                                {
+                                                  defaultValue:
+                                                    "No condition set. This field is always shown.",
+                                                },
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="grid gap-1.5 sm:grid-cols-[1fr_1fr_auto]">
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldPlaceholder", {
-                                            defaultValue: "Placeholder",
-                                          })}
-                                        </span>
-                                        <input
-                                          value={field.placeholder ?? ""}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              placeholder: event.currentTarget.value || undefined,
-                                            })
-                                          }
-                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
-                                          placeholder={t(
-                                            "notes.knowledgeCustomCardFieldPlaceholderPlaceholder",
-                                            { defaultValue: "Shown while empty" },
-                                          )}
-                                        />
-                                      </label>
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldHelpText", {
-                                            defaultValue: "Help text",
-                                          })}
-                                        </span>
-                                        <input
-                                          value={field.helpText ?? ""}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              helpText: event.currentTarget.value || undefined,
-                                            })
-                                          }
-                                          className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
-                                          placeholder={t(
-                                            "notes.knowledgeCustomCardFieldHelpTextPlaceholder",
-                                            { defaultValue: "Short hint under the field" },
-                                          )}
-                                        />
-                                      </label>
-                                      <label className="mt-5 flex h-8 items-center gap-2 rounded-md border border-border/45 bg-background/70 px-2.5 text-xs font-medium text-muted-foreground">
-                                        <input
-                                          type="checkbox"
-                                          checked={field.required === true}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              required: event.currentTarget.checked || undefined,
-                                            })
-                                          }
-                                          className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary/30"
-                                        />
-                                        {t("notes.knowledgeCustomCardFieldRequired", {
-                                          defaultValue: "Required",
-                                        })}
-                                      </label>
-                                    </div>
-                                    {isChoiceTemplateField(field) ? (
-                                      <label className="space-y-1">
-                                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldOptions", {
-                                            defaultValue: "Options",
-                                          })}
-                                        </span>
-                                        <textarea
-                                          value={formatTemplateFieldOptionsText(field)}
-                                          onChange={(event) =>
-                                            updateTemplateField(index, {
-                                              options: parseTemplateFieldOptionsText(
-                                                event.currentTarget.value,
-                                              ),
-                                            })
-                                          }
-                                          rows={Math.max(
-                                            2,
-                                            Math.min(5, field.options?.length ?? 2),
-                                          )}
-                                          className="min-h-16 w-full resize-y rounded-md border border-border/55 bg-background px-2.5 py-2 font-mono text-[11px] leading-5 text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
-                                          placeholder={t(
-                                            "notes.knowledgeCustomCardFieldOptionsPlaceholder",
-                                            {
-                                              defaultValue: "Important | important\nLater | later",
-                                            },
-                                          )}
-                                        />
-                                        <p className="text-[10px] leading-4 text-muted-foreground">
-                                          {t("notes.knowledgeCustomCardFieldOptionsHint", {
-                                            defaultValue:
-                                              "One option per line. Use Label | value when you need a stable value.",
-                                          })}
-                                        </p>
-                                      </label>
-                                    ) : null}
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ) : (
                               <div className="rounded-md border border-dashed border-border/60 bg-muted/20 px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
@@ -2462,8 +2736,11 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
   const cardTemplate = cardTemplates.find(
     (template) => createReadAnyCardAttrsFromTemplate(template).cardType === cardType,
   );
-  const cardFields = cardTemplate ? getReadAnyCardTemplateFields(cardTemplate) : [];
   const structuredData = getCardDataRecord(modelAttrs.data);
+  const allCardFields = cardTemplate ? getReadAnyCardTemplateFields(cardTemplate) : [];
+  const cardFields = cardTemplate
+    ? getVisibleReadAnyCardTemplateFields(cardTemplate, structuredData)
+    : [];
   const isFallbackCard = readOnlyModel.state === "unsupported";
   const Icon = cardIconMap[cardType as keyof typeof cardIconMap] ?? Sparkles;
   const fallbackTitle = t(`notes.knowledgeCards.${cardType}`, { defaultValue: cardType });
@@ -2745,7 +3022,9 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                       })}
                     </p>
                     <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                      {cardFields.length}
+                      {allCardFields.length === cardFields.length
+                        ? cardFields.length
+                        : `${cardFields.length}/${allCardFields.length}`}
                     </span>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">

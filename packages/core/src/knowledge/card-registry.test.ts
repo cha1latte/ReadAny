@@ -10,6 +10,8 @@ import {
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateInsertLabel,
+  getVisibleReadAnyCardTemplateFields,
+  isReadAnyCardTemplateFieldVisible,
   normalizeReadAnyCardAttrs,
   normalizeReadAnyCardTemplateFields,
   parseReadAnyCardDataFromEditor,
@@ -351,6 +353,7 @@ describe("ReadAny card registry", () => {
         key: "core idea",
         label: "Duplicate label",
         type: "multiline",
+        visibleWhen: { fieldKey: "Reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
       {
@@ -399,6 +402,7 @@ describe("ReadAny card registry", () => {
         key: "core_idea_2",
         label: "Duplicate label",
         type: "multiline",
+        visibleWhen: { fieldKey: "reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
       {
@@ -449,6 +453,79 @@ describe("ReadAny card registry", () => {
       priority: "low",
       themes: ["identity", "power"],
     });
+  });
+
+  it("evaluates conditional custom card field visibility", () => {
+    const fields = normalizeReadAnyCardTemplateFields([
+      { key: "has evidence", label: "Has evidence", type: "checkbox", defaultValue: false },
+      {
+        key: "evidence",
+        label: "Evidence",
+        type: "multiline",
+        visibleWhen: { fieldKey: "has evidence", operator: "equals", value: true },
+      },
+      {
+        key: "themes",
+        label: "Themes",
+        type: "multiselect",
+        options: [
+          { label: "Ritual", value: "ritual" },
+          { label: "Power", value: "power" },
+        ],
+      },
+      {
+        key: "ritual note",
+        label: "Ritual note",
+        type: "text",
+        visibleWhen: { fieldKey: "themes", operator: "contains", value: "ritual" },
+      },
+    ]);
+
+    expect(fields[1].visibleWhen).toEqual({
+      fieldKey: "has_evidence",
+      operator: "equals",
+      value: true,
+    });
+    expect(
+      isReadAnyCardTemplateFieldVisible(fields[1], {
+        has_evidence: false,
+      }),
+    ).toBe(false);
+    expect(
+      isReadAnyCardTemplateFieldVisible(fields[1], {
+        has_evidence: true,
+      }),
+    ).toBe(true);
+    expect(
+      isReadAnyCardTemplateFieldVisible(fields[3], {
+        themes: ["ritual", "power"],
+      }),
+    ).toBe(true);
+    expect(
+      isReadAnyCardTemplateFieldVisible(fields[3], {
+        themes: ["power"],
+      }),
+    ).toBe(false);
+
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-conditional",
+      name: "Conditional",
+      fields,
+      now: 123,
+    });
+
+    expect(
+      getVisibleReadAnyCardTemplateFields(template, {
+        has_evidence: false,
+        themes: ["power"],
+      }).map((field) => field.key),
+    ).toEqual(["has_evidence", "themes"]);
+    expect(
+      getVisibleReadAnyCardTemplateFields(template, {
+        has_evidence: true,
+        themes: ["ritual"],
+      }).map((field) => field.key),
+    ).toEqual(["has_evidence", "evidence", "themes", "ritual_note"]);
   });
 
   it("stores visual custom card fields in synced templates and insert attrs", () => {
@@ -518,6 +595,12 @@ describe("ReadAny card registry", () => {
             { label: "Ritual", value: "ritual" },
           ],
         },
+        {
+          key: "private",
+          label: "Private note",
+          type: "text",
+          visibleWhen: { fieldKey: "priority", operator: "equals", value: "low" },
+        },
       ],
       now: 123,
     });
@@ -534,6 +617,7 @@ describe("ReadAny card registry", () => {
           reviewed: false,
           priority: "high",
           themes: ["attention", "ritual"],
+          private: "Should stay hidden",
         },
       },
       { body: "", cardTemplates: [template] },
@@ -551,6 +635,7 @@ describe("ReadAny card registry", () => {
       { key: "priority", label: "Priority", value: "High" },
       { key: "themes", label: "Themes", value: "Attention, Ritual" },
     ]);
+    expect(model.structuredFields.map((field) => field.key)).not.toContain("private");
     expect(renderReadAnyCardStructuredFieldsMarkdown(model.structuredFields)).toBe(
       [
         "Fields:",
@@ -563,25 +648,26 @@ describe("ReadAny card registry", () => {
         "- Themes: Attention, Ritual",
       ].join("\n"),
     );
-    expect(
-      renderReadAnyCardMarkdownFallback(
-        {
-          cardType: "custom:template-concept",
-          version: 1,
-          title: "Attention",
-          markdown: "Definition: directed perception",
-          data: {
-            term: "Attention",
-            evidence: "Repeated ritual practice\nShared reading notes",
-            confidence: 0.92,
-            reviewed: false,
-            priority: "high",
-            themes: ["attention", "ritual"],
-          },
+    const fallbackMarkdown = renderReadAnyCardMarkdownFallback(
+      {
+        cardType: "custom:template-concept",
+        version: 1,
+        title: "Attention",
+        markdown: "Definition: directed perception",
+        data: {
+          term: "Attention",
+          evidence: "Repeated ritual practice\nShared reading notes",
+          confidence: 0.92,
+          reviewed: false,
+          priority: "high",
+          themes: ["attention", "ritual"],
+          private: "Should stay hidden",
         },
-        { body: "", cardTemplates: [template] },
-      ),
-    ).toContain("> - Confidence: 0.92");
+      },
+      { body: "", cardTemplates: [template] },
+    );
+    expect(fallbackMarkdown).toContain("> - Confidence: 0.92");
+    expect(fallbackMarkdown).not.toContain("Should stay hidden");
   });
 
   it("updates custom card templates without changing their stable card type", () => {

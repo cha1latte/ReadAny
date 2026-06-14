@@ -354,5 +354,18 @@
   "knowledgeCustomCardFieldOptions": "Options",
   "knowledgeCustomCardFieldOptionsPlaceholder": "Important | important\nLater | later",
   "knowledgeCustomCardFieldOptionsHint": "One option per line. Use Label | value when you need a stable value.",
+  "knowledgeCustomCardFieldVisibleWhen": "Show when",
+  "knowledgeCustomCardFieldAlwaysVisible": "Always visible",
+  "knowledgeCustomCardFieldAlwaysVisibleHint": "No condition set. This field is always shown.",
+  "knowledgeCustomCardFieldConditionOperator": "Rule",
+  "knowledgeCustomCardFieldConditionValue": "Value",
+  "knowledgeCustomCardFieldConditionValuePlaceholder": "Expected value",
+  "knowledgeCustomCardFieldConditionNoValue": "This rule does not need a value.",
+  "knowledgeCustomCardConditionEquals": "equals",
+  "knowledgeCustomCardConditionNotEquals": "is not",
+  "knowledgeCustomCardConditionContains": "contains",
+  "knowledgeCustomCardConditionNotContains": "does not contain",
+  "knowledgeCustomCardConditionEmpty": "is empty",
+  "knowledgeCustomCardConditionNotEmpty": "is not empty",
   "knowledgeCardFieldSelectEmpty": "Choose..."
 }

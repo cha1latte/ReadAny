@@ -152,6 +152,15 @@ const customCardFieldTypes = [
   "multiselect",
 ] as const satisfies ReadAnyCardTemplateField["type"][];
 
+const customCardFieldConditionOperators = [
+  "equals",
+  "notEquals",
+  "contains",
+  "notContains",
+  "empty",
+  "notEmpty",
+] as const satisfies NonNullable<ReadAnyCardTemplateField["visibleWhen"]>["operator"][];
+
 function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
   return field.type === "select" || field.type === "multiselect";
 }
@@ -195,6 +204,36 @@ function parseTemplateFieldOptionsText(input: string): ReadAnyCardTemplateField[
 function getTemplateFieldDefaultString(field: ReadAnyCardTemplateField): string {
   if (field.defaultValue === undefined || field.defaultValue === null) return "";
   return String(field.defaultValue);
+}
+
+function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
+  const value = field.visibleWhen?.value;
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.length > 0 ? String(value[0]) : "";
+  return String(value);
+}
+
+function parseTemplateFieldConditionValue(
+  sourceField: ReadAnyCardTemplateField | undefined,
+  value: string,
+) {
+  if (sourceField?.type === "checkbox") return value === "true";
+  if (sourceField?.type === "number") {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : value;
+  }
+  return value;
+}
+
+function getConditionOperatorLabel(
+  operator: (typeof customCardFieldConditionOperators)[number],
+): string {
+  if (operator === "equals") return "等于";
+  if (operator === "notEquals") return "不等于";
+  if (operator === "contains") return "包含";
+  if (operator === "notContains") return "不包含";
+  if (operator === "empty") return "为空";
+  return "不为空";
 }
 
 interface MobileKnowledgeEditorProps {
@@ -2268,245 +2307,515 @@ export function MobileKnowledgeEditor({
                           </View>
                           {templateFields.length > 0 ? (
                             <View style={styles.cardTemplateFieldList}>
-                              {templateFields.map((field, index) => (
-                                <View
-                                  key={`${field.key}-${index}`}
-                                  style={styles.cardTemplateFieldCard}
-                                >
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldLabel", "名称")}
-                                  </Text>
-                                  <TextInput
-                                    value={field.label}
-                                    onChangeText={(text) =>
-                                      updateTemplateField(index, { label: text })
-                                    }
-                                    placeholder={t(
-                                      "notes.knowledgeCustomCardFieldLabelPlaceholder",
-                                      "问题、证据、置信度...",
-                                    )}
-                                    placeholderTextColor={colors.mutedForeground}
-                                    style={styles.linkInput}
-                                  />
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldKey", "数据键")}
-                                  </Text>
-                                  <TextInput
-                                    value={field.key}
-                                    onChangeText={(text) =>
-                                      updateTemplateField(index, { key: text })
-                                    }
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    placeholder="field_key"
-                                    placeholderTextColor={colors.mutedForeground}
-                                    style={[styles.linkInput, styles.cardTemplateKeyInput]}
-                                  />
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldType", "类型")}
-                                  </Text>
-                                  <View style={styles.cardTemplateTypeGrid}>
-                                    {customCardFieldTypes.map((type) => {
-                                      const label =
-                                        type === "text"
-                                          ? t("notes.knowledgeCustomCardFieldTypeText", "文本")
-                                          : type === "multiline"
-                                            ? t(
-                                                "notes.knowledgeCustomCardFieldTypeMultiline",
-                                                "长文本",
-                                              )
-                                            : type === "number"
+                              {templateFields.map((field, index) => {
+                                const conditionSourceFields = templateFields.filter(
+                                  (candidate, candidateIndex) =>
+                                    candidateIndex !== index && candidate.key !== field.key,
+                                );
+                                const conditionSourceField = conditionSourceFields.find(
+                                  (candidate) => candidate.key === field.visibleWhen?.fieldKey,
+                                );
+                                const conditionOperator = field.visibleWhen?.operator ?? "equals";
+                                const conditionNeedsValue =
+                                  conditionOperator !== "empty" && conditionOperator !== "notEmpty";
+
+                                return (
+                                  <View
+                                    key={`${field.key}-${index}`}
+                                    style={styles.cardTemplateFieldCard}
+                                  >
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldLabel", "名称")}
+                                    </Text>
+                                    <TextInput
+                                      value={field.label}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, { label: text })
+                                      }
+                                      placeholder={t(
+                                        "notes.knowledgeCustomCardFieldLabelPlaceholder",
+                                        "问题、证据、置信度...",
+                                      )}
+                                      placeholderTextColor={colors.mutedForeground}
+                                      style={styles.linkInput}
+                                    />
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldKey", "数据键")}
+                                    </Text>
+                                    <TextInput
+                                      value={field.key}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, { key: text })
+                                      }
+                                      autoCapitalize="none"
+                                      autoCorrect={false}
+                                      placeholder="field_key"
+                                      placeholderTextColor={colors.mutedForeground}
+                                      style={[styles.linkInput, styles.cardTemplateKeyInput]}
+                                    />
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldType", "类型")}
+                                    </Text>
+                                    <View style={styles.cardTemplateTypeGrid}>
+                                      {customCardFieldTypes.map((type) => {
+                                        const label =
+                                          type === "text"
+                                            ? t("notes.knowledgeCustomCardFieldTypeText", "文本")
+                                            : type === "multiline"
                                               ? t(
-                                                  "notes.knowledgeCustomCardFieldTypeNumber",
-                                                  "数字",
+                                                  "notes.knowledgeCustomCardFieldTypeMultiline",
+                                                  "长文本",
                                                 )
-                                              : type === "checkbox"
+                                              : type === "number"
                                                 ? t(
-                                                    "notes.knowledgeCustomCardFieldTypeCheckbox",
-                                                    "复选框",
+                                                    "notes.knowledgeCustomCardFieldTypeNumber",
+                                                    "数字",
                                                   )
-                                                : type === "select"
+                                                : type === "checkbox"
                                                   ? t(
-                                                      "notes.knowledgeCustomCardFieldTypeSelect",
-                                                      "单选",
+                                                      "notes.knowledgeCustomCardFieldTypeCheckbox",
+                                                      "复选框",
                                                     )
-                                                  : t(
-                                                      "notes.knowledgeCustomCardFieldTypeMultiselect",
-                                                      "多选",
-                                                    );
-                                      const isActive = field.type === type;
-                                      return (
+                                                  : type === "select"
+                                                    ? t(
+                                                        "notes.knowledgeCustomCardFieldTypeSelect",
+                                                        "单选",
+                                                      )
+                                                    : t(
+                                                        "notes.knowledgeCustomCardFieldTypeMultiselect",
+                                                        "多选",
+                                                      );
+                                        const isActive = field.type === type;
+                                        return (
+                                          <TouchableOpacity
+                                            key={type}
+                                            style={[
+                                              styles.cardTemplateTypeButton,
+                                              isActive && styles.cardTemplateTypeButtonActive,
+                                            ]}
+                                            activeOpacity={0.72}
+                                            onPress={() =>
+                                              updateTemplateField(index, {
+                                                type,
+                                                options:
+                                                  type === "select" || type === "multiselect"
+                                                    ? field.options?.length
+                                                      ? field.options
+                                                      : createDefaultTemplateFieldOptions()
+                                                    : undefined,
+                                                defaultValue:
+                                                  type === "multiselect"
+                                                    ? []
+                                                    : type === "checkbox"
+                                                      ? undefined
+                                                      : typeof field.defaultValue === "boolean"
+                                                        ? undefined
+                                                        : field.defaultValue,
+                                              })
+                                            }
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.cardTemplateTypeText,
+                                                isActive && styles.cardTemplateTypeTextActive,
+                                              ]}
+                                            >
+                                              {label}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        );
+                                      })}
+                                    </View>
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldPlaceholder", "占位提示")}
+                                    </Text>
+                                    <TextInput
+                                      value={field.placeholder ?? ""}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, {
+                                          placeholder: text || undefined,
+                                        })
+                                      }
+                                      placeholder={t(
+                                        "notes.knowledgeCustomCardFieldPlaceholderPlaceholder",
+                                        "空值时显示",
+                                      )}
+                                      placeholderTextColor={colors.mutedForeground}
+                                      style={styles.linkInput}
+                                    />
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldHelpText", "说明")}
+                                    </Text>
+                                    <TextInput
+                                      value={field.helpText ?? ""}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, {
+                                          helpText: text || undefined,
+                                        })
+                                      }
+                                      placeholder={t(
+                                        "notes.knowledgeCustomCardFieldHelpTextPlaceholder",
+                                        "显示在字段下方的短提示",
+                                      )}
+                                      placeholderTextColor={colors.mutedForeground}
+                                      style={styles.linkInput}
+                                    />
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.cardTemplateRequiredButton,
+                                        field.required && styles.cardTemplateRequiredButtonActive,
+                                      ]}
+                                      activeOpacity={0.75}
+                                      onPress={() =>
+                                        updateTemplateField(index, {
+                                          required: field.required ? undefined : true,
+                                        })
+                                      }
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.cardTemplateRequiredText,
+                                          field.required && styles.cardTemplateRequiredTextActive,
+                                        ]}
+                                      >
+                                        {field.required
+                                          ? t("notes.knowledgeCustomCardFieldRequiredOn", "必填")
+                                          : t("notes.knowledgeCustomCardFieldRequired", "设为必填")}
+                                      </Text>
+                                    </TouchableOpacity>
+                                    {isChoiceTemplateField(field) ? (
+                                      <>
+                                        <Text style={styles.cardTemplateLabel}>
+                                          {t("notes.knowledgeCustomCardFieldOptions", "选项")}
+                                        </Text>
+                                        <TextInput
+                                          value={formatTemplateFieldOptionsText(field)}
+                                          onChangeText={(text) =>
+                                            updateTemplateField(index, {
+                                              options: parseTemplateFieldOptionsText(text),
+                                            })
+                                          }
+                                          placeholder={t(
+                                            "notes.knowledgeCustomCardFieldOptionsPlaceholder",
+                                            "重要 | important\n稍后 | later",
+                                          )}
+                                          placeholderTextColor={colors.mutedForeground}
+                                          multiline
+                                          textAlignVertical="top"
+                                          style={[
+                                            styles.linkInput,
+                                            styles.cardTemplateOptionsInput,
+                                          ]}
+                                        />
+                                        <Text style={styles.cardTemplateFieldHint}>
+                                          {t(
+                                            "notes.knowledgeCustomCardFieldOptionsHint",
+                                            "每行一个选项。需要稳定值时使用 名称 | value。",
+                                          )}
+                                        </Text>
+                                      </>
+                                    ) : null}
+                                    <View style={styles.cardTemplateConditionBox}>
+                                      <Text style={styles.cardTemplateLabel}>
+                                        {t("notes.knowledgeCustomCardFieldVisibleWhen", "显示条件")}
+                                      </Text>
+                                      <View style={styles.cardTemplateTypeGrid}>
                                         <TouchableOpacity
-                                          key={type}
                                           style={[
                                             styles.cardTemplateTypeButton,
-                                            isActive && styles.cardTemplateTypeButtonActive,
+                                            !field.visibleWhen &&
+                                              styles.cardTemplateTypeButtonActive,
                                           ]}
                                           activeOpacity={0.72}
                                           onPress={() =>
-                                            updateTemplateField(index, {
-                                              type,
-                                              options:
-                                                type === "select" || type === "multiselect"
-                                                  ? field.options?.length
-                                                    ? field.options
-                                                    : createDefaultTemplateFieldOptions()
-                                                  : undefined,
-                                              defaultValue:
-                                                type === "multiselect"
-                                                  ? []
-                                                  : type === "checkbox"
-                                                    ? undefined
-                                                    : typeof field.defaultValue === "boolean"
-                                                      ? undefined
-                                                      : field.defaultValue,
-                                            })
+                                            updateTemplateField(index, { visibleWhen: undefined })
                                           }
                                         >
                                           <Text
                                             style={[
                                               styles.cardTemplateTypeText,
-                                              isActive && styles.cardTemplateTypeTextActive,
+                                              !field.visibleWhen &&
+                                                styles.cardTemplateTypeTextActive,
                                             ]}
                                           >
-                                            {label}
+                                            {t(
+                                              "notes.knowledgeCustomCardFieldAlwaysVisible",
+                                              "始终显示",
+                                            )}
                                           </Text>
                                         </TouchableOpacity>
-                                      );
-                                    })}
-                                  </View>
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldPlaceholder", "占位提示")}
-                                  </Text>
-                                  <TextInput
-                                    value={field.placeholder ?? ""}
-                                    onChangeText={(text) =>
-                                      updateTemplateField(index, {
-                                        placeholder: text || undefined,
-                                      })
-                                    }
-                                    placeholder={t(
-                                      "notes.knowledgeCustomCardFieldPlaceholderPlaceholder",
-                                      "空值时显示",
-                                    )}
-                                    placeholderTextColor={colors.mutedForeground}
-                                    style={styles.linkInput}
-                                  />
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldHelpText", "说明")}
-                                  </Text>
-                                  <TextInput
-                                    value={field.helpText ?? ""}
-                                    onChangeText={(text) =>
-                                      updateTemplateField(index, {
-                                        helpText: text || undefined,
-                                      })
-                                    }
-                                    placeholder={t(
-                                      "notes.knowledgeCustomCardFieldHelpTextPlaceholder",
-                                      "显示在字段下方的短提示",
-                                    )}
-                                    placeholderTextColor={colors.mutedForeground}
-                                    style={styles.linkInput}
-                                  />
-                                  <TouchableOpacity
-                                    style={[
-                                      styles.cardTemplateRequiredButton,
-                                      field.required && styles.cardTemplateRequiredButtonActive,
-                                    ]}
-                                    activeOpacity={0.75}
-                                    onPress={() =>
-                                      updateTemplateField(index, {
-                                        required: field.required ? undefined : true,
-                                      })
-                                    }
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.cardTemplateRequiredText,
-                                        field.required && styles.cardTemplateRequiredTextActive,
-                                      ]}
-                                    >
-                                      {field.required
-                                        ? t("notes.knowledgeCustomCardFieldRequiredOn", "必填")
-                                        : t("notes.knowledgeCustomCardFieldRequired", "设为必填")}
+                                        {conditionSourceFields.map((candidate) => {
+                                          const isActive =
+                                            field.visibleWhen?.fieldKey === candidate.key;
+                                          return (
+                                            <TouchableOpacity
+                                              key={candidate.key}
+                                              style={[
+                                                styles.cardTemplateTypeButton,
+                                                isActive && styles.cardTemplateTypeButtonActive,
+                                              ]}
+                                              activeOpacity={0.72}
+                                              onPress={() =>
+                                                updateTemplateField(index, {
+                                                  visibleWhen: {
+                                                    fieldKey: candidate.key,
+                                                    operator:
+                                                      field.visibleWhen?.operator ?? "equals",
+                                                    value: field.visibleWhen?.value ?? "",
+                                                  },
+                                                })
+                                              }
+                                            >
+                                              <Text
+                                                style={[
+                                                  styles.cardTemplateTypeText,
+                                                  isActive && styles.cardTemplateTypeTextActive,
+                                                ]}
+                                              >
+                                                {candidate.label}
+                                              </Text>
+                                            </TouchableOpacity>
+                                          );
+                                        })}
+                                      </View>
+                                      {field.visibleWhen ? (
+                                        <>
+                                          <Text style={styles.cardTemplateLabel}>
+                                            {t(
+                                              "notes.knowledgeCustomCardFieldConditionOperator",
+                                              "规则",
+                                            )}
+                                          </Text>
+                                          <View style={styles.cardTemplateTypeGrid}>
+                                            {customCardFieldConditionOperators.map((operator) => {
+                                              const isActive = conditionOperator === operator;
+                                              return (
+                                                <TouchableOpacity
+                                                  key={operator}
+                                                  style={[
+                                                    styles.cardTemplateTypeButton,
+                                                    isActive && styles.cardTemplateTypeButtonActive,
+                                                  ]}
+                                                  activeOpacity={0.72}
+                                                  onPress={() =>
+                                                    updateTemplateField(index, {
+                                                      visibleWhen: {
+                                                        fieldKey: field.visibleWhen?.fieldKey ?? "",
+                                                        operator,
+                                                        value:
+                                                          operator === "empty" ||
+                                                          operator === "notEmpty"
+                                                            ? undefined
+                                                            : (field.visibleWhen?.value ?? ""),
+                                                      },
+                                                    })
+                                                  }
+                                                >
+                                                  <Text
+                                                    style={[
+                                                      styles.cardTemplateTypeText,
+                                                      isActive && styles.cardTemplateTypeTextActive,
+                                                    ]}
+                                                  >
+                                                    {getConditionOperatorLabel(operator)}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              );
+                                            })}
+                                          </View>
+                                          {conditionNeedsValue ? (
+                                            <>
+                                              <Text style={styles.cardTemplateLabel}>
+                                                {t(
+                                                  "notes.knowledgeCustomCardFieldConditionValue",
+                                                  "条件值",
+                                                )}
+                                              </Text>
+                                              {conditionSourceField?.type === "checkbox" ? (
+                                                <View style={styles.cardTemplateTypeGrid}>
+                                                  {["true", "false"].map((value) => {
+                                                    const isActive =
+                                                      getTemplateFieldConditionValueString(
+                                                        field,
+                                                      ) === value;
+                                                    return (
+                                                      <TouchableOpacity
+                                                        key={value}
+                                                        style={[
+                                                          styles.cardTemplateTypeButton,
+                                                          isActive &&
+                                                            styles.cardTemplateTypeButtonActive,
+                                                        ]}
+                                                        activeOpacity={0.72}
+                                                        onPress={() =>
+                                                          updateTemplateField(index, {
+                                                            visibleWhen: {
+                                                              fieldKey:
+                                                                field.visibleWhen?.fieldKey ?? "",
+                                                              operator: conditionOperator,
+                                                              value: value === "true",
+                                                            },
+                                                          })
+                                                        }
+                                                      >
+                                                        <Text
+                                                          style={[
+                                                            styles.cardTemplateTypeText,
+                                                            isActive &&
+                                                              styles.cardTemplateTypeTextActive,
+                                                          ]}
+                                                        >
+                                                          {value === "true"
+                                                            ? t("common.yes", "是")
+                                                            : t("common.no", "否")}
+                                                        </Text>
+                                                      </TouchableOpacity>
+                                                    );
+                                                  })}
+                                                </View>
+                                              ) : isChoiceTemplateField(
+                                                  conditionSourceField ??
+                                                    ({
+                                                      type: "text",
+                                                    } as ReadAnyCardTemplateField),
+                                                ) ? (
+                                                <View style={styles.cardTemplateTypeGrid}>
+                                                  {(conditionSourceField?.options ?? []).map(
+                                                    (option) => {
+                                                      const isActive =
+                                                        getTemplateFieldConditionValueString(
+                                                          field,
+                                                        ) === option.value;
+                                                      return (
+                                                        <TouchableOpacity
+                                                          key={option.value}
+                                                          style={[
+                                                            styles.cardTemplateTypeButton,
+                                                            isActive &&
+                                                              styles.cardTemplateTypeButtonActive,
+                                                          ]}
+                                                          activeOpacity={0.72}
+                                                          onPress={() =>
+                                                            updateTemplateField(index, {
+                                                              visibleWhen: {
+                                                                fieldKey:
+                                                                  field.visibleWhen?.fieldKey ?? "",
+                                                                operator: conditionOperator,
+                                                                value: option.value,
+                                                              },
+                                                            })
+                                                          }
+                                                        >
+                                                          <Text
+                                                            style={[
+                                                              styles.cardTemplateTypeText,
+                                                              isActive &&
+                                                                styles.cardTemplateTypeTextActive,
+                                                            ]}
+                                                          >
+                                                            {option.label}
+                                                          </Text>
+                                                        </TouchableOpacity>
+                                                      );
+                                                    },
+                                                  )}
+                                                </View>
+                                              ) : (
+                                                <TextInput
+                                                  value={getTemplateFieldConditionValueString(
+                                                    field,
+                                                  )}
+                                                  onChangeText={(text) =>
+                                                    updateTemplateField(index, {
+                                                      visibleWhen: {
+                                                        fieldKey: field.visibleWhen?.fieldKey ?? "",
+                                                        operator: conditionOperator,
+                                                        value: parseTemplateFieldConditionValue(
+                                                          conditionSourceField,
+                                                          text,
+                                                        ),
+                                                      },
+                                                    })
+                                                  }
+                                                  placeholder={t(
+                                                    "notes.knowledgeCustomCardFieldConditionValuePlaceholder",
+                                                    "期望值",
+                                                  )}
+                                                  placeholderTextColor={colors.mutedForeground}
+                                                  keyboardType={
+                                                    conditionSourceField?.type === "number"
+                                                      ? "numeric"
+                                                      : "default"
+                                                  }
+                                                  style={styles.linkInput}
+                                                />
+                                              )}
+                                            </>
+                                          ) : (
+                                            <Text style={styles.cardTemplateFieldHint}>
+                                              {t(
+                                                "notes.knowledgeCustomCardFieldConditionNoValue",
+                                                "这个规则不需要填写条件值。",
+                                              )}
+                                            </Text>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <Text style={styles.cardTemplateFieldHint}>
+                                          {t(
+                                            "notes.knowledgeCustomCardFieldAlwaysVisibleHint",
+                                            "未设置条件时，这个字段会一直显示。",
+                                          )}
+                                        </Text>
+                                      )}
+                                    </View>
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldDefault", "默认值")}
                                     </Text>
-                                  </TouchableOpacity>
-                                  {isChoiceTemplateField(field) ? (
-                                    <>
-                                      <Text style={styles.cardTemplateLabel}>
-                                        {t("notes.knowledgeCustomCardFieldOptions", "选项")}
-                                      </Text>
-                                      <TextInput
-                                        value={formatTemplateFieldOptionsText(field)}
-                                        onChangeText={(text) =>
-                                          updateTemplateField(index, {
-                                            options: parseTemplateFieldOptionsText(text),
-                                          })
-                                        }
-                                        placeholder={t(
-                                          "notes.knowledgeCustomCardFieldOptionsPlaceholder",
-                                          "重要 | important\n稍后 | later",
-                                        )}
-                                        placeholderTextColor={colors.mutedForeground}
-                                        multiline
-                                        textAlignVertical="top"
-                                        style={[styles.linkInput, styles.cardTemplateOptionsInput]}
-                                      />
-                                      <Text style={styles.cardTemplateFieldHint}>
-                                        {t(
-                                          "notes.knowledgeCustomCardFieldOptionsHint",
-                                          "每行一个选项。需要稳定值时使用 名称 | value。",
-                                        )}
-                                      </Text>
-                                    </>
-                                  ) : null}
-                                  <Text style={styles.cardTemplateLabel}>
-                                    {t("notes.knowledgeCustomCardFieldDefault", "默认值")}
-                                  </Text>
-                                  <TextInput
-                                    value={getTemplateFieldDefaultString(field)}
-                                    onChangeText={(text) =>
-                                      updateTemplateField(index, {
-                                        defaultValue:
-                                          field.type === "multiselect"
-                                            ? text
-                                                .split(",")
-                                                .map((item) => item.trim())
-                                                .filter(Boolean)
-                                            : text
+                                    <TextInput
+                                      value={getTemplateFieldDefaultString(field)}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, {
+                                          defaultValue:
+                                            field.type === "multiselect"
                                               ? text
-                                              : undefined,
-                                      })
-                                    }
-                                    placeholder={
-                                      field.type === "checkbox"
-                                        ? "true / false"
-                                        : field.type === "select"
-                                          ? "option_1"
-                                          : field.type === "multiselect"
-                                            ? "option_1, option_2"
-                                            : t(
-                                                "notes.knowledgeCustomCardFieldDefaultPlaceholder",
-                                                "可选",
-                                              )
-                                    }
-                                    placeholderTextColor={colors.mutedForeground}
-                                    keyboardType={field.type === "number" ? "numeric" : "default"}
-                                    style={styles.linkInput}
-                                  />
-                                  <TouchableOpacity
-                                    style={styles.cardTemplateRemoveFieldButton}
-                                    onPress={() => removeTemplateField(index)}
-                                    activeOpacity={0.75}
-                                  >
-                                    <Trash2Icon size={14} color={colors.destructive} />
-                                    <Text style={styles.cardTemplateRemoveFieldText}>
-                                      {t("notes.knowledgeCustomCardRemoveField", "移除字段")}
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                              ))}
+                                                  .split(",")
+                                                  .map((item) => item.trim())
+                                                  .filter(Boolean)
+                                              : text
+                                                ? text
+                                                : undefined,
+                                        })
+                                      }
+                                      placeholder={
+                                        field.type === "checkbox"
+                                          ? "true / false"
+                                          : field.type === "select"
+                                            ? "option_1"
+                                            : field.type === "multiselect"
+                                              ? "option_1, option_2"
+                                              : t(
+                                                  "notes.knowledgeCustomCardFieldDefaultPlaceholder",
+                                                  "可选",
+                                                )
+                                      }
+                                      placeholderTextColor={colors.mutedForeground}
+                                      keyboardType={field.type === "number" ? "numeric" : "default"}
+                                      style={styles.linkInput}
+                                    />
+                                    <TouchableOpacity
+                                      style={styles.cardTemplateRemoveFieldButton}
+                                      onPress={() => removeTemplateField(index)}
+                                      activeOpacity={0.75}
+                                    >
+                                      <Trash2Icon size={14} color={colors.destructive} />
+                                      <Text style={styles.cardTemplateRemoveFieldText}>
+                                        {t("notes.knowledgeCustomCardRemoveField", "移除字段")}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                );
+                              })}
                             </View>
                           ) : (
                             <View style={styles.cardTemplateNoFields}>
@@ -3274,6 +3583,14 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
         android: "monospace",
         default: "monospace",
       }),
+    },
+    cardTemplateConditionBox: {
+      gap: 7,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.75),
+      borderRadius: radius.sm,
+      backgroundColor: withOpacity(colors.background, 0.58),
+      padding: 8,
     },
     cardTemplateRemoveFieldButton: {
       minHeight: 30,

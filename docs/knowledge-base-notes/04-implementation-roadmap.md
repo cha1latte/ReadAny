@@ -198,9 +198,10 @@ attribute upgrades, visible unknown/future-version card fallback metadata,
 user-created custom card templates from the desktop/mobile insert menus, and
 desktop/mobile structured-field schema editing exist. The schema editor now
 supports text, long text, number, checkbox, single-choice, and multi-choice
-fields with placeholders, help text, required markers, options, and defaults.
-Richer card editing and JSON-based custom template schema migrations now have a
-shared core path; conditional field visibility logic remains future work.
+fields with placeholders, help text, required markers, options, defaults, and
+simple conditional visibility rules. Richer card editing and JSON-based custom
+template schema migrations now have a shared core path; nested conditional
+groups and advanced schema layout rules remain future work.
 
 Goal:
 

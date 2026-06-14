@@ -354,5 +354,18 @@
   "knowledgeCustomCardFieldOptions": "옵션",
   "knowledgeCustomCardFieldOptionsPlaceholder": "중요 | important\n나중에 | later",
   "knowledgeCustomCardFieldOptionsHint": "한 줄에 옵션 하나. 안정적인 값이 필요하면 라벨 | value 형식을 사용하세요.",
+  "knowledgeCustomCardFieldVisibleWhen": "표시 조건",
+  "knowledgeCustomCardFieldAlwaysVisible": "항상 표시",
+  "knowledgeCustomCardFieldAlwaysVisibleHint": "조건이 없으면 이 필드는 항상 표시됩니다.",
+  "knowledgeCustomCardFieldConditionOperator": "규칙",
+  "knowledgeCustomCardFieldConditionValue": "값",
+  "knowledgeCustomCardFieldConditionValuePlaceholder": "예상 값",
+  "knowledgeCustomCardFieldConditionNoValue": "이 규칙에는 값이 필요하지 않습니다.",
+  "knowledgeCustomCardConditionEquals": "같음",
+  "knowledgeCustomCardConditionNotEquals": "같지 않음",
+  "knowledgeCustomCardConditionContains": "포함",
+  "knowledgeCustomCardConditionNotContains": "포함하지 않음",
+  "knowledgeCustomCardConditionEmpty": "비어 있음",
+  "knowledgeCustomCardConditionNotEmpty": "비어 있지 않음",
   "knowledgeCardFieldSelectEmpty": "선택..."
 }

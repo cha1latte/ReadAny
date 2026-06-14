@@ -354,5 +354,18 @@
   "knowledgeCustomCardFieldOptions": "選択肢",
   "knowledgeCustomCardFieldOptionsPlaceholder": "重要 | important\n後で | later",
   "knowledgeCustomCardFieldOptionsHint": "1行に1つの選択肢。安定した値が必要な場合は ラベル | value を使います。",
+  "knowledgeCustomCardFieldVisibleWhen": "表示条件",
+  "knowledgeCustomCardFieldAlwaysVisible": "常に表示",
+  "knowledgeCustomCardFieldAlwaysVisibleHint": "条件がない場合、このフィールドは常に表示されます。",
+  "knowledgeCustomCardFieldConditionOperator": "ルール",
+  "knowledgeCustomCardFieldConditionValue": "値",
+  "knowledgeCustomCardFieldConditionValuePlaceholder": "期待値",
+  "knowledgeCustomCardFieldConditionNoValue": "このルールに値は不要です。",
+  "knowledgeCustomCardConditionEquals": "等しい",
+  "knowledgeCustomCardConditionNotEquals": "等しくない",
+  "knowledgeCustomCardConditionContains": "含む",
+  "knowledgeCustomCardConditionNotContains": "含まない",
+  "knowledgeCustomCardConditionEmpty": "空",
+  "knowledgeCustomCardConditionNotEmpty": "空ではない",
   "knowledgeCardFieldSelectEmpty": "選択..."
 }

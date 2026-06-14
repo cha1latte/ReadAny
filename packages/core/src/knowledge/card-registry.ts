@@ -93,6 +93,20 @@ export interface ReadAnyCardTemplateFieldOption {
   label: string;
 }
 
+export type ReadAnyCardTemplateFieldConditionOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "notContains"
+  | "empty"
+  | "notEmpty";
+
+export interface ReadAnyCardTemplateFieldVisibleWhen {
+  fieldKey: string;
+  operator: ReadAnyCardTemplateFieldConditionOperator;
+  value?: JSONValue;
+}
+
 export interface ReadAnyCardTemplateField {
   key: string;
   label: string;
@@ -101,6 +115,7 @@ export interface ReadAnyCardTemplateField {
   helpText?: string;
   required?: boolean;
   options?: ReadAnyCardTemplateFieldOption[];
+  visibleWhen?: ReadAnyCardTemplateFieldVisibleWhen;
   defaultValue?: JSONValue;
 }
 
@@ -206,6 +221,16 @@ const READANY_CARD_TEMPLATE_FIELD_TYPES = new Set<ReadAnyCardTemplateFieldType>(
   "multiselect",
 ]);
 
+const READANY_CARD_TEMPLATE_FIELD_CONDITION_OPERATORS =
+  new Set<ReadAnyCardTemplateFieldConditionOperator>([
+    "equals",
+    "notEquals",
+    "contains",
+    "notContains",
+    "empty",
+    "notEmpty",
+  ]);
+
 function normalizeTemplateFieldType(value: unknown): ReadAnyCardTemplateFieldType {
   return typeof value === "string" &&
     READANY_CARD_TEMPLATE_FIELD_TYPES.has(value as ReadAnyCardTemplateFieldType)
@@ -270,6 +295,49 @@ function getTemplateFieldOptionValue(
   if (!text) return undefined;
   if (options.length === 0) return text;
   return options.find((option) => option.value === text || option.label === text)?.value;
+}
+
+function normalizeTemplateFieldConditionOperator(
+  value: unknown,
+): ReadAnyCardTemplateFieldConditionOperator {
+  return typeof value === "string" &&
+    READANY_CARD_TEMPLATE_FIELD_CONDITION_OPERATORS.has(
+      value as ReadAnyCardTemplateFieldConditionOperator,
+    )
+    ? (value as ReadAnyCardTemplateFieldConditionOperator)
+    : "equals";
+}
+
+function normalizeTemplateFieldConditionValue(value: unknown): JSONValue | undefined {
+  if (value === undefined) return undefined;
+  if (isJsonValue(value)) return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value;
+  return undefined;
+}
+
+function normalizeReadAnyCardTemplateFieldVisibleWhen(
+  value: unknown,
+  fieldKey: string,
+): ReadAnyCardTemplateFieldVisibleWhen | undefined {
+  if (!isRecord(value)) return undefined;
+  const rawFieldKey = firstString(value.fieldKey, value.key, value.field);
+  if (!rawFieldKey) return undefined;
+
+  const normalizedFieldKey = normalizeTemplateFieldKey(rawFieldKey, "");
+  if (!normalizedFieldKey || normalizedFieldKey === fieldKey) return undefined;
+
+  const operator = normalizeTemplateFieldConditionOperator(value.operator);
+  const condition: ReadAnyCardTemplateFieldVisibleWhen = {
+    fieldKey: normalizedFieldKey,
+    operator,
+  };
+  if (operator !== "empty" && operator !== "notEmpty") {
+    const conditionValue = normalizeTemplateFieldConditionValue(value.value);
+    if (conditionValue !== undefined) condition.value = conditionValue;
+  }
+  return condition;
 }
 
 function normalizeTemplateFieldDefaultValue(
@@ -353,6 +421,8 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
     if ((type === "select" || type === "multiselect") && options.length > 0) {
       field.options = options;
     }
+    const visibleWhen = normalizeReadAnyCardTemplateFieldVisibleWhen(rawField.visibleWhen, key);
+    if (visibleWhen) field.visibleWhen = visibleWhen;
     const defaultValue = normalizeTemplateFieldDefaultValue(type, rawField.defaultValue, options);
     if (defaultValue !== undefined && isJsonValue(defaultValue)) {
       field.defaultValue = defaultValue;
@@ -1093,6 +1163,69 @@ export function getReadAnyCardTemplateFields(
   return normalizeReadAnyCardTemplateFields(templateSchema(template).fields);
 }
 
+function isEmptyConditionValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function isConditionValueEqual(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(actual)) {
+    return actual.some((item) => isConditionValueEqual(item, expected));
+  }
+  if (Array.isArray(expected)) {
+    return expected.some((item) => isConditionValueEqual(actual, item));
+  }
+  if (typeof actual === "number" || typeof expected === "number") {
+    const actualNumber = Number(actual);
+    const expectedNumber = Number(expected);
+    return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber)
+      ? actualNumber === expectedNumber
+      : String(actual) === String(expected);
+  }
+  return actual === expected || String(actual) === String(expected);
+}
+
+export function isReadAnyCardTemplateFieldVisible(
+  field: ReadAnyCardTemplateField,
+  data: Record<string, unknown> | undefined,
+): boolean {
+  const condition = field.visibleWhen;
+  if (!condition) return true;
+  const actualValue = data?.[condition.fieldKey];
+  if (condition.operator === "empty") return isEmptyConditionValue(actualValue);
+  if (condition.operator === "notEmpty") return !isEmptyConditionValue(actualValue);
+
+  const expectedValue = condition.value;
+  if (condition.operator === "equals") {
+    return isConditionValueEqual(actualValue, expectedValue);
+  }
+  if (condition.operator === "notEquals") {
+    return !isConditionValueEqual(actualValue, expectedValue);
+  }
+  if (condition.operator === "contains") {
+    return Array.isArray(actualValue)
+      ? actualValue.some((item) => isConditionValueEqual(item, expectedValue))
+      : isConditionValueEqual(actualValue, expectedValue);
+  }
+  if (condition.operator === "notContains") {
+    return Array.isArray(actualValue)
+      ? !actualValue.some((item) => isConditionValueEqual(item, expectedValue))
+      : !isConditionValueEqual(actualValue, expectedValue);
+  }
+  return true;
+}
+
+export function getVisibleReadAnyCardTemplateFields(
+  template: KnowledgeCardTemplate,
+  data?: Record<string, unknown>,
+): ReadAnyCardTemplateField[] {
+  return getReadAnyCardTemplateFields(template).filter((field) =>
+    isReadAnyCardTemplateFieldVisible(field, data),
+  );
+}
+
 function formatStructuredFieldValue(
   field: ReadAnyCardTemplateField,
   value: unknown,
@@ -1141,7 +1274,7 @@ function createStructuredFieldValues(
 ): ReadAnyCardStructuredFieldValue[] {
   if (!template || !isRecord(attrs.data)) return [];
   const data = attrs.data;
-  return getReadAnyCardTemplateFields(template)
+  return getVisibleReadAnyCardTemplateFields(template, data)
     .map((field) => {
       const value = formatStructuredFieldValue(field, data[field.key]);
       return value ? { key: field.key, label: field.label, value } : undefined;

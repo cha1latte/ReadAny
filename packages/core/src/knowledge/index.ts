@@ -140,6 +140,8 @@ export {
   getReadAnyCardTemplateDescription,
   getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
+  getVisibleReadAnyCardTemplateFields,
+  isReadAnyCardTemplateFieldVisible,
   normalizeReadAnyCardTemplateFields,
   normalizeReadAnyCardAttrs,
   parseReadAnyCardDataFromEditor,
@@ -161,7 +163,9 @@ export type {
   ReadAnyCardReadOnlyState,
   ReadAnyCardTemplateSchema,
   ReadAnyCardTemplateField,
+  ReadAnyCardTemplateFieldConditionOperator,
   ReadAnyCardTemplateFieldType,
+  ReadAnyCardTemplateFieldVisibleWhen,
   ReadAnyCardStructuredFieldValue,
   ReadAnyCardDataParseResult,
 } from "./card-registry";

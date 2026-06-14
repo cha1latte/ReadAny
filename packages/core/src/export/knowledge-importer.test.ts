@@ -89,6 +89,8 @@ describe("Knowledge markdown importer", () => {
       content: file.content,
     });
 
+    expect(file.content).toContain("<!-- readany:generated-links -->");
+    expect(file.content).toContain("<!-- readany:generated-attachments -->");
     expect(imported.isReadAnyExport).toBe(true);
     expect(imported.warnings).toEqual([]);
     expect(imported.frontmatter).toMatchObject({
@@ -102,7 +104,9 @@ describe("Knowledge markdown importer", () => {
       tags: ["reading", "idea"],
     });
     expect(imported.contentMd).not.toContain("## ReadAny Links");
+    expect(imported.contentMd).not.toContain("readany:generated-links");
     expect(imported.contentMd).not.toContain("## Attachments");
+    expect(imported.contentMd).not.toContain("readany:generated-attachments");
     expect(imported.draft).toMatchObject({
       id: "doc-1",
       type: "book_home",
@@ -138,6 +142,85 @@ describe("Knowledge markdown importer", () => {
         },
       ],
     });
+  });
+
+  it("preserves user-authored sections that share ReadAny generated section names", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Books/The Book/Research.md",
+      content: [
+        "---",
+        "type: readany-knowledge",
+        'id: "doc-user-section"',
+        'documentType: "standalone_note"',
+        'title: "Research"',
+        "tags: []",
+        "---",
+        "# Research",
+        "",
+        "Main body.",
+        "",
+        "## ReadAny Links",
+        "",
+        "This is a user-authored section, not generated metadata.",
+        "",
+        "## Follow Up",
+        "",
+        "Keep this content too.",
+      ].join("\n"),
+    });
+
+    expect(imported.contentMd).toContain("## ReadAny Links");
+    expect(imported.contentMd).toContain("This is a user-authored section");
+    expect(imported.contentMd).toContain("## Follow Up");
+    expect(imported.contentMd).toContain("Keep this content too.");
+  });
+
+  it("strips only trailing legacy generated ReadAny sections from imported exports", () => {
+    const imported = parseKnowledgeMarkdownDocument({
+      path: "Books/The Book/Research.md",
+      content: [
+        "---",
+        "type: readany-knowledge",
+        'id: "doc-legacy-section"',
+        'documentType: "standalone_note"',
+        'title: "Research"',
+        "tags: []",
+        "---",
+        "# Research",
+        "",
+        "Main body.",
+        "",
+        "## ReadAny Links",
+        "",
+        "A user-authored section with the same title.",
+        "",
+        "## Follow Up",
+        "",
+        "Keep this content.",
+        "",
+        "## ReadAny Links",
+        "",
+        "- **related:** [[Ideas/Other Note]]",
+        "",
+        "## Attachments",
+        "",
+        "- [diagram.png](Assets/diagram.png)",
+      ].join("\n"),
+    });
+
+    expect(imported.contentMd).toBe(
+      [
+        "Main body.",
+        "",
+        "## ReadAny Links",
+        "",
+        "A user-authored section with the same title.",
+        "",
+        "## Follow Up",
+        "",
+        "Keep this content.",
+      ].join("\n"),
+    );
   });
 
   it("preserves parent ids from ReadAny Markdown frontmatter", () => {

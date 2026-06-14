@@ -377,7 +377,12 @@ function renderLinks(document: KnowledgeDocument, context: ExportContext): strin
   const links = context.linksByDocumentId.get(document.id) ?? [];
   if (links.length === 0) return [];
 
-  return ["## ReadAny Links", "", ...links.map((link) => renderLinkItem(link, context))];
+  return [
+    "## ReadAny Links",
+    "<!-- readany:generated-links -->",
+    "",
+    ...links.map((link) => renderLinkItem(link, context)),
+  ];
 }
 
 function relativeMarkdownPath(fromFilePath: string, toFilePath: string): string {
@@ -404,6 +409,7 @@ function renderAttachments(
 
   return [
     "## Attachments",
+    "<!-- readany:generated-attachments -->",
     "",
     ...attachments.map((attachment) => {
       const exportedPath = context.attachmentExportPathsById.get(attachment.id);

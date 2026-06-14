@@ -449,13 +449,60 @@ function removeLeadingDocumentTitle(markdown: string, title: string): string {
   return lines.join("\n").trim();
 }
 
+type GeneratedReadAnySectionTitle = "ReadAny Links" | "Attachments";
+
+function generatedReadAnySectionTitle(line: string): GeneratedReadAnySectionTitle | undefined {
+  const match = line.trim().match(/^##\s+(ReadAny Links|Attachments)\s*$/);
+  return match?.[1] as GeneratedReadAnySectionTitle | undefined;
+}
+
+function generatedReadAnySectionMarker(title: GeneratedReadAnySectionTitle): string {
+  return title === "ReadAny Links"
+    ? "<!-- readany:generated-links -->"
+    : "<!-- readany:generated-attachments -->";
+}
+
+function trailingMarkdownH2Section(
+  lines: string[],
+  endExclusive: number,
+): { index: number; title?: GeneratedReadAnySectionTitle } | undefined {
+  for (let index = endExclusive - 1; index >= 0; index -= 1) {
+    if (!/^##\s+.+$/.test(lines[index].trim())) continue;
+    return { index, title: generatedReadAnySectionTitle(lines[index]) };
+  }
+  return undefined;
+}
+
+function looksLikeLegacyGeneratedReadAnySection(
+  title: GeneratedReadAnySectionTitle,
+  sectionLines: string[],
+): boolean {
+  const contentLines = sectionLines.map((line) => line.trim()).filter(Boolean);
+  if (contentLines.length === 0) return false;
+
+  if (contentLines[0] === generatedReadAnySectionMarker(title)) return true;
+
+  if (title === "ReadAny Links") {
+    return contentLines.every((line) => /^-\s+\*\*[^*]+:\*\*\s+.+$/.test(line));
+  }
+
+  return contentLines.every((line) => /^-\s+\[[^\]]+\]\(.+\)$/.test(line));
+}
+
 function stripGeneratedReadAnySections(markdown: string): string {
   const lines = markdown.trim().split("\n");
-  const generatedSectionIndex = lines.findIndex((line) =>
-    /^##\s+(ReadAny Links|Attachments)\s*$/.test(line.trim()),
-  );
-  if (generatedSectionIndex === -1) return markdown.trim();
-  return lines.slice(0, generatedSectionIndex).join("\n").trim();
+  let endExclusive = lines.length;
+
+  while (endExclusive > 0) {
+    const section = trailingMarkdownH2Section(lines, endExclusive);
+    if (!section?.title) break;
+
+    const trailingLines = lines.slice(section.index + 1, endExclusive);
+    if (!looksLikeLegacyGeneratedReadAnySection(section.title, trailingLines)) break;
+    endExclusive = section.index;
+  }
+
+  return lines.slice(0, endExclusive).join("\n").trim();
 }
 
 function normalizeFrontmatter(

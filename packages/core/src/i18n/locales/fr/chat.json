@@ -151,6 +151,7 @@
     "link": "Créer un lien de connaissance",
     "pendingBadge": "Confirmation requise",
     "savedBadge": "Appliqué",
+    "failedBadge": "Échec",
     "safeHint": "L'IA a seulement créé un brouillon. Il sera écrit dans votre base après confirmation.",
     "changes": "Modifications",
     "location": "Emplacement",
@@ -160,6 +161,8 @@
     "applied": "Appliqué",
     "applySuccess": "Enregistré dans la base de connaissances",
     "applyFailed": "Impossible d'appliquer la proposition",
+    "retry": "Réessayer",
+    "applyFailedSafeHint": "Rien n'a été écrit. Actualisez ou vérifiez le document, puis réessayez.",
     "fields": {
       "parentFolder": "Dossier",
       "title": "Titre",

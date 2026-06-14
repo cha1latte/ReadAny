@@ -151,6 +151,7 @@
     "link": "Crear enlace de conocimiento",
     "pendingBadge": "Necesita confirmación",
     "savedBadge": "Aplicado",
+    "failedBadge": "Error",
     "safeHint": "La IA solo creó un borrador. Se escribirá en tu base de conocimiento tras confirmarlo.",
     "changes": "Cambios",
     "location": "Ubicación",
@@ -160,6 +161,8 @@
     "applied": "Aplicado",
     "applySuccess": "Guardado en la base de conocimiento",
     "applyFailed": "No se pudo aplicar la propuesta",
+    "retry": "Reintentar",
+    "applyFailedSafeHint": "No se escribió nada. Actualiza o revisa el documento y vuelve a intentarlo.",
     "fields": {
       "parentFolder": "Carpeta",
       "title": "Título",

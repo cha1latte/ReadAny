@@ -237,7 +237,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   compressKnowledgeDocumentSummary: "toolLabels.compressKnowledgeDocumentSummary",
 };
 
-type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+type KnowledgeProposalApplyState = "idle" | "applying" | "applied" | "failed";
 type KnowledgeOpenDocumentSource = "ai_result" | "ai_relation" | "ai_proposal";
 type KnowledgeOpenDocumentTarget = {
   id?: string;
@@ -632,6 +632,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
   const [proposalApplyResult, setProposalApplyResult] =
     useState<KnowledgeProposalApplyResult | null>(null);
+  const [proposalApplyError, setProposalApplyError] = useState<string | null>(null);
   const { t } = useTranslation();
   const colors = useColors();
   const s = makeToolStyles(colors);
@@ -640,11 +641,13 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
     if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
     setProposalApplyResult(null);
+    setProposalApplyError(null);
   }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
-    if (!proposal || proposalApplyState !== "idle") return;
+    if (!proposal || proposalApplyState === "applying" || proposalApplyState === "applied") return;
     setProposalApplyState("applying");
+    setProposalApplyError(null);
     try {
       const result = await applyKnowledgeWriteProposal(proposal);
       if (proposal.action !== "link") {
@@ -653,12 +656,11 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       setProposalApplyResult(result);
       setProposalApplyState("applied");
     } catch (error) {
-      setProposalApplyState("idle");
-      console.error("[KnowledgeProposal] Failed to apply proposal:", error);
-      Alert.alert(
-        t("knowledgeProposal.applyFailed", "应用失败"),
+      setProposalApplyError(
         error instanceof Error ? error.message : t("knowledgeProposal.applyFailed", "应用失败"),
       );
+      setProposalApplyState("failed");
+      console.error("[KnowledgeProposal] Failed to apply proposal:", error);
     }
   };
 
@@ -695,10 +697,17 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
             </View>
           ) : null}
           {proposal && !hasError ? (
-            <View style={s.proposalBadge}>
-              <Text style={s.proposalBadgeText}>
+            <View style={[s.proposalBadge, proposalApplyState === "failed" && s.proposalFailedBadge]}>
+              <Text
+                style={[
+                  s.proposalBadgeText,
+                  proposalApplyState === "failed" && s.proposalFailedBadgeText,
+                ]}
+              >
                 {proposalApplyState === "applied"
                   ? t("knowledgeProposal.savedBadge", "已应用")
+                  : proposalApplyState === "failed"
+                    ? t("knowledgeProposal.failedBadge", "应用失败")
                   : t("knowledgeProposal.pendingBadge", "待确认")}
               </Text>
             </View>
@@ -753,6 +762,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                   proposal={proposal}
                   applyState={proposalApplyState}
                   applyResult={proposalApplyResult}
+                  applyError={proposalApplyError}
                   onApply={handleApplyProposal}
                 />
               ) : knowledgeResult ? (
@@ -780,11 +790,13 @@ function KnowledgeProposalCard({
   proposal,
   applyState,
   applyResult,
+  applyError,
   onApply,
 }: {
   proposal: KnowledgeWriteProposal;
   applyState: KnowledgeProposalApplyState;
   applyResult: KnowledgeProposalApplyResult | null;
+  applyError: string | null;
   onApply: () => void;
 }) {
   const { t } = useTranslation();
@@ -978,6 +990,21 @@ function KnowledgeProposalCard({
           </View>
         ) : null}
 
+        {applyState === "failed" ? (
+          <View style={s.proposalApplyErrorBox}>
+            <Text style={s.proposalApplyErrorTitle}>
+              {t("knowledgeProposal.applyFailed", "应用知识库提案失败")}
+            </Text>
+            {applyError ? <Text style={s.proposalApplyErrorText}>{applyError}</Text> : null}
+            <Text style={s.proposalApplyErrorHint}>
+              {t(
+                "knowledgeProposal.applyFailedSafeHint",
+                "没有写入任何内容。请刷新或检查文档后再试一次。",
+              )}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={s.proposalActionRow}>
           {openTarget ? (
             <TouchableOpacity
@@ -993,9 +1020,13 @@ function KnowledgeProposalCard({
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
-            style={[s.proposalApplyButton, applyState !== "idle" && s.proposalApplyButtonDisabled]}
+            style={[
+              s.proposalApplyButton,
+              (applyState === "applying" || applyState === "applied") &&
+                s.proposalApplyButtonDisabled,
+            ]}
             onPress={onApply}
-            disabled={applyState !== "idle"}
+            disabled={applyState === "applying" || applyState === "applied"}
             activeOpacity={0.8}
           >
             <Text style={s.proposalApplyText}>
@@ -1003,6 +1034,8 @@ function KnowledgeProposalCard({
                 ? t("knowledgeProposal.applying", "应用中...")
                 : applyState === "applied"
                   ? t("knowledgeProposal.applied", "已应用")
+                  : applyState === "failed"
+                    ? t("knowledgeProposal.retry", "重试")
                   : t("knowledgeProposal.apply", "应用到知识库")}
             </Text>
           </TouchableOpacity>
@@ -1145,10 +1178,16 @@ const makeToolStyles = (colors: ThemeColors) =>
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
+    proposalFailedBadge: {
+      backgroundColor: withOpacity(colors.destructive, 0.1),
+    },
     proposalBadgeText: {
       fontSize: fs.xs,
       color: colors.primary,
       fontWeight: fw.medium,
+    },
+    proposalFailedBadgeText: {
+      color: colors.destructive,
     },
     chevron: {},
     chevronOpen: { transform: [{ rotate: "180deg" }] },
@@ -1645,6 +1684,31 @@ const makeToolStyles = (colors: ThemeColors) =>
       fontSize: fs.xs,
       lineHeight: 16,
       marginVertical: 4,
+    },
+    proposalApplyErrorBox: {
+      gap: 5,
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.destructive, 0.28),
+      backgroundColor: withOpacity(colors.destructive, 0.07),
+      borderRadius: radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+    },
+    proposalApplyErrorTitle: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      fontWeight: fw.semibold,
+      color: colors.destructive,
+    },
+    proposalApplyErrorText: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: withOpacity(colors.destructive, 0.88),
+    },
+    proposalApplyErrorHint: {
+      fontSize: fs.xs,
+      lineHeight: 17,
+      color: withOpacity(colors.destructive, 0.72),
     },
     proposalActionRow: {
       flexDirection: "row",

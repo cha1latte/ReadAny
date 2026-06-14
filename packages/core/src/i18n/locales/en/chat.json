@@ -151,6 +151,7 @@
     "link": "Create knowledge link",
     "pendingBadge": "Needs confirmation",
     "savedBadge": "Applied",
+    "failedBadge": "Failed",
     "safeHint": "AI has only drafted this. It will write to your knowledge base after confirmation.",
     "changes": "Changes",
     "location": "Location",
@@ -160,6 +161,8 @@
     "applied": "Applied",
     "applySuccess": "Saved to knowledge base",
     "applyFailed": "Failed to apply knowledge proposal",
+    "retry": "Try again",
+    "applyFailedSafeHint": "Nothing was written. Refresh or review the document, then try again.",
     "fields": {
       "parentFolder": "Folder",
       "title": "Title",

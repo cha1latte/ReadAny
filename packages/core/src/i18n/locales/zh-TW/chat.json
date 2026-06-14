@@ -151,6 +151,7 @@
     "link": "建立知識關聯",
     "pendingBadge": "待確認",
     "savedBadge": "已套用",
+    "failedBadge": "套用失敗",
     "safeHint": "AI 只產生了草稿，確認後才會寫入你的知識庫。",
     "changes": "變更",
     "location": "位置",
@@ -160,6 +161,8 @@
     "applied": "已套用",
     "applySuccess": "已儲存到知識庫",
     "applyFailed": "套用知識庫提案失敗",
+    "retry": "重試",
+    "applyFailedSafeHint": "沒有寫入任何內容。請重新整理或檢查文件後再試一次。",
     "fields": {
       "parentFolder": "所在資料夾",
       "title": "標題",

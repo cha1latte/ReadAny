@@ -151,6 +151,7 @@
     "link": "建立知识关联",
     "pendingBadge": "待确认",
     "savedBadge": "已应用",
+    "failedBadge": "应用失败",
     "safeHint": "AI 只生成了草稿，确认后才会写入你的知识库。",
     "changes": "变更",
     "location": "位置",
@@ -160,6 +161,8 @@
     "applied": "已应用",
     "applySuccess": "已保存到知识库",
     "applyFailed": "应用知识库提案失败",
+    "retry": "重试",
+    "applyFailedSafeHint": "没有写入任何内容。请刷新或检查文档后再试一次。",
     "fields": {
       "parentFolder": "所在文件夹",
       "title": "标题",

@@ -151,6 +151,7 @@
     "link": "ナレッジリンクを作成",
     "pendingBadge": "確認待ち",
     "savedBadge": "適用済み",
+    "failedBadge": "失敗",
     "safeHint": "AI は下書きだけを作成しました。確認後にナレッジベースへ保存されます。",
     "changes": "変更",
     "location": "場所",
@@ -160,6 +161,8 @@
     "applied": "適用済み",
     "applySuccess": "ナレッジベースに保存しました",
     "applyFailed": "ナレッジ提案の適用に失敗しました",
+    "retry": "再試行",
+    "applyFailedSafeHint": "何も書き込まれていません。更新するか文書を確認してから、もう一度お試しください。",
     "fields": {
       "parentFolder": "フォルダー",
       "title": "タイトル",

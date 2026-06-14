@@ -288,7 +288,7 @@ const TOOL_LABEL_KEYS: Record<string, string> = {
   compressKnowledgeDocumentSummary: "toolLabels.compressKnowledgeDocumentSummary",
 };
 
-type KnowledgeProposalApplyState = "idle" | "applying" | "applied";
+type KnowledgeProposalApplyState = "idle" | "applying" | "applied" | "failed";
 type KnowledgeOpenDocumentSource = "ai_result" | "ai_relation" | "ai_proposal";
 type KnowledgeOpenDocumentTarget = {
   id?: string;
@@ -719,6 +719,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const [proposalApplyState, setProposalApplyState] = useState<KnowledgeProposalApplyState>("idle");
   const [proposalApplyResult, setProposalApplyResult] =
     useState<KnowledgeProposalApplyResult | null>(null);
+  const [proposalApplyError, setProposalApplyError] = useState<string | null>(null);
 
   const getStatusIcon = () => {
     if (hasError) return <XCircle className="h-4 w-4 text-destructive" />;
@@ -744,11 +745,13 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
     if (hasError || proposal || knowledgeResult) setIsOpen(true);
     setProposalApplyState("idle");
     setProposalApplyResult(null);
+    setProposalApplyError(null);
   }, [hasError, proposal, knowledgeResult]);
 
   const handleApplyProposal = async () => {
-    if (!proposal || proposalApplyState !== "idle") return;
+    if (!proposal || proposalApplyState === "applying" || proposalApplyState === "applied") return;
     setProposalApplyState("applying");
+    setProposalApplyError(null);
     try {
       const result = await applyKnowledgeWriteProposal(proposal);
       if (proposal.action !== "link") {
@@ -758,9 +761,11 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
       setProposalApplyState("applied");
       toast.success(t("knowledgeProposal.applySuccess"));
     } catch (error) {
-      setProposalApplyState("idle");
+      const message = error instanceof Error ? error.message : t("knowledgeProposal.applyFailed");
+      setProposalApplyError(message);
+      setProposalApplyState("failed");
       console.error("[KnowledgeProposal] Failed to apply proposal:", error);
-      toast.error(error instanceof Error ? error.message : t("knowledgeProposal.applyFailed"));
+      toast.error(message);
     }
   };
 
@@ -790,9 +795,18 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                   </span>
                 )}
                 {proposal && !hasError && (
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-xs",
+                      proposalApplyState === "failed"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-primary/10 text-primary",
+                    )}
+                  >
                     {proposalApplyState === "applied"
                       ? t("knowledgeProposal.savedBadge")
+                      : proposalApplyState === "failed"
+                        ? t("knowledgeProposal.failedBadge")
                       : t("knowledgeProposal.pendingBadge")}
                   </span>
                 )}
@@ -861,6 +875,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
                       proposal={proposal}
                       applyState={proposalApplyState}
                       applyResult={proposalApplyResult}
+                      applyError={proposalApplyError}
                       onApply={handleApplyProposal}
                     />
                   ) : knowledgeResult ? (
@@ -888,11 +903,13 @@ function KnowledgeProposalCard({
   proposal,
   applyState,
   applyResult,
+  applyError,
   onApply,
 }: {
   proposal: KnowledgeWriteProposal;
   applyState: KnowledgeProposalApplyState;
   applyResult: KnowledgeProposalApplyResult | null;
+  applyError: string | null;
   onApply: () => void;
 }) {
   const { t } = useTranslation();
@@ -1089,6 +1106,18 @@ function KnowledgeProposalCard({
           </div>
         )}
 
+        {applyState === "failed" ? (
+          <div className="rounded-md border border-destructive/25 bg-destructive/[0.06] px-3 py-2.5 text-xs leading-relaxed">
+            <div className="font-medium text-destructive">{t("knowledgeProposal.applyFailed")}</div>
+            {applyError ? (
+              <div className="mt-1 break-words text-destructive/90">{applyError}</div>
+            ) : null}
+            <div className="mt-1.5 text-destructive/75">
+              {t("knowledgeProposal.applyFailedSafeHint")}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-end gap-2">
           {openTarget ? (
             <Button
@@ -1106,13 +1135,15 @@ function KnowledgeProposalCard({
             type="button"
             size="sm"
             onClick={onApply}
-            disabled={applyState !== "idle"}
+            disabled={applyState === "applying" || applyState === "applied"}
             className="h-8"
           >
             {applyState === "applying"
               ? t("knowledgeProposal.applying")
               : applyState === "applied"
                 ? t("knowledgeProposal.applied")
+                : applyState === "failed"
+                  ? t("knowledgeProposal.retry")
                 : t("knowledgeProposal.apply")}
           </Button>
         </div>

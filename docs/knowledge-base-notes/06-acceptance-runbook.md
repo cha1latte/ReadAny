@@ -60,8 +60,14 @@ pnpm --filter @readany/core exec vitest run \
 pnpm --filter @readany/core exec tsc --noEmit
 pnpm --filter app exec tsc --noEmit
 pnpm --filter @readany/app-expo exec tsc --noEmit
+pnpm --filter @readany/app-expo exec node scripts/build-knowledge-editor.js
+git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 git diff --check
 ```
+
+`pnpm acceptance:knowledge` compares the mobile WebView editor bundle before and
+after rebuilding it. If the generated HTML changes, commit
+`packages/app-expo/assets/editor/knowledge-editor.html` and rerun the gate.
 
 Evidence mapping:
 

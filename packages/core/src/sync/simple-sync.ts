@@ -419,9 +419,38 @@ async function shouldApplyRemoteRecordIntegrity(
   record: Record<string, unknown>,
   pk: string,
 ): Promise<boolean> {
-  if (tableName !== "knowledge_links" || record.to_kind !== "document") {
+  if (tableName === "knowledge_attachments") {
+    const documentId = record.document_id;
+    if (!documentId) return true;
+
+    if (await knowledgeDocumentExists(db, String(documentId))) return true;
+
+    console.warn(
+      `[SimpleSync] Skipping orphaned knowledge_attachments/${String(record[pk])}: document ${String(documentId)} is missing`,
+    );
+    return false;
+  }
+
+  if (tableName !== "knowledge_links") {
     return true;
   }
+
+  const sourceDocumentId = record.from_document_id;
+  if (!sourceDocumentId) {
+    console.warn(
+      `[SimpleSync] Skipping orphaned knowledge_links/${String(record[pk])}: missing source document id`,
+    );
+    return false;
+  }
+
+  if (!(await knowledgeDocumentExists(db, String(sourceDocumentId)))) {
+    console.warn(
+      `[SimpleSync] Skipping orphaned knowledge_links/${String(record[pk])}: source document ${String(sourceDocumentId)} is missing`,
+    );
+    return false;
+  }
+
+  if (record.to_kind !== "document") return true;
 
   const targetDocumentId = record.to_id;
   if (!targetDocumentId) {
@@ -431,16 +460,23 @@ async function shouldApplyRemoteRecordIntegrity(
     return false;
   }
 
-  const rows = await db.select<{ id: string }>(
-    "SELECT id FROM knowledge_documents WHERE id = ? LIMIT 1",
-    [String(targetDocumentId)],
-  );
-  if (rows.length > 0) return true;
+  if (await knowledgeDocumentExists(db, String(targetDocumentId))) return true;
 
   console.warn(
     `[SimpleSync] Skipping orphaned knowledge_links/${String(record[pk])}: target document ${String(targetDocumentId)} is missing`,
   );
   return false;
+}
+
+async function knowledgeDocumentExists(
+  db: Awaited<ReturnType<typeof getDB>>,
+  documentId: string,
+): Promise<boolean> {
+  const rows = await db.select<{ id: string }>(
+    "SELECT id FROM knowledge_documents WHERE id = ? LIMIT 1",
+    [documentId],
+  );
+  return rows.length > 0;
 }
 
 async function upsertRecord(

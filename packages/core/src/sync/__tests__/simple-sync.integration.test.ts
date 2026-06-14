@@ -751,6 +751,64 @@ describe("simple sync convergence", () => {
     expect(target.get("knowledge_links", "stale-doc-link")).toBeUndefined();
   });
 
+  it("skips knowledge links whose source document is missing", async () => {
+    const target = new FakeSyncDb();
+    target.insert("books", bookRow());
+    dbMocks.currentDb = target;
+    dbMocks.currentDeviceId = "device-local";
+
+    const result = await applyChanges({
+      deviceId: "device-remote",
+      timestamp: now,
+      since: 0,
+      tables: {
+        knowledge_links: {
+          records: [
+            knowledgeLinkRow({
+              id: "stale-source-link",
+              from_document_id: "doc-missing",
+              to_kind: "highlight",
+              to_id: "hl-1",
+              updated_at: 1500,
+            }),
+          ],
+          deletedIds: [],
+        },
+      },
+    });
+
+    expect(result).toEqual({ applied: 0, skipped: 1 });
+    expect(target.get("knowledge_links", "stale-source-link")).toBeUndefined();
+  });
+
+  it("skips knowledge attachments whose document is missing", async () => {
+    const target = new FakeSyncDb();
+    target.insert("books", bookRow());
+    dbMocks.currentDb = target;
+    dbMocks.currentDeviceId = "device-local";
+
+    const result = await applyChanges({
+      deviceId: "device-remote",
+      timestamp: now,
+      since: 0,
+      tables: {
+        knowledge_attachments: {
+          records: [
+            knowledgeAttachmentRow({
+              id: "stale-attachment",
+              document_id: "doc-missing",
+              updated_at: 1500,
+            }),
+          ],
+          deletedIds: [],
+        },
+      },
+    });
+
+    expect(result).toEqual({ applied: 0, skipped: 1 });
+    expect(target.get("knowledge_attachments", "stale-attachment")).toBeUndefined();
+  });
+
   it("syncs knowledge documents, links, attachments, and card templates", async () => {
     const backend = new MemoryBackend();
     const deviceA = new FakeSyncDb();

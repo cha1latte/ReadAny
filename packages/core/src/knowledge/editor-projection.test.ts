@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { JSONValue } from "../types";
+import type { JSONValue, KnowledgeCardTemplate } from "../types";
 import {
   createReadAnyCardTiptapContent,
   markdownToBasicTiptap,
@@ -223,6 +223,51 @@ describe("editor projection", () => {
     expect(html).toContain("v99 newer");
     expect(html).not.toContain("private");
     expect(html).not.toContain("&lt;json&gt;");
+  });
+
+  it("renders missing required custom card fields in Markdown and static HTML", () => {
+    const cardTemplates: KnowledgeCardTemplate[] = [
+      {
+        id: "template-concept",
+        name: "Concept",
+        version: 1,
+        schemaJson: {
+          cardType: "custom:template-concept",
+          title: "Concept",
+          fields: [
+            { key: "term", label: "Term", type: "text", required: true },
+            { key: "evidence", label: "Evidence", type: "multiline" },
+          ],
+        },
+        builtIn: false,
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-concept",
+            version: 1,
+            title: "Incomplete concept",
+            markdown: "Definition:",
+          },
+        },
+      ],
+    };
+
+    const markdown = renderKnowledgeJsonToMarkdown(content, { cardTemplates });
+    const html = renderKnowledgeJsonToReadOnlyHtml(content, { cardTemplates });
+
+    expect(markdown).toContain("- Term: Missing required value");
+    expect(markdown).not.toContain("- Evidence:");
+    expect(html).toContain('data-readany-card-field-state="missing"');
+    expect(html).toContain("<dt>Term</dt><dd>Missing required value</dd>");
+    expect(html).not.toContain("<dt>Evidence</dt>");
   });
 
   it("uses card registry fallbacks for built-in ReadAny card types", () => {

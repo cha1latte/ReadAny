@@ -549,8 +549,12 @@ function renderReadAnyCardHtml(node: TiptapNode, options: ReadOnlyHtmlProjection
   const structuredFieldsHtml = model.structuredFields.length
     ? `<dl class="${className(options, "card-fields")}">${model.structuredFields
         .map(
-          (field) =>
-            `<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`,
+          (field) => {
+            const missingAttrs = field.missing
+              ? ` class="${className(options, "card-field-missing")}" data-readany-card-field-state="missing"`
+              : "";
+            return `<div${missingAttrs}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`;
+          },
         )
         .join("")}</dl>`
     : "";

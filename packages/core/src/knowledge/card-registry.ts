@@ -38,6 +38,7 @@ export interface ReadAnyCardStructuredFieldValue {
   key: string;
   label: string;
   value: string;
+  missing?: boolean;
 }
 
 export interface ReadAnyCardReadOnlyModel {
@@ -1272,12 +1273,21 @@ function createStructuredFieldValues(
   attrs: ReadAnyCardAttrs,
   template: KnowledgeCardTemplate | undefined,
 ): ReadAnyCardStructuredFieldValue[] {
-  if (!template || !isRecord(attrs.data)) return [];
-  const data = attrs.data;
+  if (!template) return [];
+  const data = isRecord(attrs.data) ? attrs.data : {};
   return getVisibleReadAnyCardTemplateFields(template, data)
     .map((field) => {
       const value = formatStructuredFieldValue(field, data[field.key]);
-      return value ? { key: field.key, label: field.label, value } : undefined;
+      if (value) return { key: field.key, label: field.label, value };
+      if (field.required) {
+        return {
+          key: field.key,
+          label: field.label,
+          value: "Missing required value",
+          missing: true,
+        };
+      }
+      return undefined;
     })
     .filter((field): field is ReadAnyCardStructuredFieldValue => !!field);
 }

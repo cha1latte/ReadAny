@@ -634,6 +634,7 @@ describe("KnowledgeExporter", () => {
               fields: [
                 { key: "term", label: "Term", type: "text" },
                 { key: "confidence", label: "Confidence", type: "number" },
+                { key: "source", label: "Source", type: "text", required: true },
               ],
             },
             builtIn: false,
@@ -650,6 +651,7 @@ describe("KnowledgeExporter", () => {
     expect(file.content).toContain("Fields:");
     expect(file.content).toContain("- Term: Attention");
     expect(file.content).toContain("- Confidence: 0.92");
+    expect(file.content).toContain("- Source: Missing required value");
   });
 
   it("exports AI tool failure cards with paths and safe no-write hints", () => {

@@ -269,6 +269,7 @@ describe("buildKnowledgePromptContext", () => {
         fields: [
           { key: "term", label: "Term", type: "text" },
           { key: "confidence", label: "Confidence", type: "number" },
+          { key: "source", label: "Source", type: "text", required: true },
         ],
       },
       builtIn: false,
@@ -310,6 +311,7 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).toContain("Definition: directed perception");
     expect(context).toContain("Term: Attention");
     expect(context).toContain("Confidence: 0.92");
+    expect(context).toContain("Source: Missing required value");
     expect(context).not.toContain("Stale markdown fallback");
   });
 

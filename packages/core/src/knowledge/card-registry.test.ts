@@ -670,6 +670,63 @@ describe("ReadAny card registry", () => {
     expect(fallbackMarkdown).not.toContain("Should stay hidden");
   });
 
+  it("keeps visible missing required custom card fields readable", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-concept",
+      name: "Concept",
+      markdown: "Definition:",
+      fields: [
+        { key: "term", label: "Term", type: "text", required: true },
+        { key: "evidence", label: "Evidence", type: "multiline" },
+        { key: "reviewed", label: "Reviewed", type: "checkbox", required: true },
+        {
+          key: "private",
+          label: "Private note",
+          type: "text",
+          required: true,
+          visibleWhen: { fieldKey: "reviewed", operator: "equals", value: true },
+        },
+      ],
+      now: 123,
+    });
+    const model = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-concept",
+        version: 1,
+        title: "Incomplete concept",
+        markdown: "Definition:",
+        data: {
+          term: "",
+        },
+      },
+      { body: "", cardTemplates: [template] },
+    );
+
+    expect(model.structuredFields).toEqual([
+      { key: "term", label: "Term", value: "Missing required value", missing: true },
+      { key: "reviewed", label: "Reviewed", value: "Missing required value", missing: true },
+    ]);
+    expect(model.structuredFields.map((field) => field.key)).not.toContain("evidence");
+    expect(model.structuredFields.map((field) => field.key)).not.toContain("private");
+    expect(renderReadAnyCardStructuredFieldsMarkdown(model.structuredFields)).toBe(
+      ["Fields:", "- Term: Missing required value", "- Reviewed: Missing required value"].join(
+        "\n",
+      ),
+    );
+    const fallbackMarkdown = renderReadAnyCardMarkdownFallback(
+      {
+        cardType: "custom:template-concept",
+        version: 1,
+        title: "Incomplete concept",
+        markdown: "Definition:",
+      },
+      { body: "", cardTemplates: [template] },
+    );
+    expect(fallbackMarkdown).toContain("> - Term: Missing required value");
+    expect(fallbackMarkdown).toContain("> - Reviewed: Missing required value");
+    expect(fallbackMarkdown).not.toContain("Private note");
+  });
+
   it("updates custom card templates without changing their stable card type", () => {
     const template = createCustomReadAnyCardTemplate({
       id: "template-reading-question",

@@ -13,10 +13,10 @@ or has an explicit owner-approved exception, and
 | Field | Value |
 | --- | --- |
 | Branch | `feat/knowledge-base-notes-research` |
-| Commit under test | `f0e803f4` |
+| Commit under test | `a824d170` |
 | Tester | Codex automated baseline |
 | Test date | 2026-06-14 |
-| `pnpm acceptance:knowledge` result | Pass: 32 core test files / 442 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
+| `pnpm acceptance:knowledge` result | Pass: 32 core test files / 444 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks, and whitespace check passed. |
 | Desktop platform/build | macOS local automated desktop production bundle via `pnpm acceptance:knowledge`; interactive desktop QA still pending. |
 | Mobile platform/build | Expo TypeScript and generated WebView editor bundle via `pnpm acceptance:knowledge`; real-device iOS/Android QA still pending. |
 | Second sync device/build | Pending manual QA. |
@@ -43,8 +43,8 @@ or has an explicit owner-approved exception, and
 
 | Check | Expected | Status | Evidence |
 | --- | --- | --- | --- |
-| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Commit `f0e803f4` was created after a clean automated gate; it is the code baseline for the next manual QA pass. |
-| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-14 for commit `f0e803f4`: 32 core test files / 442 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
+| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Commit `a824d170` was created after a clean automated gate; it is the code baseline for the next manual QA pass. |
+| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-14 for commit `a824d170`: 32 core test files / 444 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks, and whitespace check. |
 | Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. | Pass | The desktop Vite production bundle completed successfully; warnings were the known dynamic-import/chunk-size warnings documented as non-blocking in the runbook. |
 
 ## Desktop QA

@@ -19,6 +19,8 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   formatKnowledgeDocumentPath,
+  getKnowledgeDocumentOpenMode,
+  getKnowledgeDocumentWorkspaceMode,
   isGeneratedHighlightNoteDocument,
   isGeneratedLegacyNoteDocument,
   knowledgeDocumentFingerprint,
@@ -99,6 +101,30 @@ describe("knowledge document utilities", () => {
       folders: [],
       documents: [note],
     });
+  });
+
+  it("routes vault roots and folders to browsers, not document editors", () => {
+    const folder = document({ id: "folder", type: "folder", title: "Ideas" });
+    const note = document({ id: "note", type: "standalone_note", title: "Note" });
+    const home = document({ id: "home", type: "book_home", title: "Home" });
+
+    expect(getKnowledgeDocumentOpenMode({ document: null })).toBe("vault_root");
+    expect(getKnowledgeDocumentOpenMode({ document: note, isVaultRootOpen: true })).toBe(
+      "vault_root",
+    );
+    expect(getKnowledgeDocumentOpenMode({ document: folder })).toBe("folder_browser");
+    expect(getKnowledgeDocumentOpenMode({ document: note })).toBe("document_editor");
+    expect(getKnowledgeDocumentOpenMode({ document: home })).toBe("document_editor");
+  });
+
+  it("keeps mobile workspace mode aligned with the open mode contract", () => {
+    expect(getKnowledgeDocumentWorkspaceMode()).toBe("vault");
+    expect(getKnowledgeDocumentWorkspaceMode(document({ id: "folder", type: "folder" }))).toBe(
+      "vault",
+    );
+    expect(
+      getKnowledgeDocumentWorkspaceMode(document({ id: "note", type: "standalone_note" })),
+    ).toBe("document");
   });
 
   it("builds a stable document tree from parent ids", () => {

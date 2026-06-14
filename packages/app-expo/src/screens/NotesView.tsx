@@ -81,6 +81,8 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  getKnowledgeDocumentOpenMode,
+  getKnowledgeDocumentWorkspaceMode,
   ensureKnowledgeSourceLink,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -2405,7 +2407,8 @@ function KnowledgeHomePanel({
     () => sortAnnotationsByPosition(book.highlights).slice(0, 3),
     [book.highlights],
   );
-  const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
+  const activeKnowledgeOpenMode = getKnowledgeDocumentOpenMode({ document, isVaultRootOpen });
+  const isFolderDocument = activeKnowledgeOpenMode === "folder_browser";
   const rootDocuments = useMemo(() => {
     const homeDocumentId = documents.find((item) => item.type === "book_home")?.id;
     return orderKnowledgeDocuments(
@@ -2548,7 +2551,7 @@ function KnowledgeHomePanel({
   const handleSelectKnowledgeDocument = useCallback(
     (nextDocument: KnowledgeDocument) => {
       onSelectDocument(nextDocument);
-      setWorkspaceMode(nextDocument.type === "folder" ? "vault" : "document");
+      setWorkspaceMode(getKnowledgeDocumentWorkspaceMode(nextDocument));
     },
     [onSelectDocument],
   );
@@ -2576,10 +2579,10 @@ function KnowledgeHomePanel({
   }, []);
 
   useEffect(() => {
-    if (document?.type === "folder" && workspaceMode === "document") {
+    if (getKnowledgeDocumentWorkspaceMode(document) === "vault" && workspaceMode === "document") {
       setWorkspaceMode("vault");
     }
-  }, [document?.type, workspaceMode]);
+  }, [document, workspaceMode]);
 
   useEffect(() => {
     if (workspaceMode !== "document") {
@@ -2700,7 +2703,6 @@ function KnowledgeHomePanel({
                 }}
                 onSelectDocument={(targetDocument) => {
                   handleSelectKnowledgeDocument(targetDocument);
-                  if (targetDocument.type === "folder") setWorkspaceMode("vault");
                 }}
                 styles={styles}
                 colors={colors}

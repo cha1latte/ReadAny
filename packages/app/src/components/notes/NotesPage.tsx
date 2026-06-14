@@ -72,6 +72,7 @@ import {
   filterKnowledgeDocumentTreeNodesForSearch,
   flattenKnowledgeDocumentTree,
   getKnowledgeEditorSurfaceForDocumentType,
+  getKnowledgeDocumentOpenMode,
   ensureKnowledgeSourceLink,
   knowledgeDocumentFingerprint,
   markdownToBasicTiptap,
@@ -2622,7 +2623,8 @@ function KnowledgeHomePanel({
       homeDocumentId,
     );
   }, [documents]);
-  const isFolderDocument = !isVaultRootOpen && document?.type === "folder";
+  const activeKnowledgeOpenMode = getKnowledgeDocumentOpenMode({ document, isVaultRootOpen });
+  const isFolderDocument = activeKnowledgeOpenMode === "folder_browser";
   const activePathItems = useMemo(
     () =>
       isVaultRootOpen

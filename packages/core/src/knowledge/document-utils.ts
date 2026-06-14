@@ -22,6 +22,9 @@ export interface KnowledgeDocumentTree {
   orphaned: KnowledgeDocument[];
 }
 
+export type KnowledgeDocumentOpenMode = "vault_root" | "folder_browser" | "document_editor";
+export type KnowledgeDocumentWorkspaceMode = "vault" | "document";
+
 export interface KnowledgeDocumentPathItem {
   id: string;
   title: string;
@@ -418,6 +421,20 @@ export function createKnowledgeFolderDisplaySections(
   }
 
   return { home, folders, documents };
+}
+
+export function getKnowledgeDocumentOpenMode(input: {
+  document?: Pick<KnowledgeDocument, "type"> | null;
+  isVaultRootOpen?: boolean;
+}): KnowledgeDocumentOpenMode {
+  if (input.isVaultRootOpen || !input.document) return "vault_root";
+  return input.document.type === "folder" ? "folder_browser" : "document_editor";
+}
+
+export function getKnowledgeDocumentWorkspaceMode(
+  document?: Pick<KnowledgeDocument, "type"> | null,
+): KnowledgeDocumentWorkspaceMode {
+  return getKnowledgeDocumentOpenMode({ document }) === "document_editor" ? "document" : "vault";
 }
 
 export function validateKnowledgeDocumentSiblingTitle(input: {

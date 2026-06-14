@@ -207,6 +207,55 @@ describe("buildKnowledgePromptContext", () => {
     expect(context).toContain("Question: What changed?");
     expect(context).not.toContain("Stale markdown fallback");
   });
+
+  it("keeps unsupported and future ReadAny cards readable in AI context without raw data", () => {
+    const context = buildKnowledgePromptContext(
+      [
+        doc({
+          id: "fallback-card-doc",
+          title: "Fallback Card Note",
+          contentMd: "Stale markdown fallback",
+          contentJson: {
+            type: "doc",
+            content: [
+              {
+                type: "readanyCard",
+                attrs: {
+                  cardType: "customMetric",
+                  version: 3,
+                  title: "Reading score",
+                  text: "Focus: 92%",
+                  sourceTitle: "Chapter 4",
+                  cfi: "epubcfi(/6/4)",
+                  data: { private: "<json>" },
+                },
+              },
+              {
+                type: "readanyCard",
+                attrs: {
+                  cardType: "aiSummary",
+                  version: 99,
+                  title: "Future summary",
+                  markdown: "Readable fallback body.",
+                },
+              },
+            ],
+          },
+        }),
+      ],
+      { maxChars: 1400 },
+    );
+
+    expect(context).toContain("[standalone_note] Fallback Card Note");
+    expect(context).toContain("Reading score");
+    expect(context).toContain("Focus: 92%");
+    expect(context).toContain("ReadAny card: customMetric v3");
+    expect(context).toContain("Future summary");
+    expect(context).toContain("Readable fallback body.");
+    expect(context).not.toContain("Stale markdown fallback");
+    expect(context).not.toContain("private");
+    expect(context).not.toContain("<json>");
+  });
 });
 
 describe("loadKnowledgePromptContext", () => {

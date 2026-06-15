@@ -155,6 +155,7 @@ describe("knowledge tools", () => {
         parentTitle?: string;
         path: string;
         snippet: string;
+        matchFields?: string[];
         childCount: number;
       }>;
     };
@@ -172,6 +173,8 @@ describe("knowledge tools", () => {
     expect(result.documents[0].parentTitle).toBe("Chapter Notes");
     expect(result.documents[0].path).toBe("Knowledge base / Chapter Notes / Memory");
     expect(result.documents[0].snippet).toContain("Memory note");
+    expect(result.documents[0].matchFields).toEqual(["title", "path", "tags", "excerpt"]);
+    expect(result.documents[1].matchFields).toEqual(["tags", "excerpt", "content"]);
     expect(result.documents[0].childCount).toBe(0);
   });
 
@@ -209,6 +212,7 @@ describe("knowledge tools", () => {
         path: string;
         summary?: string;
         snippet: string;
+        matchFields?: string[];
       }>;
     };
 
@@ -219,6 +223,7 @@ describe("knowledge tools", () => {
       path: "Knowledge base / Untitled",
       summary: "Vector memory: durable insight about context windows.",
       snippet: "Vector memory: durable insight about context windows.",
+      matchFields: ["summary"],
     });
   });
 
@@ -269,6 +274,7 @@ describe("knowledge tools", () => {
         excerpt: "Opening question.",
         summary: undefined,
         snippet: "Opening question.",
+        matchFields: ["path"],
         childCount: 0,
         children: [],
         updatedAt: 2000,

@@ -371,62 +371,79 @@ function KnowledgeToolResultDocumentRows({
 
   return (
     <>
-      {documents.slice(0, max).map((document) => (
-        <div
-          key={document.id ?? `${document.title}-${document.path}`}
-          className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">{document.title}</div>
-              {document.path ? (
-                <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {document.path}
+      {documents.slice(0, max).map((document) => {
+        const matchFieldLabels =
+          document.matchFields?.map((field) =>
+            t(`knowledgeToolResult.matchFields.${field}`, { defaultValue: field }),
+          ) ?? [];
+
+        return (
+          <div
+            key={document.id ?? `${document.title}-${document.path}`}
+            className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-foreground">
+                  {document.title}
                 </div>
-              ) : null}
-            </div>
-            {document.type ? (
-              <div className="flex shrink-0 items-center gap-1.5">
-                <span className="rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  {t(`knowledgeToolResult.types.${document.type}`, {
-                    defaultValue: document.type,
-                  })}
-                </span>
-                {document.id ? (
-                  <button
-                    type="button"
-                    className="inline-flex h-6 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                    onClick={() => handleOpenDocument(document)}
-                    title={t("knowledgeToolResult.openDocument", {
-                      defaultValue: "Open document",
-                    })}
-                  >
-                    <FileText className="h-3 w-3" />
-                    {t("knowledgeToolResult.open", { defaultValue: "Open" })}
-                  </button>
+                {document.path ? (
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {document.path}
+                  </div>
                 ) : null}
               </div>
-            ) : document.id ? (
-              <button
-                type="button"
-                className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                onClick={() => handleOpenDocument(document)}
-                title={t("knowledgeToolResult.openDocument", {
-                  defaultValue: "Open document",
+              {document.type ? (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="rounded bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                    {t(`knowledgeToolResult.types.${document.type}`, {
+                      defaultValue: document.type,
+                    })}
+                  </span>
+                  {document.id ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-6 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                      onClick={() => handleOpenDocument(document)}
+                      title={t("knowledgeToolResult.openDocument", {
+                        defaultValue: "Open document",
+                      })}
+                    >
+                      <FileText className="h-3 w-3" />
+                      {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+                    </button>
+                  ) : null}
+                </div>
+              ) : document.id ? (
+                <button
+                  type="button"
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => handleOpenDocument(document)}
+                  title={t("knowledgeToolResult.openDocument", {
+                    defaultValue: "Open document",
+                  })}
+                >
+                  <FileText className="h-3 w-3" />
+                  {t("knowledgeToolResult.open", { defaultValue: "Open" })}
+                </button>
+              ) : null}
+            </div>
+            {matchFieldLabels.length > 0 ? (
+              <div className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                {t("knowledgeToolResult.matchedIn", {
+                  fields: matchFieldLabels.join(", "),
+                  defaultValue: `Matched in ${matchFieldLabels.join(", ")}`,
                 })}
-              >
-                <FileText className="h-3 w-3" />
-                {t("knowledgeToolResult.open", { defaultValue: "Open" })}
-              </button>
+              </div>
+            ) : null}
+            {document.snippet ? (
+              <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                {document.snippet}
+              </p>
             ) : null}
           </div>
-          {document.snippet ? (
-            <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-              {document.snippet}
-            </p>
-          ) : null}
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }

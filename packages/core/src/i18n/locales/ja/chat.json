@@ -144,6 +144,15 @@
     "documentId": "文書：{{id}}",
     "reason": "理由：{{reason}}",
     "empty": "一致するナレッジ文書はありません",
+    "matchedIn": "一致箇所：{{fields}}",
+    "matchFields": {
+      "title": "タイトル",
+      "path": "パス",
+      "tags": "タグ",
+      "excerpt": "抜粋",
+      "summary": "要約",
+      "content": "本文"
+    },
     "more": "ほか {{count}} 件",
     "relations": "関連パス",
     "relationOutgoing": "リンク先",

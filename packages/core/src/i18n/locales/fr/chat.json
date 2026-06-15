@@ -144,6 +144,15 @@
     "documentId": "Document : {{id}}",
     "reason": "Raison : {{reason}}",
     "empty": "Aucun document de connaissance correspondant",
+    "matchedIn": "Correspondance dans {{fields}}",
+    "matchFields": {
+      "title": "titre",
+      "path": "chemin",
+      "tags": "étiquettes",
+      "excerpt": "extrait",
+      "summary": "résumé",
+      "content": "contenu"
+    },
     "more": "{{count}} de plus",
     "relations": "Chemins liés",
     "relationOutgoing": "Lié vers",

@@ -144,6 +144,15 @@
     "documentId": "문서: {{id}}",
     "reason": "이유: {{reason}}",
     "empty": "일치하는 지식 문서가 없어요",
+    "matchedIn": "일치 위치: {{fields}}",
+    "matchFields": {
+      "title": "제목",
+      "path": "경로",
+      "tags": "태그",
+      "excerpt": "발췌",
+      "summary": "요약",
+      "content": "본문"
+    },
     "more": "{{count}}개 더 있음",
     "relations": "연결된 경로",
     "relationOutgoing": "연결 대상",

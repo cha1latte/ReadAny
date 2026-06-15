@@ -144,6 +144,15 @@
     "documentId": "Documento: {{id}}",
     "reason": "Motivo: {{reason}}",
     "empty": "No hay documentos de conocimiento coincidentes",
+    "matchedIn": "Coincide en {{fields}}",
+    "matchFields": {
+      "title": "título",
+      "path": "ruta",
+      "tags": "etiquetas",
+      "excerpt": "extracto",
+      "summary": "resumen",
+      "content": "contenido"
+    },
     "more": "{{count}} más",
     "relations": "Rutas relacionadas",
     "relationOutgoing": "Enlaza con",

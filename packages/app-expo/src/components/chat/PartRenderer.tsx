@@ -322,65 +322,80 @@ function KnowledgeToolResultDocumentRows({
 
   return (
     <>
-      {documents.slice(0, max).map((document) => (
-        <View
-          key={document.id ?? `${document.title}-${document.path}`}
-          style={styles.knowledgeResultItem}
-        >
-          <View style={styles.knowledgeResultItemHeader}>
-            <Text style={styles.knowledgeResultItemTitle} numberOfLines={1}>
-              {document.title}
-            </Text>
-            {!!document.type && (
-              <View style={styles.knowledgeResultItemActions}>
-                <View style={styles.knowledgeResultTypeBadge}>
-                  <Text style={styles.knowledgeResultTypeText} numberOfLines={1}>
-                    {t(`knowledgeToolResult.types.${document.type}`, {
-                      defaultValue: document.type,
-                    })}
-                  </Text>
-                </View>
-                {!!document.id && (
-                  <TouchableOpacity
-                    style={styles.knowledgeResultOpenButton}
-                    onPress={() => handleOpenDocument(document)}
-                    activeOpacity={0.75}
-                    accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
-                  >
-                    <NotebookPenIcon size={12} color={colors.primary} />
-                    <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
-                      {t("knowledgeToolResult.open", "打开")}
+      {documents.slice(0, max).map((document) => {
+        const matchFieldLabels =
+          document.matchFields?.map((field) =>
+            t(`knowledgeToolResult.matchFields.${field}`, { defaultValue: field }),
+          ) ?? [];
+
+        return (
+          <View
+            key={document.id ?? `${document.title}-${document.path}`}
+            style={styles.knowledgeResultItem}
+          >
+            <View style={styles.knowledgeResultItemHeader}>
+              <Text style={styles.knowledgeResultItemTitle} numberOfLines={1}>
+                {document.title}
+              </Text>
+              {!!document.type && (
+                <View style={styles.knowledgeResultItemActions}>
+                  <View style={styles.knowledgeResultTypeBadge}>
+                    <Text style={styles.knowledgeResultTypeText} numberOfLines={1}>
+                      {t(`knowledgeToolResult.types.${document.type}`, {
+                        defaultValue: document.type,
+                      })}
                     </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                  </View>
+                  {!!document.id && (
+                    <TouchableOpacity
+                      style={styles.knowledgeResultOpenButton}
+                      onPress={() => handleOpenDocument(document)}
+                      activeOpacity={0.75}
+                      accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+                    >
+                      <NotebookPenIcon size={12} color={colors.primary} />
+                      <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
+                        {t("knowledgeToolResult.open", "打开")}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              {!document.type && !!document.id && (
+                <TouchableOpacity
+                  style={styles.knowledgeResultOpenButton}
+                  onPress={() => handleOpenDocument(document)}
+                  activeOpacity={0.75}
+                  accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
+                >
+                  <NotebookPenIcon size={12} color={colors.primary} />
+                  <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
+                    {t("knowledgeToolResult.open", "打开")}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {!!document.path && (
+              <Text style={styles.knowledgeResultPath} numberOfLines={1}>
+                {document.path}
+              </Text>
             )}
-            {!document.type && !!document.id && (
-              <TouchableOpacity
-                style={styles.knowledgeResultOpenButton}
-                onPress={() => handleOpenDocument(document)}
-                activeOpacity={0.75}
-                accessibilityLabel={t("knowledgeToolResult.openDocument", "打开文档")}
-              >
-                <NotebookPenIcon size={12} color={colors.primary} />
-                <Text style={styles.knowledgeResultOpenText} numberOfLines={1}>
-                  {t("knowledgeToolResult.open", "打开")}
-                </Text>
-              </TouchableOpacity>
+            {matchFieldLabels.length > 0 ? (
+              <Text style={styles.knowledgeResultMatchText} numberOfLines={1}>
+                {t("knowledgeToolResult.matchedIn", {
+                  fields: matchFieldLabels.join(", "),
+                  defaultValue: `Matched in ${matchFieldLabels.join(", ")}`,
+                })}
+              </Text>
+            ) : null}
+            {!!document.snippet && (
+              <Text style={styles.knowledgeResultSnippet} numberOfLines={3}>
+                {document.snippet}
+              </Text>
             )}
           </View>
-          {!!document.path && (
-            <Text style={styles.knowledgeResultPath} numberOfLines={1}>
-              {document.path}
-            </Text>
-          )}
-          {!!document.snippet && (
-            <Text style={styles.knowledgeResultSnippet} numberOfLines={3}>
-              {document.snippet}
-            </Text>
-          )}
-        </View>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -1439,6 +1454,12 @@ const makeToolStyles = (colors: ThemeColors) =>
       marginTop: 4,
       fontSize: fs.xs,
       lineHeight: 16,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultMatchText: {
+      marginTop: 5,
+      fontSize: fs.xs,
+      lineHeight: 15,
       color: colors.mutedForeground,
     },
     knowledgeResultSnippet: {

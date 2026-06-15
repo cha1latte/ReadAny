@@ -144,6 +144,15 @@
     "documentId": "Document: {{id}}",
     "reason": "Reason: {{reason}}",
     "empty": "No matching knowledge documents",
+    "matchedIn": "Matched in {{fields}}",
+    "matchFields": {
+      "title": "title",
+      "path": "path",
+      "tags": "tags",
+      "excerpt": "excerpt",
+      "summary": "summary",
+      "content": "content"
+    },
     "more": "{{count}} more",
     "relations": "Related paths",
     "relationOutgoing": "Links to",

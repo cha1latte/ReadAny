@@ -144,6 +144,15 @@
     "documentId": "文件：{{id}}",
     "reason": "原因：{{reason}}",
     "empty": "沒有符合的知識文件",
+    "matchedIn": "命中：{{fields}}",
+    "matchFields": {
+      "title": "標題",
+      "path": "路徑",
+      "tags": "標籤",
+      "excerpt": "摘錄",
+      "summary": "摘要",
+      "content": "正文"
+    },
     "more": "還有 {{count}} 個",
     "relations": "關聯路徑",
     "relationOutgoing": "連結到",

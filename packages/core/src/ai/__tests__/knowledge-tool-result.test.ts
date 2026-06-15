@@ -14,6 +14,7 @@ describe("knowledge tool result display", () => {
           type: "standalone_note",
           path: "Knowledge base / Chapter Notes",
           snippet: "A useful theme note",
+          matchFields: ["title", "path", "tags"],
           childCount: 0,
         },
       ],
@@ -37,10 +38,28 @@ describe("knowledge tool result display", () => {
           type: "standalone_note",
           path: "Knowledge base / Chapter Notes",
           snippet: "A useful theme note",
+          matchFields: ["title", "path", "tags"],
           childCount: 0,
         },
       ],
     });
+  });
+
+  it("keeps knowledge search match fields readable and sanitized", () => {
+    const display = getKnowledgeToolResultDisplay("searchKnowledgeBase", {
+      total: 1,
+      showing: 1,
+      documents: [
+        {
+          id: "doc-1",
+          title: "Tagged Note",
+          path: "Knowledge base / Tagged Note",
+          matchFields: ["tags", "bad-field", "summary", "tags", 1],
+        },
+      ],
+    });
+
+    expect(display?.documents[0]?.matchFields).toEqual(["tags", "summary"]);
   });
 
   it("summarizes current-book knowledge reads", () => {

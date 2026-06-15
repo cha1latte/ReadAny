@@ -59,6 +59,16 @@ const LINK_RELATIONS = new Set<KnowledgeLinkRelation>([
 const KNOWLEDGE_ROOT_TITLE = "Knowledge base";
 const UNTITLED_DOCUMENT_TITLE = "Untitled document";
 const ORPHANED_PARENT_TITLE = "Orphaned";
+const KNOWLEDGE_SEARCH_MATCH_FIELDS = [
+  "title",
+  "path",
+  "tags",
+  "excerpt",
+  "summary",
+  "content",
+] as const;
+
+type KnowledgeSearchMatchField = (typeof KNOWLEDGE_SEARCH_MATCH_FIELDS)[number];
 
 function asPositiveLimit(value: unknown, fallback: number): number {
   const limit = Number(value);
@@ -264,6 +274,27 @@ function scoreDocument(
   return score;
 }
 
+function createKnowledgeSearchMatchFields(
+  document: KnowledgeDocument,
+  query: string,
+  documentsById = createDocumentMap([document]),
+): KnowledgeSearchMatchField[] {
+  if (!query) return [];
+
+  const fieldText: Record<KnowledgeSearchMatchField, string> = {
+    title: document.title,
+    path: createDocumentPath(document, documentsById),
+    tags: document.tags.join(" "),
+    excerpt: document.excerpt || "",
+    summary: document.summaryMd || "",
+    content: document.contentMd,
+  };
+
+  return KNOWLEDGE_SEARCH_MATCH_FIELDS.filter((field) =>
+    fieldText[field].toLowerCase().includes(query),
+  );
+}
+
 function bookKnowledgePriority(document: KnowledgeDocument): number {
   const typeScore: Record<KnowledgeDocumentType, number> = {
     book_home: 7,
@@ -355,6 +386,7 @@ function documentSummary(
 ) {
   const parent = document.parentId ? documentsById.get(document.parentId) : undefined;
   const children = childrenByParentId.get(document.id) ?? [];
+  const matchFields = createKnowledgeSearchMatchFields(document, query, documentsById);
   return {
     id: document.id,
     bookId: document.bookId,
@@ -368,6 +400,7 @@ function documentSummary(
     excerpt: document.excerpt,
     summary: document.summaryMd,
     snippet: createSnippet(document, query),
+    matchFields: matchFields.length > 0 ? matchFields : undefined,
     childCount: children.length,
     children: children.slice(0, MAX_CHILD_CONTEXT_COUNT).map((child) => ({
       id: child.id,

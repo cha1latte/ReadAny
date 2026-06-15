@@ -144,6 +144,15 @@
     "documentId": "文档：{{id}}",
     "reason": "原因：{{reason}}",
     "empty": "没有匹配的知识文档",
+    "matchedIn": "命中：{{fields}}",
+    "matchFields": {
+      "title": "标题",
+      "path": "路径",
+      "tags": "标签",
+      "excerpt": "摘录",
+      "summary": "摘要",
+      "content": "正文"
+    },
     "more": "还有 {{count}} 个",
     "relations": "关联路径",
     "relationOutgoing": "链接到",

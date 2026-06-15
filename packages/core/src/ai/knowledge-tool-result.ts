@@ -15,8 +15,17 @@ export interface KnowledgeToolResultDocument {
   path?: string;
   type?: string;
   snippet?: string;
+  matchFields?: KnowledgeToolResultMatchField[];
   childCount?: number;
 }
+
+export type KnowledgeToolResultMatchField =
+  | "title"
+  | "path"
+  | "tags"
+  | "excerpt"
+  | "summary"
+  | "content";
 
 export interface KnowledgeToolResultRelation {
   id?: string;
@@ -121,6 +130,24 @@ function asErrorString(value: unknown): string | undefined {
 
 function asBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function asMatchFields(value: unknown): KnowledgeToolResultMatchField[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const allowed = new Set<KnowledgeToolResultMatchField>([
+    "title",
+    "path",
+    "tags",
+    "excerpt",
+    "summary",
+    "content",
+  ]);
+  const fields = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item): item is KnowledgeToolResultMatchField =>
+      allowed.has(item as KnowledgeToolResultMatchField),
+    );
+  return fields.length > 0 ? [...new Set(fields)] : undefined;
 }
 
 function compactKnowledgePreview(value: unknown): string | undefined {
@@ -262,6 +289,7 @@ function asDocumentSummary(value: unknown): KnowledgeToolResultDocument | null {
       asString(value.excerpt) ||
       asString(value.summary) ||
       compactKnowledgePreview(value.content),
+    matchFields: asMatchFields(value.matchFields),
     childCount: asNumber(value.childCount),
   };
 }

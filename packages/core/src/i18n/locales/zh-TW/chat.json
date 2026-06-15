@@ -118,6 +118,24 @@
     "tool": "知識庫工具",
     "failureUnknown": "工具呼叫失敗",
     "failureSafeHint": "失敗的工具不會寫入知識庫或修改文件。",
+    "writeSafety": {
+      "read_only": {
+        "label": "唯讀",
+        "description": "這個工具只讀取知識脈絡，沒有儲存或修改任何內容。"
+      },
+      "memory_persisted": {
+        "label": "記憶已更新",
+        "description": "這個工具更新了壓縮檢索記憶，不會改寫使用者正文內容。"
+      },
+      "memory_skipped": {
+        "label": "未寫入",
+        "description": "這個工具沒有持久化摘要，也沒有修改使用者正文內容。"
+      },
+      "no_write_failed": {
+        "label": "未寫入",
+        "description": "這次失敗的工具呼叫沒有儲存或修改任何知識文件/關聯。"
+      }
+    },
     "count": "顯示 {{showing}} / {{total}} 個文件",
     "status": "狀態：{{status}}",
     "persisted": "已持久化",

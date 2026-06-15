@@ -26,6 +26,18 @@ export interface KnowledgeToolResultRelation {
   document: KnowledgeToolResultDocument;
 }
 
+export type KnowledgeToolResultWriteSafetyState =
+  | "read_only"
+  | "memory_persisted"
+  | "memory_skipped"
+  | "no_write_failed";
+
+export interface KnowledgeToolResultWriteSafety {
+  state: KnowledgeToolResultWriteSafetyState;
+  label: string;
+  description: string;
+}
+
 export interface KnowledgeToolResultDisplay {
   kind: KnowledgeToolResultKind;
   toolName?: string;
@@ -40,6 +52,7 @@ export interface KnowledgeToolResultDisplay {
   sourceChars?: number;
   documentId?: string;
   summaryPreview?: string;
+  writeSafety: KnowledgeToolResultWriteSafety;
   failureCardAttrs?: ReadAnyCardAttrs;
   failureCardMarkdown?: string;
   documents: KnowledgeToolResultDocument[];
@@ -62,6 +75,32 @@ const KNOWLEDGE_TOOL_NAMES = new Set([
 ]);
 const KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT =
   "No knowledge document or link was saved or changed by this failed tool call.";
+const KNOWLEDGE_TOOL_WRITE_SAFETY: Record<
+  KnowledgeToolResultWriteSafetyState,
+  KnowledgeToolResultWriteSafety
+> = {
+  read_only: {
+    state: "read_only",
+    label: "Read-only",
+    description: "This tool only read knowledge context. It did not save or change anything.",
+  },
+  memory_persisted: {
+    state: "memory_persisted",
+    label: "Memory updated",
+    description:
+      "This tool updated compact retrieval memory. It did not rewrite user-authored document content.",
+  },
+  memory_skipped: {
+    state: "memory_skipped",
+    label: "No write",
+    description: "This tool did not persist a summary or change user-authored content.",
+  },
+  no_write_failed: {
+    state: "no_write_failed",
+    label: "No write",
+    description: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
+  },
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -126,6 +165,7 @@ function asFailureDisplay(
     reason,
     error: error || message || reason || "Tool execution failed",
     safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
+    writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.no_write_failed,
     documents: contextDocumentsFromResult(result),
   });
 }
@@ -143,6 +183,7 @@ function createFailureDisplay(
     reason: result ? asString(result.reason) : undefined,
     error,
     safeNoWriteHint: KNOWLEDGE_FAILURE_SAFE_NO_WRITE_HINT,
+    writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.no_write_failed,
     documents: result ? contextDocumentsFromResult(result) : [],
   });
 }
@@ -183,15 +224,20 @@ function createFailureCardAttrs(display: KnowledgeToolResultDisplay): ReadAnyCar
       reason: display.reason,
       documentId: display.documentId,
       safeNoWriteHint: display.safeNoWriteHint,
+      writeSafety: display.writeSafety,
       documents: display.documents,
     },
   };
 }
 
 function withFailureCard(display: KnowledgeToolResultDisplay): KnowledgeToolResultDisplay {
-  const failureCardAttrs = createFailureCardAttrs(display);
-  return {
+  const displayWithSafety = {
     ...display,
+    writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.no_write_failed,
+  };
+  const failureCardAttrs = createFailureCardAttrs(displayWithSafety);
+  return {
+    ...displayWithSafety,
     failureCardAttrs,
     failureCardMarkdown: renderReadAnyCardMarkdownFallback(failureCardAttrs, {
       body: failureCardAttrs.markdown || "",
@@ -367,6 +413,7 @@ export function getKnowledgeToolResultDisplay(
       toolName,
       total: asNumber(resultRecord.total),
       showing: asNumber(resultRecord.showing),
+      writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.read_only,
       documents: asDocumentList(resultRecord.documents),
     };
   }
@@ -378,6 +425,7 @@ export function getKnowledgeToolResultDisplay(
       total: 1,
       bookId: asString(resultRecord.bookId),
       documentId: asString(resultRecord.documentId),
+      writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.read_only,
       documents: contextDocumentsFromResult(resultRecord),
       relations: relationDocumentsFromResult(resultRecord),
     };
@@ -390,6 +438,7 @@ export function getKnowledgeToolResultDisplay(
       total: asNumber(resultRecord.total),
       showing: asNumber(resultRecord.showing),
       bookId: asString(resultRecord.bookId),
+      writeSafety: KNOWLEDGE_TOOL_WRITE_SAFETY.read_only,
       documents: asDocumentList(resultRecord.documents),
     };
   }
@@ -409,6 +458,9 @@ export function getKnowledgeToolResultDisplay(
     sourceChars: asNumber(resultRecord.sourceChars),
     documentId: summaryDocumentId,
     summaryPreview: compactMarkdownPreview(resultRecord.summaryMd),
+    writeSafety: asBoolean(resultRecord.persisted)
+      ? KNOWLEDGE_TOOL_WRITE_SAFETY.memory_persisted
+      : KNOWLEDGE_TOOL_WRITE_SAFETY.memory_skipped,
     documents: summaryDocument
       ? [summaryDocument]
       : summaryPath || summaryDocumentId

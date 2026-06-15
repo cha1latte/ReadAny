@@ -118,6 +118,24 @@
     "tool": "Herramienta de conocimiento",
     "failureUnknown": "La ejecución de la herramienta falló",
     "failureSafeHint": "Esta llamada fallida no escribió en la base de conocimiento ni modificó tus documentos.",
+    "writeSafety": {
+      "read_only": {
+        "label": "Solo lectura",
+        "description": "Esta herramienta solo leyó contexto de conocimiento. No guardó ni cambió nada."
+      },
+      "memory_persisted": {
+        "label": "Memoria actualizada",
+        "description": "Esta herramienta actualizó la memoria compacta de recuperación. No reescribió contenido del usuario."
+      },
+      "memory_skipped": {
+        "label": "Sin escritura",
+        "description": "Esta herramienta no persistió un resumen ni cambió contenido del usuario."
+      },
+      "no_write_failed": {
+        "label": "Sin escritura",
+        "description": "Ningún documento ni enlace de conocimiento se guardó o cambió por esta llamada fallida."
+      }
+    },
     "count": "Mostrando {{showing}} / {{total}} documentos",
     "status": "Estado: {{status}}",
     "persisted": "Persistido",

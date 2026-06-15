@@ -586,6 +586,18 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             showing: display.showing ?? display.documents.length,
             defaultValue: `${display.documents.length} document(s)`,
           });
+  const writeSafetyLabel = t(
+    `knowledgeToolResult.writeSafety.${display.writeSafety.state}.label`,
+    {
+      defaultValue: display.writeSafety.label,
+    },
+  );
+  const writeSafetyDescription = t(
+    `knowledgeToolResult.writeSafety.${display.writeSafety.state}.description`,
+    {
+      defaultValue: display.writeSafety.description,
+    },
+  );
 
   return (
     <div
@@ -626,6 +638,24 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
       </div>
 
       <div className="space-y-2 p-3">
+        <div
+          className={cn(
+            "rounded-md border px-2.5 py-2 text-xs leading-relaxed",
+            display.kind === "failure"
+              ? "border-destructive/25 bg-destructive/10 text-destructive"
+              : "border-primary/20 bg-primary/[0.04] text-foreground",
+          )}
+        >
+          <div className="font-medium">{writeSafetyLabel}</div>
+          <div
+            className={cn(
+              "mt-0.5",
+              display.kind === "failure" ? "text-destructive/75" : "text-muted-foreground",
+            )}
+          >
+            {writeSafetyDescription}
+          </div>
+        </div>
         {display.kind === "failure" ? (
           <>
             <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">

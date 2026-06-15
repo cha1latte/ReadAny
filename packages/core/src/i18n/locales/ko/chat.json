@@ -118,6 +118,24 @@
     "tool": "지식 베이스 도구",
     "failureUnknown": "도구 실행 실패",
     "failureSafeHint": "실패한 도구 호출은 지식 베이스에 쓰거나 문서를 변경하지 않습니다.",
+    "writeSafety": {
+      "read_only": {
+        "label": "읽기 전용",
+        "description": "이 도구는 지식 맥락만 읽었으며 저장하거나 변경하지 않았습니다."
+      },
+      "memory_persisted": {
+        "label": "메모리 업데이트됨",
+        "description": "이 도구는 압축 검색 메모리를 업데이트했습니다. 사용자가 작성한 본문은 다시 쓰지 않습니다."
+      },
+      "memory_skipped": {
+        "label": "쓰기 없음",
+        "description": "이 도구는 요약을 저장하지 않았고 사용자가 작성한 본문도 변경하지 않았습니다."
+      },
+      "no_write_failed": {
+        "label": "쓰기 없음",
+        "description": "실패한 이 도구 호출은 지식 문서나 링크를 저장하거나 변경하지 않았습니다."
+      }
+    },
     "count": "{{showing}} / {{total}}개 문서 표시",
     "status": "상태: {{status}}",
     "persisted": "저장됨",

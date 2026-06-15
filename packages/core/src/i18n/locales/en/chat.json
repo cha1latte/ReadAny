@@ -118,6 +118,24 @@
     "tool": "Knowledge tool",
     "failureUnknown": "Tool execution failed",
     "failureSafeHint": "This failed tool call did not write to the knowledge base or change your documents.",
+    "writeSafety": {
+      "read_only": {
+        "label": "Read-only",
+        "description": "This tool only read knowledge context. It did not save or change anything."
+      },
+      "memory_persisted": {
+        "label": "Memory updated",
+        "description": "This tool updated compact retrieval memory. It did not rewrite user-authored document content."
+      },
+      "memory_skipped": {
+        "label": "No write",
+        "description": "This tool did not persist a summary or change user-authored content."
+      },
+      "no_write_failed": {
+        "label": "No write",
+        "description": "No knowledge document or link was saved or changed by this failed tool call."
+      }
+    },
     "count": "Showing {{showing}} / {{total}} documents",
     "status": "Status: {{status}}",
     "persisted": "Persisted",

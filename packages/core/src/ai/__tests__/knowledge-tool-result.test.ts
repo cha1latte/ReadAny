@@ -24,6 +24,11 @@ describe("knowledge tool result display", () => {
       toolName: "searchKnowledgeBase",
       total: 2,
       showing: 1,
+      writeSafety: {
+        state: "read_only",
+        label: "Read-only",
+        description: "This tool only read knowledge context. It did not save or change anything.",
+      },
       documents: [
         {
           id: "doc-1",
@@ -107,6 +112,11 @@ describe("knowledge tool result display", () => {
       total: 1,
       bookId: "book-1",
       documentId: "doc-1",
+      writeSafety: {
+        state: "read_only",
+        label: "Read-only",
+        description: "This tool only read knowledge context. It did not save or change anything.",
+      },
       documents: [
         {
           id: "doc-1",
@@ -243,6 +253,12 @@ describe("knowledge tool result display", () => {
       reason: "stale",
       sourceChars: 12000,
       summaryPreview: "Summary A durable reading memory.",
+      writeSafety: {
+        state: "memory_persisted",
+        label: "Memory updated",
+        description:
+          "This tool updated compact retrieval memory. It did not rewrite user-authored document content.",
+      },
       documents: [
         {
           id: "doc-1",
@@ -251,6 +267,27 @@ describe("knowledge tool result display", () => {
           path: "Knowledge base / Chapter Notes / Durable Memory",
         },
       ],
+    });
+  });
+
+  it("marks skipped compact-memory runs as no-write tool results", () => {
+    const display = getKnowledgeToolResultDisplay("compressKnowledgeDocumentSummary", {
+      success: true,
+      status: "skipped",
+      persisted: false,
+      documentId: "doc-1",
+      reason: "fresh",
+    });
+
+    expect(display).toMatchObject({
+      kind: "summary",
+      toolName: "compressKnowledgeDocumentSummary",
+      persisted: false,
+      writeSafety: {
+        state: "memory_skipped",
+        label: "No write",
+        description: "This tool did not persist a summary or change user-authored content.",
+      },
     });
   });
 
@@ -268,6 +305,12 @@ describe("knowledge tool result display", () => {
       error: "Knowledge document not found",
       safeNoWriteHint:
         "No knowledge document or link was saved or changed by this failed tool call.",
+      writeSafety: {
+        state: "no_write_failed",
+        label: "No write",
+        description:
+          "No knowledge document or link was saved or changed by this failed tool call.",
+      },
       documents: [],
     });
     expect(display?.failureCardAttrs).toMatchObject({
@@ -304,6 +347,12 @@ describe("knowledge tool result display", () => {
       error: "Model request failed",
       safeNoWriteHint:
         "No knowledge document or link was saved or changed by this failed tool call.",
+      writeSafety: {
+        state: "no_write_failed",
+        label: "No write",
+        description:
+          "No knowledge document or link was saved or changed by this failed tool call.",
+      },
       documents: [
         {
           id: "doc-1",
@@ -449,6 +498,9 @@ describe("knowledge tool result display", () => {
       error: "Model request failed",
       safeNoWriteHint:
         "No knowledge document or link was saved or changed by this failed tool call.",
+      writeSafety: {
+        state: "no_write_failed",
+      },
       documents: [],
     });
     expect(display?.failureCardMarkdown).toContain("> Reason: model_error");
@@ -465,6 +517,9 @@ describe("knowledge tool result display", () => {
       error: "Tool searchKnowledgeBase is not available",
       safeNoWriteHint:
         "No knowledge document or link was saved or changed by this failed tool call.",
+      writeSafety: {
+        state: "no_write_failed",
+      },
       documents: [],
     });
     expect(display?.failureCardMarkdown).toContain("> [!failure] searchKnowledgeBase");
@@ -481,6 +536,9 @@ describe("knowledge tool result display", () => {
       error: "Bridge message failed",
       safeNoWriteHint:
         "No knowledge document or link was saved or changed by this failed tool call.",
+      writeSafety: {
+        state: "no_write_failed",
+      },
       documents: [],
     });
     expect(display?.failureCardAttrs?.cardType).toBe("aiToolFailure");

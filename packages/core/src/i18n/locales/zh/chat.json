@@ -118,6 +118,24 @@
     "tool": "知识库工具",
     "failureUnknown": "工具调用失败",
     "failureSafeHint": "失败的工具不会写入知识库或修改文档。",
+    "writeSafety": {
+      "read_only": {
+        "label": "只读",
+        "description": "这个工具只读取知识上下文，没有保存或修改任何内容。"
+      },
+      "memory_persisted": {
+        "label": "记忆已更新",
+        "description": "这个工具更新了压缩检索记忆，不会改写用户正文内容。"
+      },
+      "memory_skipped": {
+        "label": "未写入",
+        "description": "这个工具没有持久化摘要，也没有修改用户正文内容。"
+      },
+      "no_write_failed": {
+        "label": "未写入",
+        "description": "这次失败的工具调用没有保存或修改任何知识文档/关联。"
+      }
+    },
     "count": "显示 {{showing}} / {{total}} 个文档",
     "status": "状态：{{status}}",
     "persisted": "已持久化",

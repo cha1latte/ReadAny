@@ -118,6 +118,24 @@
     "tool": "ナレッジツール",
     "failureUnknown": "ツールの実行に失敗しました",
     "failureSafeHint": "失敗したツール呼び出しは、ナレッジベースへの書き込みや文書の変更を行いません。",
+    "writeSafety": {
+      "read_only": {
+        "label": "読み取り専用",
+        "description": "このツールはナレッジ文脈を読むだけで、保存や変更は行いません。"
+      },
+      "memory_persisted": {
+        "label": "メモリ更新済み",
+        "description": "このツールは圧縮検索メモリを更新しました。ユーザー本文は書き換えません。"
+      },
+      "memory_skipped": {
+        "label": "書き込みなし",
+        "description": "このツールは要約を保存せず、ユーザー本文も変更しませんでした。"
+      },
+      "no_write_failed": {
+        "label": "書き込みなし",
+        "description": "失敗したこのツール呼び出しでは、ナレッジ文書やリンクは保存・変更されていません。"
+      }
+    },
     "count": "{{showing}} / {{total}} 件の文書を表示",
     "status": "状態：{{status}}",
     "persisted": "保存済み",

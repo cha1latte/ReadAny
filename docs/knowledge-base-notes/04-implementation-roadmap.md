@@ -179,7 +179,8 @@ vault-aware result context, prompt snapshots and exact document reads with
 outgoing-link/backlink context, relation labels/CFIs in prompt snapshots,
 relation-aware desktop/mobile result cards, current-workspace document opening
 from AI result and applied proposal cards, update proposals that reject duplicate
-sibling vault paths, and structured failure cards exist.
+sibling vault paths, write-safety status on desktop/mobile tool result cards,
+and structured failure cards exist.
 Broader retrieval UX and end-to-end validation still need work.
 
 Goal:

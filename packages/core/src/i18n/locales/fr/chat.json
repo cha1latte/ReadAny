@@ -118,6 +118,24 @@
     "tool": "Outil de connaissances",
     "failureUnknown": "L'exécution de l'outil a échoué",
     "failureSafeHint": "Cet appel d'outil échoué n'a pas écrit dans la base de connaissances ni modifié vos documents.",
+    "writeSafety": {
+      "read_only": {
+        "label": "Lecture seule",
+        "description": "Cet outil a seulement lu le contexte de connaissance. Il n'a rien enregistré ni modifié."
+      },
+      "memory_persisted": {
+        "label": "Mémoire mise à jour",
+        "description": "Cet outil a mis à jour la mémoire compacte de recherche. Il n'a pas réécrit le contenu utilisateur."
+      },
+      "memory_skipped": {
+        "label": "Aucune écriture",
+        "description": "Cet outil n'a pas persisté de résumé ni modifié le contenu utilisateur."
+      },
+      "no_write_failed": {
+        "label": "Aucune écriture",
+        "description": "Aucun document ou lien de connaissance n'a été enregistré ou modifié par cet appel échoué."
+      }
+    },
     "count": "{{showing}} / {{total}} documents affichés",
     "status": "Statut : {{status}}",
     "persisted": "Persisté",

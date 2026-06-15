@@ -523,6 +523,14 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
             total: display.total ?? display.documents.length,
             showing: display.showing ?? display.documents.length,
           });
+  const writeSafetyLabel = t(
+    `knowledgeToolResult.writeSafety.${display.writeSafety.state}.label`,
+    display.writeSafety.label,
+  );
+  const writeSafetyDescription = t(
+    `knowledgeToolResult.writeSafety.${display.writeSafety.state}.description`,
+    display.writeSafety.description,
+  );
 
   return (
     <View style={[s.knowledgeResultCard, display.kind === "failure" && s.knowledgeResultFailure]}>
@@ -557,6 +565,29 @@ function KnowledgeToolResultCard({ display }: { display: KnowledgeToolResultDisp
       </View>
 
       <View style={s.knowledgeResultBody}>
+        <View
+          style={[
+            s.knowledgeResultSafety,
+            display.kind === "failure" && s.knowledgeResultFailureSafety,
+          ]}
+        >
+          <Text
+            style={[
+              s.knowledgeResultSafetyLabel,
+              display.kind === "failure" && s.knowledgeResultFailureSafetyLabel,
+            ]}
+          >
+            {writeSafetyLabel}
+          </Text>
+          <Text
+            style={[
+              s.knowledgeResultSafetyText,
+              display.kind === "failure" && s.knowledgeResultFailureSafetyText,
+            ]}
+          >
+            {writeSafetyDescription}
+          </Text>
+        </View>
         {display.kind === "failure" ? (
           <>
             <View style={s.knowledgeResultFailureBody}>
@@ -1291,6 +1322,36 @@ const makeToolStyles = (colors: ThemeColors) =>
     knowledgeResultBody: {
       gap: 8,
       padding: 10,
+    },
+    knowledgeResultSafety: {
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.primary, 0.24),
+      backgroundColor: withOpacity(colors.primary, 0.06),
+      borderRadius: radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 3,
+    },
+    knowledgeResultFailureSafety: {
+      borderColor: withOpacity(colors.destructive, 0.24),
+      backgroundColor: withOpacity(colors.destructive, 0.08),
+    },
+    knowledgeResultSafetyLabel: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    knowledgeResultFailureSafetyLabel: {
+      color: colors.destructive,
+    },
+    knowledgeResultSafetyText: {
+      fontSize: fs.xs,
+      lineHeight: 16,
+      color: colors.mutedForeground,
+    },
+    knowledgeResultFailureSafetyText: {
+      color: withOpacity(colors.destructive, 0.76),
     },
     knowledgeResultFailureBody: {
       borderWidth: 0.5,

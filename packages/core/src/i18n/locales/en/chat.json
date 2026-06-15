@@ -43,6 +43,8 @@
     "copyAll": "Copy All",
     "exportSuccess": "Export successful",
     "copiedSuccess": "Copied to clipboard",
+    "citationBookMissing": "This citation is not linked to a book",
+    "citationOpenedBook": "Opened the book. This citation has no precise location.",
     "roleUser": "You",
     "roleAI": "AI",
     "askAboutBook": "Ask anything about this book...",

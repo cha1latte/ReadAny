@@ -43,6 +43,8 @@
     "copyAll": "Copiar todo",
     "exportSuccess": "Exportación exitosa",
     "copiedSuccess": "Copiado al portapapeles",
+    "citationBookMissing": "Esta cita no está vinculada a ningún libro",
+    "citationOpenedBook": "Libro abierto. Esta cita no tiene una ubicación precisa.",
     "roleUser": "Tú",
     "roleAI": "IA",
     "askAboutBook": "Pregunta lo que quieras sobre este libro...",

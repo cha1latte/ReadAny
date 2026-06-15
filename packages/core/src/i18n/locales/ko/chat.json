@@ -43,6 +43,8 @@
     "copyAll": "전체 복사",
     "exportSuccess": "내보내기 완료",
     "copiedSuccess": "클립보드에 복사됨",
+    "citationBookMissing": "이 인용은 책과 연결되어 있지 않아요",
+    "citationOpenedBook": "책을 열었어요. 이 인용에는 정확한 위치가 없어요.",
     "roleUser": "나",
     "roleAI": "AI",
     "askAboutBook": "이 책에 대해 무엇이든 물어보세요...",

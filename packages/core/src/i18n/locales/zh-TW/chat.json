@@ -43,6 +43,8 @@
     "copyAll": "複製全部",
     "exportSuccess": "匯出成功",
     "copiedSuccess": "已複製到剪貼簿",
+    "citationBookMissing": "這個引用沒有關聯書籍",
+    "citationOpenedBook": "已開啟書籍，這個引用沒有精確位置",
     "roleUser": "你",
     "roleAI": "AI",
     "askAboutBook": "詢問關於這本書的問題...",

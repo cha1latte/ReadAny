@@ -165,6 +165,9 @@ confirmation-required proposal write-safety status, confirmation-required apply
 behavior, and persistent proposal-apply failure
 states with retry affordances and localized conflict reasons instead of raw
 internal error codes.
+The desktop chat contract also checks that standalone AI citations open the
+matching reader tab with the registered CFI instead of only logging the click,
+so citations produced outside the reader sidebar still lead back to source text.
 The desktop and mobile knowledge workspace contract checks scan the runtime UI
 sources for the vault tree, root/folder browser, document editor, breadcrumb/path,
 search, create target, import review, desktop vault-import conflict resolution

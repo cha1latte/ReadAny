@@ -43,6 +43,8 @@
     "copyAll": "すべてコピー",
     "exportSuccess": "エクスポート成功",
     "copiedSuccess": "クリップボードにコピーしました",
+    "citationBookMissing": "この引用は書籍に関連付けられていません",
+    "citationOpenedBook": "書籍を開きました。この引用には正確な位置情報がありません。",
     "roleUser": "あなた",
     "roleAI": "AI",
     "askAboutBook": "この本について何でも聞いてください...",

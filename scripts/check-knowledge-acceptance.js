@@ -22,6 +22,7 @@ const desktopChatRendererPath = path.join(
   rootDir,
   "packages/app/src/components/chat/PartRenderer.tsx",
 );
+const desktopChatPagePath = path.join(rootDir, "packages/app/src/components/chat/ChatPage.tsx");
 const desktopMainPath = path.join(rootDir, "packages/app/src/main.tsx");
 const desktopBrowserPreviewPlatformPath = path.join(
   rootDir,
@@ -326,6 +327,14 @@ function verifyDesktopAIKnowledgeChatContract() {
     "getKnowledgeProposalApplyErrorDetails",
     "preview.visiblePath",
     "preview.hasPathChange",
+  ]);
+  verifySourceContract("desktop chat citation navigation contract", desktopChatPagePath, [
+    "openDesktopBook",
+    "handleCitationClick",
+    "citation.bookId",
+    "initialCfi: citation.cfi?.trim() || undefined",
+    "citationOpenedBook",
+    "citationBookMissing",
   ]);
 }
 

@@ -14,6 +14,15 @@ const knowledgeNotesSourceFiles = [
   "packages/app-expo/src/components/knowledge/MobileKnowledgeEditor.tsx",
   "packages/app-expo/src/screens/NotesView.tsx",
 ] as const;
+const knowledgeChatSourceFiles = [
+  "packages/app/src/components/chat/MessageList.tsx",
+  "packages/app/src/components/chat/PartRenderer.tsx",
+  "packages/app/src/components/chat/StreamingIndicator.tsx",
+  "packages/app-expo/src/components/chat/MessageList.tsx",
+  "packages/app-expo/src/components/chat/PartRenderer.tsx",
+  "packages/app-expo/src/components/chat/StreamingIndicator.tsx",
+  "packages/core/src/hooks/use-streaming-chat.ts",
+] as const;
 
 function readLocaleNamespace(locale: string, namespace: (typeof knowledgeNamespaces)[number]) {
   return JSON.parse(
@@ -65,12 +74,13 @@ function hasPath(value: LocaleObject, key: string): boolean {
   return true;
 }
 
-function extractKnowledgeNotesKeysFromSource(): string[] {
+function extractI18nKeysFromSource(sourceFiles: readonly string[], prefixes: readonly string[]) {
   const keys = new Set<string>();
-  for (const sourceFile of knowledgeNotesSourceFiles) {
+  const pattern = new RegExp(`["'](${prefixes.join("|")})\\.[A-Za-z0-9_.-]+["']`, "g");
+  for (const sourceFile of sourceFiles) {
     const source = readFileSync(path.join(repoRoot, sourceFile), "utf8");
-    for (const match of source.matchAll(/["'](notes\.knowledge[A-Za-z0-9_.-]+)["']/g)) {
-      const key = match[1];
+    for (const match of source.matchAll(pattern)) {
+      const key = match[0].slice(1, -1);
       if (!key.endsWith(".")) keys.add(key);
     }
   }
@@ -90,10 +100,21 @@ describe("i18n knowledge locales", () => {
 
   it("keeps knowledge notes UI keys used by desktop and mobile sources translated", () => {
     const notesLocale = readLocaleNamespace("en", "notes");
-    const missingKeys = extractKnowledgeNotesKeysFromSource().filter(
-      (key) => !hasPath(notesLocale, key),
-    );
+    const missingKeys = extractI18nKeysFromSource(knowledgeNotesSourceFiles, [
+      "notes\\.knowledge",
+    ]).filter((key) => !hasPath(notesLocale, key));
     expect(missingKeys, "English notes locale is missing knowledge UI keys").toEqual([]);
+  });
+
+  it("keeps knowledge chat UI keys used by desktop and mobile sources translated", () => {
+    const chatLocale = readLocaleNamespace("en", "chat");
+    const missingKeys = extractI18nKeysFromSource(knowledgeChatSourceFiles, [
+      "knowledgeToolResult",
+      "knowledgeProposal",
+      "toolLabels",
+      "streaming",
+    ]).filter((key) => !hasPath(chatLocale, key));
+    expect(missingKeys, "English chat locale is missing knowledge chat UI keys").toEqual([]);
   });
 
   it("keeps knowledge and card translation keys available in every locale", () => {

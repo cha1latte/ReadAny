@@ -63,6 +63,7 @@ const knowledgeTests = [
   "src/ai/tools/knowledge-tools.test.ts",
   "src/export/knowledge-exporter.test.ts",
   "src/export/knowledge-importer.test.ts",
+  "src/export/obsidian-uri.test.ts",
 ];
 
 const commands = [
@@ -398,6 +399,10 @@ function verifyDesktopKnowledgeWorkspaceContract() {
     "knowledgeVaultImportResolution.",
     "entry.resolution",
     "KnowledgeVaultConflictCard",
+    "createObsidianVaultFileOpenUri",
+    "knowledgeObsidianOpenFile",
+    "knowledgeObsidianSearchVault",
+    "openExternalUrl",
     "knowledgeDocumentPath",
     "knowledge:open-document",
     "applyBackgroundKnowledgeSummaryUpdate",

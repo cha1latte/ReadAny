@@ -117,6 +117,8 @@ export interface IPlatformService {
   // Desktop: system save dialog, RN: expo-file-system + expo-sharing
   // Returns saved path if successful, null if cancelled.
   shareOrDownloadFile(content: string, filename: string, mimeType: string): Promise<string | null>;
+  /** Open an external URL or custom protocol URI, such as https:// or obsidian://. */
+  openExternalUrl?(url: string): Promise<void>;
 
   // ---- LAN Sync ----
   // Check if device is on WiFi (returns true on desktop)

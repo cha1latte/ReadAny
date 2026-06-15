@@ -721,6 +721,11 @@ export class ExpoPlatformService implements IPlatformService {
     return null;
   }
 
+  async openExternalUrl(url: string): Promise<void> {
+    const { Linking } = await import("react-native");
+    await Linking.openURL(url);
+  }
+
   // ---- LAN Sync ----
 
   async isOnWifi(): Promise<boolean> {

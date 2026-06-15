@@ -55,9 +55,12 @@ import {
   type KnowledgeVaultImportPlan,
   type KnowledgeVaultImportResolution,
   annotationExporter,
+  createObsidianSearchUri,
+  createObsidianVaultFileOpenUri,
   createKnowledgeMarkdownImportPlan,
   createKnowledgeVaultImportPlan,
   createKnowledgeVaultImportWriteProposals,
+  inferObsidianVaultNameFromPath,
   knowledgeExporter,
   scopeKnowledgeExportInputToDocumentSubtree,
 } from "@readany/core/export";
@@ -115,6 +118,7 @@ import {
   ChevronRight,
   Download,
   Edit3,
+  ExternalLink,
   FileText,
   Folder,
   FolderDown,
@@ -178,6 +182,24 @@ function knowledgeVaultImportResolutionLabel(
 ): string | null {
   if (!resolution) return null;
   return t(`notes.knowledgeVaultImportResolution.${resolution.kind}`);
+}
+
+async function openKnowledgeObsidianUri(
+  uri: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): Promise<void> {
+  const platform = getPlatformService();
+  if (!platform.openExternalUrl) {
+    toast.error(t("notes.knowledgeObsidianOpenUnavailable"));
+    return;
+  }
+
+  try {
+    await platform.openExternalUrl(uri);
+  } catch (error) {
+    toast.error(t("notes.knowledgeObsidianOpenFailed"));
+    console.error("[Notes] Failed to open Obsidian URI:", error);
+  }
 }
 
 interface KnowledgeMarkdownImportReviewItem {
@@ -5126,6 +5148,17 @@ function KnowledgeVaultConflictCard({
 }) {
   const visiblePaths = notice.paths.slice(0, 4);
   const hiddenCount = Math.max(0, notice.paths.length - visiblePaths.length);
+  const firstVisiblePath = visiblePaths[0];
+  const firstFileUri = firstVisiblePath
+    ? createObsidianVaultFileOpenUri({
+        rootPath: notice.rootPath,
+        relativePath: firstVisiblePath,
+        paneType: "tab",
+      })
+    : null;
+  const searchUri = createObsidianSearchUri({
+    vault: inferObsidianVaultNameFromPath(notice.rootPath),
+  });
 
   return (
     <div className="mb-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm shadow-sm">
@@ -5171,6 +5204,31 @@ function KnowledgeVaultConflictCard({
                 </p>
               ) : null}
             </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {firstFileUri ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 border-destructive/25 bg-background/75 px-2 text-xs text-foreground hover:bg-background"
+                onClick={() => void openKnowledgeObsidianUri(firstFileUri, t)}
+              >
+                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                {t("notes.knowledgeObsidianOpenFile")}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 border-border/60 bg-background/75 px-2 text-xs text-foreground hover:bg-background"
+              onClick={() => void openKnowledgeObsidianUri(searchUri, t)}
+            >
+              <Search className="mr-1.5 h-3.5 w-3.5" />
+              {t("notes.knowledgeObsidianSearchVault")}
+            </Button>
           </div>
         </div>
       </div>
@@ -5416,6 +5474,9 @@ function KnowledgeVaultImportReviewCard({
   const proposalByDocumentId = new Map(
     review.proposals.map((proposal) => [proposal.documentId, proposal] as const),
   );
+  const searchUri = createObsidianSearchUri({
+    vault: inferObsidianVaultNameFromPath(review.rootPath),
+  });
 
   return (
     <div className="mb-3 overflow-hidden rounded-lg border border-primary/20 bg-primary/[0.035] text-sm shadow-sm">
@@ -5636,6 +5697,16 @@ function KnowledgeVaultImportReviewCard({
                   : t("notes.knowledgeVaultImportNoApplicableChanges")}
             </p>
             <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7"
+                onClick={() => void openKnowledgeObsidianUri(searchUri, t)}
+              >
+                <Search className="mr-1.5 h-3.5 w-3.5" />
+                {t("notes.knowledgeObsidianSearchVault")}
+              </Button>
               <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>
                 {t("common.cancel")}
               </Button>

@@ -344,6 +344,11 @@ export class TauriPlatformService implements IPlatformService {
     return filePath;
   }
 
+  async openExternalUrl(url: string): Promise<void> {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
+  }
+
   // ---- LAN Sync ----
 
   async isOnWifi(): Promise<boolean> {

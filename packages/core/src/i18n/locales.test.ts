@@ -37,6 +37,12 @@ function isKnowledgeKey(key: string): boolean {
   return normalized.includes("knowledge") || normalized.includes("card");
 }
 
+function localeDirectories() {
+  return readdirSync(localesDir)
+    .filter((entry) => statSync(path.join(localesDir, entry)).isDirectory())
+    .sort();
+}
+
 function interpolationPlaceholders(value: unknown): string[] {
   return Array.from(String(value).matchAll(/{{\s*([\w.]+)\s*}}/g))
     .map((match) => match[1])
@@ -44,9 +50,18 @@ function interpolationPlaceholders(value: unknown): string[] {
 }
 
 describe("i18n knowledge locales", () => {
+  it("keeps notes knowledge and card keys inside the notes object", () => {
+    for (const locale of localeDirectories()) {
+      const topLevelKeys = Object.keys(readLocaleNamespace(locale, "notes")).filter(isKnowledgeKey);
+      expect(
+        topLevelKeys,
+        `${locale}/notes has knowledge i18n keys outside the notes object`,
+      ).toEqual([]);
+    }
+  });
+
   it("keeps knowledge and card translation keys available in every locale", () => {
-    const locales = readdirSync(localesDir)
-      .filter((entry) => statSync(path.join(localesDir, entry)).isDirectory())
+    const locales = localeDirectories()
       .filter((locale) => locale !== "en")
       .sort();
 
@@ -61,8 +76,7 @@ describe("i18n knowledge locales", () => {
   });
 
   it("keeps knowledge and card interpolation placeholders consistent", () => {
-    const locales = readdirSync(localesDir)
-      .filter((entry) => statSync(path.join(localesDir, entry)).isDirectory())
+    const locales = localeDirectories()
       .filter((locale) => locale !== "en")
       .sort();
 

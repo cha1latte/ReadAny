@@ -120,10 +120,19 @@ export interface KnowledgeWriteProposalPreview {
   targetPath?: string;
   visiblePath?: string;
   hasPathChange: boolean;
+  writeSafety: KnowledgeProposalWriteSafety;
 }
 
 export interface KnowledgeWriteProposalPreviewOptions {
   cardTemplates?: KnowledgeCardTemplate[];
+}
+
+export type KnowledgeProposalWriteSafetyState = "proposal_pending_confirmation";
+
+export interface KnowledgeProposalWriteSafety {
+  state: KnowledgeProposalWriteSafetyState;
+  label: string;
+  description: string;
 }
 
 export type KnowledgeProposalApplyErrorScope =
@@ -207,6 +216,12 @@ const LINK_RELATIONS = new Set<KnowledgeLinkRelation>([
   "contains",
   "generated_from",
 ]);
+const KNOWLEDGE_PROPOSAL_WRITE_SAFETY: KnowledgeProposalWriteSafety = {
+  state: "proposal_pending_confirmation",
+  label: "Confirmation required",
+  description:
+    "AI only prepared this proposal. It will not write to the knowledge base until you apply it.",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -620,6 +635,7 @@ export function createKnowledgeWriteProposalPreview(
       targetPath: proposal.targetPath,
       visiblePath: proposal.targetPath,
       hasPathChange: false,
+      writeSafety: KNOWLEDGE_PROPOSAL_WRITE_SAFETY,
     };
   }
 
@@ -647,6 +663,7 @@ export function createKnowledgeWriteProposalPreview(
       targetPath,
       visiblePath: targetPath || currentPath,
       hasPathChange: Boolean(currentPath && targetPath && currentPath !== targetPath),
+      writeSafety: KNOWLEDGE_PROPOSAL_WRITE_SAFETY,
     };
   }
 
@@ -671,6 +688,7 @@ export function createKnowledgeWriteProposalPreview(
         ? `${proposal.source.path} -> ${proposal.target.path}`
         : proposal.source?.path || proposal.target?.path,
     hasPathChange: false,
+    writeSafety: KNOWLEDGE_PROPOSAL_WRITE_SAFETY,
   };
 }
 

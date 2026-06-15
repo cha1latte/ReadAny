@@ -1011,6 +1011,18 @@ function KnowledgeProposalCard({
           : "knowledgeProposal.types.knowledgeDocument",
       );
   const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
+  const proposalSafetyLabel = t(
+    `knowledgeProposal.writeSafety.${preview.writeSafety.state}.label`,
+    {
+      defaultValue: preview.writeSafety.label,
+    },
+  );
+  const proposalSafetyDescription = t(
+    `knowledgeProposal.writeSafety.${preview.writeSafety.state}.description`,
+    {
+      defaultValue: preview.writeSafety.description,
+    },
+  );
   const openTarget = useMemo<KnowledgeOpenDocumentTarget | null>(() => {
     if (applyState !== "applied" || !applyResult?.documentId) return null;
     if (proposal.action === "create") {
@@ -1070,9 +1082,10 @@ function KnowledgeProposalCard({
       </div>
 
       <div className="space-y-3 p-3">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {t("knowledgeProposal.safeHint")}
-        </p>
+        <div className="rounded-md border border-primary/20 bg-primary/[0.04] px-2.5 py-2 text-xs leading-relaxed">
+          <div className="font-medium text-foreground">{proposalSafetyLabel}</div>
+          <div className="mt-0.5 text-muted-foreground">{proposalSafetyDescription}</div>
+        </div>
 
         {preview.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

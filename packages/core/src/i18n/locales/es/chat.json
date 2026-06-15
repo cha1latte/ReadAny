@@ -180,6 +180,12 @@
     "savedBadge": "Aplicado",
     "failedBadge": "Error",
     "safeHint": "La IA solo creó un borrador. Se escribirá en tu base de conocimiento tras confirmarlo.",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "Requiere confirmación",
+        "description": "La IA solo preparó esta propuesta. No escribirá en la base de conocimiento hasta que la apliques."
+      }
+    },
     "changes": "Cambios",
     "location": "Ubicación",
     "contentPreview": "Vista previa",

@@ -180,6 +180,12 @@
     "savedBadge": "적용됨",
     "failedBadge": "실패",
     "safeHint": "AI는 초안만 만들었어요. 확인 후 지식 베이스에 저장됩니다.",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "확인이 필요함",
+        "description": "AI는 이 제안을 준비만 했어요. 적용하기 전에는 지식 베이스에 기록되지 않습니다."
+      }
+    },
     "changes": "변경 사항",
     "location": "위치",
     "contentPreview": "미리보기",

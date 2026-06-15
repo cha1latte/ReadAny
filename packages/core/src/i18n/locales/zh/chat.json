@@ -180,6 +180,12 @@
     "savedBadge": "已应用",
     "failedBadge": "应用失败",
     "safeHint": "AI 只生成了草稿，确认后才会写入你的知识库。",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "需要确认",
+        "description": "AI 只是准备了这条提案，只有点击应用后才会写入知识库。"
+      }
+    },
     "changes": "变更",
     "location": "位置",
     "contentPreview": "内容预览",

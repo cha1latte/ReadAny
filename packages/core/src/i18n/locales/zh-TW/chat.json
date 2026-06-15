@@ -180,6 +180,12 @@
     "savedBadge": "已套用",
     "failedBadge": "套用失敗",
     "safeHint": "AI 只產生了草稿，確認後才會寫入你的知識庫。",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "需要確認",
+        "description": "AI 只是準備了這則提案，只有點擊套用後才會寫入知識庫。"
+      }
+    },
     "changes": "變更",
     "location": "位置",
     "contentPreview": "內容預覽",

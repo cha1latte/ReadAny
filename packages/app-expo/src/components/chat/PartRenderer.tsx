@@ -900,6 +900,14 @@ function KnowledgeProposalCard({
         preview.action === "link" ? "知识关联" : "知识文档",
       );
   const changedFieldLabels = formatKnowledgeChangedFields(preview.changedFields, t);
+  const proposalSafetyLabel = t(
+    `knowledgeProposal.writeSafety.${preview.writeSafety.state}.label`,
+    preview.writeSafety.label,
+  );
+  const proposalSafetyDescription = t(
+    `knowledgeProposal.writeSafety.${preview.writeSafety.state}.description`,
+    preview.writeSafety.description,
+  );
   const openTarget = useMemo<KnowledgeOpenDocumentTarget | null>(() => {
     if (applyState !== "applied" || !applyResult?.documentId) return null;
     if (proposal.action === "create") {
@@ -984,9 +992,10 @@ function KnowledgeProposalCard({
       </View>
 
       <View style={s.proposalBody}>
-        <Text style={s.proposalHintText}>
-          {t("knowledgeProposal.safeHint", "AI 只生成了草稿，确认后才会写入你的知识库。")}
-        </Text>
+        <View style={s.proposalSafetyBlock}>
+          <Text style={s.proposalSafetyLabel}>{proposalSafetyLabel}</Text>
+          <Text style={s.proposalSafetyText}>{proposalSafetyDescription}</Text>
+        </View>
 
         {preview.tags.length > 0 ? (
           <View style={s.proposalTagRow}>
@@ -1630,9 +1639,24 @@ const makeToolStyles = (colors: ThemeColors) =>
       gap: 9,
       padding: 10,
     },
-    proposalHintText: {
+    proposalSafetyBlock: {
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.primary, 0.24),
+      backgroundColor: withOpacity(colors.primary, 0.06),
+      borderRadius: radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 3,
+    },
+    proposalSafetyLabel: {
       fontSize: fs.xs,
-      lineHeight: 17,
+      lineHeight: 16,
+      fontWeight: fw.semibold,
+      color: colors.foreground,
+    },
+    proposalSafetyText: {
+      fontSize: fs.xs,
+      lineHeight: 16,
       color: colors.mutedForeground,
     },
     proposalTagRow: {

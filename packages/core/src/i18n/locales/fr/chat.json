@@ -180,6 +180,12 @@
     "savedBadge": "Appliqué",
     "failedBadge": "Échec",
     "safeHint": "L'IA a seulement créé un brouillon. Il sera écrit dans votre base après confirmation.",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "Confirmation requise",
+        "description": "L'IA a seulement préparé cette proposition. Elle n'écrira rien dans la base tant que vous ne l'appliquez pas."
+      }
+    },
     "changes": "Modifications",
     "location": "Emplacement",
     "contentPreview": "Aperçu",

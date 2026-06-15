@@ -180,6 +180,12 @@
     "savedBadge": "Applied",
     "failedBadge": "Failed",
     "safeHint": "AI has only drafted this. It will write to your knowledge base after confirmation.",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "Confirmation required",
+        "description": "AI only prepared this proposal. It will not write to the knowledge base until you apply it."
+      }
+    },
     "changes": "Changes",
     "location": "Location",
     "contentPreview": "Preview",

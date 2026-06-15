@@ -101,6 +101,12 @@ describe("knowledge write proposals", () => {
       targetPath: "Knowledge base / Summaries / Durable Summary",
       visiblePath: "Knowledge base / Summaries / Durable Summary",
       hasPathChange: false,
+      writeSafety: {
+        state: "proposal_pending_confirmation",
+        label: "Confirmation required",
+        description:
+          "AI only prepared this proposal. It will not write to the knowledge base until you apply it.",
+      },
     });
   });
 

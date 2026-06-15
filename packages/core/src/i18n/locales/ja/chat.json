@@ -180,6 +180,12 @@
     "savedBadge": "適用済み",
     "failedBadge": "失敗",
     "safeHint": "AI は下書きだけを作成しました。確認後にナレッジベースへ保存されます。",
+    "writeSafety": {
+      "proposal_pending_confirmation": {
+        "label": "確認が必要",
+        "description": "AI はこの提案を準備しただけです。適用するまでナレッジベースには書き込まれません。"
+      }
+    },
     "changes": "変更",
     "location": "場所",
     "contentPreview": "プレビュー",

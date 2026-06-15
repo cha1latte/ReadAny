@@ -167,6 +167,10 @@ sources for the vault tree, root/folder browser, document editor, breadcrumb/pat
 search, create target, import review, desktop vault-import conflict resolution
 guidance, and keyboard-safe mobile editor entry points that make the vault mental
 model visible before editing.
+They also check that saved and imported knowledge documents keep the compact
+AI-memory maintenance path wired through source fingerprints and background
+summary queues on both desktop and mobile, so long-form notes do not become
+stale retrieval sources after ordinary editing or Markdown import.
 The mobile workspace contract also checks that Markdown import review keeps file
 picker display names available, so review cards do not expose cache-only picker
 URIs as the user's source file identity.
@@ -197,7 +201,7 @@ Evidence mapping:
 | Tiptap JSON projects to Markdown/HTML without losing supported rich blocks. | `editor-projection.test.ts`, `rich-text-preservation.test.ts` |
 | Draft recovery, mobile WebView messages, and error states are typed and present in the generated bundle. | `editor-draft.test.ts`, `mobile-editor-bridge.test.ts`, mobile WebView bundle contract check, `app-expo` TypeScript |
 | Attachments and source/internal links remain portable through editor, sync, and export paths. | `attachments.test.ts`, `internal-links.test.ts`, `source-links.test.ts`, `rich-text-preservation.test.ts` |
-| AI reads knowledge safely, keeps prompt/exact-read outgoing links, backlinks, relation labels, CFIs, relation directions, vault paths, search match-field explanations, and write-safety state visible, can open matching result/applied-proposal documents in the current knowledge workspace, and writes only through confirmation proposals or explicit compact-memory tools. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
+| AI reads knowledge safely, keeps prompt/exact-read outgoing links, backlinks, relation labels, CFIs, relation directions, vault paths, search match-field explanations, and write-safety state visible, can open matching result/applied-proposal documents in the current knowledge workspace, keeps saved/imported documents queued for compact-memory maintenance, and writes only through confirmation proposals or explicit compact-memory tools. | `system-prompt.test.ts`, `streaming.test.ts`, `reading-agent-tools.test.ts`, `knowledge-context.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-tools.test.ts`, `proposals.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks, desktop/mobile knowledge workspace contract checks |
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
 | Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states, and export as readable Obsidian callouts. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-exporter.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |

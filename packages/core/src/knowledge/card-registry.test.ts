@@ -639,6 +639,68 @@ describe("ReadAny card registry", () => {
     );
   });
 
+  it("matches imported custom card groups by label when explicit group keys differ", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-imported-claim",
+      name: "Imported Claim",
+      fields: [
+        { key: "has_evidence", label: "Has evidence", type: "checkbox", defaultValue: false },
+        { key: "quote", label: "Quote", type: "multiline", group: "Evidence" },
+        { key: "summary", label: "Summary", type: "text", group: "Core" },
+      ],
+      now: 123,
+    });
+    const importedTemplate = {
+      ...template,
+      schemaJson: {
+        ...(template.schemaJson as Record<string, unknown>),
+        groups: [
+          {
+            key: "ev",
+            label: "Evidence",
+            visibleWhen: { fieldKey: "has evidence", operator: "equals", value: true },
+          },
+        ],
+      },
+    };
+
+    expect(getReadAnyCardTemplateFieldGroups(importedTemplate)).toEqual([
+      {
+        key: "evidence",
+        label: "Evidence",
+        visibleWhen: { fieldKey: "has_evidence", operator: "equals", value: true },
+      },
+      { key: "core", label: "Core" },
+    ]);
+    expect(getReadAnyCardTemplateFields(importedTemplate)[1].groupVisibleWhen).toEqual({
+      fieldKey: "has_evidence",
+      operator: "equals",
+      value: true,
+    });
+    expect(
+      getVisibleReadAnyCardTemplateFields(importedTemplate, {
+        has_evidence: false,
+        quote: "Should be hidden",
+        summary: "Visible",
+      }).map((field) => field.key),
+    ).toEqual(["has_evidence", "summary"]);
+
+    const hiddenModel = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-imported-claim",
+        data: {
+          has_evidence: false,
+          quote: "Should be hidden",
+          summary: "Visible",
+        },
+      },
+      { body: "", cardTemplates: [importedTemplate] },
+    );
+    expect(renderReadAnyCardStructuredFieldsMarkdown(hiddenModel.structuredFields)).not.toContain(
+      "Should be hidden",
+    );
+  });
+
   it("stores visual custom card fields in synced templates and insert attrs", () => {
     const template = createCustomReadAnyCardTemplate({
       id: "template-concept",

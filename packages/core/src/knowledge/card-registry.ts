@@ -495,6 +495,7 @@ function normalizeReadAnyCardTemplateFieldGroups(
 ): ReadAnyCardTemplateFieldGroup[] {
   const normalizedGroups: ReadAnyCardTemplateFieldGroup[] = [];
   const indexByKey = new Map<string, number>();
+  const indexByLabelKey = new Map<string, number>();
 
   const upsertGroup = (
     label: string,
@@ -503,8 +504,9 @@ function normalizeReadAnyCardTemplateFieldGroups(
   ) => {
     const normalizedLabel = label.trim();
     if (!normalizedLabel) return;
+    const labelKey = templateFieldGroupKey(normalizedLabel);
     const normalizedKey = normalizeTemplateFieldKey(key, templateFieldGroupKey(normalizedLabel));
-    const existingIndex = indexByKey.get(normalizedKey);
+    const existingIndex = indexByKey.get(normalizedKey) ?? indexByLabelKey.get(labelKey);
     if (existingIndex !== undefined) {
       const existing = normalizedGroups[existingIndex];
       normalizedGroups[existingIndex] = {
@@ -512,9 +514,12 @@ function normalizeReadAnyCardTemplateFieldGroups(
         label: existing.label || normalizedLabel,
         ...(visibleWhen ? { visibleWhen } : {}),
       };
+      indexByKey.set(normalizedKey, existingIndex);
+      indexByLabelKey.set(labelKey, existingIndex);
       return;
     }
     indexByKey.set(normalizedKey, normalizedGroups.length);
+    indexByLabelKey.set(labelKey, normalizedGroups.length);
     normalizedGroups.push({
       key: normalizedKey,
       label: normalizedLabel,
@@ -564,7 +569,11 @@ function attachTemplateFieldGroupVisibility(
   groups: ReadAnyCardTemplateFieldGroup[],
 ): ReadAnyCardTemplateField[] {
   if (groups.length === 0) return fields;
-  const groupsByKey = new Map(groups.map((group) => [group.key, group]));
+  const groupsByKey = new Map<string, ReadAnyCardTemplateFieldGroup>();
+  for (const group of groups) {
+    groupsByKey.set(group.key, group);
+    groupsByKey.set(templateFieldGroupKey(group.label), group);
+  }
   return fields.map((field) => {
     const groupLabel = field.group?.trim();
     if (!groupLabel) return field;

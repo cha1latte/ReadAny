@@ -100,7 +100,7 @@ import {
 } from "@readany/core/knowledge";
 import { applyKnowledgeWriteProposal } from "@readany/core/knowledge/proposals";
 import { sortAnnotationsByPosition } from "@readany/core/reader";
-import { getPlatformService } from "@readany/core/services";
+import { getPlatformService, type PickedFile } from "@readany/core/services";
 import type {
   Book,
   Highlight,
@@ -157,6 +157,7 @@ const KNOWLEDGE_SUMMARY_AUTOSAVE_MAINTENANCE_DELAY_MS = 45_000;
 interface KnowledgeMarkdownImportReviewItem {
   path: string;
   sourcePath: string;
+  sourceName?: string;
   proposal: KnowledgeImportWriteProposal;
   warnings: string[];
 }
@@ -186,6 +187,15 @@ function mobileFileName(path: string): string {
   } catch {
     return fileName;
   }
+}
+
+function normalizePickedFiles(selected: string | string[] | null): PickedFile[] {
+  if (!selected) return [];
+  const paths = Array.isArray(selected) ? selected : [selected];
+  return paths.map((path) => ({
+    path,
+    name: mobileFileName(path),
+  }));
 }
 
 function knowledgeMarkdownImportWarningLabel(warning: string, t: TFunction): string {
@@ -1862,7 +1872,7 @@ export function NotesView({
 
     try {
       const platform = getPlatformService();
-      const selected = await platform.pickFile({
+      const pickerOptions = {
         multiple: true,
         filters: [
           {
@@ -1870,11 +1880,11 @@ export function NotesView({
             extensions: ["md", "markdown"],
           },
         ],
-      });
-      if (!selected) return;
-
-      const paths = Array.isArray(selected) ? selected : [selected];
-      if (paths.length === 0) return;
+      };
+      const pickedFiles =
+        (await platform.pickFiles?.(pickerOptions)) ??
+        normalizePickedFiles(await platform.pickFile(pickerOptions));
+      if (pickedFiles.length === 0) return;
 
       const saved = await saveActiveKnowledgeDocumentNow();
       if (!saved) return;
@@ -1885,13 +1895,14 @@ export function NotesView({
       });
       const [files, cardTemplates] = await Promise.all([
         Promise.all(
-          paths.map(async (path) => ({
-            path,
-            content: await platform.readTextFile(path),
+          pickedFiles.map(async (file) => ({
+            path: file.path,
+            content: await platform.readTextFile(file.path),
           })),
         ),
         getKnowledgeCardTemplates({ includeDisabled: true }),
       ]);
+      const pickedFileByPath = new Map(pickedFiles.map((file) => [file.path, file]));
       const plan = createKnowledgeMarkdownImportPlan({
         bookId: selectedKnowledgeBookId,
         defaultParentId,
@@ -1902,10 +1913,13 @@ export function NotesView({
       const items: KnowledgeMarkdownImportReviewItem[] = plan.items.map((item) => ({
         path: item.path,
         sourcePath: item.path,
+        sourceName: pickedFileByPath.get(item.path)?.name,
         proposal: {
           ...item.proposal,
           message: t("notes.knowledgeMarkdownImportProposalMessage", {
-            file: mobileFileName(item.relativePath || item.path),
+            file:
+              pickedFileByPath.get(item.path)?.name ??
+              mobileFileName(item.relativePath || item.path),
           }),
         },
         warnings: item.warnings,
@@ -3965,10 +3979,12 @@ function KnowledgeMarkdownImportReviewSheet({
                       {title}
                     </Text>
                     <Text style={styles.knowledgeImportItemPath} numberOfLines={1}>
-                      {mobileFileName(item.path)}
+                      {item.sourceName ?? mobileFileName(item.path)}
                     </Text>
                     <Text style={styles.knowledgeImportSourcePath} numberOfLines={1}>
-                      {t("notes.knowledgeImportSource", { path: item.sourcePath })}
+                      {t("notes.knowledgeImportSource", {
+                        path: item.sourceName ?? item.sourcePath,
+                      })}
                     </Text>
                     {!!destinationLabel && (
                       <View style={styles.knowledgeImportDestination}>

@@ -12,6 +12,7 @@ import type {
   IDatabase,
   IPlatformService,
   IWebSocket,
+  PickedFile,
   UpdateInfo,
   WebSocketOptions,
 } from "@readany/core/services";
@@ -170,6 +171,17 @@ export class TauriPlatformService implements IPlatformService {
     });
     if (Array.isArray(result)) return result.length > 0 ? result : null;
     return result;
+  }
+
+  async pickFiles(options?: FilePickerOptions): Promise<PickedFile[] | null> {
+    const selected = await this.pickFile(options);
+    if (!selected) return null;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    const files = paths.map((path) => ({
+      path,
+      name: path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || path,
+    }));
+    return files.length > 0 ? files : null;
   }
 
   // ---- Database ----

@@ -13,6 +13,13 @@ export interface FilePickerOptions {
   }>;
 }
 
+export interface PickedFile {
+  path: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+}
+
 export interface WebSocketOptions {
   headers?: Record<string, string>;
 }
@@ -85,6 +92,8 @@ export interface IPlatformService {
 
   // ---- File picker ----
   pickFile(options?: FilePickerOptions): Promise<string | string[] | null>;
+  /** Rich file picker result for UI surfaces that need stable display names. */
+  pickFiles?(options?: FilePickerOptions): Promise<PickedFile[] | null>;
 
   // ---- Database ----
   loadDatabase(path: string): Promise<IDatabase>;

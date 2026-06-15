@@ -434,6 +434,8 @@ function verifyMobileKnowledgeWorkspaceContract() {
     "knowledgeDocumentPathText",
     "knowledge:open-document",
     "KnowledgeMarkdownImportReviewSheet",
+    "pickFiles",
+    "sourceName",
     "applyKnowledgeWriteProposal",
     "applyBackgroundKnowledgeSummaryUpdate",
     "useKeyboardInsets",

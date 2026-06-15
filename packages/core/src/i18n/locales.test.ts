@@ -23,6 +23,55 @@ const knowledgeChatSourceFiles = [
   "packages/app-expo/src/components/chat/StreamingIndicator.tsx",
   "packages/core/src/hooks/use-streaming-chat.ts",
 ] as const;
+const knowledgeDocumentTypeKeys = [
+  "book_home",
+  "folder",
+  "standalone_note",
+  "highlight_note",
+  "review",
+  "summary",
+  "imported_markdown",
+] as const;
+const knowledgeToolResultMatchFieldKeys = [
+  "title",
+  "path",
+  "tags",
+  "excerpt",
+  "summary",
+  "content",
+] as const;
+const knowledgeToolResultWriteSafetyKeys = [
+  "read_only",
+  "memory_persisted",
+  "memory_skipped",
+  "no_write_failed",
+] as const;
+const knowledgeProposalTypeKeys = [
+  "knowledgeDocument",
+  "bookHome",
+  "folder",
+  "standaloneNote",
+  "highlightNote",
+  "review",
+  "summary",
+  "importedMarkdown",
+  "knowledgeLink",
+] as const;
+const knowledgeProposalFieldKeys = ["parentFolder", "title", "content", "tags"] as const;
+const knowledgeProposalApplyErrorKeys = [
+  "parent.book_home_locked",
+  "parent.missing_parent",
+  "parent.parent_not_folder",
+  "parent.book_mismatch",
+  "parent.missing_document",
+  "parent.descendant_parent",
+  "parent.invalid_parent",
+  "title.duplicate_sibling_title",
+  "create.create_id_conflict",
+  "update.stale_document",
+  "link.missing_source_document",
+  "link.missing_target_document",
+] as const;
 
 function readLocaleNamespace(locale: string, namespace: (typeof knowledgeNamespaces)[number]) {
   return JSON.parse(
@@ -115,6 +164,28 @@ describe("i18n knowledge locales", () => {
       "streaming",
     ]).filter((key) => !hasPath(chatLocale, key));
     expect(missingKeys, "English chat locale is missing knowledge chat UI keys").toEqual([]);
+  });
+
+  it("keeps dynamic knowledge chat UI keys translated", () => {
+    const chatLocale = readLocaleNamespace("en", "chat");
+    const expectedKeys = [
+      ...knowledgeDocumentTypeKeys.map((key) => `knowledgeToolResult.types.${key}`),
+      ...knowledgeToolResultMatchFieldKeys.map(
+        (key) => `knowledgeToolResult.matchFields.${key}`,
+      ),
+      ...knowledgeToolResultWriteSafetyKeys.flatMap((key) => [
+        `knowledgeToolResult.writeSafety.${key}.label`,
+        `knowledgeToolResult.writeSafety.${key}.description`,
+      ]),
+      ...knowledgeProposalTypeKeys.map((key) => `knowledgeProposal.types.${key}`),
+      ...knowledgeProposalFieldKeys.map((key) => `knowledgeProposal.fields.${key}`),
+      "knowledgeProposal.writeSafety.proposal_pending_confirmation.label",
+      "knowledgeProposal.writeSafety.proposal_pending_confirmation.description",
+      ...knowledgeProposalApplyErrorKeys.map((key) => `knowledgeProposal.errors.${key}`),
+    ];
+    const missingKeys = expectedKeys.filter((key) => !hasPath(chatLocale, key));
+
+    expect(missingKeys, "English chat locale is missing dynamic knowledge UI keys").toEqual([]);
   });
 
   it("keeps knowledge and card translation keys available in every locale", () => {

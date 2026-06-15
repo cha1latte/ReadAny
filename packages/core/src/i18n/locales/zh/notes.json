@@ -314,6 +314,8 @@
     "knowledgeCustomCardFieldLabel": "名称",
     "knowledgeCustomCardFieldLabelPlaceholder": "问题、证据、置信度...",
     "knowledgeCustomCardFieldKey": "数据键",
+    "knowledgeCustomCardFieldGroup": "分组",
+    "knowledgeCustomCardFieldGroupPlaceholder": "核心、证据、后续...",
     "knowledgeCustomCardFieldType": "类型",
     "knowledgeCustomCardFieldTypeText": "文本",
     "knowledgeCustomCardFieldTypeMultiline": "长文本",

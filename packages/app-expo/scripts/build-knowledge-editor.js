@@ -398,7 +398,16 @@ async function buildKnowledgeEditor() {
 
             const grid = document.createElement("div");
             grid.className = "readany-card-structured-grid";
+            let currentGroup = "";
             fields.forEach((field) => {
+              const fieldGroup = typeof field.group === "string" ? field.group.trim() : "";
+              if (fieldGroup && fieldGroup !== currentGroup) {
+                const groupHeading = document.createElement("div");
+                groupHeading.className = "readany-card-structured-group-heading";
+                groupHeading.textContent = fieldGroup;
+                grid.appendChild(groupHeading);
+              }
+              currentGroup = fieldGroup;
               const currentValue = currentData[field.key];
               const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(field, currentValue);
               const applyMissingState = (element) => {

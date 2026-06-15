@@ -546,18 +546,46 @@ function renderReadAnyCardHtml(node: TiptapNode, options: ReadOnlyHtmlProjection
         options,
       )}</div>`
     : "";
-  const structuredFieldsHtml = model.structuredFields.length
-    ? `<dl class="${className(options, "card-fields")}">${model.structuredFields
-        .map(
-          (field) => {
-            const missingAttrs = field.missing
-              ? ` class="${className(options, "card-field-missing")}" data-readany-card-field-state="missing"`
-              : "";
-            return `<div${missingAttrs}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`;
-          },
-        )
-        .join("")}</dl>`
-    : "";
+  const renderFieldRow = (field: (typeof model.structuredFields)[number]) => {
+    const missingAttrs = field.missing
+      ? ` class="${className(options, "card-field-missing")}" data-readany-card-field-state="missing"`
+      : "";
+    return `<div${missingAttrs}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`;
+  };
+  const structuredFieldsHtml = (() => {
+    if (model.structuredFields.length === 0) return "";
+    const hasGroups = model.structuredFields.some((field) => !!field.group);
+    if (!hasGroups) {
+      return `<dl class="${className(options, "card-fields")}">${model.structuredFields
+        .map(renderFieldRow)
+        .join("")}</dl>`;
+    }
+
+    let currentGroup: string | undefined;
+    const sections: string[] = [];
+    let currentRows: string[] = [];
+    const flushRows = () => {
+      if (currentRows.length === 0) return;
+      const heading = currentGroup
+        ? `<div class="${className(options, "card-field-group-title")}">${escapeHtml(currentGroup)}</div>`
+        : "";
+      sections.push(
+        `<section class="${className(options, "card-field-group")}">${heading}<dl>${currentRows.join("")}</dl></section>`,
+      );
+      currentRows = [];
+    };
+
+    for (const field of model.structuredFields) {
+      const group = field.group?.trim() || undefined;
+      if (group !== currentGroup) {
+        flushRows();
+        currentGroup = group;
+      }
+      currentRows.push(renderFieldRow(field));
+    }
+    flushRows();
+    return `<div class="${className(options, "card-fields")} ${className(options, "card-fields-grouped")}">${sections.join("")}</div>`;
+  })();
 
   return [
     `<article class="${className(options, "card")} ${className(options, `card-${model.state}`)}" data-readany-card-type="${escapeHtml(model.cardType)}" data-readany-card-version="${escapeHtml(String(model.version))}" data-readany-card-state="${escapeHtml(model.state)}">`,

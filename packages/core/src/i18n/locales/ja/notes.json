@@ -314,6 +314,8 @@
     "knowledgeCustomCardFieldLabel": "ラベル",
     "knowledgeCustomCardFieldLabelPlaceholder": "質問、根拠、信頼度...",
     "knowledgeCustomCardFieldKey": "データキー",
+    "knowledgeCustomCardFieldGroup": "グループ",
+    "knowledgeCustomCardFieldGroupPlaceholder": "核心、根拠、次のアクション...",
     "knowledgeCustomCardFieldType": "種類",
     "knowledgeCustomCardFieldTypeText": "テキスト",
     "knowledgeCustomCardFieldTypeMultiline": "長文",

@@ -314,6 +314,8 @@
     "knowledgeCustomCardFieldLabel": "Libellé",
     "knowledgeCustomCardFieldLabelPlaceholder": "Question, preuve, confiance...",
     "knowledgeCustomCardFieldKey": "Clé de données",
+    "knowledgeCustomCardFieldGroup": "Groupe",
+    "knowledgeCustomCardFieldGroupPlaceholder": "Essentiel, Preuves, Suite...",
     "knowledgeCustomCardFieldType": "Type",
     "knowledgeCustomCardFieldTypeText": "Texte",
     "knowledgeCustomCardFieldTypeMultiline": "Texte long",

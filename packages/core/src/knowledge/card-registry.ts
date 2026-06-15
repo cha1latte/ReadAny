@@ -38,6 +38,7 @@ export interface ReadAnyCardStructuredFieldValue {
   key: string;
   label: string;
   value: string;
+  group?: string;
   missing?: boolean;
 }
 
@@ -112,6 +113,7 @@ export interface ReadAnyCardTemplateField {
   key: string;
   label: string;
   type: ReadAnyCardTemplateFieldType;
+  group?: string;
   placeholder?: string;
   helpText?: string;
   required?: boolean;
@@ -413,6 +415,8 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
       label,
       type,
     };
+    const group = firstString(rawField.group, rawField.section, rawField.groupLabel);
+    if (group) field.group = group.trim();
     const placeholder = stringAttr(rawField.placeholder);
     if (placeholder) field.placeholder = placeholder;
     const helpText = firstString(rawField.helpText, rawField.description);
@@ -1353,12 +1357,14 @@ function createStructuredFieldValues(
   return getVisibleReadAnyCardTemplateFields(template, data)
     .map((field) => {
       const value = formatStructuredFieldValue(field, data[field.key]);
-      if (value) return { key: field.key, label: field.label, value };
+      const group = field.group?.trim();
+      if (value) return { key: field.key, label: field.label, value, ...(group ? { group } : {}) };
       if (isReadAnyCardTemplateRequiredValueMissing(field, data[field.key])) {
         return {
           key: field.key,
           label: field.label,
           value: "Missing required value",
+          ...(group ? { group } : {}),
           missing: true,
         };
       }
@@ -1371,10 +1377,26 @@ export function renderReadAnyCardStructuredFieldsMarkdown(
   fields: ReadAnyCardStructuredFieldValue[],
 ): string {
   if (fields.length === 0) return "";
-  const lines = fields.map((field) => {
+  const hasGroups = fields.some((field) => !!field.group);
+  let currentGroup: string | undefined;
+  const lines = fields.flatMap((field) => {
+    const group = field.group?.trim() || undefined;
+    const nextLines: string[] = [];
+    if (hasGroups && group && group !== currentGroup) {
+      nextLines.push(`${group}:`);
+    }
+    currentGroup = group;
     const valueLines = field.value.split("\n");
     const [firstLine = "", ...restLines] = valueLines;
-    return [`- ${field.label}: ${firstLine}`, ...restLines.map((line) => `  ${line}`)].join("\n");
+    const itemPrefix = hasGroups && group ? "  - " : "- ";
+    const continuationPrefix = hasGroups && group ? "    " : "  ";
+    nextLines.push(
+      [
+        `${itemPrefix}${field.label}: ${firstLine}`,
+        ...restLines.map((line) => `${continuationPrefix}${line}`),
+      ].join("\n"),
+    );
+    return nextLines;
   });
   return ["Fields:", ...lines].join("\n");
 }

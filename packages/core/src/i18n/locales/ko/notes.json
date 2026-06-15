@@ -314,6 +314,8 @@
     "knowledgeCustomCardFieldLabel": "라벨",
     "knowledgeCustomCardFieldLabelPlaceholder": "질문, 근거, 신뢰도...",
     "knowledgeCustomCardFieldKey": "데이터 키",
+    "knowledgeCustomCardFieldGroup": "그룹",
+    "knowledgeCustomCardFieldGroupPlaceholder": "핵심, 근거, 후속...",
     "knowledgeCustomCardFieldType": "유형",
     "knowledgeCustomCardFieldTypeText": "텍스트",
     "knowledgeCustomCardFieldTypeMultiline": "긴 텍스트",

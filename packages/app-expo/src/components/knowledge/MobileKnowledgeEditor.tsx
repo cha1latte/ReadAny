@@ -2384,6 +2384,23 @@ export function MobileKnowledgeEditor({
                                       style={[styles.linkInput, styles.cardTemplateKeyInput]}
                                     />
                                     <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldGroup", "分组")}
+                                    </Text>
+                                    <TextInput
+                                      value={field.group ?? ""}
+                                      onChangeText={(text) =>
+                                        updateTemplateField(index, {
+                                          group: text.trim() || undefined,
+                                        })
+                                      }
+                                      placeholder={t(
+                                        "notes.knowledgeCustomCardFieldGroupPlaceholder",
+                                        "核心、证据、后续...",
+                                      )}
+                                      placeholderTextColor={colors.mutedForeground}
+                                      style={styles.linkInput}
+                                    />
+                                    <Text style={styles.cardTemplateLabel}>
                                       {t("notes.knowledgeCustomCardFieldType", "类型")}
                                     </Text>
                                     <View style={styles.cardTemplateTypeGrid}>

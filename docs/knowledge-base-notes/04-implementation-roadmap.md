@@ -211,9 +211,11 @@ template snapshots, and desktop/mobile structured-field schema editing exist.
 The schema editor now supports text,
 long text, number, checkbox, single-choice, and multi-choice fields with
 placeholders, help text, required markers, options, defaults, and simple
-conditional visibility rules. Richer card editing and JSON-based custom template
-schema migrations now have a shared core path; nested conditional groups and
-advanced schema layout rules remain future work.
+conditional visibility rules. Fields can also be grouped into lightweight
+sections that survive desktop/mobile editing, WebView rendering, Markdown
+fallbacks, and read-only HTML projection. Richer card editing and JSON-based
+custom template schema migrations now have a shared core path; nested
+conditional groups and advanced schema layout rules remain future work.
 
 Goal:
 

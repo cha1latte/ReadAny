@@ -347,6 +347,7 @@ describe("ReadAny card registry", () => {
       {
         label: "Core Idea",
         type: "text",
+        group: "Core",
         placeholder: "What changed?",
         defaultValue: "Untitled idea",
       },
@@ -354,12 +355,14 @@ describe("ReadAny card registry", () => {
         key: "core idea",
         label: "Duplicate label",
         type: "multiline",
+        section: "Evidence",
         visibleWhen: { fieldKey: "Reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
       {
         label: "Confidence",
         type: "number",
+        groupLabel: "Scoring",
         defaultValue: "0.8",
       },
       {
@@ -396,6 +399,7 @@ describe("ReadAny card registry", () => {
         key: "core_idea",
         label: "Core Idea",
         type: "text",
+        group: "Core",
         placeholder: "What changed?",
         defaultValue: "Untitled idea",
       },
@@ -403,6 +407,7 @@ describe("ReadAny card registry", () => {
         key: "core_idea_2",
         label: "Duplicate label",
         type: "multiline",
+        group: "Evidence",
         visibleWhen: { fieldKey: "reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
@@ -410,6 +415,7 @@ describe("ReadAny card registry", () => {
         key: "confidence",
         label: "Confidence",
         type: "number",
+        group: "Scoring",
         defaultValue: 0.8,
       },
       {
@@ -669,6 +675,60 @@ describe("ReadAny card registry", () => {
     );
     expect(fallbackMarkdown).toContain("> - Confidence: 0.92");
     expect(fallbackMarkdown).not.toContain("Should stay hidden");
+  });
+
+  it("keeps grouped custom card fields readable in models and Markdown", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-reading-claim",
+      name: "Reading Claim",
+      markdown: "Claim:",
+      fields: [
+        { key: "claim", label: "Claim", type: "text", group: "Core" },
+        { key: "confidence", label: "Confidence", type: "number", group: "Core" },
+        { key: "evidence", label: "Evidence", type: "multiline", group: "Evidence" },
+        { key: "reviewed", label: "Reviewed", type: "checkbox" },
+      ],
+      now: 123,
+    });
+    const model = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-reading-claim",
+        version: 1,
+        title: "Attention",
+        markdown: "Claim: attention is trained",
+        data: {
+          claim: "Attention is trained.",
+          confidence: 0.82,
+          evidence: "Chapter 2 example\nChapter 4 contrast",
+          reviewed: true,
+        },
+      },
+      { body: "", cardTemplates: [template] },
+    );
+
+    expect(model.structuredFields).toEqual([
+      { key: "claim", label: "Claim", value: "Attention is trained.", group: "Core" },
+      { key: "confidence", label: "Confidence", value: "0.82", group: "Core" },
+      {
+        key: "evidence",
+        label: "Evidence",
+        value: "Chapter 2 example\nChapter 4 contrast",
+        group: "Evidence",
+      },
+      { key: "reviewed", label: "Reviewed", value: "Yes" },
+    ]);
+    expect(renderReadAnyCardStructuredFieldsMarkdown(model.structuredFields)).toBe(
+      [
+        "Fields:",
+        "Core:",
+        "  - Claim: Attention is trained.",
+        "  - Confidence: 0.82",
+        "Evidence:",
+        "  - Evidence: Chapter 2 example",
+        "    Chapter 4 contrast",
+        "- Reviewed: Yes",
+      ].join("\n"),
+    );
   });
 
   it("keeps disabled custom card templates usable for existing card rendering", () => {

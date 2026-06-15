@@ -2072,7 +2072,7 @@ export function KnowledgeEditor({
                                       key={`${field.key}-${index}`}
                                       className="grid gap-1.5 rounded-md border border-border/45 bg-muted/20 p-2"
                                     >
-                                      <div className="grid gap-1.5 sm:grid-cols-[1fr_0.9fr]">
+                                      <div className="grid gap-1.5 sm:grid-cols-[1fr_0.9fr_0.8fr]">
                                         <label className="space-y-1">
                                           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                                             {t("notes.knowledgeCustomCardFieldLabel", {
@@ -2110,6 +2110,29 @@ export function KnowledgeEditor({
                                             }
                                             className="h-8 w-full rounded-md border border-border/55 bg-background px-2 font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
                                             placeholder="field_key"
+                                          />
+                                        </label>
+                                        <label className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldGroup", {
+                                              defaultValue: "Group",
+                                            })}
+                                          </span>
+                                          <input
+                                            value={field.group ?? ""}
+                                            onChange={(event) =>
+                                              updateTemplateField(index, {
+                                                group:
+                                                  event.currentTarget.value.trim() || undefined,
+                                              })
+                                            }
+                                            className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                            placeholder={t(
+                                              "notes.knowledgeCustomCardFieldGroupPlaceholder",
+                                              {
+                                                defaultValue: "Core, Evidence, Follow-up...",
+                                              },
+                                            )}
                                           />
                                         </label>
                                       </div>
@@ -3251,11 +3274,26 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                     ) : null}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {cardFields.map((field) => {
+                    {cardFields.map((field, fieldIndex) => {
                       const currentValue = structuredData[field.key];
                       const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(
                         field,
                         currentValue,
+                      );
+                      const fieldGroup = field.group?.trim();
+                      const previousFieldGroup = cardFields[fieldIndex - 1]?.group?.trim();
+                      const groupHeading =
+                        fieldGroup && fieldGroup !== previousFieldGroup ? (
+                          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-2">
+                            <span>{fieldGroup}</span>
+                            <span className="h-px flex-1 bg-border/45" />
+                          </div>
+                        ) : null;
+                      const wrapCardField = (fieldElement: ReactNode) => (
+                        <Fragment key={field.key}>
+                          {groupHeading}
+                          {fieldElement}
+                        </Fragment>
                       );
                       const missingHint = isRequiredMissing ? (
                         <span className="mt-1 block text-[10px] leading-4 text-destructive">
@@ -3263,9 +3301,8 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                         </span>
                       ) : null;
                       if (field.type === "checkbox") {
-                        return (
+                        return wrapCardField(
                           <label
-                            key={field.key}
                             className={cn(
                               "flex min-h-9 items-start gap-2 rounded-md border px-2.5 py-2",
                               isRequiredMissing
@@ -3301,7 +3338,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               ) : null}
                               {missingHint}
                             </span>
-                          </label>
+                          </label>,
                         );
                       }
 
@@ -3317,8 +3354,8 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                         </span>
                       ) : null;
                       if (field.type === "multiline") {
-                        return (
-                          <label key={field.key} className="space-y-1 sm:col-span-2">
+                        return wrapCardField(
+                          <label className="space-y-1 sm:col-span-2">
                             {label}
                             <textarea
                               defaultValue={getCardFieldInputValue(currentValue)}
@@ -3341,13 +3378,13 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                             />
                             {helpText}
                             {missingHint}
-                          </label>
+                          </label>,
                         );
                       }
 
                       if (field.type === "select") {
-                        return (
-                          <label key={field.key} className="space-y-1">
+                        return wrapCardField(
+                          <label className="space-y-1">
                             {label}
                             <select
                               value={getCardFieldInputValue(currentValue)}
@@ -3380,14 +3417,14 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                             </select>
                             {helpText}
                             {missingHint}
-                          </label>
+                          </label>,
                         );
                       }
 
                       if (field.type === "multiselect") {
                         const selectedValues = getCardFieldSelectedValues(currentValue);
-                        return (
-                          <div key={field.key} className="space-y-1 sm:col-span-2">
+                        return wrapCardField(
+                          <div className="space-y-1 sm:col-span-2">
                             {label}
                             <div
                               className={cn(
@@ -3425,12 +3462,12 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                             </div>
                             {helpText}
                             {missingHint}
-                          </div>
+                          </div>,
                         );
                       }
 
-                      return (
-                        <label key={field.key} className="space-y-1">
+                      return wrapCardField(
+                        <label className="space-y-1">
                           {label}
                           <input
                             type={field.type === "number" ? "number" : "text"}
@@ -3455,7 +3492,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                           />
                           {helpText}
                           {missingHint}
-                        </label>
+                        </label>,
                       );
                     })}
                   </div>

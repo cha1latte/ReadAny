@@ -314,6 +314,8 @@
     "knowledgeCustomCardFieldLabel": "名稱",
     "knowledgeCustomCardFieldLabelPlaceholder": "問題、證據、信心值...",
     "knowledgeCustomCardFieldKey": "資料鍵",
+    "knowledgeCustomCardFieldGroup": "分組",
+    "knowledgeCustomCardFieldGroupPlaceholder": "核心、證據、後續...",
     "knowledgeCustomCardFieldType": "類型",
     "knowledgeCustomCardFieldTypeText": "文字",
     "knowledgeCustomCardFieldTypeMultiline": "長文字",

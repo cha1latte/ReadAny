@@ -478,7 +478,7 @@ describe("editor projection", () => {
         },
       },
     ];
-    const cardTemplates = [
+    const cardTemplates: KnowledgeCardTemplate[] = [
       {
         id: "template-concept",
         name: "Concept",
@@ -805,6 +805,69 @@ describe("editor projection", () => {
     expect(fallbackMarkdown).toContain("> - Evidence: Ritual practice");
     expect(html).toContain('class="readany-card-fields"');
     expect(html).toContain("<dt>Confidence</dt><dd>0.92</dd>");
+  });
+
+  it("projects grouped custom card structured fields into readable Markdown and HTML sections", () => {
+    const cardTemplates = [
+      {
+        id: "template-claim",
+        name: "Claim",
+        version: 1,
+        schemaJson: {
+          cardType: "custom:template-claim",
+          title: "Claim",
+          markdown: "Claim:",
+          fields: [
+            { key: "claim", label: "Claim", type: "text", group: "Core" },
+            { key: "evidence", label: "Evidence", type: "multiline", group: "Evidence" },
+            { key: "reviewed", label: "Reviewed", type: "checkbox" },
+          ],
+        } as JSONValue,
+        builtIn: false,
+        enabled: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "readanyCard",
+          attrs: {
+            cardType: "custom:template-claim",
+            version: 1,
+            title: "Attention",
+            markdown: "Claim: attention is trained",
+            data: {
+              claim: "Attention is trained.",
+              evidence: "Chapter 2 example",
+              reviewed: true,
+            },
+          },
+        },
+      ],
+    };
+
+    const markdown = renderKnowledgeJsonToMarkdown(content as unknown as JSONValue, {
+      cardTemplates,
+      includeReadAnyCardMetadata: true,
+    });
+    const fallbackMarkdown = renderKnowledgeJsonToMarkdown(content as unknown as JSONValue, {
+      cardTemplates,
+    });
+    const html = renderKnowledgeJsonToReadOnlyHtml(content as unknown as JSONValue, {
+      cardTemplates,
+    });
+
+    expect(markdown).toContain("Fields:\nCore:\n  - Claim: Attention is trained.");
+    expect(markdown).toContain("Evidence:\n  - Evidence: Chapter 2 example");
+    expect(markdown).toContain("- Reviewed: Yes");
+    expect(fallbackMarkdown).toContain("> Core:");
+    expect(fallbackMarkdown).toContain(">   - Evidence: Chapter 2 example");
+    expect(html).toContain('class="readany-card-fields readany-card-fields-grouped"');
+    expect(html).toContain('class="readany-card-field-group-title">Core</div>');
+    expect(html).toContain("<dt>Evidence</dt><dd>Chapter 2 example</dd>");
   });
 
   it("preserves normalized legacy card metadata when requested", () => {

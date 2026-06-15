@@ -22,6 +22,11 @@ const desktopChatRendererPath = path.join(
   rootDir,
   "packages/app/src/components/chat/PartRenderer.tsx",
 );
+const desktopMainPath = path.join(rootDir, "packages/app/src/main.tsx");
+const desktopBrowserPreviewPlatformPath = path.join(
+  rootDir,
+  "packages/app/src/lib/platform/browser-preview-platform-service.ts",
+);
 const desktopKnowledgeEditorPath = path.join(
   rootDir,
   "packages/app/src/components/knowledge/KnowledgeEditor.tsx",
@@ -451,6 +456,29 @@ function verifyMobileKnowledgeWorkspaceContract() {
   ]);
 }
 
+function verifyDesktopBrowserPreviewContract() {
+  verifySourceContract("desktop browser-preview runtime contract", desktopMainPath, [
+    "BrowserPreviewPlatformService",
+    "isTauriRuntimeAvailable()",
+    "setStreamingFetch(globalThis.fetch.bind(globalThis)",
+    'import("./lib/tauri-vector-db")',
+    'import("./lib/storage/desktop-library-root")',
+    'import("./lib/rag/fallback-content-provider")',
+  ]);
+  verifySourceContract(
+    "desktop browser-preview platform contract",
+    desktopBrowserPreviewPlatformPath,
+    [
+      "BrowserPreviewPlatformService",
+      "BrowserPreviewDatabase",
+      'platformType = "desktop"',
+      "loadDatabase",
+      "shareOrDownloadFile",
+      "LAN sync server is only available in the Tauri desktop app.",
+    ],
+  );
+}
+
 for (const [command, args, label] of commands) {
   runCommand(command, args, label);
 }
@@ -463,6 +491,7 @@ verifyDesktopAIKnowledgeChatContract();
 verifyMobileAIKnowledgeChatContract();
 verifyDesktopKnowledgeWorkspaceContract();
 verifyMobileKnowledgeWorkspaceContract();
+verifyDesktopBrowserPreviewContract();
 runCommand("git", ["diff", "--check"], "diff whitespace check");
 
 console.log("\n[knowledge-acceptance] all automated checks passed");

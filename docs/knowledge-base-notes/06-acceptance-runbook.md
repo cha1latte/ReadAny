@@ -101,6 +101,9 @@ git diff --exit-code -- packages/app-expo/assets/editor/knowledge-editor.html
 # The acceptance script also checks desktop and mobile knowledge workspace
 # source contracts for vault trees, root/folder browser surfaces, WYSIWYG
 # document editors, path-aware creation/search, and import/review surfaces.
+# It also checks that the desktop Vite browser-preview runtime is guarded from
+# Tauri-only platform services, so UI smoke checks can load without false
+# `invoke` console errors when the app is opened outside the Tauri shell.
 git diff --check
 ```
 
@@ -167,6 +170,11 @@ sources for the vault tree, root/folder browser, document editor, breadcrumb/pat
 search, create target, import review, desktop vault-import conflict resolution
 guidance, and keyboard-safe mobile editor entry points that make the vault mental
 model visible before editing.
+The desktop browser-preview runtime contract checks that direct Vite/browser
+loads use a non-persistent preview platform service and defer Tauri-only fetch,
+vector DB, data-root migration, and fallback-content-provider setup until a real
+Tauri runtime is present. This keeps browser smoke testing useful without
+weakening the production desktop path.
 They also check that saved and imported knowledge documents keep the compact
 AI-memory maintenance path wired through source fingerprints and background
 summary queues on both desktop and mobile, so long-form notes do not become

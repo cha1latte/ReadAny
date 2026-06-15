@@ -20,7 +20,7 @@ import type {
 const TAURI_LAN_RUNTIME_ERROR =
   "Tauri desktop runtime is required to use the LAN sender. Open the desktop app instead of the browser dev server.";
 
-function isTauriRuntimeAvailable(): boolean {
+export function isTauriRuntimeAvailable(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 

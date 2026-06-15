@@ -103,6 +103,14 @@
     "knowledgeVaultImportMoreIssues": "{{count}} archivos más con problemas",
     "knowledgeVaultImportSafeHint": "Nada se escribe en ReadAny hasta que confirmes.",
     "knowledgeVaultImportConflictSafeHint": "Los documentos con conflicto no se aplicarán. Resuélvelos manualmente antes de volver a importar.",
+    "knowledgeVaultImportResolution": {
+      "manual_merge": "Recomendado: conserva la versión actual de ReadAny, fusiona manualmente el archivo externo y vuelve a importar.",
+      "remove_duplicate": "Recomendado: elimina o renombra el archivo duplicado exportado por ReadAny y vuelve a importar.",
+      "restore_missing": "Recomendado: restaura el archivo faltante o exporta otra vez desde ReadAny antes de importar.",
+      "restore_readable": "Recomendado: haz que el archivo sea legible o exporta de nuevo y vuelve a importar.",
+      "manual_review": "Recomendado: revisa este archivo externo, resuélvelo y vuelve a importar.",
+      "keep_local_template": "Recomendado: conserva la plantilla local; exporta de nuevo si quieres que el manifest externo coincida."
+    },
     "knowledgeVaultImportApplying": "Aplicando...",
     "knowledgeVaultImportApply": "Aplicar cambios",
     "exportNotion": "Notion (Copiar)",

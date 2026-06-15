@@ -103,6 +103,14 @@
     "knowledgeVaultImportMoreIssues": "{{count}} more issue files hidden",
     "knowledgeVaultImportSafeHint": "Nothing is written back to ReadAny until you confirm.",
     "knowledgeVaultImportConflictSafeHint": "Conflicted documents will not be applied. Resolve them manually before importing again.",
+    "knowledgeVaultImportResolution": {
+      "manual_merge": "Recommended: keep the current ReadAny version, merge the external file manually, then import again.",
+      "remove_duplicate": "Recommended: delete or rename the duplicate ReadAny export file, then import again.",
+      "restore_missing": "Recommended: restore the missing file, or export from ReadAny again before importing.",
+      "restore_readable": "Recommended: make the file readable or export again, then import again.",
+      "manual_review": "Recommended: review this external file, resolve it, then import again.",
+      "keep_local_template": "Recommended: keep the local template; export again if you want the external manifest to match it."
+    },
     "knowledgeVaultImportApplying": "Applying...",
     "knowledgeVaultImportApply": "Apply changes",
     "exportNotion": "Notion (Copy)",

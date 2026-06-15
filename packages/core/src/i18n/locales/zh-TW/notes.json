@@ -103,6 +103,14 @@
     "knowledgeVaultImportMoreIssues": "還有 {{count}} 個問題檔案未顯示",
     "knowledgeVaultImportSafeHint": "確認後才會寫回 ReadAny，不會自動覆蓋。",
     "knowledgeVaultImportConflictSafeHint": "衝突文件不會被套用，請先手動處理後再匯入。",
+    "knowledgeVaultImportResolution": {
+      "manual_merge": "建議：保留 ReadAny 目前版本，手動合併外部檔案後重新匯入。",
+      "remove_duplicate": "建議：刪除或重新命名重複的 ReadAny 匯出檔，再重新匯入。",
+      "restore_missing": "建議：還原缺失檔案，或從 ReadAny 重新匯出後再匯入。",
+      "restore_readable": "建議：確認檔案可讀取或重新匯出，然後再匯入。",
+      "manual_review": "建議：檢查這個外部檔案，處理後重新匯入。",
+      "keep_local_template": "建議：保留本機模板；需要外部 manifest 一致時可重新匯出。"
+    },
     "knowledgeVaultImportApplying": "套用中...",
     "knowledgeVaultImportApply": "套用變更",
     "exportNotion": "Notion (複製)",

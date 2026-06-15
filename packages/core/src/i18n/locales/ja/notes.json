@@ -103,6 +103,14 @@
     "knowledgeVaultImportMoreIssues": "ほか {{count}} 件の問題ファイルがあります",
     "knowledgeVaultImportSafeHint": "確認するまで ReadAny には書き戻されません。",
     "knowledgeVaultImportConflictSafeHint": "競合したドキュメントは適用されません。手動で解決してから再度読み込んでください。",
+    "knowledgeVaultImportResolution": {
+      "manual_merge": "推奨: 現在の ReadAny 版を保持し、外部ファイルを手動でマージしてから再インポートします。",
+      "remove_duplicate": "推奨: 重複した ReadAny エクスポートファイルを削除または名前変更してから再インポートします。",
+      "restore_missing": "推奨: 不足しているファイルを復元するか、ReadAny から再エクスポートしてからインポートします。",
+      "restore_readable": "推奨: ファイルを読み取れる状態にするか再エクスポートしてからインポートします。",
+      "manual_review": "推奨: この外部ファイルを確認して解決してから再インポートします。",
+      "keep_local_template": "推奨: ローカルテンプレートを保持します。外部 manifest を合わせる場合は再エクスポートしてください。"
+    },
     "knowledgeVaultImportApplying": "適用中...",
     "knowledgeVaultImportApply": "変更を適用",
     "exportNotion": "Notion（コピー）",

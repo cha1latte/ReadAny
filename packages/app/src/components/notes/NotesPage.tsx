@@ -53,6 +53,7 @@ import {
   type KnowledgeExportObservedFile,
   type KnowledgeImportWriteProposal,
   type KnowledgeVaultImportPlan,
+  type KnowledgeVaultImportResolution,
   annotationExporter,
   createKnowledgeMarkdownImportPlan,
   createKnowledgeVaultImportPlan,
@@ -169,6 +170,14 @@ interface KnowledgeVaultImportReview {
   rootPath: string;
   plan: KnowledgeVaultImportPlan;
   proposals: KnowledgeDocumentUpdateProposal[];
+}
+
+function knowledgeVaultImportResolutionLabel(
+  resolution: KnowledgeVaultImportResolution | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  if (!resolution) return null;
+  return t(`notes.knowledgeVaultImportResolution.${resolution.kind}`);
 }
 
 interface KnowledgeMarkdownImportReviewItem {
@@ -5558,34 +5567,52 @@ function KnowledgeVaultImportReviewCard({
                   {t("notes.knowledgeVaultImportIssues")}
                 </div>
                 <div className="space-y-1">
-                  {visibleIssues.map((entry) => (
-                    <div
-                      key={`${entry.status}:${entry.path}`}
-                      className="flex min-w-0 items-center justify-between gap-2"
-                    >
-                      <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
-                        {entry.path}
-                      </p>
-                      <span className="shrink-0 rounded-md bg-background/75 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {entry.status === "conflict"
-                          ? t("notes.knowledgeVaultImportConflictIssue")
-                          : entry.status === "missing"
-                            ? t("notes.knowledgeVaultImportMissingIssue")
-                            : t("notes.knowledgeVaultImportUnreadableIssue")}
-                      </span>
-                    </div>
-                  ))}
+                  {visibleIssues.map((entry) => {
+                    const resolutionLabel = knowledgeVaultImportResolutionLabel(
+                      entry.resolution,
+                      t,
+                    );
+                    return (
+                      <div
+                        key={`${entry.status}:${entry.path}`}
+                        className="rounded-md border border-border/40 bg-background/70 px-2 py-1.5"
+                      >
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+                            {entry.path}
+                          </p>
+                          <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {entry.status === "conflict"
+                              ? t("notes.knowledgeVaultImportConflictIssue")
+                              : entry.status === "missing"
+                                ? t("notes.knowledgeVaultImportMissingIssue")
+                                : t("notes.knowledgeVaultImportUnreadableIssue")}
+                          </span>
+                        </div>
+                        {resolutionLabel ? (
+                          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                            {resolutionLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                   {visibleCardTemplateConflicts.map((entry) => (
                     <div
                       key={`card-template:${entry.template.id}`}
-                      className="flex min-w-0 items-center justify-between gap-2"
+                      className="rounded-md border border-border/40 bg-background/70 px-2 py-1.5"
                     >
-                      <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
-                        {entry.template.name}
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <p className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+                          {entry.template.name}
+                        </p>
+                        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {t("notes.knowledgeVaultImportTemplateConflictIssue")}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        {knowledgeVaultImportResolutionLabel(entry.resolution, t)}
                       </p>
-                      <span className="shrink-0 rounded-md bg-background/75 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {t("notes.knowledgeVaultImportTemplateConflictIssue")}
-                      </span>
                     </div>
                   ))}
                   {hiddenIssueCount + hiddenCardTemplateConflictCount > 0 ? (

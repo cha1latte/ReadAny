@@ -131,13 +131,14 @@ Verification:
 
 Status: implemented as a desktop v1 on the current branch; mobile Markdown file
 picker import is now available, while mobile inbound share-extension import and
-deeper conflict resolution remain future work. Document export, vault package
-generation, manifests, attachment path planning, conflict detection, ReadAny
-card fallbacks, Markdown file import, and linked-folder import/reconcile exist.
+automated or block-level conflict merging remain future work. Document export,
+vault package generation, manifests, attachment path planning, conflict
+detection with resolution guidance, ReadAny card fallbacks, Markdown file
+import, and linked-folder import/reconcile exist.
 Linked-folder import also recognizes folder-level `README.md` and `index.md`
 aliases when resolving path-backed internal links, and restores non-built-in
 card template snapshots from the vault manifest after user confirmation while
-surfacing newer local template conflicts.
+surfacing newer local template conflicts with safe local-default guidance.
 
 Goal:
 
@@ -168,8 +169,9 @@ Verification:
 - External edits are detected before overwrite.
 - Folder moves and renames reconcile by stable document ID, not only by path.
 - Markdown imports preview the target documents before saving.
-- Vault imports surface modified, missing, and unreadable files before applying
-  updates.
+- Vault imports surface modified, missing, unreadable, duplicate, and
+  local-and-external conflict states with safe resolution guidance before
+  applying updates.
 
 ## Phase 5: AI Knowledge Tools
 

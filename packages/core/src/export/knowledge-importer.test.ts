@@ -1066,6 +1066,12 @@ Home note.
         current: newerLocalTemplate,
         status: "conflict",
         warnings: ["local_card_template_newer"],
+        resolution: {
+          kind: "keep_local_template",
+          suggestedAction: "review_template_then_export_again",
+          safeDefault: "keep_local_template",
+          blocksAutomaticApply: true,
+        },
       },
     ]);
   });
@@ -1149,6 +1155,12 @@ Home note.
         path: documentFile.path,
         status: "conflict",
         warnings: ["multiple_files_with_same_document_id"],
+        resolution: {
+          kind: "remove_duplicate",
+          suggestedAction: "remove_duplicate_then_reimport",
+          safeDefault: "keep_readany",
+          blocksAutomaticApply: true,
+        },
       }),
     ]);
     expect(createKnowledgeVaultImportWriteProposals(plan)).toEqual([]);
@@ -1367,6 +1379,12 @@ Home note.
         existingHash: expect.any(String),
         currentHash: expect.any(String),
         warnings: ["local_and_remote_modified"],
+        resolution: {
+          kind: "manual_merge",
+          suggestedAction: "merge_then_reimport",
+          safeDefault: "keep_readany",
+          blocksAutomaticApply: true,
+        },
       }),
     ]);
     expect(createKnowledgeVaultImportWriteProposals(plan)).toEqual([]);
@@ -1416,6 +1434,12 @@ Home note.
         documentId: "doc-missing",
         status: "missing",
         warnings: ["manifest_file_missing"],
+        resolution: {
+          kind: "restore_missing",
+          suggestedAction: "restore_file_or_export_again",
+          safeDefault: "keep_readany",
+          blocksAutomaticApply: true,
+        },
       }),
     ]);
     expect(plan.unreadable).toEqual([
@@ -1424,6 +1448,12 @@ Home note.
         status: "modified_unreadable",
         existingHash: "fnv1a32:changed",
         warnings: ["modified_file_content_missing"],
+        resolution: {
+          kind: "restore_readable",
+          suggestedAction: "grant_access_or_export_again",
+          safeDefault: "keep_readany",
+          blocksAutomaticApply: true,
+        },
       }),
     ]);
   });

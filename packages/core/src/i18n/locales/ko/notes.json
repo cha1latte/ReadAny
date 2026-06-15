@@ -103,6 +103,14 @@
     "knowledgeVaultImportMoreIssues": "그 외 {{count}}개 문제 파일",
     "knowledgeVaultImportSafeHint": "확인하기 전에는 ReadAny에 쓰지 않아요.",
     "knowledgeVaultImportConflictSafeHint": "충돌한 문서는 적용하지 않아요. 먼저 직접 해결한 뒤 다시 가져와 주세요.",
+    "knowledgeVaultImportResolution": {
+      "manual_merge": "권장: 현재 ReadAny 버전을 유지하고 외부 파일을 수동으로 병합한 뒤 다시 가져오세요.",
+      "remove_duplicate": "권장: 중복된 ReadAny 내보내기 파일을 삭제하거나 이름을 바꾼 뒤 다시 가져오세요.",
+      "restore_missing": "권장: 누락된 파일을 복원하거나 ReadAny에서 다시 내보낸 뒤 가져오세요.",
+      "restore_readable": "권장: 파일을 읽을 수 있게 하거나 다시 내보낸 뒤 가져오세요.",
+      "manual_review": "권장: 이 외부 파일을 확인하고 정리한 뒤 다시 가져오세요.",
+      "keep_local_template": "권장: 로컬 템플릿을 유지하세요. 외부 manifest를 맞추려면 다시 내보내세요."
+    },
     "knowledgeVaultImportApplying": "적용 중...",
     "knowledgeVaultImportApply": "변경 적용",
     "exportNotion": "Notion (복사)",

@@ -89,6 +89,29 @@ export type KnowledgeVaultImportEntryStatus =
   | "modified_unreadable"
   | "conflict";
 
+export type KnowledgeVaultImportResolutionKind =
+  | "manual_merge"
+  | "remove_duplicate"
+  | "restore_missing"
+  | "restore_readable"
+  | "manual_review"
+  | "keep_local_template";
+
+export type KnowledgeVaultImportResolutionAction =
+  | "merge_then_reimport"
+  | "remove_duplicate_then_reimport"
+  | "restore_file_or_export_again"
+  | "grant_access_or_export_again"
+  | "inspect_then_reimport"
+  | "review_template_then_export_again";
+
+export interface KnowledgeVaultImportResolution {
+  kind: KnowledgeVaultImportResolutionKind;
+  suggestedAction: KnowledgeVaultImportResolutionAction;
+  safeDefault: "keep_readany" | "keep_local_template";
+  blocksAutomaticApply: boolean;
+}
+
 export interface KnowledgeVaultImportEntry {
   documentId: string;
   path: string;
@@ -98,6 +121,7 @@ export interface KnowledgeVaultImportEntry {
   currentHash?: string;
   draft?: KnowledgeImportDocumentDraft;
   warnings: string[];
+  resolution?: KnowledgeVaultImportResolution;
 }
 
 export interface KnowledgeVaultImportPlan {
@@ -132,6 +156,7 @@ export interface KnowledgeVaultImportCardTemplateConflict {
   current: KnowledgeCardTemplate;
   status: "conflict";
   warnings: string[];
+  resolution: KnowledgeVaultImportResolution;
 }
 
 export interface KnowledgeImportProposalOptions {
@@ -244,6 +269,12 @@ function createKnowledgeVaultImportCardTemplateDiff({
       current,
       status: "conflict",
       warnings: ["local_card_template_newer"],
+      resolution: {
+        kind: "keep_local_template",
+        suggestedAction: "review_template_then_export_again",
+        safeDefault: "keep_local_template",
+        blocksAutomaticApply: true,
+      },
     });
   }
 
@@ -259,6 +290,57 @@ const DOCUMENT_TYPES = new Set<KnowledgeDocumentType>([
   "summary",
   "imported_markdown",
 ]);
+
+function createKnowledgeVaultImportResolution(
+  status: KnowledgeVaultImportEntryStatus,
+  warnings: readonly string[],
+): KnowledgeVaultImportResolution | undefined {
+  const warningSet = new Set(warnings);
+  if (status === "conflict") {
+    if (warningSet.has("multiple_files_with_same_document_id")) {
+      return {
+        kind: "remove_duplicate",
+        suggestedAction: "remove_duplicate_then_reimport",
+        safeDefault: "keep_readany",
+        blocksAutomaticApply: true,
+      };
+    }
+    if (warningSet.has("local_and_remote_modified")) {
+      return {
+        kind: "manual_merge",
+        suggestedAction: "merge_then_reimport",
+        safeDefault: "keep_readany",
+        blocksAutomaticApply: true,
+      };
+    }
+    return {
+      kind: "manual_review",
+      suggestedAction: "inspect_then_reimport",
+      safeDefault: "keep_readany",
+      blocksAutomaticApply: true,
+    };
+  }
+
+  if (status === "missing") {
+    return {
+      kind: "restore_missing",
+      suggestedAction: "restore_file_or_export_again",
+      safeDefault: "keep_readany",
+      blocksAutomaticApply: true,
+    };
+  }
+
+  if (status === "modified_unreadable") {
+    return {
+      kind: "restore_readable",
+      suggestedAction: "grant_access_or_export_again",
+      safeDefault: "keep_readany",
+      blocksAutomaticApply: true,
+    };
+  }
+
+  return undefined;
+}
 
 const KNOWLEDGE_ROOT_TITLE = "Knowledge base";
 const UNTITLED_DOCUMENT_TITLE = "Untitled document";
@@ -831,6 +913,9 @@ export function createKnowledgeVaultImportPlan(
         existingHash: observedFileHash(file),
         currentHash,
         warnings: ["multiple_files_with_same_document_id"],
+        resolution: createKnowledgeVaultImportResolution("conflict", [
+          "multiple_files_with_same_document_id",
+        ]),
       });
       continue;
     }
@@ -843,6 +928,9 @@ export function createKnowledgeVaultImportPlan(
           previousHash: manifestDocument.hash,
           currentHash,
           warnings: ["multiple_files_with_same_document_id"],
+          resolution: createKnowledgeVaultImportResolution("conflict", [
+            "multiple_files_with_same_document_id",
+          ]),
         });
         continue;
       }
@@ -862,6 +950,7 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         currentHash,
         warnings: ["manifest_file_missing"],
+        resolution: createKnowledgeVaultImportResolution("missing", ["manifest_file_missing"]),
       });
       continue;
     }
@@ -894,6 +983,7 @@ export function createKnowledgeVaultImportPlan(
     }
 
     if (existingHash && hasLocalChange) {
+      const warnings = [...pathWarnings, "local_and_remote_modified"];
       entries.push({
         documentId,
         path,
@@ -901,12 +991,14 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: [...pathWarnings, "local_and_remote_modified"],
+        warnings,
+        resolution: createKnowledgeVaultImportResolution("conflict", warnings),
       });
       continue;
     }
 
     if (typeof file.content !== "string") {
+      const warnings = [...pathWarnings, "modified_file_content_missing"];
       entries.push({
         documentId,
         path,
@@ -914,7 +1006,8 @@ export function createKnowledgeVaultImportPlan(
         previousHash: manifestDocument.hash,
         existingHash,
         currentHash,
-        warnings: [...pathWarnings, "modified_file_content_missing"],
+        warnings,
+        resolution: createKnowledgeVaultImportResolution("modified_unreadable", warnings),
       });
       continue;
     }

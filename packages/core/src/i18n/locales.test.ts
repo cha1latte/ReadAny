@@ -6,7 +6,14 @@ import { describe, expect, it } from "vitest";
 type LocaleObject = Record<string, unknown>;
 
 const localesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "locales");
+const repoRoot = path.resolve(localesDir, "../../../../..");
 const knowledgeNamespaces = ["notes", "chat"] as const;
+const knowledgeNotesSourceFiles = [
+  "packages/app/src/components/knowledge/KnowledgeEditor.tsx",
+  "packages/app/src/components/notes/NotesPage.tsx",
+  "packages/app-expo/src/components/knowledge/MobileKnowledgeEditor.tsx",
+  "packages/app-expo/src/screens/NotesView.tsx",
+] as const;
 
 function readLocaleNamespace(locale: string, namespace: (typeof knowledgeNamespaces)[number]) {
   return JSON.parse(
@@ -49,6 +56,27 @@ function interpolationPlaceholders(value: unknown): string[] {
     .sort();
 }
 
+function hasPath(value: LocaleObject, key: string): boolean {
+  let current: unknown = value;
+  for (const part of key.split(".")) {
+    if (!isLocaleObject(current) || !(part in current)) return false;
+    current = current[part];
+  }
+  return true;
+}
+
+function extractKnowledgeNotesKeysFromSource(): string[] {
+  const keys = new Set<string>();
+  for (const sourceFile of knowledgeNotesSourceFiles) {
+    const source = readFileSync(path.join(repoRoot, sourceFile), "utf8");
+    for (const match of source.matchAll(/["'](notes\.knowledge[A-Za-z0-9_.-]+)["']/g)) {
+      const key = match[1];
+      if (!key.endsWith(".")) keys.add(key);
+    }
+  }
+  return [...keys].sort();
+}
+
 describe("i18n knowledge locales", () => {
   it("keeps notes knowledge and card keys inside the notes object", () => {
     for (const locale of localeDirectories()) {
@@ -58,6 +86,14 @@ describe("i18n knowledge locales", () => {
         `${locale}/notes has knowledge i18n keys outside the notes object`,
       ).toEqual([]);
     }
+  });
+
+  it("keeps knowledge notes UI keys used by desktop and mobile sources translated", () => {
+    const notesLocale = readLocaleNamespace("en", "notes");
+    const missingKeys = extractKnowledgeNotesKeysFromSource().filter(
+      (key) => !hasPath(notesLocale, key),
+    );
+    expect(missingKeys, "English notes locale is missing knowledge UI keys").toEqual([]);
   });
 
   it("keeps knowledge and card translation keys available in every locale", () => {

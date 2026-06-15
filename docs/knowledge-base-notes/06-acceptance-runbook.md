@@ -117,6 +117,17 @@ remaining missing rows without failing the shell:
 pnpm acceptance:knowledge:manual -- --allow-incomplete
 ```
 
+To generate the guided manual QA run sheet from the evidence table, run:
+
+```bash
+pnpm acceptance:knowledge:manual:plan
+```
+
+The generated `08-manual-qa-run-sheet.md` is only an execution checklist. Copy
+the real pass/fail/blocker status and concrete evidence back into
+`07-manual-qa-evidence.md`; the run sheet alone does not satisfy the manual
+gate.
+
 `pnpm acceptance:knowledge` compares the mobile WebView editor bundle before and
 after rebuilding it. If the generated HTML changes, commit
 `packages/app-expo/assets/editor/knowledge-editor.html` and rerun the gate.

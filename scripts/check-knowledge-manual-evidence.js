@@ -8,6 +8,10 @@ const defaultEvidencePath = path.join(
   rootDir,
   "docs/knowledge-base-notes/07-manual-qa-evidence.md",
 );
+const defaultRunSheetPath = path.join(
+  rootDir,
+  "docs/knowledge-base-notes/08-manual-qa-run-sheet.md",
+);
 
 const allowedStatuses = new Set(["Pass", "Fail", "Blocked", "N/A"]);
 const readyValues = new Set(["yes", "ready", "pass", "true"]);
@@ -54,6 +58,7 @@ function usage() {
       "Options:",
       "  --file <path>        Check a different Markdown evidence file.",
       "  --allow-incomplete   Report missing evidence without failing the command.",
+      "  --write-plan [path]  Write a guided manual QA run sheet from the evidence table.",
       "  --self-test          Run embedded parser/validator checks.",
       "  --help               Show this help.",
     ].join("\n"),
@@ -66,6 +71,7 @@ function parseArgs(argv) {
     file: defaultEvidencePath,
     help: false,
     selfTest: false,
+    writePlan: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -83,6 +89,16 @@ function parseArgs(argv) {
       args.selfTest = true;
       continue;
     }
+    if (arg === "--write-plan") {
+      const next = argv[index + 1];
+      if (next && !next.startsWith("--")) {
+        args.writePlan = path.resolve(process.cwd(), next);
+        index += 1;
+      } else {
+        args.writePlan = defaultRunSheetPath;
+      }
+      continue;
+    }
     if (arg === "--file") {
       const file = argv[index + 1];
       if (!file) throw new Error("--file requires a path");
@@ -94,6 +110,107 @@ function parseArgs(argv) {
   }
 
   return args;
+}
+
+function tableRowsByHeaders(markdown, headers) {
+  return collectTables(markdown).filter((table) => tableMatches(table, headers));
+}
+
+function sanitizeAnchor(value) {
+  return value
+    .toLowerCase()
+    .replace(/`/g, "")
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function evidenceHintForSection(section) {
+  if (section === "Desktop QA") {
+    return "Screenshot or short screen recording, plus console log excerpt when behavior changes.";
+  }
+  if (section === "Mobile QA") {
+    return "Real-device screenshot/video, keyboard-safe-area observation, and device log excerpt when relevant.";
+  }
+  if (section === "AI Knowledge QA") {
+    return "Chat transcript excerpt showing tool cards/proposals/failure states and the visible vault path.";
+  }
+  if (section === "Obsidian And Import/Export QA") {
+    return "Export/import folder path, representative Markdown file path, and any conflict preview screenshot.";
+  }
+  if (section === "Sync QA") {
+    return "Two-device observation, sync backend/account, and before/after path/content/card evidence.";
+  }
+  return "Evidence already lives in the automated baseline row.";
+}
+
+function getSessionMetadata(markdown) {
+  const [sessionTable] = tableRowsByHeaders(markdown, ["Field", "Value"]);
+  if (!sessionTable) return new Map();
+  return new Map(sessionTable.body.map((row) => [row[0], row[1] ?? ""]));
+}
+
+function renderManualQaRunSheet(markdown, options = {}) {
+  const evidencePath = options.evidencePath ?? defaultEvidencePath;
+  const metadata = getSessionMetadata(markdown);
+  const checkTables = tableRowsByHeaders(markdown, ["Check", "Expected", "Status", "Evidence"]);
+  const manualSections = checkTables.filter((table) => table.section !== "Automated Baseline");
+  const commit = metadata.get("Commit under test") || "Pending";
+  const branch = metadata.get("Branch") || "Pending";
+  const lines = [
+    "# Knowledge Manual QA Run Sheet",
+    "",
+    "This file is generated from `07-manual-qa-evidence.md`. Use it while running",
+    "desktop, real-device mobile, AI, Obsidian, and sync checks, then copy the",
+    "actual status and evidence back into the evidence file. Do not treat this run",
+    "sheet as proof by itself.",
+    "",
+    "## Session",
+    "",
+    `- Evidence file: \`${path.relative(rootDir, evidencePath)}\``,
+    `- Branch: ${branch}`,
+    `- Commit under test: ${commit}`,
+    `- Required final gate: \`pnpm acceptance:knowledge:manual\``,
+    "",
+    "## Preflight",
+    "",
+    "- [ ] Pull the branch and confirm the worktree is clean.",
+    "- [ ] Run `pnpm acceptance:knowledge` on the commit under test.",
+    "- [ ] Prepare a desktop build, a real mobile device, a second sync device, an AI provider/model, a sync backend/account, and an Obsidian export folder.",
+    "- [ ] Keep screenshots, short videos, logs, exported file paths, and sync observations named so they can be pasted into the evidence rows.",
+    "",
+  ];
+
+  for (const table of manualSections) {
+    lines.push(`## ${table.section}`, "", `Evidence hint: ${evidenceHintForSection(table.section)}`, "");
+    for (const row of table.body) {
+      const [check, expected, status = "", evidence = ""] = row;
+      const anchor = sanitizeAnchor(`${table.section}-${check}`);
+      lines.push(
+        `### ${check}`,
+        "",
+        `- Evidence row: \`${table.section} / ${check}\``,
+        `- Expected: ${expected}`,
+        `- Current status: ${status || "(empty)"}`,
+        `- Current evidence: ${evidence || "(empty)"}`,
+        `- Evidence anchor: \`${anchor}\``,
+        "- [ ] Run the check.",
+        "- [ ] Record pass/fail/blocker status.",
+        "- [ ] Paste concrete evidence into `07-manual-qa-evidence.md`.",
+        "",
+      );
+    }
+  }
+
+  lines.push(
+    "## Finalization",
+    "",
+    "- [ ] Fill `Ready for PR review?`, `Blocking failures`, `Follow-up issues`, and `Reviewer notes`.",
+    "- [ ] Run `pnpm acceptance:knowledge:manual` without `--allow-incomplete`.",
+    "- [ ] Commit and push the filled evidence file only after the strict manual gate passes.",
+    "",
+  );
+
+  return lines.join("\n");
 }
 
 function splitMarkdownTableRow(line) {
@@ -323,11 +440,17 @@ function runSelfTest() {
 
   const passResult = validateManualEvidence(passDoc);
   const failResult = validateManualEvidence(failDoc);
+  const runSheet = renderManualQaRunSheet(passDoc, {
+    evidencePath: path.join(rootDir, "docs/knowledge-base-notes/07-manual-qa-evidence.md"),
+  });
   if (passResult.errors.length > 0) {
     throw new Error(`Expected passing fixture, got:\n${passResult.errors.join("\n")}`);
   }
   if (failResult.errors.length === 0) {
     throw new Error("Expected failing fixture to report missing commit under test.");
+  }
+  if (!runSheet.includes("## Desktop QA") || !runSheet.includes("Evidence row: `Sync QA / Sample`")) {
+    throw new Error("Expected generated run sheet to include manual QA sections and rows.");
   }
   console.log("[knowledge-manual-evidence] self-test passed");
 }
@@ -374,6 +497,14 @@ function main() {
   }
 
   const markdown = fs.readFileSync(options.file, "utf8");
+  if (options.writePlan) {
+    const runSheet = renderManualQaRunSheet(markdown, { evidencePath: options.file });
+    fs.mkdirSync(path.dirname(options.writePlan), { recursive: true });
+    fs.writeFileSync(options.writePlan, runSheet);
+    console.log(
+      `[knowledge-manual-evidence] wrote manual QA run sheet: ${path.relative(rootDir, options.writePlan)}`,
+    );
+  }
   const result = validateManualEvidence(markdown, options);
   printResult(result, options);
 }

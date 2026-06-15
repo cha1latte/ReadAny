@@ -139,6 +139,9 @@ Linked-folder import also recognizes folder-level `README.md` and `index.md`
 aliases when resolving path-backed internal links, and restores non-built-in
 card template snapshots from the vault manifest after user confirmation while
 surfacing newer local template conflicts with safe local-default guidance.
+Desktop conflict and import-review cards now also expose optional Obsidian URI
+actions for opening exported files and searching the selected vault folder; this
+is a convenience layer only, not a sync backbone.
 
 Goal:
 
@@ -160,6 +163,8 @@ Work:
   proposals.
 - Preserve document hierarchy when exporting to an Obsidian-style vault and when
   reconciling imported files.
+- Add optional Obsidian URI helpers and desktop actions for opening exported
+  files or searching the selected vault from conflict/import review surfaces.
 
 Verification:
 
@@ -172,6 +177,8 @@ Verification:
 - Vault imports surface modified, missing, unreadable, duplicate, and
   local-and-external conflict states with safe resolution guidance before
   applying updates.
+- Obsidian URI actions encode vault, path, file, search, and append parameters
+  through shared helpers and fail visibly if the host platform cannot open them.
 
 ## Phase 5: AI Knowledge Tools
 

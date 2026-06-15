@@ -74,7 +74,8 @@ pnpm --filter @readany/core exec vitest run \
   src/ai/__tests__/tool-result.test.ts \
   src/ai/tools/knowledge-tools.test.ts \
   src/export/knowledge-exporter.test.ts \
-  src/export/knowledge-importer.test.ts
+  src/export/knowledge-importer.test.ts \
+  src/export/obsidian-uri.test.ts
 
 pnpm --filter @readany/core exec tsc --noEmit
 pnpm --filter app exec tsc --noEmit
@@ -166,6 +167,10 @@ sources for the vault tree, root/folder browser, document editor, breadcrumb/pat
 search, create target, import review, desktop vault-import conflict resolution
 guidance, and keyboard-safe mobile editor entry points that make the vault mental
 model visible before editing.
+The desktop knowledge workspace contract also checks that optional Obsidian URI
+actions stay wired through shared URI helpers and the platform external-URL
+opener, so opening a file or searching the vault remains a convenience layer
+rather than a sync dependency.
 `pnpm acceptance:knowledge:manual` checks that `07-manual-qa-evidence.md`
 contains session metadata, allowed status values, non-empty evidence for passing
 rows, owner-approved exception notes for `Blocked`/`N/A` rows, and a final
@@ -182,6 +187,7 @@ Evidence mapping:
 | Missing or cyclic parents surface as visible orphaned roots in desktop and mobile root browsers. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
 | Vault roots and folder documents open browsing surfaces; ordinary documents open editor surfaces. | `document-utils.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
 | Create and Markdown import actions inherit the current vault root, folder, or sibling context consistently. Folder-level `README.md` and `index.md` links resolve back to the manifest document id, and linked-vault import conflicts surface safe resolution guidance before any write. | `document-utils.test.ts`, `knowledge-importer.test.ts`, desktop/mobile knowledge workspace contract checks, desktop and mobile TypeScript checks |
+| Optional Obsidian URI actions encode open/new/search paths safely and surface desktop open/search actions from conflict and import-review cards. | `obsidian-uri.test.ts`, desktop knowledge workspace contract check, core/desktop/mobile TypeScript checks |
 | Knowledge and card UI strings and interpolation placeholders stay available across supported locales. | `locales.test.ts`, desktop and mobile TypeScript checks |
 | Desktop knowledge workspace code is included in a valid production browser bundle. | Desktop production bundle contract check |
 | Desktop/mobile editor profiles expose the right rich-text features by scenario. | `editor-profile.test.ts`, TypeScript checks |

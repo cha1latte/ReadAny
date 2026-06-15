@@ -9,7 +9,7 @@ sheet as proof by itself.
 
 - Evidence file: `docs/knowledge-base-notes/07-manual-qa-evidence.md`
 - Branch: `feat/knowledge-base-notes-research`
-- Commit under test: `928d1808`
+- Commit under test: `8b847b50`
 - Required final gate: `pnpm acceptance:knowledge:manual`
 
 ## Preflight
@@ -394,6 +394,17 @@ Evidence hint: Export/import folder path, representative Markdown file path, and
 - Current status: (empty)
 - Current evidence: (empty)
 - Evidence anchor: `obsidian-and-import-export-qa-re-export`
+- [ ] Run the check.
+- [ ] Record pass/fail/blocker status.
+- [ ] Paste concrete evidence into `07-manual-qa-evidence.md`.
+
+### Obsidian URI actions
+
+- Evidence row: `Obsidian And Import/Export QA / Obsidian URI actions`
+- Expected: Desktop conflict and import-review cards can open an exported file or search the selected vault through Obsidian URI actions, and show a visible failure toast if the platform cannot open the URI.
+- Current status: (empty)
+- Current evidence: (empty)
+- Evidence anchor: `obsidian-and-import-export-qa-obsidian-uri-actions`
 - [ ] Run the check.
 - [ ] Record pass/fail/blocker status.
 - [ ] Paste concrete evidence into `07-manual-qa-evidence.md`.

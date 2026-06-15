@@ -247,11 +247,17 @@ function getTemplateFieldDefaultString(field: ReadAnyCardTemplateField): string 
   return String(field.defaultValue);
 }
 
-function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
-  const value = field.visibleWhen?.value;
+function getTemplateConditionValueString(
+  condition: ReadAnyCardTemplateField["visibleWhen"] | undefined,
+): string {
+  const value = condition?.value;
   if (value === undefined || value === null) return "";
   if (Array.isArray(value)) return value.length > 0 ? String(value[0]) : "";
   return String(value);
+}
+
+function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
+  return getTemplateConditionValueString(field.visibleWhen);
 }
 
 function parseTemplateFieldConditionValue(
@@ -772,33 +778,30 @@ export function KnowledgeEditor({
     void clearKnowledgeEditorDraft(draftKey);
   }, [draftKey, isSaved, valueFingerprint]);
 
-  const scheduleDraftSave = useCallback(
-    (nextValue: KnowledgeEditorValue) => {
-      const activeDraftKey = draftKeyRef.current;
-      if (readOnlyRef.current || !activeDraftKey) return;
-      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+  const scheduleDraftSave = useCallback((nextValue: KnowledgeEditorValue) => {
+    const activeDraftKey = draftKeyRef.current;
+    if (readOnlyRef.current || !activeDraftKey) return;
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
 
-      const nextFingerprint = knowledgeEditorDraftFingerprint(nextValue.contentJson);
-      if (nextFingerprint === baseFingerprintRef.current) {
-        lastWrittenDraftFingerprintRef.current = null;
-        void clearKnowledgeEditorDraft(activeDraftKey);
-        return;
-      }
+    const nextFingerprint = knowledgeEditorDraftFingerprint(nextValue.contentJson);
+    if (nextFingerprint === baseFingerprintRef.current) {
+      lastWrittenDraftFingerprintRef.current = null;
+      void clearKnowledgeEditorDraft(activeDraftKey);
+      return;
+    }
 
-      draftSaveTimerRef.current = setTimeout(() => {
-        void saveKnowledgeEditorDraft(activeDraftKey, nextValue, {
-          baseFingerprint: baseFingerprintRef.current,
+    draftSaveTimerRef.current = setTimeout(() => {
+      void saveKnowledgeEditorDraft(activeDraftKey, nextValue, {
+        baseFingerprint: baseFingerprintRef.current,
+      })
+        .then((draft) => {
+          lastWrittenDraftFingerprintRef.current = draft.contentFingerprint;
         })
-          .then((draft) => {
-            lastWrittenDraftFingerprintRef.current = draft.contentFingerprint;
-          })
-          .catch((error) => {
-            console.warn("[KnowledgeEditor] Failed to save editor draft:", error);
-          });
-      }, DESKTOP_DRAFT_SAVE_DELAY_MS);
-    },
-    [],
-  );
+        .catch((error) => {
+          console.warn("[KnowledgeEditor] Failed to save editor draft:", error);
+        });
+    }, DESKTOP_DRAFT_SAVE_DELAY_MS);
+  }, []);
 
   const editor = useEditor({
     extensions,
@@ -1139,6 +1142,23 @@ export function KnowledgeEditor({
     (index: number, patch: Partial<ReadAnyCardTemplateField>) => {
       setTemplateFields((current) =>
         current.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)),
+      );
+      setTemplateSaveError(null);
+    },
+    [],
+  );
+
+  const updateTemplateGroupVisibleWhen = useCallback(
+    (
+      group: string | undefined,
+      visibleWhen: ReadAnyCardTemplateField["groupVisibleWhen"] | undefined,
+    ) => {
+      const groupName = group?.trim();
+      if (!groupName) return;
+      setTemplateFields((current) =>
+        current.map((field) =>
+          field.group?.trim() === groupName ? { ...field, groupVisibleWhen: visibleWhen } : field,
+        ),
       );
       setTemplateSaveError(null);
     },
@@ -2071,6 +2091,33 @@ export function KnowledgeEditor({
                                   const conditionNeedsValue =
                                     conditionOperator !== "empty" &&
                                     conditionOperator !== "notEmpty";
+                                  const fieldGroupName = field.group?.trim() || "";
+                                  const groupConditionSourceFields = fieldGroupName
+                                    ? templateFields.filter(
+                                        (candidate, candidateIndex) =>
+                                          candidateIndex !== index && candidate.key !== field.key,
+                                      )
+                                    : [];
+                                  const isFirstGroupField = fieldGroupName
+                                    ? templateFields.findIndex(
+                                        (candidate) => candidate.group?.trim() === fieldGroupName,
+                                      ) === index
+                                    : false;
+                                  const groupVisibleWhen = fieldGroupName
+                                    ? templateFields.find(
+                                        (candidate) =>
+                                          candidate.group?.trim() === fieldGroupName &&
+                                          candidate.groupVisibleWhen,
+                                      )?.groupVisibleWhen
+                                    : undefined;
+                                  const groupConditionSourceField = groupConditionSourceFields.find(
+                                    (candidate) => candidate.key === groupVisibleWhen?.fieldKey,
+                                  );
+                                  const groupConditionOperator =
+                                    groupVisibleWhen?.operator ?? "equals";
+                                  const groupConditionNeedsValue =
+                                    groupConditionOperator !== "empty" &&
+                                    groupConditionOperator !== "notEmpty";
 
                                   return (
                                     <div
@@ -2129,6 +2176,9 @@ export function KnowledgeEditor({
                                               updateTemplateField(index, {
                                                 group:
                                                   event.currentTarget.value.trim() || undefined,
+                                                groupVisibleWhen: event.currentTarget.value.trim()
+                                                  ? field.groupVisibleWhen
+                                                  : undefined,
                                               })
                                             }
                                             className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
@@ -2141,6 +2191,246 @@ export function KnowledgeEditor({
                                           />
                                         </label>
                                       </div>
+                                      {fieldGroupName && isFirstGroupField ? (
+                                        <div className="rounded-md border border-border/45 bg-background/55 p-2">
+                                          <div className="grid gap-1.5 sm:grid-cols-[0.9fr_0.8fr_1fr]">
+                                            <label className="space-y-1">
+                                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                {t("notes.knowledgeCustomCardGroupVisibleWhen", {
+                                                  defaultValue: "Group shows when",
+                                                })}
+                                              </span>
+                                              <select
+                                                value={groupVisibleWhen?.fieldKey ?? ""}
+                                                onChange={(event) => {
+                                                  const fieldKey = event.currentTarget.value;
+                                                  updateTemplateGroupVisibleWhen(
+                                                    fieldGroupName,
+                                                    fieldKey
+                                                      ? {
+                                                          fieldKey,
+                                                          operator:
+                                                            groupVisibleWhen?.operator ?? "equals",
+                                                          value: groupVisibleWhen?.value ?? "",
+                                                        }
+                                                      : undefined,
+                                                  );
+                                                }}
+                                                className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                              >
+                                                <option value="">
+                                                  {t(
+                                                    "notes.knowledgeCustomCardFieldAlwaysVisible",
+                                                    { defaultValue: "Always visible" },
+                                                  )}
+                                                </option>
+                                                {groupConditionSourceFields.map((candidate) => (
+                                                  <option key={candidate.key} value={candidate.key}>
+                                                    {candidate.label}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </label>
+                                            {groupVisibleWhen ? (
+                                              <>
+                                                <label className="space-y-1">
+                                                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                    {t(
+                                                      "notes.knowledgeCustomCardFieldConditionOperator",
+                                                      { defaultValue: "Rule" },
+                                                    )}
+                                                  </span>
+                                                  <select
+                                                    value={groupConditionOperator}
+                                                    onChange={(event) => {
+                                                      const operator = event.currentTarget
+                                                        .value as NonNullable<
+                                                        ReadAnyCardTemplateField["visibleWhen"]
+                                                      >["operator"];
+                                                      updateTemplateGroupVisibleWhen(
+                                                        fieldGroupName,
+                                                        {
+                                                          fieldKey:
+                                                            groupVisibleWhen?.fieldKey ?? "",
+                                                          operator,
+                                                          value:
+                                                            operator === "empty" ||
+                                                            operator === "notEmpty"
+                                                              ? undefined
+                                                              : (groupVisibleWhen?.value ?? ""),
+                                                        },
+                                                      );
+                                                    }}
+                                                    className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                  >
+                                                    {customCardFieldConditionOperators.map(
+                                                      (operator) => (
+                                                        <option key={operator} value={operator}>
+                                                          {operator === "equals"
+                                                            ? t(
+                                                                "notes.knowledgeCustomCardConditionEquals",
+                                                                { defaultValue: "equals" },
+                                                              )
+                                                            : operator === "notEquals"
+                                                              ? t(
+                                                                  "notes.knowledgeCustomCardConditionNotEquals",
+                                                                  { defaultValue: "is not" },
+                                                                )
+                                                              : operator === "contains"
+                                                                ? t(
+                                                                    "notes.knowledgeCustomCardConditionContains",
+                                                                    { defaultValue: "contains" },
+                                                                  )
+                                                                : operator === "notContains"
+                                                                  ? t(
+                                                                      "notes.knowledgeCustomCardConditionNotContains",
+                                                                      {
+                                                                        defaultValue:
+                                                                          "does not contain",
+                                                                      },
+                                                                    )
+                                                                  : operator === "empty"
+                                                                    ? t(
+                                                                        "notes.knowledgeCustomCardConditionEmpty",
+                                                                        {
+                                                                          defaultValue: "is empty",
+                                                                        },
+                                                                      )
+                                                                    : t(
+                                                                        "notes.knowledgeCustomCardConditionNotEmpty",
+                                                                        {
+                                                                          defaultValue:
+                                                                            "is not empty",
+                                                                        },
+                                                                      )}
+                                                        </option>
+                                                      ),
+                                                    )}
+                                                  </select>
+                                                </label>
+                                                {groupConditionNeedsValue ? (
+                                                  <div className="space-y-1">
+                                                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                      {t(
+                                                        "notes.knowledgeCustomCardFieldConditionValue",
+                                                        { defaultValue: "Value" },
+                                                      )}
+                                                    </span>
+                                                    {groupConditionSourceField?.type ===
+                                                    "checkbox" ? (
+                                                      <select
+                                                        value={getTemplateConditionValueString(
+                                                          groupVisibleWhen,
+                                                        )}
+                                                        onChange={(event) =>
+                                                          updateTemplateGroupVisibleWhen(
+                                                            fieldGroupName,
+                                                            {
+                                                              fieldKey:
+                                                                groupVisibleWhen?.fieldKey ?? "",
+                                                              operator: groupConditionOperator,
+                                                              value:
+                                                                event.currentTarget.value ===
+                                                                "true",
+                                                            },
+                                                          )
+                                                        }
+                                                        className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                      >
+                                                        <option value="true">
+                                                          {t("common.yes", {
+                                                            defaultValue: "Yes",
+                                                          })}
+                                                        </option>
+                                                        <option value="false">
+                                                          {t("common.no", { defaultValue: "No" })}
+                                                        </option>
+                                                      </select>
+                                                    ) : isChoiceTemplateField(
+                                                        groupConditionSourceField ??
+                                                          ({
+                                                            type: "text",
+                                                          } as ReadAnyCardTemplateField),
+                                                      ) ? (
+                                                      <select
+                                                        value={getTemplateConditionValueString(
+                                                          groupVisibleWhen,
+                                                        )}
+                                                        onChange={(event) =>
+                                                          updateTemplateGroupVisibleWhen(
+                                                            fieldGroupName,
+                                                            {
+                                                              fieldKey:
+                                                                groupVisibleWhen?.fieldKey ?? "",
+                                                              operator: groupConditionOperator,
+                                                              value: event.currentTarget.value,
+                                                            },
+                                                          )
+                                                        }
+                                                        className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none focus:border-primary/45"
+                                                      >
+                                                        {(
+                                                          groupConditionSourceField?.options ?? []
+                                                        ).map((option) => (
+                                                          <option
+                                                            key={option.value}
+                                                            value={option.value}
+                                                          >
+                                                            {option.label}
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                    ) : (
+                                                      <input
+                                                        value={getTemplateConditionValueString(
+                                                          groupVisibleWhen,
+                                                        )}
+                                                        onChange={(event) =>
+                                                          updateTemplateGroupVisibleWhen(
+                                                            fieldGroupName,
+                                                            {
+                                                              fieldKey:
+                                                                groupVisibleWhen?.fieldKey ?? "",
+                                                              operator: groupConditionOperator,
+                                                              value:
+                                                                parseTemplateFieldConditionValue(
+                                                                  groupConditionSourceField,
+                                                                  event.currentTarget.value,
+                                                                ),
+                                                            },
+                                                          )
+                                                        }
+                                                        className="h-8 w-full rounded-md border border-border/55 bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary/45"
+                                                        placeholder={t(
+                                                          "notes.knowledgeCustomCardFieldConditionValuePlaceholder",
+                                                          { defaultValue: "Expected value" },
+                                                        )}
+                                                      />
+                                                    )}
+                                                  </div>
+                                                ) : (
+                                                  <div className="self-end rounded-md border border-border/40 bg-muted/25 px-2 py-2 text-[11px] leading-4 text-muted-foreground">
+                                                    {t(
+                                                      "notes.knowledgeCustomCardFieldConditionNoValue",
+                                                      {
+                                                        defaultValue:
+                                                          "This rule does not need a value.",
+                                                      },
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </>
+                                            ) : (
+                                              <div className="self-end rounded-md border border-dashed border-border/50 bg-muted/20 px-2 py-2 text-[11px] leading-4 text-muted-foreground sm:col-span-2">
+                                                {t("notes.knowledgeCustomCardGroupVisibleHint", {
+                                                  defaultValue:
+                                                    "All fields in this group follow the same group rule.",
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ) : null}
                                       <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_1fr_auto]">
                                         <label className="space-y-1">
                                           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -2223,10 +2513,9 @@ export function KnowledgeEditor({
                                                       defaultValue: "Auto",
                                                     })
                                                   : width === "full"
-                                                    ? t(
-                                                        "notes.knowledgeCustomCardFieldWidthFull",
-                                                        { defaultValue: "Full" },
-                                                      )
+                                                    ? t("notes.knowledgeCustomCardFieldWidthFull", {
+                                                        defaultValue: "Full",
+                                                      })
                                                     : width === "half"
                                                       ? t(
                                                           "notes.knowledgeCustomCardFieldWidthHalf",

@@ -324,6 +324,8 @@
     "knowledgeCustomCardFieldKey": "데이터 키",
     "knowledgeCustomCardFieldGroup": "그룹",
     "knowledgeCustomCardFieldGroupPlaceholder": "핵심, 근거, 후속...",
+    "knowledgeCustomCardGroupVisibleWhen": "그룹 표시 조건",
+    "knowledgeCustomCardGroupVisibleHint": "같은 그룹의 필드는 이 표시 규칙을 공유합니다.",
     "knowledgeCustomCardFieldLayout": "레이아웃",
     "knowledgeCustomCardFieldWidthAuto": "자동",
     "knowledgeCustomCardFieldWidthFull": "전체",

@@ -79,6 +79,7 @@ export interface ReadAnyCardTemplateSchema {
   sourceId?: string;
   cfi?: string;
   fields?: ReadAnyCardTemplateField[];
+  groups?: ReadAnyCardTemplateFieldGroup[];
   attrs?: Record<string, unknown>;
   migrations?: ReadAnyCardTemplateMigration[];
 }
@@ -112,12 +113,19 @@ export interface ReadAnyCardTemplateFieldVisibleWhen {
   value?: JSONValue;
 }
 
+export interface ReadAnyCardTemplateFieldGroup {
+  key: string;
+  label: string;
+  visibleWhen?: ReadAnyCardTemplateFieldVisibleWhen;
+}
+
 export interface ReadAnyCardTemplateField {
   key: string;
   label: string;
   type: ReadAnyCardTemplateFieldType;
   group?: string;
   width?: ReadAnyCardTemplateFieldWidth;
+  groupVisibleWhen?: ReadAnyCardTemplateFieldVisibleWhen;
   placeholder?: string;
   helpText?: string;
   required?: boolean;
@@ -352,14 +360,14 @@ function normalizeTemplateFieldConditionValue(value: unknown): JSONValue | undef
 
 function normalizeReadAnyCardTemplateFieldVisibleWhen(
   value: unknown,
-  fieldKey: string,
+  fieldKey?: string,
 ): ReadAnyCardTemplateFieldVisibleWhen | undefined {
   if (!isRecord(value)) return undefined;
   const rawFieldKey = firstString(value.fieldKey, value.key, value.field);
   if (!rawFieldKey) return undefined;
 
   const normalizedFieldKey = normalizeTemplateFieldKey(rawFieldKey, "");
-  if (!normalizedFieldKey || normalizedFieldKey === fieldKey) return undefined;
+  if (!normalizedFieldKey || (fieldKey && normalizedFieldKey === fieldKey)) return undefined;
 
   const operator = normalizeTemplateFieldConditionOperator(value.operator);
   const condition: ReadAnyCardTemplateFieldVisibleWhen = {
@@ -463,6 +471,10 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
     }
     const visibleWhen = normalizeReadAnyCardTemplateFieldVisibleWhen(rawField.visibleWhen, key);
     if (visibleWhen) field.visibleWhen = visibleWhen;
+    const groupVisibleWhen = normalizeReadAnyCardTemplateFieldVisibleWhen(
+      rawField.groupVisibleWhen ?? rawField.groupCondition ?? rawField.sectionVisibleWhen,
+    );
+    if (field.group && groupVisibleWhen) field.groupVisibleWhen = groupVisibleWhen;
     const defaultValue = normalizeTemplateFieldDefaultValue(type, rawField.defaultValue, options);
     if (defaultValue !== undefined && isJsonValue(defaultValue)) {
       field.defaultValue = defaultValue;
@@ -471,6 +483,95 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
   }
 
   return normalizedFields.slice(0, 12);
+}
+
+function templateFieldGroupKey(label: string): string {
+  return normalizeTemplateFieldKey(label, "group");
+}
+
+function normalizeReadAnyCardTemplateFieldGroups(
+  groups: unknown,
+  fields: ReadAnyCardTemplateField[] = [],
+): ReadAnyCardTemplateFieldGroup[] {
+  const normalizedGroups: ReadAnyCardTemplateFieldGroup[] = [];
+  const indexByKey = new Map<string, number>();
+
+  const upsertGroup = (
+    label: string,
+    key: string,
+    visibleWhen?: ReadAnyCardTemplateFieldVisibleWhen,
+  ) => {
+    const normalizedLabel = label.trim();
+    if (!normalizedLabel) return;
+    const normalizedKey = normalizeTemplateFieldKey(key, templateFieldGroupKey(normalizedLabel));
+    const existingIndex = indexByKey.get(normalizedKey);
+    if (existingIndex !== undefined) {
+      const existing = normalizedGroups[existingIndex];
+      normalizedGroups[existingIndex] = {
+        ...existing,
+        label: existing.label || normalizedLabel,
+        ...(visibleWhen ? { visibleWhen } : {}),
+      };
+      return;
+    }
+    indexByKey.set(normalizedKey, normalizedGroups.length);
+    normalizedGroups.push({
+      key: normalizedKey,
+      label: normalizedLabel,
+      ...(visibleWhen ? { visibleWhen } : {}),
+    });
+  };
+
+  for (const field of fields) {
+    const label = field.group?.trim();
+    if (!label) continue;
+    upsertGroup(label, templateFieldGroupKey(label), field.groupVisibleWhen);
+  }
+
+  if (Array.isArray(groups)) {
+    for (const [index, rawGroup] of groups.entries()) {
+      if (!isRecord(rawGroup)) continue;
+      const label =
+        firstString(rawGroup.label, rawGroup.title, rawGroup.name, rawGroup.group) ??
+        `Group ${index + 1}`;
+      const key = firstString(rawGroup.key, rawGroup.id, rawGroup.name, rawGroup.group) ?? label;
+      const visibleWhen = normalizeReadAnyCardTemplateFieldVisibleWhen(
+        rawGroup.visibleWhen ?? rawGroup.condition,
+      );
+      upsertGroup(label, key, visibleWhen);
+    }
+  }
+
+  return normalizedGroups.slice(0, 12);
+}
+
+function createReadAnyCardTemplateFieldGroups(
+  fields: ReadAnyCardTemplateField[],
+): ReadAnyCardTemplateFieldGroup[] {
+  return normalizeReadAnyCardTemplateFieldGroups(undefined, fields).filter(
+    (group) => !!group.visibleWhen,
+  );
+}
+
+function stripTemplateFieldGroupVisibility(
+  fields: ReadAnyCardTemplateField[],
+): ReadAnyCardTemplateField[] {
+  return fields.map(({ groupVisibleWhen: _groupVisibleWhen, ...field }) => field);
+}
+
+function attachTemplateFieldGroupVisibility(
+  fields: ReadAnyCardTemplateField[],
+  groups: ReadAnyCardTemplateFieldGroup[],
+): ReadAnyCardTemplateField[] {
+  if (groups.length === 0) return fields;
+  const groupsByKey = new Map(groups.map((group) => [group.key, group]));
+  return fields.map((field) => {
+    const groupLabel = field.group?.trim();
+    if (!groupLabel) return field;
+    const group = groupsByKey.get(templateFieldGroupKey(groupLabel));
+    if (!group?.visibleWhen) return field;
+    return { ...field, groupVisibleWhen: group.visibleWhen };
+  });
 }
 
 export function createReadAnyCardTemplateFieldDefaults(
@@ -793,9 +894,19 @@ function rewriteTemplateFieldConditions(
   return fields.map((field) => {
     const visibleWhen = field.visibleWhen;
     const nextFieldKey = visibleWhen ? fieldRenames[visibleWhen.fieldKey] : undefined;
-    return visibleWhen && nextFieldKey
-      ? { ...field, visibleWhen: { ...visibleWhen, fieldKey: nextFieldKey } }
-      : field;
+    const groupVisibleWhen = field.groupVisibleWhen;
+    const nextGroupFieldKey = groupVisibleWhen
+      ? fieldRenames[groupVisibleWhen.fieldKey]
+      : undefined;
+    return {
+      ...field,
+      ...(visibleWhen && nextFieldKey
+        ? { visibleWhen: { ...visibleWhen, fieldKey: nextFieldKey } }
+        : {}),
+      ...(groupVisibleWhen && nextGroupFieldKey
+        ? { groupVisibleWhen: { ...groupVisibleWhen, fieldKey: nextGroupFieldKey } }
+        : {}),
+    };
   });
 }
 
@@ -1115,6 +1226,8 @@ export function createCustomReadAnyCardTemplate({
   const trimmedName = name.trim();
   const title = trimmedName || "Custom card";
   const normalizedFields = normalizeReadAnyCardTemplateFields(fields);
+  const fieldGroups = createReadAnyCardTemplateFieldGroups(normalizedFields);
+  const schemaFields = stripTemplateFieldGroupVisibility(normalizedFields);
   const schemaJson: Record<string, JSONValue> = {
     cardType: `custom:${id}`,
     insertLabel: title,
@@ -1123,9 +1236,10 @@ export function createCustomReadAnyCardTemplate({
   };
   const trimmedDescription = description?.trim();
   if (trimmedDescription) schemaJson.description = trimmedDescription;
-  if (normalizedFields.length > 0) {
-    schemaJson.fields = normalizedFields as unknown as JSONValue;
-    const defaults = createReadAnyCardTemplateFieldDefaults(normalizedFields);
+  if (schemaFields.length > 0) {
+    schemaJson.fields = schemaFields as unknown as JSONValue;
+    if (fieldGroups.length > 0) schemaJson.groups = fieldGroups as unknown as JSONValue;
+    const defaults = createReadAnyCardTemplateFieldDefaults(schemaFields);
     if (defaults) {
       schemaJson.attrs = { data: defaults };
     }
@@ -1160,16 +1274,17 @@ export function updateCustomReadAnyCardTemplate({
   const existingSchema = (templateSchema(template) as Record<string, JSONValue>) ?? {};
   const normalizedFields =
     fields === undefined
-      ? normalizeReadAnyCardTemplateFields(existingSchema.fields)
+      ? getReadAnyCardTemplateFields(template)
       : normalizeReadAnyCardTemplateFields(fields);
   const {
     description: _existingDescription,
     fields: _existingFields,
+    groups: _existingGroups,
     attrs: _existingAttrs,
     migrations: existingMigrations,
     ...schemaRest
   } = existingSchema;
-  const existingFields = normalizeReadAnyCardTemplateFields(existingSchema.fields);
+  const existingFields = getReadAnyCardTemplateFields(template);
   const fieldRenames = createTemplateFieldRenameMap(existingFields, normalizedFields);
   const conditionSafeFields = rewriteTemplateFieldConditions(normalizedFields, fieldRenames);
   const existingAttrs = isRecord(existingSchema.attrs)
@@ -1194,6 +1309,8 @@ export function updateCustomReadAnyCardTemplate({
     ...(renameMigration ? [renameMigration] : []),
     ...(Array.isArray(existingMigrations) ? existingMigrations : []),
   ];
+  const fieldGroups = createReadAnyCardTemplateFieldGroups(conditionSafeFields);
+  const schemaFields = stripTemplateFieldGroupVisibility(conditionSafeFields);
   const schemaJson: Record<string, JSONValue> = {
     ...schemaRest,
     cardType: `custom:${template.id}`,
@@ -1203,9 +1320,10 @@ export function updateCustomReadAnyCardTemplate({
   };
   const trimmedDescription = description?.trim();
   if (trimmedDescription) schemaJson.description = trimmedDescription;
-  if (conditionSafeFields.length > 0) {
-    schemaJson.fields = conditionSafeFields as unknown as JSONValue;
+  if (schemaFields.length > 0) {
+    schemaJson.fields = schemaFields as unknown as JSONValue;
   }
+  if (fieldGroups.length > 0) schemaJson.groups = fieldGroups as unknown as JSONValue;
   if (migrations.length > 0) schemaJson.migrations = migrations as unknown as JSONValue;
   const nextAttrs: Record<string, JSONValue> =
     Object.keys(mergedData).length > 0 ? { ...attrsRest, data: mergedData } : { ...attrsRest };
@@ -1268,7 +1386,18 @@ export function getReadAnyCardTemplateDescription(
 export function getReadAnyCardTemplateFields(
   template: KnowledgeCardTemplate,
 ): ReadAnyCardTemplateField[] {
-  return normalizeReadAnyCardTemplateFields(templateSchema(template).fields);
+  const schema = templateSchema(template);
+  const fields = normalizeReadAnyCardTemplateFields(schema.fields);
+  const groups = normalizeReadAnyCardTemplateFieldGroups(schema.groups, fields);
+  return attachTemplateFieldGroupVisibility(fields, groups);
+}
+
+export function getReadAnyCardTemplateFieldGroups(
+  template: KnowledgeCardTemplate,
+): ReadAnyCardTemplateFieldGroup[] {
+  const schema = templateSchema(template);
+  const fields = normalizeReadAnyCardTemplateFields(schema.fields);
+  return normalizeReadAnyCardTemplateFieldGroups(schema.groups, fields);
 }
 
 function isEmptyConditionValue(value: unknown): boolean {
@@ -1325,12 +1454,30 @@ export function isReadAnyCardTemplateFieldVisible(
   return true;
 }
 
+export function isReadAnyCardTemplateFieldGroupVisible(
+  field: ReadAnyCardTemplateField,
+  data: Record<string, unknown> | undefined,
+): boolean {
+  if (!field.groupVisibleWhen) return true;
+  return isReadAnyCardTemplateFieldVisible(
+    {
+      key: `${field.group ?? "group"}_visibility`,
+      label: field.group ?? "Group",
+      type: "text",
+      visibleWhen: field.groupVisibleWhen,
+    },
+    data,
+  );
+}
+
 export function getVisibleReadAnyCardTemplateFields(
   template: KnowledgeCardTemplate,
   data?: Record<string, unknown>,
 ): ReadAnyCardTemplateField[] {
-  return getReadAnyCardTemplateFields(template).filter((field) =>
-    isReadAnyCardTemplateFieldVisible(field, data),
+  return getReadAnyCardTemplateFields(template).filter(
+    (field) =>
+      isReadAnyCardTemplateFieldGroupVisible(field, data) &&
+      isReadAnyCardTemplateFieldVisible(field, data),
   );
 }
 

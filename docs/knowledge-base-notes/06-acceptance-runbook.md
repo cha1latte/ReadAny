@@ -139,10 +139,11 @@ the ReadAny card conversion control so AI/card blocks can be turned back into
 ordinary editable content instead of becoming permanent special blocks.
 Custom card field schema editing is checked in the desktop and mobile editor
 sources, including text, long-text, number, checkbox, single-choice, and
-multi-choice fields with required markers, help text, options, defaults, and
-simple visibility rules, optional field group labels, and lightweight field
-width layout rules. The WebView bundle is checked for structured-field
-rendering, including grouped section headings and field-width markers, so
+multi-choice fields with required markers, help text, options, defaults,
+simple visibility rules, optional field group labels, group-level visibility
+rules, and lightweight field width layout rules. The WebView bundle is checked
+for structured-field rendering, including grouped section headings and
+field-width markers, so
 synced custom cards can be edited without dropping to raw JSON. The core card,
 projection, export, and AI context tests also verify that visible structured
 field values, group labels, and choice labels stay readable in Markdown/Obsidian
@@ -190,7 +191,7 @@ Evidence mapping:
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
 | Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states, and export as readable Obsidian callouts. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-exporter.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |
-| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, conversion back to normal editable content, user-authored structured field schemas, field groups, field-width layout metadata, sync-safe disabled templates for existing cards, and readable field values in export/AI context. | `card-registry.test.ts`, `knowledge-queries.test.ts`, `editor-projection.test.ts`, `knowledge-context.test.ts`, `knowledge-exporter.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile knowledge editor contract check, mobile WebView bundle contract check |
+| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, conversion back to normal editable content, user-authored structured field schemas, field groups, group-level visibility, field-width layout metadata, sync-safe disabled templates for existing cards, and readable field values in export/AI context. | `card-registry.test.ts`, `knowledge-queries.test.ts`, `editor-projection.test.ts`, `knowledge-context.test.ts`, `knowledge-exporter.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile knowledge editor contract check, mobile WebView bundle contract check |
 
 ## Desktop Manual Checks
 

@@ -9,6 +9,8 @@ import {
   formatReadAnyCardDataForEditor,
   getReadAnyCardDefinition,
   getReadAnyCardTemplateDescription,
+  getReadAnyCardTemplateFieldGroups,
+  getReadAnyCardTemplateFields,
   getReadAnyCardTemplateInsertLabel,
   getVisibleReadAnyCardTemplateFields,
   isReadAnyCardTemplateFieldVisible,
@@ -539,6 +541,102 @@ describe("ReadAny card registry", () => {
         themes: ["ritual"],
       }).map((field) => field.key),
     ).toEqual(["has_evidence", "evidence", "themes", "ritual_note"]);
+  });
+
+  it("applies custom card group visibility before field visibility", () => {
+    const template = createCustomReadAnyCardTemplate({
+      id: "template-grouped-claim",
+      name: "Grouped Claim",
+      fields: [
+        { key: "has_evidence", label: "Has evidence", type: "checkbox", defaultValue: false },
+        {
+          key: "quote",
+          label: "Quote",
+          type: "multiline",
+          group: "Evidence",
+          groupVisibleWhen: { fieldKey: "has evidence", operator: "equals", value: true },
+        },
+        {
+          key: "commentary",
+          label: "Commentary",
+          type: "text",
+          group: "Evidence",
+          visibleWhen: { fieldKey: "quote", operator: "notEmpty" },
+        },
+        { key: "summary", label: "Summary", type: "text", group: "Core" },
+      ],
+      now: 123,
+    });
+
+    expect(template.schemaJson).toMatchObject({
+      fields: [
+        { key: "has_evidence", label: "Has evidence", type: "checkbox", defaultValue: false },
+        { key: "quote", label: "Quote", type: "multiline", group: "Evidence" },
+        {
+          key: "commentary",
+          label: "Commentary",
+          type: "text",
+          group: "Evidence",
+          visibleWhen: { fieldKey: "quote", operator: "notEmpty" },
+        },
+        { key: "summary", label: "Summary", type: "text", group: "Core" },
+      ],
+      groups: [
+        {
+          key: "evidence",
+          label: "Evidence",
+          visibleWhen: { fieldKey: "has_evidence", operator: "equals", value: true },
+        },
+      ],
+    });
+    expect(getReadAnyCardTemplateFieldGroups(template)).toEqual([
+      {
+        key: "evidence",
+        label: "Evidence",
+        visibleWhen: { fieldKey: "has_evidence", operator: "equals", value: true },
+      },
+      { key: "core", label: "Core" },
+    ]);
+    expect(getReadAnyCardTemplateFields(template)[1].groupVisibleWhen).toEqual({
+      fieldKey: "has_evidence",
+      operator: "equals",
+      value: true,
+    });
+
+    expect(
+      getVisibleReadAnyCardTemplateFields(template, {
+        has_evidence: false,
+        quote: "Hidden quote",
+        commentary: "Hidden commentary",
+      }).map((field) => field.key),
+    ).toEqual(["has_evidence", "summary"]);
+    expect(
+      getVisibleReadAnyCardTemplateFields(template, {
+        has_evidence: true,
+        quote: "",
+        summary: "Visible",
+      }).map((field) => field.key),
+    ).toEqual(["has_evidence", "quote", "summary"]);
+
+    const hiddenModel = createReadAnyCardReadOnlyModel(
+      {
+        cardType: "custom:template-grouped-claim",
+        data: {
+          has_evidence: false,
+          quote: "Hidden quote",
+          commentary: "Hidden commentary",
+          summary: "Visible summary",
+        },
+      },
+      { body: "", cardTemplates: [template] },
+    );
+    expect(hiddenModel.structuredFields.map((field) => field.key)).toEqual([
+      "has_evidence",
+      "summary",
+    ]);
+    expect(renderReadAnyCardStructuredFieldsMarkdown(hiddenModel.structuredFields)).not.toContain(
+      "Hidden quote",
+    );
   });
 
   it("stores visual custom card fields in synced templates and insert attrs", () => {

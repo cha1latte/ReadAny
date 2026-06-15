@@ -211,11 +211,17 @@ function getTemplateFieldDefaultString(field: ReadAnyCardTemplateField): string 
   return String(field.defaultValue);
 }
 
-function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
-  const value = field.visibleWhen?.value;
+function getTemplateConditionValueString(
+  condition: ReadAnyCardTemplateField["visibleWhen"] | undefined,
+): string {
+  const value = condition?.value;
   if (value === undefined || value === null) return "";
   if (Array.isArray(value)) return value.length > 0 ? String(value[0]) : "";
   return String(value);
+}
+
+function getTemplateFieldConditionValueString(field: ReadAnyCardTemplateField): string {
+  return getTemplateConditionValueString(field.visibleWhen);
 }
 
 function parseTemplateFieldConditionValue(
@@ -1033,6 +1039,23 @@ export function MobileKnowledgeEditor({
     (index: number, patch: Partial<ReadAnyCardTemplateField>) => {
       setTemplateFields((current) =>
         current.map((field, fieldIndex) => (fieldIndex === index ? { ...field, ...patch } : field)),
+      );
+      setTemplateSaveError(null);
+    },
+    [],
+  );
+
+  const updateTemplateGroupVisibleWhen = useCallback(
+    (
+      group: string | undefined,
+      visibleWhen: ReadAnyCardTemplateField["groupVisibleWhen"] | undefined,
+    ) => {
+      const groupName = group?.trim();
+      if (!groupName) return;
+      setTemplateFields((current) =>
+        current.map((field) =>
+          field.group?.trim() === groupName ? { ...field, groupVisibleWhen: visibleWhen } : field,
+        ),
       );
       setTemplateSaveError(null);
     },
@@ -2353,6 +2376,33 @@ export function MobileKnowledgeEditor({
                                 const conditionOperator = field.visibleWhen?.operator ?? "equals";
                                 const conditionNeedsValue =
                                   conditionOperator !== "empty" && conditionOperator !== "notEmpty";
+                                const fieldGroupName = field.group?.trim() || "";
+                                const groupConditionSourceFields = fieldGroupName
+                                  ? templateFields.filter(
+                                      (candidate, candidateIndex) =>
+                                        candidateIndex !== index && candidate.key !== field.key,
+                                    )
+                                  : [];
+                                const isFirstGroupField = fieldGroupName
+                                  ? templateFields.findIndex(
+                                      (candidate) => candidate.group?.trim() === fieldGroupName,
+                                    ) === index
+                                  : false;
+                                const groupVisibleWhen = fieldGroupName
+                                  ? templateFields.find(
+                                      (candidate) =>
+                                        candidate.group?.trim() === fieldGroupName &&
+                                        candidate.groupVisibleWhen,
+                                    )?.groupVisibleWhen
+                                  : undefined;
+                                const groupConditionSourceField = groupConditionSourceFields.find(
+                                  (candidate) => candidate.key === groupVisibleWhen?.fieldKey,
+                                );
+                                const groupConditionOperator =
+                                  groupVisibleWhen?.operator ?? "equals";
+                                const groupConditionNeedsValue =
+                                  groupConditionOperator !== "empty" &&
+                                  groupConditionOperator !== "notEmpty";
 
                                 return (
                                   <View
@@ -2396,6 +2446,9 @@ export function MobileKnowledgeEditor({
                                       onChangeText={(text) =>
                                         updateTemplateField(index, {
                                           group: text.trim() || undefined,
+                                          groupVisibleWhen: text.trim()
+                                            ? field.groupVisibleWhen
+                                            : undefined,
                                         })
                                       }
                                       placeholder={t(
@@ -2405,6 +2458,276 @@ export function MobileKnowledgeEditor({
                                       placeholderTextColor={colors.mutedForeground}
                                       style={styles.linkInput}
                                     />
+                                    {fieldGroupName && isFirstGroupField ? (
+                                      <View style={styles.cardTemplateConditionBox}>
+                                        <Text style={styles.cardTemplateLabel}>
+                                          {t(
+                                            "notes.knowledgeCustomCardGroupVisibleWhen",
+                                            "分组显示条件",
+                                          )}
+                                        </Text>
+                                        <View style={styles.cardTemplateTypeGrid}>
+                                          <TouchableOpacity
+                                            style={[
+                                              styles.cardTemplateTypeButton,
+                                              !groupVisibleWhen &&
+                                                styles.cardTemplateTypeButtonActive,
+                                            ]}
+                                            activeOpacity={0.72}
+                                            onPress={() =>
+                                              updateTemplateGroupVisibleWhen(
+                                                fieldGroupName,
+                                                undefined,
+                                              )
+                                            }
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.cardTemplateTypeText,
+                                                !groupVisibleWhen &&
+                                                  styles.cardTemplateTypeTextActive,
+                                              ]}
+                                            >
+                                              {t(
+                                                "notes.knowledgeCustomCardFieldAlwaysVisible",
+                                                "始终显示",
+                                              )}
+                                            </Text>
+                                          </TouchableOpacity>
+                                          {groupConditionSourceFields.map((candidate) => {
+                                            const isActive =
+                                              groupVisibleWhen?.fieldKey === candidate.key;
+                                            return (
+                                              <TouchableOpacity
+                                                key={candidate.key}
+                                                style={[
+                                                  styles.cardTemplateTypeButton,
+                                                  isActive && styles.cardTemplateTypeButtonActive,
+                                                ]}
+                                                activeOpacity={0.72}
+                                                onPress={() =>
+                                                  updateTemplateGroupVisibleWhen(fieldGroupName, {
+                                                    fieldKey: candidate.key,
+                                                    operator:
+                                                      groupVisibleWhen?.operator ?? "equals",
+                                                    value: groupVisibleWhen?.value ?? "",
+                                                  })
+                                                }
+                                              >
+                                                <Text
+                                                  style={[
+                                                    styles.cardTemplateTypeText,
+                                                    isActive && styles.cardTemplateTypeTextActive,
+                                                  ]}
+                                                >
+                                                  {candidate.label}
+                                                </Text>
+                                              </TouchableOpacity>
+                                            );
+                                          })}
+                                        </View>
+                                        {groupVisibleWhen ? (
+                                          <>
+                                            <Text style={styles.cardTemplateLabel}>
+                                              {t(
+                                                "notes.knowledgeCustomCardFieldConditionOperator",
+                                                "规则",
+                                              )}
+                                            </Text>
+                                            <View style={styles.cardTemplateTypeGrid}>
+                                              {customCardFieldConditionOperators.map((operator) => {
+                                                const isActive =
+                                                  groupConditionOperator === operator;
+                                                return (
+                                                  <TouchableOpacity
+                                                    key={operator}
+                                                    style={[
+                                                      styles.cardTemplateTypeButton,
+                                                      isActive &&
+                                                        styles.cardTemplateTypeButtonActive,
+                                                    ]}
+                                                    activeOpacity={0.72}
+                                                    onPress={() =>
+                                                      updateTemplateGroupVisibleWhen(
+                                                        fieldGroupName,
+                                                        {
+                                                          fieldKey:
+                                                            groupVisibleWhen?.fieldKey ?? "",
+                                                          operator,
+                                                          value:
+                                                            operator === "empty" ||
+                                                            operator === "notEmpty"
+                                                              ? undefined
+                                                              : (groupVisibleWhen?.value ?? ""),
+                                                        },
+                                                      )
+                                                    }
+                                                  >
+                                                    <Text
+                                                      style={[
+                                                        styles.cardTemplateTypeText,
+                                                        isActive &&
+                                                          styles.cardTemplateTypeTextActive,
+                                                      ]}
+                                                    >
+                                                      {getConditionOperatorLabel(operator)}
+                                                    </Text>
+                                                  </TouchableOpacity>
+                                                );
+                                              })}
+                                            </View>
+                                            {groupConditionNeedsValue ? (
+                                              <>
+                                                <Text style={styles.cardTemplateLabel}>
+                                                  {t(
+                                                    "notes.knowledgeCustomCardFieldConditionValue",
+                                                    "条件值",
+                                                  )}
+                                                </Text>
+                                                {groupConditionSourceField?.type === "checkbox" ? (
+                                                  <View style={styles.cardTemplateTypeGrid}>
+                                                    {["true", "false"].map((value) => {
+                                                      const isActive =
+                                                        getTemplateConditionValueString(
+                                                          groupVisibleWhen,
+                                                        ) === value;
+                                                      return (
+                                                        <TouchableOpacity
+                                                          key={value}
+                                                          style={[
+                                                            styles.cardTemplateTypeButton,
+                                                            isActive &&
+                                                              styles.cardTemplateTypeButtonActive,
+                                                          ]}
+                                                          activeOpacity={0.72}
+                                                          onPress={() =>
+                                                            updateTemplateGroupVisibleWhen(
+                                                              fieldGroupName,
+                                                              {
+                                                                fieldKey:
+                                                                  groupVisibleWhen?.fieldKey ?? "",
+                                                                operator: groupConditionOperator,
+                                                                value: value === "true",
+                                                              },
+                                                            )
+                                                          }
+                                                        >
+                                                          <Text
+                                                            style={[
+                                                              styles.cardTemplateTypeText,
+                                                              isActive &&
+                                                                styles.cardTemplateTypeTextActive,
+                                                            ]}
+                                                          >
+                                                            {value === "true"
+                                                              ? t("common.yes", "是")
+                                                              : t("common.no", "否")}
+                                                          </Text>
+                                                        </TouchableOpacity>
+                                                      );
+                                                    })}
+                                                  </View>
+                                                ) : isChoiceTemplateField(
+                                                    groupConditionSourceField ??
+                                                      ({
+                                                        type: "text",
+                                                      } as ReadAnyCardTemplateField),
+                                                  ) ? (
+                                                  <View style={styles.cardTemplateTypeGrid}>
+                                                    {(groupConditionSourceField?.options ?? []).map(
+                                                      (option) => {
+                                                        const isActive =
+                                                          getTemplateConditionValueString(
+                                                            groupVisibleWhen,
+                                                          ) === option.value;
+                                                        return (
+                                                          <TouchableOpacity
+                                                            key={option.value}
+                                                            style={[
+                                                              styles.cardTemplateTypeButton,
+                                                              isActive &&
+                                                                styles.cardTemplateTypeButtonActive,
+                                                            ]}
+                                                            activeOpacity={0.72}
+                                                            onPress={() =>
+                                                              updateTemplateGroupVisibleWhen(
+                                                                fieldGroupName,
+                                                                {
+                                                                  fieldKey:
+                                                                    groupVisibleWhen?.fieldKey ??
+                                                                    "",
+                                                                  operator: groupConditionOperator,
+                                                                  value: option.value,
+                                                                },
+                                                              )
+                                                            }
+                                                          >
+                                                            <Text
+                                                              style={[
+                                                                styles.cardTemplateTypeText,
+                                                                isActive &&
+                                                                  styles.cardTemplateTypeTextActive,
+                                                              ]}
+                                                            >
+                                                              {option.label}
+                                                            </Text>
+                                                          </TouchableOpacity>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </View>
+                                                ) : (
+                                                  <TextInput
+                                                    value={getTemplateConditionValueString(
+                                                      groupVisibleWhen,
+                                                    )}
+                                                    onChangeText={(text) =>
+                                                      updateTemplateGroupVisibleWhen(
+                                                        fieldGroupName,
+                                                        {
+                                                          fieldKey:
+                                                            groupVisibleWhen?.fieldKey ?? "",
+                                                          operator: groupConditionOperator,
+                                                          value: parseTemplateFieldConditionValue(
+                                                            groupConditionSourceField,
+                                                            text,
+                                                          ),
+                                                        },
+                                                      )
+                                                    }
+                                                    placeholder={t(
+                                                      "notes.knowledgeCustomCardFieldConditionValuePlaceholder",
+                                                      "期望值",
+                                                    )}
+                                                    placeholderTextColor={colors.mutedForeground}
+                                                    keyboardType={
+                                                      groupConditionSourceField?.type === "number"
+                                                        ? "numeric"
+                                                        : "default"
+                                                    }
+                                                    style={styles.linkInput}
+                                                  />
+                                                )}
+                                              </>
+                                            ) : (
+                                              <Text style={styles.cardTemplateFieldHint}>
+                                                {t(
+                                                  "notes.knowledgeCustomCardFieldConditionNoValue",
+                                                  "这个规则不需要填写条件值。",
+                                                )}
+                                              </Text>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <Text style={styles.cardTemplateFieldHint}>
+                                            {t(
+                                              "notes.knowledgeCustomCardGroupVisibleHint",
+                                              "同名分组里的字段会共用这个显示规则。",
+                                            )}
+                                          </Text>
+                                        )}
+                                      </View>
+                                    ) : null}
                                     <Text style={styles.cardTemplateLabel}>
                                       {t("notes.knowledgeCustomCardFieldType", "类型")}
                                     </Text>
@@ -2488,10 +2811,7 @@ export function MobileKnowledgeEditor({
                                           width === ""
                                             ? t("notes.knowledgeCustomCardFieldWidthAuto", "自动")
                                             : width === "full"
-                                              ? t(
-                                                  "notes.knowledgeCustomCardFieldWidthFull",
-                                                  "满宽",
-                                                )
+                                              ? t("notes.knowledgeCustomCardFieldWidthFull", "满宽")
                                               : width === "half"
                                                 ? t(
                                                     "notes.knowledgeCustomCardFieldWidthHalf",

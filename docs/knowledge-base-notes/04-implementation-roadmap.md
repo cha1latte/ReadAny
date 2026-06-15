@@ -216,13 +216,14 @@ The schema editor now supports text,
 long text, number, checkbox, single-choice, and multi-choice fields with
 placeholders, help text, required markers, options, defaults, and simple
 conditional visibility rules. Fields can also be grouped into lightweight
-sections that survive desktop/mobile editing, WebView rendering, Markdown
-fallbacks, and read-only HTML projection. Richer card editing and JSON-based
-custom template schema migrations now have a shared core path; nested
-conditional groups and richer layout rules remain future work. Lightweight
-field width rules, covering auto, full, half, and third-width fields, now
-survive desktop/mobile template editing, WebView rendering, static read-only
-HTML projection, Markdown fallbacks, and automated acceptance checks.
+sections with optional group-level visibility rules that survive
+desktop/mobile editing, WebView rendering, Markdown fallbacks, and read-only
+HTML projection. Richer card editing and JSON-based custom template schema
+migrations now have a shared core path; deeply nested conditional groups and
+richer layout rules remain future work. Lightweight field width rules,
+covering auto, full, half, and third-width fields, now survive desktop/mobile
+template editing, WebView rendering, static read-only HTML projection,
+Markdown fallbacks, and automated acceptance checks.
 
 Goal:
 

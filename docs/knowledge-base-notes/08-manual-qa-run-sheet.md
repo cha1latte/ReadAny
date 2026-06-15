@@ -217,7 +217,7 @@ Evidence hint: Real-device screenshot/video, keyboard-safe-area observation, and
 ### Mobile import review
 
 - Evidence row: `Mobile QA / Mobile import review`
-- Expected: Markdown import previews destination paths before applying writes.
+- Expected: Markdown import previews destination paths and readable picker file names before applying writes; it should not show cache-only picker URIs as the source identity.
 - Current status: (empty)
 - Current evidence: (empty)
 - Evidence anchor: `mobile-qa-mobile-import-review`

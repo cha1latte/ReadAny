@@ -13,10 +13,10 @@ or has an explicit owner-approved exception, and
 | Field | Value |
 | --- | --- |
 | Branch | `feat/knowledge-base-notes-research` |
-| Commit under test | `8b847b50` |
+| Commit under test | `b6c8a06c` |
 | Tester | Codex automated baseline |
 | Test date | 2026-06-15 |
-| `pnpm acceptance:knowledge` result | Pass on 2026-06-15 for commit `8b847b50`: 34 core test files / 496 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks including optional Obsidian URI actions, persistent proposal-apply failure states with localized conflict reasons, confirmation-required proposal write-safety status, grouped custom-card field sections, custom-card group visibility rules, custom-card field width layout markers, AI tool write-safety status, AI search match-field explanations, vault import conflict resolution guidance, and whitespace check passed. |
+| `pnpm acceptance:knowledge` result | Pass on 2026-06-15 for commit `b6c8a06c`: 34 core test files / 496 tests, core TS, desktop TS, desktop production bundle, mobile TS, generated WebView bundle, workspace/chat/editor contract checks including optional Obsidian URI actions, mobile Markdown import picker file names, persistent proposal-apply failure states with localized conflict reasons, confirmation-required proposal write-safety status, grouped custom-card field sections, custom-card group visibility rules, custom-card field width layout markers, AI tool write-safety status, AI search match-field explanations, vault import conflict resolution guidance, and whitespace check passed. |
 | Desktop platform/build | macOS local automated desktop production bundle via `pnpm acceptance:knowledge`; interactive desktop QA still pending. |
 | Mobile platform/build | Expo TypeScript and generated WebView editor bundle via `pnpm acceptance:knowledge`; mobile knowledge workspace/editor contracts include the document editor keyboard-avoidance entry point, shared keyboard inset usage, visible WebView failure states, and draft restore affordances; real-device iOS/Android QA still pending. |
 | Second sync device/build | Pending manual QA. |
@@ -43,8 +43,8 @@ or has an explicit owner-approved exception, and
 
 | Check | Expected | Status | Evidence |
 | --- | --- | --- | --- |
-| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Runtime commit `8b847b50` was tested by the automated gate; this manual evidence refresh is docs-only and should be pushed before manual QA starts. |
-| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-15 for commit `8b847b50`: 34 core test files / 496 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks including optional Obsidian URI actions, persistent proposal-apply failure states with localized conflict reasons, confirmation-required proposal write-safety status, grouped custom-card field sections, custom-card group visibility rules, custom-card field width layout markers, AI tool write-safety status, AI search match-field explanations, vault import conflict resolution guidance, and whitespace check. |
+| Clean branch | Worktree is clean and pushed before manual QA starts. | Pass | Runtime commit `b6c8a06c` was tested by the automated gate; this manual evidence refresh is docs-only and should be pushed before manual QA starts. |
+| Full automated gate | `pnpm acceptance:knowledge` passes. | Pass | Passed on 2026-06-15 for commit `b6c8a06c`: 34 core test files / 496 tests plus core TS, desktop TS, desktop production bundle, mobile TS, WebView bundle, contract checks including optional Obsidian URI actions, mobile Markdown import picker file names, persistent proposal-apply failure states with localized conflict reasons, confirmation-required proposal write-safety status, grouped custom-card field sections, custom-card group visibility rules, custom-card field width layout markers, AI tool write-safety status, AI search match-field explanations, vault import conflict resolution guidance, and whitespace check. |
 | Bundle warnings reviewed | Existing Vite chunk/dynamic import warnings are non-blocking and no new error appears. | Pass | The desktop Vite production bundle completed successfully; warnings were the known dynamic-import/chunk-size warnings documented as non-blocking in the runbook. |
 
 ## Desktop QA
@@ -78,7 +78,7 @@ keyboard, WebView focus, safe area, or sync acceptance.
 | Card details | Editing card attrs/data in WebView works; invalid JSON shows an error and preserves previous valid attrs. |  |  |
 | Keyboard and safe area | Keyboard never covers editor controls or chat input, including Chinese and system keyboards. |  |  |
 | Background recovery | Backgrounding and reopening offers the latest draft instead of silently losing unsaved content. |  |  |
-| Mobile import review | Markdown import previews destination paths before applying writes. |  |  |
+| Mobile import review | Markdown import previews destination paths and readable picker file names before applying writes; it should not show cache-only picker URIs as the source identity. |  |  |
 
 ## AI Knowledge QA
 

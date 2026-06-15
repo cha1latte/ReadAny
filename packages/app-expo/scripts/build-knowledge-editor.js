@@ -410,6 +410,12 @@ async function buildKnowledgeEditor() {
               currentGroup = fieldGroup;
               const currentValue = currentData[field.key];
               const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(field, currentValue);
+              const applyFieldLayout = (element) => {
+                if (field.width === "full" || field.width === "half" || field.width === "third") {
+                  element.classList.add("readany-card-field-width-" + field.width);
+                  element.setAttribute("data-readany-card-field-width", field.width);
+                }
+              };
               const applyMissingState = (element) => {
                 element.classList.toggle("readany-card-field-missing", isRequiredMissing);
                 if (isRequiredMissing) {
@@ -435,6 +441,7 @@ async function buildKnowledgeEditor() {
               if (field.type === "checkbox") {
                 const label = document.createElement("label");
                 label.className = "readany-card-structured-checkbox";
+                applyFieldLayout(label);
                 applyMissingState(label);
                 const input = document.createElement("input");
                 input.type = "checkbox";
@@ -457,6 +464,7 @@ async function buildKnowledgeEditor() {
 
               const label = document.createElement("label");
               label.className = "readany-card-field-label";
+              applyFieldLayout(label);
               applyMissingState(label);
               const caption = document.createElement("span");
               caption.textContent = field.label;

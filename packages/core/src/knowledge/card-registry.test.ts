@@ -348,6 +348,7 @@ describe("ReadAny card registry", () => {
         label: "Core Idea",
         type: "text",
         group: "Core",
+        width: "wide",
         placeholder: "What changed?",
         defaultValue: "Untitled idea",
       },
@@ -356,6 +357,7 @@ describe("ReadAny card registry", () => {
         label: "Duplicate label",
         type: "multiline",
         section: "Evidence",
+        layout: { width: "1/2" },
         visibleWhen: { fieldKey: "Reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
@@ -363,6 +365,7 @@ describe("ReadAny card registry", () => {
         label: "Confidence",
         type: "number",
         groupLabel: "Scoring",
+        span: 4,
         defaultValue: "0.8",
       },
       {
@@ -400,6 +403,7 @@ describe("ReadAny card registry", () => {
         label: "Core Idea",
         type: "text",
         group: "Core",
+        width: "full",
         placeholder: "What changed?",
         defaultValue: "Untitled idea",
       },
@@ -408,6 +412,7 @@ describe("ReadAny card registry", () => {
         label: "Duplicate label",
         type: "multiline",
         group: "Evidence",
+        width: "half",
         visibleWhen: { fieldKey: "reviewed", operator: "equals", value: true },
         defaultValue: "Evidence:",
       },
@@ -416,6 +421,7 @@ describe("ReadAny card registry", () => {
         label: "Confidence",
         type: "number",
         group: "Scoring",
+        width: "third",
         defaultValue: 0.8,
       },
       {
@@ -683,9 +689,9 @@ describe("ReadAny card registry", () => {
       name: "Reading Claim",
       markdown: "Claim:",
       fields: [
-        { key: "claim", label: "Claim", type: "text", group: "Core" },
-        { key: "confidence", label: "Confidence", type: "number", group: "Core" },
-        { key: "evidence", label: "Evidence", type: "multiline", group: "Evidence" },
+        { key: "claim", label: "Claim", type: "text", group: "Core", width: "full" },
+        { key: "confidence", label: "Confidence", type: "number", group: "Core", width: "third" },
+        { key: "evidence", label: "Evidence", type: "multiline", group: "Evidence", width: "half" },
         { key: "reviewed", label: "Reviewed", type: "checkbox" },
       ],
       now: 123,
@@ -707,13 +713,20 @@ describe("ReadAny card registry", () => {
     );
 
     expect(model.structuredFields).toEqual([
-      { key: "claim", label: "Claim", value: "Attention is trained.", group: "Core" },
-      { key: "confidence", label: "Confidence", value: "0.82", group: "Core" },
+      {
+        key: "claim",
+        label: "Claim",
+        value: "Attention is trained.",
+        group: "Core",
+        width: "full",
+      },
+      { key: "confidence", label: "Confidence", value: "0.82", group: "Core", width: "third" },
       {
         key: "evidence",
         label: "Evidence",
         value: "Chapter 2 example\nChapter 4 contrast",
         group: "Evidence",
+        width: "half",
       },
       { key: "reviewed", label: "Reviewed", value: "Yes" },
     ]);

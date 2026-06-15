@@ -219,7 +219,10 @@ conditional visibility rules. Fields can also be grouped into lightweight
 sections that survive desktop/mobile editing, WebView rendering, Markdown
 fallbacks, and read-only HTML projection. Richer card editing and JSON-based
 custom template schema migrations now have a shared core path; nested
-conditional groups and advanced schema layout rules remain future work.
+conditional groups and richer layout rules remain future work. Lightweight
+field width rules, covering auto, full, half, and third-width fields, now
+survive desktop/mobile template editing, WebView rendering, static read-only
+HTML projection, Markdown fallbacks, and automated acceptance checks.
 
 Goal:
 

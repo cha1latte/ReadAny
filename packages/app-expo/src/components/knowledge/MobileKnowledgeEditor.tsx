@@ -152,6 +152,11 @@ const customCardFieldTypes = [
   "multiselect",
 ] as const satisfies ReadAnyCardTemplateField["type"][];
 
+const customCardFieldWidths = ["", "full", "half", "third"] as const satisfies readonly (
+  | ""
+  | NonNullable<ReadAnyCardTemplateField["width"]>
+)[];
+
 const customCardFieldConditionOperators = [
   "equals",
   "notEquals",
@@ -2458,6 +2463,55 @@ export function MobileKnowledgeEditor({
                                                       : typeof field.defaultValue === "boolean"
                                                         ? undefined
                                                         : field.defaultValue,
+                                              })
+                                            }
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.cardTemplateTypeText,
+                                                isActive && styles.cardTemplateTypeTextActive,
+                                              ]}
+                                            >
+                                              {label}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        );
+                                      })}
+                                    </View>
+                                    <Text style={styles.cardTemplateLabel}>
+                                      {t("notes.knowledgeCustomCardFieldLayout", "布局")}
+                                    </Text>
+                                    <View style={styles.cardTemplateTypeGrid}>
+                                      {customCardFieldWidths.map((width) => {
+                                        const isActive = (field.width ?? "") === width;
+                                        const label =
+                                          width === ""
+                                            ? t("notes.knowledgeCustomCardFieldWidthAuto", "自动")
+                                            : width === "full"
+                                              ? t(
+                                                  "notes.knowledgeCustomCardFieldWidthFull",
+                                                  "满宽",
+                                                )
+                                              : width === "half"
+                                                ? t(
+                                                    "notes.knowledgeCustomCardFieldWidthHalf",
+                                                    "半宽",
+                                                  )
+                                                : t(
+                                                    "notes.knowledgeCustomCardFieldWidthThird",
+                                                    "三分之一",
+                                                  );
+                                        return (
+                                          <TouchableOpacity
+                                            key={width || "auto"}
+                                            style={[
+                                              styles.cardTemplateTypeButton,
+                                              isActive && styles.cardTemplateTypeButtonActive,
+                                            ]}
+                                            activeOpacity={0.72}
+                                            onPress={() =>
+                                              updateTemplateField(index, {
+                                                width: width || undefined,
                                               })
                                             }
                                           >

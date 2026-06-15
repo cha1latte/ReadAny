@@ -39,6 +39,7 @@ export interface ReadAnyCardStructuredFieldValue {
   label: string;
   value: string;
   group?: string;
+  width?: ReadAnyCardTemplateFieldWidth;
   missing?: boolean;
 }
 
@@ -90,6 +91,8 @@ export type ReadAnyCardTemplateFieldType =
   | "select"
   | "multiselect";
 
+export type ReadAnyCardTemplateFieldWidth = "full" | "half" | "third";
+
 export interface ReadAnyCardTemplateFieldOption {
   value: string;
   label: string;
@@ -114,6 +117,7 @@ export interface ReadAnyCardTemplateField {
   label: string;
   type: ReadAnyCardTemplateFieldType;
   group?: string;
+  width?: ReadAnyCardTemplateFieldWidth;
   placeholder?: string;
   helpText?: string;
   required?: boolean;
@@ -224,6 +228,12 @@ const READANY_CARD_TEMPLATE_FIELD_TYPES = new Set<ReadAnyCardTemplateFieldType>(
   "multiselect",
 ]);
 
+const READANY_CARD_TEMPLATE_FIELD_WIDTHS = new Set<ReadAnyCardTemplateFieldWidth>([
+  "full",
+  "half",
+  "third",
+]);
+
 const READANY_CARD_TEMPLATE_FIELD_CONDITION_OPERATORS =
   new Set<ReadAnyCardTemplateFieldConditionOperator>([
     "equals",
@@ -239,6 +249,26 @@ function normalizeTemplateFieldType(value: unknown): ReadAnyCardTemplateFieldTyp
     READANY_CARD_TEMPLATE_FIELD_TYPES.has(value as ReadAnyCardTemplateFieldType)
     ? (value as ReadAnyCardTemplateFieldType)
     : "text";
+}
+
+function normalizeTemplateFieldWidth(value: unknown): ReadAnyCardTemplateFieldWidth | undefined {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (READANY_CARD_TEMPLATE_FIELD_WIDTHS.has(normalized as ReadAnyCardTemplateFieldWidth)) {
+      return normalized as ReadAnyCardTemplateFieldWidth;
+    }
+    if (["wide", "block", "12", "100", "1/1"].includes(normalized)) return "full";
+    if (["medium", "6", "50", "1/2", "2"].includes(normalized)) return "half";
+    if (["compact", "4", "33", "1/3", "3"].includes(normalized)) return "third";
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value >= 10 || value === 1) return "full";
+    if (value === 6 || value === 2) return "half";
+    if (value === 4 || value === 3) return "third";
+  }
+
+  return undefined;
 }
 
 function normalizeTemplateFieldKey(input: string, fallback: string): string {
@@ -417,6 +447,11 @@ export function normalizeReadAnyCardTemplateFields(fields: unknown): ReadAnyCard
     };
     const group = firstString(rawField.group, rawField.section, rawField.groupLabel);
     if (group) field.group = group.trim();
+    const layout = isRecord(rawField.layout) ? rawField.layout : undefined;
+    const width = normalizeTemplateFieldWidth(
+      rawField.width ?? layout?.width ?? rawField.span ?? rawField.columns,
+    );
+    if (width) field.width = width;
     const placeholder = stringAttr(rawField.placeholder);
     if (placeholder) field.placeholder = placeholder;
     const helpText = firstString(rawField.helpText, rawField.description);
@@ -1358,13 +1393,23 @@ function createStructuredFieldValues(
     .map((field) => {
       const value = formatStructuredFieldValue(field, data[field.key]);
       const group = field.group?.trim();
-      if (value) return { key: field.key, label: field.label, value, ...(group ? { group } : {}) };
+      const width = field.width;
+      if (value) {
+        return {
+          key: field.key,
+          label: field.label,
+          value,
+          ...(group ? { group } : {}),
+          ...(width ? { width } : {}),
+        };
+      }
       if (isReadAnyCardTemplateRequiredValueMissing(field, data[field.key])) {
         return {
           key: field.key,
           label: field.label,
           value: "Missing required value",
           ...(group ? { group } : {}),
+          ...(width ? { width } : {}),
           missing: true,
         };
       }

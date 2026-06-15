@@ -140,13 +140,14 @@ ordinary editable content instead of becoming permanent special blocks.
 Custom card field schema editing is checked in the desktop and mobile editor
 sources, including text, long-text, number, checkbox, single-choice, and
 multi-choice fields with required markers, help text, options, defaults, and
-simple visibility rules and optional field group labels. The WebView bundle is
-checked for structured-field rendering, including grouped section headings, so
+simple visibility rules, optional field group labels, and lightweight field
+width layout rules. The WebView bundle is checked for structured-field
+rendering, including grouped section headings and field-width markers, so
 synced custom cards can be edited without dropping to raw JSON. The core card,
 projection, export, and AI context tests also verify that visible structured
 field values, group labels, and choice labels stay readable in Markdown/Obsidian
-output and prompt previews while hidden fields stay out of those readable
-surfaces.
+output and prompt previews, while width metadata survives the HTML/WebView
+surfaces and hidden fields stay out of readable exports.
 The desktop production bundle check scans the built browser assets for the
 knowledge editor shell, AI proposal/result renderers, ReadAny cards,
 internal/source links, Obsidian export markers, and portable attachment URIs.
@@ -189,7 +190,7 @@ Evidence mapping:
 | Non-vectorized books keep fallback exploration and validated citations available. | `system-prompt.test.ts`, `reading-agent-tools.test.ts`, `tools.test.ts` |
 | Failed tool calls become visible failure cards with tool names, reasons, no-write hints, and available vault paths instead of endless loading states, and export as readable Obsidian callouts. | `tool-call-state.test.ts`, `tool-result.test.ts`, `knowledge-tool-result.test.ts`, `knowledge-exporter.test.ts`, desktop production bundle contract check, desktop/mobile AI knowledge chat contract checks |
 | Compact summaries are retrieval memory, not user-content rewrites. | `compact-summary.test.ts`, `knowledge-memory.test.ts`, `tools.test.ts`, `knowledge-tools.test.ts` |
-| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, conversion back to normal editable content, user-authored structured field schemas, sync-safe disabled templates for existing cards, and readable field values in export/AI context. | `card-registry.test.ts`, `knowledge-queries.test.ts`, `editor-projection.test.ts`, `knowledge-context.test.ts`, `knowledge-exporter.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile knowledge editor contract check, mobile WebView bundle contract check |
+| ReadAny cards preserve attrs, data, schema migrations, fallback rendering, unknown versions, conversion back to normal editable content, user-authored structured field schemas, field groups, field-width layout metadata, sync-safe disabled templates for existing cards, and readable field values in export/AI context. | `card-registry.test.ts`, `knowledge-queries.test.ts`, `editor-projection.test.ts`, `knowledge-context.test.ts`, `knowledge-exporter.test.ts`, `rich-text-preservation.test.ts`, desktop knowledge editor contract check, mobile knowledge editor contract check, mobile WebView bundle contract check |
 
 ## Desktop Manual Checks
 

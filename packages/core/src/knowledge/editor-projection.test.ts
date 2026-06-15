@@ -235,7 +235,7 @@ describe("editor projection", () => {
           cardType: "custom:template-concept",
           title: "Concept",
           fields: [
-            { key: "term", label: "Term", type: "text", required: true },
+            { key: "term", label: "Term", type: "text", required: true, width: "half" },
             { key: "evidence", label: "Evidence", type: "multiline" },
           ],
         },
@@ -266,6 +266,8 @@ describe("editor projection", () => {
     expect(markdown).toContain("- Term: Missing required value");
     expect(markdown).not.toContain("- Evidence:");
     expect(html).toContain('data-readany-card-field-state="missing"');
+    expect(html).toContain('data-readany-card-field-width="half"');
+    expect(html).toContain("readany-card-field-width-half");
     expect(html).toContain("<dt>Term</dt><dd>Missing required value</dd>");
     expect(html).not.toContain("<dt>Evidence</dt>");
   });

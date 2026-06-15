@@ -492,7 +492,14 @@
 
       .readany-card-structured-grid {
         display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 8px;
+      }
+
+      .readany-card-structured-grid > .readany-card-field-label,
+      .readany-card-structured-grid > .readany-card-structured-checkbox,
+      .readany-card-structured-grid > .readany-card-structured-group-heading {
+        grid-column: 1 / -1;
       }
 
       .readany-card-structured-group-heading {
@@ -504,6 +511,20 @@
         font-weight: 750;
         letter-spacing: 0.04em;
         text-transform: uppercase;
+      }
+
+      @media (min-width: 520px) {
+        .readany-card-field-width-full {
+          grid-column: span 6;
+        }
+
+        .readany-card-field-width-half {
+          grid-column: span 3;
+        }
+
+        .readany-card-field-width-third {
+          grid-column: span 2;
+        }
       }
 
       .readany-card-structured-checkbox {

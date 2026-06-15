@@ -186,6 +186,11 @@ const customCardFieldTypes = [
   "multiselect",
 ] as const satisfies ReadAnyCardTemplateField["type"][];
 
+const customCardFieldWidths = ["", "full", "half", "third"] as const satisfies readonly (
+  | ""
+  | NonNullable<ReadAnyCardTemplateField["width"]>
+)[];
+
 const customCardFieldConditionOperators = [
   "equals",
   "notEquals",
@@ -2136,7 +2141,7 @@ export function KnowledgeEditor({
                                           />
                                         </label>
                                       </div>
-                                      <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_auto]">
+                                      <div className="grid gap-1.5 sm:grid-cols-[0.8fr_1fr_1fr_auto]">
                                         <label className="space-y-1">
                                           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                                             {t("notes.knowledgeCustomCardFieldType", {
@@ -2203,6 +2208,54 @@ export function KnowledgeEditor({
                                             ))}
                                           </select>
                                         </label>
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t("notes.knowledgeCustomCardFieldLayout", {
+                                              defaultValue: "Layout",
+                                            })}
+                                          </span>
+                                          <div className="grid h-8 grid-cols-4 overflow-hidden rounded-md border border-border/55 bg-background">
+                                            {customCardFieldWidths.map((width) => {
+                                              const isActive = (field.width ?? "") === width;
+                                              const label =
+                                                width === ""
+                                                  ? t("notes.knowledgeCustomCardFieldWidthAuto", {
+                                                      defaultValue: "Auto",
+                                                    })
+                                                  : width === "full"
+                                                    ? t(
+                                                        "notes.knowledgeCustomCardFieldWidthFull",
+                                                        { defaultValue: "Full" },
+                                                      )
+                                                    : width === "half"
+                                                      ? t(
+                                                          "notes.knowledgeCustomCardFieldWidthHalf",
+                                                          { defaultValue: "Half" },
+                                                        )
+                                                      : t(
+                                                          "notes.knowledgeCustomCardFieldWidthThird",
+                                                          { defaultValue: "Third" },
+                                                        );
+                                              return (
+                                                <button
+                                                  key={width || "auto"}
+                                                  type="button"
+                                                  className={cn(
+                                                    "border-r border-border/45 px-1 text-[10px] font-medium text-muted-foreground transition-colors last:border-r-0 hover:bg-muted/50",
+                                                    isActive && "bg-primary/10 text-primary",
+                                                  )}
+                                                  onClick={() =>
+                                                    updateTemplateField(index, {
+                                                      width: width || undefined,
+                                                    })
+                                                  }
+                                                >
+                                                  {label}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
                                         <div className="space-y-1">
                                           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                                             {t("notes.knowledgeCustomCardFieldDefault", {
@@ -2951,6 +3004,15 @@ function getCardFieldSelectedValues(value: JSONValue | undefined): string[] {
   return [];
 }
 
+function getCardFieldWidthClass(field: ReadAnyCardTemplateField): string {
+  if (field.width === "full") return "sm:col-span-6";
+  if (field.width === "half") return "sm:col-span-3";
+  if (field.width === "third") return "sm:col-span-2";
+  return field.type === "multiline" || field.type === "multiselect"
+    ? "sm:col-span-6"
+    : "sm:col-span-3";
+}
+
 function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: NodeViewProps) {
   const { t } = useTranslation();
   const attrs = node.attrs as ReadAnyCardAttrs;
@@ -3273,18 +3335,19 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                       </span>
                     ) : null}
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-6">
                     {cardFields.map((field, fieldIndex) => {
                       const currentValue = structuredData[field.key];
                       const isRequiredMissing = isReadAnyCardTemplateRequiredValueMissing(
                         field,
                         currentValue,
                       );
+                      const fieldWidthClass = getCardFieldWidthClass(field);
                       const fieldGroup = field.group?.trim();
                       const previousFieldGroup = cardFields[fieldIndex - 1]?.group?.trim();
                       const groupHeading =
                         fieldGroup && fieldGroup !== previousFieldGroup ? (
-                          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-2">
+                          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-6">
                             <span>{fieldGroup}</span>
                             <span className="h-px flex-1 bg-border/45" />
                           </div>
@@ -3305,6 +3368,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                           <label
                             className={cn(
                               "flex min-h-9 items-start gap-2 rounded-md border px-2.5 py-2",
+                              fieldWidthClass,
                               isRequiredMissing
                                 ? "border-destructive/45 bg-destructive/5"
                                 : "border-border/45 bg-muted/20",
@@ -3312,6 +3376,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                             data-readany-card-field-state={
                               isRequiredMissing ? "missing" : undefined
                             }
+                            data-readany-card-field-width={field.width}
                           >
                             <input
                               type="checkbox"
@@ -3355,7 +3420,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                       ) : null;
                       if (field.type === "multiline") {
                         return wrapCardField(
-                          <label className="space-y-1 sm:col-span-2">
+                          <label className={cn("space-y-1", fieldWidthClass)}>
                             {label}
                             <textarea
                               defaultValue={getCardFieldInputValue(currentValue)}
@@ -3368,6 +3433,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               data-readany-card-field-state={
                                 isRequiredMissing ? "missing" : undefined
                               }
+                              data-readany-card-field-width={field.width}
                               className={cn(
                                 "min-h-20 w-full resize-y rounded-md border bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/60",
                                 isRequiredMissing
@@ -3384,7 +3450,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
 
                       if (field.type === "select") {
                         return wrapCardField(
-                          <label className="space-y-1">
+                          <label className={cn("space-y-1", fieldWidthClass)}>
                             {label}
                             <select
                               value={getCardFieldInputValue(currentValue)}
@@ -3396,6 +3462,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               data-readany-card-field-state={
                                 isRequiredMissing ? "missing" : undefined
                               }
+                              data-readany-card-field-width={field.width}
                               className={cn(
                                 "h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground outline-none disabled:opacity-70",
                                 isRequiredMissing
@@ -3424,7 +3491,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                       if (field.type === "multiselect") {
                         const selectedValues = getCardFieldSelectedValues(currentValue);
                         return wrapCardField(
-                          <div className="space-y-1 sm:col-span-2">
+                          <div className={cn("space-y-1", fieldWidthClass)}>
                             {label}
                             <div
                               className={cn(
@@ -3434,6 +3501,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                               data-readany-card-field-state={
                                 isRequiredMissing ? "missing" : undefined
                               }
+                              data-readany-card-field-width={field.width}
                             >
                               {(field.options ?? []).map((option) => {
                                 const isSelected = selectedValues.includes(option.value);
@@ -3467,7 +3535,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                       }
 
                       return wrapCardField(
-                        <label className="space-y-1">
+                        <label className={cn("space-y-1", fieldWidthClass)}>
                           {label}
                           <input
                             type={field.type === "number" ? "number" : "text"}
@@ -3482,6 +3550,7 @@ function ReadAnyCardView({ editor, node, selected, updateAttributes, getPos }: N
                             data-readany-card-field-state={
                               isRequiredMissing ? "missing" : undefined
                             }
+                            data-readany-card-field-width={field.width}
                             className={cn(
                               "h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60",
                               isRequiredMissing

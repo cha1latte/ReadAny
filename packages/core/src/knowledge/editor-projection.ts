@@ -547,10 +547,16 @@ function renderReadAnyCardHtml(node: TiptapNode, options: ReadOnlyHtmlProjection
       )}</div>`
     : "";
   const renderFieldRow = (field: (typeof model.structuredFields)[number]) => {
-    const missingAttrs = field.missing
-      ? ` class="${className(options, "card-field-missing")}" data-readany-card-field-state="missing"`
-      : "";
-    return `<div${missingAttrs}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`;
+    const classes = [
+      field.missing ? className(options, "card-field-missing") : undefined,
+      field.width ? className(options, `card-field-width-${field.width}`) : undefined,
+    ].filter(Boolean);
+    const attrs = [
+      classes.length ? `class="${classes.join(" ")}"` : undefined,
+      field.missing ? 'data-readany-card-field-state="missing"' : undefined,
+      field.width ? `data-readany-card-field-width="${field.width}"` : undefined,
+    ].filter(Boolean);
+    return `<div${attrs.length ? ` ${attrs.join(" ")}` : ""}><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(field.value)}</dd></div>`;
   };
   const structuredFieldsHtml = (() => {
     if (model.structuredFields.length === 0) return "";

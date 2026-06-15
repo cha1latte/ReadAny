@@ -157,7 +157,8 @@ sources for AI knowledge proposal/result/failure cards, visible vault paths,
 search match-field explanations, current-workspace document open actions from
 result and applied proposal cards, safe no-write hints, visible write-safety
 status for read-only, memory-write, skipped, and failed tool calls,
-confirmation-required apply behavior, and persistent proposal-apply failure
+confirmation-required proposal write-safety status, confirmation-required apply
+behavior, and persistent proposal-apply failure
 states with retry affordances and localized conflict reasons instead of raw
 internal error codes.
 The desktop and mobile knowledge workspace contract checks scan the runtime UI

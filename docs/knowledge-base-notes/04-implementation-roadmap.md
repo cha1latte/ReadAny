@@ -182,7 +182,8 @@ outgoing-link/backlink context, relation labels/CFIs in prompt snapshots,
 relation-aware desktop/mobile result cards, current-workspace document opening
 from AI result and applied proposal cards, update proposals that reject duplicate
 sibling vault paths, write-safety status on desktop/mobile tool result cards,
-structured failure cards, and visible search match-field explanations on
+confirmation-required proposal write-safety status on desktop/mobile proposal
+cards, structured failure cards, and visible search match-field explanations on
 desktop/mobile result cards exist.
 Broader end-to-end validation still needs work.
 

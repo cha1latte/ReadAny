@@ -9,7 +9,7 @@ sheet as proof by itself.
 
 - Evidence file: `docs/knowledge-base-notes/07-manual-qa-evidence.md`
 - Branch: `feat/knowledge-base-notes-research`
-- Commit under test: `15bc704d`
+- Commit under test: `a0821758`
 - Required final gate: `pnpm acceptance:knowledge:manual`
 
 ## Preflight

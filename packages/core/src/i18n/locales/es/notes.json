@@ -343,6 +343,7 @@
     "knowledgeCustomCardFieldDefault": "Predeterminado",
     "knowledgeCustomCardFieldDefaultEmpty": "Sin predeterminado",
     "knowledgeCustomCardFieldDefaultPlaceholder": "Opcional",
+    "knowledgeCustomCardFieldOptionDefault": "Opción {{count}}",
     "knowledgeCustomCardRemoveField": "Eliminar campo",
     "knowledgeCustomCardNoFields": "Aún no hay campos. La tarjeta puede usar el cuerpo predeterminado y JSON avanzado.",
     "knowledgeCustomCardCreate": "Crear tarjeta",

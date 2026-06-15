@@ -343,6 +343,7 @@
     "knowledgeCustomCardFieldDefault": "Default",
     "knowledgeCustomCardFieldDefaultEmpty": "No default",
     "knowledgeCustomCardFieldDefaultPlaceholder": "Optional",
+    "knowledgeCustomCardFieldOptionDefault": "Option {{count}}",
     "knowledgeCustomCardRemoveField": "Remove field",
     "knowledgeCustomCardNoFields": "No fields yet. The card can still use the default body and advanced JSON.",
     "knowledgeCustomCardCreate": "Create card",

@@ -343,6 +343,7 @@
     "knowledgeCustomCardFieldDefault": "기본값",
     "knowledgeCustomCardFieldDefaultEmpty": "기본값 없음",
     "knowledgeCustomCardFieldDefaultPlaceholder": "선택 사항",
+    "knowledgeCustomCardFieldOptionDefault": "옵션 {{count}}",
     "knowledgeCustomCardRemoveField": "필드 제거",
     "knowledgeCustomCardNoFields": "아직 필드가 없습니다. 카드는 기본 본문과 고급 JSON을 계속 사용할 수 있습니다.",
     "knowledgeCustomCardCreate": "카드 만들기",

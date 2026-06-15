@@ -343,6 +343,7 @@
     "knowledgeCustomCardFieldDefault": "預設值",
     "knowledgeCustomCardFieldDefaultEmpty": "無預設值",
     "knowledgeCustomCardFieldDefaultPlaceholder": "選填",
+    "knowledgeCustomCardFieldOptionDefault": "選項 {{count}}",
     "knowledgeCustomCardRemoveField": "移除欄位",
     "knowledgeCustomCardNoFields": "還沒有欄位。卡片仍可使用預設正文和進階 JSON。",
     "knowledgeCustomCardCreate": "建立卡片",

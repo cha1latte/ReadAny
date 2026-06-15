@@ -201,15 +201,23 @@ const customCardFieldConditionOperators = [
 ] as const satisfies NonNullable<ReadAnyCardTemplateField["visibleWhen"]>["operator"][];
 
 const DESKTOP_DRAFT_SAVE_DELAY_MS = 650;
+type TranslationFn = ReturnType<typeof useTranslation>["t"];
 
 function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
   return field.type === "select" || field.type === "multiselect";
 }
 
-function createDefaultTemplateFieldOptions() {
+function defaultTemplateFieldOptionLabel(t: TranslationFn, count: number): string {
+  return t("notes.knowledgeCustomCardFieldOptionDefault", {
+    count,
+    defaultValue: `Option ${count}`,
+  });
+}
+
+function createDefaultTemplateFieldOptions(t: TranslationFn) {
   return [
-    { label: "Option 1", value: "option_1" },
-    { label: "Option 2", value: "option_2" },
+    { label: defaultTemplateFieldOptionLabel(t, 1), value: "option_1" },
+    { label: defaultTemplateFieldOptionLabel(t, 2), value: "option_2" },
   ];
 }
 
@@ -221,14 +229,17 @@ function formatTemplateFieldOptionsText(field: ReadAnyCardTemplateField): string
     .join("\n");
 }
 
-function parseTemplateFieldOptionsText(input: string): ReadAnyCardTemplateField["options"] {
+function parseTemplateFieldOptionsText(
+  input: string,
+  t: TranslationFn,
+): ReadAnyCardTemplateField["options"] {
   return input
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line, index) => {
       const [labelPart, valuePart] = line.split("|").map((part) => part.trim());
-      const label = labelPart || `Option ${index + 1}`;
+      const label = labelPart || defaultTemplateFieldOptionLabel(t, index + 1);
       const value =
         valuePart ||
         label
@@ -2450,7 +2461,7 @@ export function KnowledgeEditor({
                                                   nextType === "multiselect"
                                                     ? field.options?.length
                                                       ? field.options
-                                                      : createDefaultTemplateFieldOptions()
+                                                      : createDefaultTemplateFieldOptions(t)
                                                     : undefined,
                                                 defaultValue:
                                                   nextType === "multiselect"
@@ -2753,6 +2764,7 @@ export function KnowledgeEditor({
                                               updateTemplateField(index, {
                                                 options: parseTemplateFieldOptionsText(
                                                   event.currentTarget.value,
+                                                  t,
                                                 ),
                                               })
                                             }

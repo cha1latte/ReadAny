@@ -166,14 +166,23 @@ const customCardFieldConditionOperators = [
   "notEmpty",
 ] as const satisfies NonNullable<ReadAnyCardTemplateField["visibleWhen"]>["operator"][];
 
+type TranslationFn = ReturnType<typeof useTranslation>["t"];
+
 function isChoiceTemplateField(field: ReadAnyCardTemplateField) {
   return field.type === "select" || field.type === "multiselect";
 }
 
-function createDefaultTemplateFieldOptions() {
+function defaultTemplateFieldOptionLabel(t: TranslationFn, count: number): string {
+  return t("notes.knowledgeCustomCardFieldOptionDefault", {
+    count,
+    defaultValue: `Option ${count}`,
+  });
+}
+
+function createDefaultTemplateFieldOptions(t: TranslationFn) {
   return [
-    { label: "选项 1", value: "option_1" },
-    { label: "选项 2", value: "option_2" },
+    { label: defaultTemplateFieldOptionLabel(t, 1), value: "option_1" },
+    { label: defaultTemplateFieldOptionLabel(t, 2), value: "option_2" },
   ];
 }
 
@@ -185,14 +194,17 @@ function formatTemplateFieldOptionsText(field: ReadAnyCardTemplateField): string
     .join("\n");
 }
 
-function parseTemplateFieldOptionsText(input: string): ReadAnyCardTemplateField["options"] {
+function parseTemplateFieldOptionsText(
+  input: string,
+  t: TranslationFn,
+): ReadAnyCardTemplateField["options"] {
   return input
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line, index) => {
       const [labelPart, valuePart] = line.split("|").map((part) => part.trim());
-      const label = labelPart || `选项 ${index + 1}`;
+      const label = labelPart || defaultTemplateFieldOptionLabel(t, index + 1);
       const value =
         valuePart ||
         label
@@ -2776,7 +2788,7 @@ export function MobileKnowledgeEditor({
                                                   type === "select" || type === "multiselect"
                                                     ? field.options?.length
                                                       ? field.options
-                                                      : createDefaultTemplateFieldOptions()
+                                                      : createDefaultTemplateFieldOptions(t)
                                                     : undefined,
                                                 defaultValue:
                                                   type === "multiselect"
@@ -2913,7 +2925,7 @@ export function MobileKnowledgeEditor({
                                           value={formatTemplateFieldOptionsText(field)}
                                           onChangeText={(text) =>
                                             updateTemplateField(index, {
-                                              options: parseTemplateFieldOptionsText(text),
+                                              options: parseTemplateFieldOptionsText(text, t),
                                             })
                                           }
                                           placeholder={t(

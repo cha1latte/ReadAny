@@ -343,6 +343,7 @@
     "knowledgeCustomCardFieldDefault": "デフォルト",
     "knowledgeCustomCardFieldDefaultEmpty": "デフォルトなし",
     "knowledgeCustomCardFieldDefaultPlaceholder": "任意",
+    "knowledgeCustomCardFieldOptionDefault": "選択肢 {{count}}",
     "knowledgeCustomCardRemoveField": "フィールドを削除",
     "knowledgeCustomCardNoFields": "まだフィールドはありません。カードはデフォルト本文と高度な JSON を引き続き使用できます。",
     "knowledgeCustomCardCreate": "カードを作成",

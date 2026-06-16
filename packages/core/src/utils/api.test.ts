@@ -191,17 +191,19 @@ describe("AI API URL helpers", () => {
     });
 
     it("reports the normalized request URL when endpoint tests fail", async () => {
+      const expectedError: Partial<EmbeddingEndpointTestError> = {
+        name: "EmbeddingEndpointTestError",
+        url: "https://api.siliconflow.cn/v1/embeddings",
+        status: 404,
+      };
+
       await expect(
         testEmbeddingEndpoint({
           url: "https://api.siliconflow.cn/v1",
           modelId: "Qwen/Qwen3-Embedding-4B",
           fetcher: async () => new Response("not found", { status: 404, statusText: "Not Found" }),
         }),
-      ).rejects.toMatchObject<Partial<EmbeddingEndpointTestError>>({
-        name: "EmbeddingEndpointTestError",
-        url: "https://api.siliconflow.cn/v1/embeddings",
-        status: 404,
-      });
+      ).rejects.toMatchObject(expectedError);
     });
   });
 });

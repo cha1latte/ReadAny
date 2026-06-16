@@ -3687,11 +3687,13 @@ a { color: ${primary} !important; }
         // Use range-based alignment (preferred: uses boundary comparison, not CFI string equality)
         // Fall back to CFI string alignment for older tts.js builds without tts.from()
         const firstVisibleCfi = segments[0]?.cfi || null;
-        const resolvedAlignRange = resolveRangeForCfi(alignCfi);
+        const lastLocationCfi = view && view.lastLocation && view.lastLocation.cfi || null;
+        const liveAlignCfi = alignCfi || lastLocationCfi || null;
+        const resolvedAlignRange = resolveRangeForCfi(liveAlignCfi);
         const alignedSegments = segments.length
           ? collectTTSSegmentsFromEngine(
-              alignCfi ? 500 : segments.length,
-              alignCfi || firstVisibleCfi,
+              liveAlignCfi ? 500 : segments.length,
+              liveAlignCfi || firstVisibleCfi,
               resolvedAlignRange?.range || firstVisibleRange
             )
           : [];
@@ -3714,7 +3716,7 @@ a { color: ${primary} !important; }
           } else if (filtered.length > 0) {
             returnSource = 'direct-partial-filtered-fallback';
             returnedSegments = segments;
-          } else if (alignCfi) {
+          } else if (liveAlignCfi) {
             const alignedStart = alignedSegments[0] || null;
             const alignedStartIdentity = alignedStart
               ? getTTSSegmentIdentity(alignedStart.cfi, alignedStart.text)
@@ -3739,9 +3741,12 @@ a { color: ${primary} !important; }
         }
 
         window.__lastVisibleTTSDiagnostics = {
-          alignCfi: alignCfi || null,
+          inputAlignCfi: alignCfi || null,
+          liveAlignCfi: liveAlignCfi,
+          lastLocationCfi: lastLocationCfi,
           firstVisibleCfi: firstVisibleCfi,
           firstVisibleText: segments[0] && segments[0].text || null,
+          firstReturnedText: returnedSegments[0] && returnedSegments[0].text || null,
           directCount: segments.length,
           alignedCount: alignedSegments.length,
           filteredAlignedCount: filteredAlignedCount,
@@ -3757,13 +3762,17 @@ a { color: ${primary} !important; }
         return returnedSegments;
       } catch (e) {
         console.log('[visibleTTSSegments] extraction error:', e);
-        const fallbackSegments = alignCfi
-          ? collectTTSSegmentsFromEngine(500, alignCfi, resolveRangeForCfi(alignCfi)?.range || null)
+        const lastLocationCfi = view && view.lastLocation && view.lastLocation.cfi || null;
+        const liveAlignCfi = alignCfi || lastLocationCfi || null;
+        const fallbackSegments = liveAlignCfi
+          ? collectTTSSegmentsFromEngine(500, liveAlignCfi, resolveRangeForCfi(liveAlignCfi)?.range || null)
           : [];
         window.__lastVisibleTTSDiagnostics = {
-          alignCfi: alignCfi || null,
+          inputAlignCfi: alignCfi || null,
+          liveAlignCfi: liveAlignCfi,
+          lastLocationCfi: lastLocationCfi,
           extractionError: String(e),
-          returnSource: alignCfi ? 'engine-align-fallback' : 'no-visible-segments',
+          returnSource: liveAlignCfi ? 'engine-align-fallback' : 'no-visible-segments',
           directCount: 0,
           alignedCount: fallbackSegments.length,
           filteredAlignedCount: 0,

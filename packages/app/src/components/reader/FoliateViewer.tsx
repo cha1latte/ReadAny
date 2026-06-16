@@ -281,6 +281,10 @@ function getRendererContents(view: FoliateView | null): RendererContent[] {
   return (view?.renderer?.getContents?.() ?? []) as RendererContent[];
 }
 
+function getViewLastLocationCfi(view: FoliateView | null) {
+  return (view?.lastLocation as { cfi?: string } | null | undefined)?.cfi || null;
+}
+
 function getPaginatedVisibleRangeCandidates(renderer: {
   start?: unknown;
   end?: unknown;
@@ -1243,9 +1247,12 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           ) => Array<{ text?: string; cfi?: string }>;
         };
 
+        const lastLocationCfi = getViewLastLocationCfi(view);
+        const liveAlignCfi = alignCfi || lastLocationCfi || null;
+
         if (segments.length > 0 && tts) {
           try {
-            const alignTargetCfi = alignCfi || segments[0]?.cfi;
+            const alignTargetCfi = liveAlignCfi || segments[0]?.cfi;
             if (!alignTargetCfi) return segments;
             if (typeof tts.alignCfi === "function") {
               tts.alignCfi(alignTargetCfi);
@@ -1262,7 +1269,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                 ? tts.collectDetails(
                     Math.max(
                       0,
-                      Math.max(segments.length, alignCfi ? 12 : segments.length) -
+                      Math.max(segments.length, liveAlignCfi ? 12 : segments.length) -
                         (currentDetail ? 1 : 0),
                     ),
                     {
@@ -1305,7 +1312,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                 } else if (filtered.length > 0) {
                   returnedSegments = segments;
                   returnSource = "direct-partial-filtered-fallback";
-                } else if (alignCfi) {
+                } else if (liveAlignCfi) {
                   const alignedStart = alignedSegments[0] || null;
                   const alignedStartIdentity = alignedStart
                     ? getTTSSegmentIdentity(alignedStart.cfi, alignedStart.text)
@@ -1329,7 +1336,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                 }
               }
               console.log("[FoliateViewer][TTS] visibleTTSSegments", {
-                alignCfi: alignCfi || null,
+                inputAlignCfi: alignCfi || null,
+                liveAlignCfi,
+                lastLocationCfi,
                 contentsCount: contents.length,
                 scannedContentsCount: scanContents.length,
                 directCount: segments.length,
@@ -1337,6 +1346,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                 returnedCount: returnedSegments.length,
                 returnSource,
                 firstVisibleText: segments[0]?.text || null,
+                firstReturnedText: returnedSegments[0]?.text || null,
               });
               return returnedSegments;
             }
@@ -1346,7 +1356,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         }
 
         console.log("[FoliateViewer][TTS] visibleTTSSegments", {
-          alignCfi: alignCfi || null,
+          inputAlignCfi: alignCfi || null,
+          liveAlignCfi,
+          lastLocationCfi,
           contentsCount: contents.length,
           scannedContentsCount: scanContents.length,
           directCount: segments.length,
@@ -1354,6 +1366,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           returnedCount: segments.length,
           returnSource: "direct",
           firstVisibleText: segments[0]?.text || null,
+          firstReturnedText: segments[0]?.text || null,
         });
         return segments;
       },
@@ -1531,8 +1544,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         },
         getView: () => viewRef.current,
         getCurrentCfi: () => {
-          const cfi = (viewRef.current?.lastLocation as { cfi?: string } | null | undefined)?.cfi;
-          return cfi || null;
+          return getViewLastLocationCfi(viewRef.current);
         },
         getVisibleText: () => {
           try {

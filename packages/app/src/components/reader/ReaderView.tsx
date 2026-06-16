@@ -801,7 +801,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const pendingTTSContinueCallbackRef = useRef<(() => void) | null>(null);
   const pendingTTSContinueSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPageTTSFromCfiRef = useRef<
-    ((targetCfi: string, targetText?: string) => Promise<void>) | null
+    ((targetCfi: string, targetText?: string, options?: { navigate?: boolean }) => Promise<void>) | null
   >(null);
   const previousReaderBookIdRef = useRef<string | null>(null);
 
@@ -2040,7 +2040,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         setTtsSourceKind("page");
         setTtsContinuousEnabled(continuous);
         ttsContinuousRef.current = continuous;
-        await startPageTTSFromCfiRef.current?.(currentReaderCfi);
+        await startPageTTSFromCfiRef.current?.(currentReaderCfi, undefined, { navigate: false });
         return;
       }
 
@@ -2101,15 +2101,18 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   );
 
   const startPageTTSFromCfi = useCallback(
-    async (targetCfi: string, targetText?: string) => {
+    async (targetCfi: string, targetText?: string, options?: { navigate?: boolean }) => {
       if (!targetCfi) return;
       pendingTTSContinueCallbackRef.current = null;
       if (pendingTTSContinueSafetyTimerRef.current) {
         clearTimeout(pendingTTSContinueSafetyTimerRef.current);
         pendingTTSContinueSafetyTimerRef.current = null;
       }
-      goToCFISafely(targetCfi);
-      await new Promise((resolve) => setTimeout(resolve, 280));
+      const shouldNavigate = options?.navigate !== false;
+      if (shouldNavigate) {
+        goToCFISafely(targetCfi);
+        await new Promise((resolve) => setTimeout(resolve, 280));
+      }
       const segments =
         (await foliateRef.current?.getVisibleTTSSegments(targetCfi))?.map((segment) => ({
           text: segment.text.trim(),
@@ -2177,9 +2180,10 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     // queue isn't just a single sentence.
     const isSelectionSession = ttsSourceKind === "selection";
 
-    // If playing, always just re-show (don't interrupt playback)
-    // If stopped/paused with active session and same chapter, also just re-show
-    if (hasActiveSession && (isPlaying || !chapterChanged) && !isSelectionSession) {
+    // If playing, just re-show without interrupting playback. Otherwise refresh
+    // from the current reader position so a stale queue from a previous page is
+    // not reused.
+    if (hasActiveSession && isPlaying && !chapterChanged && !isSelectionSession) {
       setShowTTS(true);
       return;
     }

@@ -222,7 +222,7 @@ export function useReaderTTS({
   const pendingTTSContinueCallbackRef = useRef<(() => void) | null>(null);
   const pendingTTSContinueSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPageTTSFromCfiRef = useRef<
-    ((targetCfi: string, targetText?: string) => Promise<void>) | null
+    ((targetCfi: string, targetText?: string, options?: { navigate?: boolean }) => Promise<void>) | null
   >(null);
   const ttsHandlingPageEndRef = useRef(false);
   const ttsLastStopHandledSignatureRef = useRef<string | null>(null);
@@ -1225,7 +1225,7 @@ export function useReaderTTS({
 
   // ─── startPageTTSFromCfi ──────────────────────────────────────────────────
   const startPageTTSFromCfi = useCallback(
-    async (targetCfi: string, targetText?: string) => {
+    async (targetCfi: string, targetText?: string, options?: { navigate?: boolean }) => {
       if (!targetCfi || !bridgeRef.current) return;
       const normalizedTargetText = (targetText || "").trim();
       pendingTTSContinueCallbackRef.current = null;
@@ -1233,8 +1233,11 @@ export function useReaderTTS({
         clearTimeout(pendingTTSContinueSafetyTimerRef.current);
         pendingTTSContinueSafetyTimerRef.current = null;
       }
-      bridgeRef.current.goToCFI(targetCfi);
-      await new Promise((resolve) => setTimeout(resolve, 320));
+      const shouldNavigate = options?.navigate !== false;
+      if (shouldNavigate) {
+        bridgeRef.current.goToCFI(targetCfi);
+        await new Promise((resolve) => setTimeout(resolve, 320));
+      }
       const normalizedSegments = await getNormalizedVisibleTTSSegments(targetCfi);
       const context = await getCachedTTSSegmentContext(
         targetCfi,
@@ -1253,7 +1256,9 @@ export function useReaderTTS({
       const seedSegment =
         normalizedTargetText.length > 0 ? [{ text: normalizedTargetText, cfi: targetCfi }] : [];
       const visibleSegments =
-        visibleIndexByCfi >= 0
+        !shouldNavigate
+          ? normalizedSegments
+          : visibleIndexByCfi >= 0
           ? normalizedSegments.slice(visibleIndexByCfi)
           : dedupeTTSSegments([
               ...seedSegment,
@@ -1348,7 +1353,7 @@ export function useReaderTTS({
         setTtsSourceKind("page");
         setTtsContinuousEnabled(continuous);
         ttsContinuousRef.current = continuous;
-        await startPageTTSFromCfi(currentCfi);
+        await startPageTTSFromCfi(currentCfi, undefined, { navigate: false });
         return;
       }
 

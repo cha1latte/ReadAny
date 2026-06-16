@@ -1349,15 +1349,7 @@ export function useReaderTTS({
   // ─── startPageTTS ─────────────────────────────────────────────────────────
   const startPageTTS = useCallback(
     async (continuous = ttsContinuousEnabled) => {
-      if (currentCfi) {
-        setTtsSourceKind("page");
-        setTtsContinuousEnabled(continuous);
-        ttsContinuousRef.current = continuous;
-        await startPageTTSFromCfi(currentCfi, undefined, { navigate: false });
-        return;
-      }
-
-      const normalizedSegments = await getNormalizedVisibleTTSSegments(null);
+      const normalizedSegments = await getNormalizedVisibleTTSSegments(currentCfi || null);
       const pageAnchorCfi = normalizedSegments[0]?.cfi || currentCfi || null;
       if (__DEV__) {
         console.log("[ReaderScreen][TTS][queue-start] visible-page", {

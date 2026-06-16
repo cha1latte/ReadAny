@@ -948,6 +948,26 @@
       });
     }
 
+    function postNoteTooltipHit(hit) {
+      const doc = hit?.range?.startContainer?.ownerDocument;
+      if (!hit || !hit.range || !doc) return false;
+      armNoteTapGuard(doc, 900);
+      const rect = hit.range.getBoundingClientRect();
+      const iframe = doc.defaultView?.frameElement;
+      const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+      postToRN('note-tooltip', {
+        cfi: hit.cfi,
+        note: hit.note,
+        position: {
+          x: iframeRect.left + rect.left + rect.width / 2,
+          y: iframeRect.top + rect.top - 8,
+          selectionTop: iframeRect.top + rect.top,
+          selectionBottom: iframeRect.top + rect.bottom,
+        },
+      });
+      return true;
+    }
+
     // Note tooltip registry: per-doc WeakMap of cfi -> { range, note }
     const docNoteRegistries = new WeakMap();
 
@@ -1178,24 +1198,10 @@
           timer = null;
           const hit = isPointInNoteRange(doc, startX, startY);
           if (!hit) return;
-          armNoteTapGuard(doc, 900);
 
           // Prevent subsequent click / show-annotation
           e.preventDefault && e.preventDefault();
-
-          const rect = hit.range.getBoundingClientRect();
-          const iframe = doc.defaultView && doc.defaultView.frameElement;
-          const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
-          postToRN('note-tooltip', {
-            cfi: hit.cfi,
-            note: hit.note,
-            position: {
-              x: iframeRect.left + rect.left + rect.width / 2,
-              y: iframeRect.top + rect.top - 8,
-              selectionTop: iframeRect.top + rect.top,
-              selectionBottom: iframeRect.top + rect.bottom,
-            },
-          });
+          postNoteTooltipHit(hit);
         }, LONG_PRESS_MS);
       }, { passive: false });
 
@@ -2257,7 +2263,20 @@ a { color: ${primary} !important; }
         if (!state || state.moved || e.changedTouches.length !== 1) return;
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
         const touch = e.changedTouches[0];
-        const hitAnnotation = state.annotationRangeHit || isPointInAnnotationRange(doc, touch.clientX, touch.clientY);
+        const hitNote =
+          (state.annotationRangeHit && state.annotationRangeHit.note
+            ? state.annotationRangeHit
+            : null) ||
+          isPointInNoteRange(doc, touch.clientX, touch.clientY);
+        if (hitNote) {
+          e.preventDefault();
+          e.stopPropagation();
+          postNoteTooltipHit(hitNote);
+          return;
+        }
+
+        const hitAnnotation =
+          state.annotationRangeHit || isPointInAnnotationRange(doc, touch.clientX, touch.clientY);
         if (hitAnnotation) {
           e.preventDefault();
           e.stopPropagation();
@@ -3011,6 +3030,16 @@ a { color: ${primary} !important; }
       return isHostRectVisible(mapIframeRectToHost(rect, doc));
     }
 
+    function isRectStartVisibleInReader(rect, renderer, win, doc) {
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      const isPaginated = !renderer.scrolled;
+      if (isPaginated && renderer.size > 0) {
+        const visibleRange = getVisibleRangeForTTSDoc(doc, renderer);
+        return visibleRange ? rect.left >= visibleRange.left && rect.left < visibleRange.right : false;
+      }
+      return isHostRectVisible(mapIframeRectToHost(rect, doc));
+    }
+
     function isRangeVisibleInReader(range, renderer, win) {
       if (!range || !renderer || !win) return false;
       try {
@@ -3081,6 +3110,33 @@ a { color: ${primary} !important; }
       }
       const last = textNodes[textNodes.length - 1];
       return { node: last.node, offset: last.node.nodeValue.length };
+    }
+
+    function getVisibleTextStartOffset(textNode, renderer, win, doc, length) {
+      const textLength = typeof length === 'number' ? length : (textNode && textNode.nodeValue || '').length;
+      if (!textNode || textLength <= 0) return null;
+
+      try {
+        const fullRange = doc.createRange();
+        fullRange.selectNodeContents(textNode);
+        const firstRect = Array.from(fullRange.getClientRects ? fullRange.getClientRects() : [])
+          .find((rect) => rect.width > 0 && rect.height > 0);
+        if (firstRect && isRectStartVisibleInReader(firstRect, renderer, win, doc)) return 0;
+      } catch (e) {}
+
+      for (let offset = 0; offset < textLength; offset++) {
+        if (!String(textNode.nodeValue || '')[offset]?.trim()) continue;
+        try {
+          const range = doc.createRange();
+          range.setStart(textNode, offset);
+          range.setEnd(textNode, Math.min(offset + 1, textLength));
+          const rects = Array.from(range.getClientRects ? range.getClientRects() : []);
+          if (rects.some((rect) => isRectStartVisibleInReader(rect, renderer, win, doc))) {
+            return offset;
+          }
+        } catch (e) {}
+      }
+      return null;
     }
 
     function fallbackSentenceSegments(text) {
@@ -3534,15 +3590,21 @@ a { color: ${primary} !important; }
             if (!textNodes.length) continue;
 
             var absoluteText = '';
+            let visibleTextStart = null;
             const positionedNodes = textNodes.map((item) => {
               const start = absoluteText.length;
               absoluteText += item.text;
+              if (visibleTextStart === null) {
+                const offset = getVisibleTextStartOffset(item.node, renderer, win, doc, item.text.length);
+                if (offset !== null) visibleTextStart = start + offset;
+              }
               return {
                 node: item.node,
                 start,
                 end: absoluteText.length,
               };
             });
+            if (visibleTextStart === null) continue;
 
             const rawSegments = segmenter
               ? Array.from(segmenter.segment(absoluteText)).map((item) => ({
@@ -3566,6 +3628,8 @@ a { color: ${primary} !important; }
             for (var si = 0; si < normalizedSegments.length; si++) {
               let start = normalizedSegments[si].start;
               let end = normalizedSegments[si].end;
+              if (end <= visibleTextStart) continue;
+              start = Math.max(start, visibleTextStart);
 
               while (start < end && /\s/u.test(absoluteText[start])) start++;
               while (end > start && /\s/u.test(absoluteText[end - 1])) end--;

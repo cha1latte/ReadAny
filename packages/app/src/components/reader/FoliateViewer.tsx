@@ -226,6 +226,38 @@ function acceptTTSNode(node: Node) {
   return shouldSkipTTSNode(parent) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
 }
 
+function getVisibleTextStartOffset(
+  textNode: Text,
+  isRectVisible: (rect: DOMRect) => boolean,
+  length = textNode.nodeValue?.length ?? 0,
+) {
+  if (length <= 0) return null;
+
+  try {
+    const fullRange = textNode.ownerDocument.createRange();
+    fullRange.selectNodeContents(textNode);
+    const firstRect = Array.from(fullRange.getClientRects()).find(
+      (rect) => rect.width > 0 && rect.height > 0,
+    );
+    if (firstRect && isRectVisible(firstRect)) return 0;
+  } catch {
+    // Fall through to per-character probing.
+  }
+
+  for (let offset = 0; offset < length; offset += 1) {
+    if (!textNode.nodeValue?.[offset]?.trim()) continue;
+    try {
+      const range = textNode.ownerDocument.createRange();
+      range.setStart(textNode, offset);
+      range.setEnd(textNode, Math.min(offset + 1, length));
+      if (Array.from(range.getClientRects()).some(isRectVisible)) return offset;
+    } catch {
+      // Ignore characters that cannot be measured.
+    }
+  }
+  return null;
+}
+
 function getTTSSegmentIdentity(cfi?: string | null, text?: string | null) {
   return `${cfi || ""}::${normalizeTTSSegmentText(text)}`;
 }
@@ -278,6 +310,10 @@ function getPaginatedVisibleRangeCandidates(renderer: {
 
 function rectIntersectsPaginatedRange(rect: DOMRect, range: PaginatedVisibleRange) {
   return rect.right > range.left && rect.left < range.right;
+}
+
+function rectContainsPaginatedStart(rect: DOMRect, range: PaginatedVisibleRange) {
+  return rect.left >= range.left && rect.left < range.right;
 }
 
 function scorePaginatedVisibleRange(doc: Document, range: PaginatedVisibleRange) {
@@ -1007,6 +1043,16 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           return isHostRectVisible(mapIframeRectToHost(rect, doc));
         };
 
+        const isRectStartVisibleInReader = (rect: DOMRect, doc?: Document | null) => {
+          if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+          const isPaginated = !renderer.scrolled;
+          if (isPaginated) {
+            const visibleRange = doc ? getVisibleRangeForDoc(doc) : null;
+            return visibleRange ? rectContainsPaginatedStart(rect, visibleRange) : false;
+          }
+          return isHostRectVisible(mapIframeRectToHost(rect, doc));
+        };
+
         // Require the START of the sentence range to be visible on the current page,
         // preventing sentences that began on the previous page from appearing as the
         // first TTS segment.
@@ -1095,6 +1141,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
             const positionedNodes: Array<{ node: Text; start: number; end: number }> = [];
             let absoluteText = "";
+            let visibleTextStart: number | null = null;
             for (
               let textNode = walker.nextNode() as Text | null;
               textNode;
@@ -1104,8 +1151,18 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
               const start = absoluteText.length;
               absoluteText += text;
               positionedNodes.push({ node: textNode, start, end: absoluteText.length });
+              if (visibleTextStart === null) {
+                const offset = getVisibleTextStartOffset(
+                  textNode,
+                  (rect) => isRectStartVisibleInReader(rect, doc),
+                  text.length,
+                );
+                if (offset !== null) visibleTextStart = start + offset;
+              }
             }
-            if (!absoluteText.trim() || positionedNodes.length === 0) continue;
+            if (!absoluteText.trim() || positionedNodes.length === 0 || visibleTextStart === null) {
+              continue;
+            }
 
             const rawSegments = segmenter
               ? Array.from(segmenter.segment(absoluteText)).map(
@@ -1144,6 +1201,8 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
               : [{ start: 0, end: absoluteText.length }]) {
               let start = rawSegment.start;
               let end = rawSegment.end;
+              if (end <= visibleTextStart) continue;
+              start = Math.max(start, visibleTextStart);
               while (start < end && /\s/u.test(absoluteText[start] ?? "")) start++;
               while (end > start && /\s/u.test(absoluteText[end - 1] ?? "")) end--;
               if (end - start < 2) continue;
@@ -2132,8 +2191,14 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       // show-annotation fires synchronously before the setTimeout(10ms) in pointerup
       annotationClickedRef.current = true;
 
-      // Always show the same annotation popover for existing highlights, including
-      // highlights with notes, so actions like copy remain available.
+      if (cfisWithNotes.has(value)) {
+        const doc =
+          range.startContainer.nodeType === Node.DOCUMENT_NODE
+            ? (range.startContainer as Document)
+            : range.startContainer.ownerDocument;
+        if (doc && showNoteTooltip(doc, value)) return;
+      }
+
       onShowAnnotationRef.current?.(value, range, index);
     }, []);
 
@@ -3382,6 +3447,7 @@ const NOTE_TOOLTIP_STYLES = `
 
 // Per-doc registry: cfi -> { range, note }
 const docNoteRegistries = new WeakMap<Document, Map<string, { range: Range; note: string }>>();
+const docNoteTooltipShowers = new WeakMap<Document, (cfi: string) => boolean>();
 
 // Global set to track CFIs that have notes (for showAnnotationHandler)
 const cfisWithNotes = new Set<string>();
@@ -3469,6 +3535,14 @@ function ensureNoteTooltipSystem(doc: Document) {
     tooltip.style.top = `${top}px`;
   };
 
+  docNoteTooltipShowers.set(doc, (cfi: string) => {
+    const entry = docNoteRegistries.get(doc)?.get(cfi);
+    if (!entry) return false;
+    activeCfi = cfi;
+    showTooltip(entry.note, entry.range);
+    return true;
+  });
+
   const hideTooltip = () => {
     hideTimer = setTimeout(() => {
       tooltip.classList.remove("visible");
@@ -3532,4 +3606,8 @@ function createNoteTooltip(doc: Document, range: Range, note: string, cfi?: stri
 function removeNoteTooltip(doc: Document, cfi: string) {
   const registry = docNoteRegistries.get(doc);
   if (registry) registry.delete(cfi);
+}
+
+function showNoteTooltip(doc: Document, cfi: string) {
+  return docNoteTooltipShowers.get(doc)?.(cfi) ?? false;
 }

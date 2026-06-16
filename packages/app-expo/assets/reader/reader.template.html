@@ -2668,10 +2668,10 @@ a { color: ${primary} !important; }
           
           var isVisible = false;
           if (isPaginated && pSize > 0) {
-            // In paginated mode, first page starts at scroll offset = pSize
-            // So visible range in iframe coords is [start - size, end - size]
-            var visibleLeft = pStart - pSize;
-            var visibleRight = pStart;
+            var visibleLeft = pStart;
+            var visibleRight = typeof renderer.end === 'number' && renderer.end > pStart
+              ? renderer.end
+              : pStart + pSize;
             isVisible = rect.right > visibleLeft && rect.left < visibleRight && rect.width > 0;
           } else {
             // Scrolled mode: use iframe viewport dimensions
@@ -2742,12 +2742,10 @@ a { color: ${primary} !important; }
           
           var isVisible = false;
           if (isPaginated && pSize > 0) {
-            // In paginated mode, the iframe is expanded to the full content width.
-            // The outer container scrolls to show the current "page".
-            // First page starts at scroll offset = pSize (page 0 is padding).
-            // So visible range in iframe coords is [start - size, end - size].
-            var visibleLeft = pStart - pSize;
-            var visibleRight = pStart;
+            var visibleLeft = pStart;
+            var visibleRight = typeof renderer.end === 'number' && renderer.end > pStart
+              ? renderer.end
+              : pStart + pSize;
             isVisible = rect.right > visibleLeft && rect.left < visibleRight && rect.width > 0;
           } else {
             // Scrolled mode: use iframe viewport dimensions
@@ -2903,16 +2901,16 @@ a { color: ${primary} !important; }
       const candidates = getPaginatedVisibleRangeCandidates(renderer);
       if (candidates.length <= 1) return candidates[0] || null;
 
-      const legacyRange = candidates.find((range) => range.source === 'legacy-offset') || null;
-      if (legacyRange && scorePaginatedVisibleRange(doc, legacyRange) > 0) return legacyRange;
-
       const rendererRange = candidates.find((range) => range.source === 'renderer') || null;
       if (rendererRange && scorePaginatedVisibleRange(doc, rendererRange) > 0) return rendererRange;
 
       const fallbackRange = candidates.find((range) => range.source === 'size-fallback') || null;
       if (fallbackRange && scorePaginatedVisibleRange(doc, fallbackRange) > 0) return fallbackRange;
 
-      return legacyRange || rendererRange || fallbackRange || candidates[0] || null;
+      const legacyRange = candidates.find((range) => range.source === 'legacy-offset') || null;
+      if (legacyRange && scorePaginatedVisibleRange(doc, legacyRange) > 0) return legacyRange;
+
+      return rendererRange || fallbackRange || legacyRange || candidates[0] || null;
     }
 
     let ttsVisibleRangeByDoc = new WeakMap();

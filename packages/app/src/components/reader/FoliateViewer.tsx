@@ -354,11 +354,6 @@ function pickPaginatedVisibleRange(
   const candidates = getPaginatedVisibleRangeCandidates(renderer);
   if (candidates.length <= 1) return candidates[0] ?? null;
 
-  const legacyRange = candidates.find((range) => range.source === "legacy-offset") ?? null;
-  if (legacyRange && scorePaginatedVisibleRange(doc, legacyRange) > 0) {
-    return legacyRange;
-  }
-
   const rendererRange = candidates.find((range) => range.source === "renderer") ?? null;
   if (rendererRange && scorePaginatedVisibleRange(doc, rendererRange) > 0) {
     return rendererRange;
@@ -369,7 +364,12 @@ function pickPaginatedVisibleRange(
     return fallbackRange;
   }
 
-  return legacyRange ?? rendererRange ?? fallbackRange ?? candidates[0];
+  const legacyRange = candidates.find((range) => range.source === "legacy-offset") ?? null;
+  if (legacyRange && scorePaginatedVisibleRange(doc, legacyRange) > 0) {
+    return legacyRange;
+  }
+
+  return rendererRange ?? fallbackRange ?? legacyRange ?? candidates[0];
 }
 
 function getIframeClickMetrics(doc: Document, container: HTMLElement | null, clientX: number) {
@@ -1545,11 +1545,11 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             const pStart = renderer.start; // abs(scrollLeft)
 
             if (isPaginated && pSize > 0) {
-              // In paginated mode, first page starts at scroll offset = pSize
-              // (page 0 is padding). So visible range in iframe coords is
-              // [start - size, end - size].
-              const visibleLeft = pStart - pSize;
-              const visibleRight = pStart; // end - size = (start + size) - size = start
+              const visibleLeft = pStart;
+              const visibleRight =
+                typeof renderer.end === "number" && renderer.end > pStart
+                  ? renderer.end
+                  : pStart + pSize;
 
               const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
                 acceptNode: acceptTTSNode,
@@ -1981,8 +1981,11 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
               const pStart = renderer.start;
 
               if (isPaginated && pSize > 0) {
-                const visibleLeft = pStart - pSize;
-                const visibleRight = pStart;
+                const visibleLeft = pStart;
+                const visibleRight =
+                  typeof renderer.end === "number" && renderer.end > pStart
+                    ? renderer.end
+                    : pStart + pSize;
                 const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
                   acceptNode: acceptTTSNode,
                 });

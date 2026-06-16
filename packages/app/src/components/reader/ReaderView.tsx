@@ -2035,11 +2035,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
   const startPageTTS = useCallback(
     async (continuous = ttsContinuousEnabled) => {
-      if (readerTab?.currentCfi) {
+      const currentReaderCfi = foliateRef.current?.getCurrentCfi() || readerTab?.currentCfi || null;
+      if (currentReaderCfi) {
         setTtsSourceKind("page");
         setTtsContinuousEnabled(continuous);
         ttsContinuousRef.current = continuous;
-        await startPageTTSFromCfiRef.current?.(readerTab.currentCfi);
+        await startPageTTSFromCfiRef.current?.(currentReaderCfi);
         return;
       }
 

@@ -656,6 +656,7 @@ export interface FoliateViewerHandle {
   }) => AsyncGenerator | null;
   clearSearch: () => void;
   getView: () => FoliateView | null;
+  getCurrentCfi: () => string | null;
   /** Get visible text on the current page for TTS */
   getVisibleText: () => string;
   getVisibleTTSSegments: (alignCfi?: string | null) => Promise<TTSSegmentDetail[]>;
@@ -1529,6 +1530,10 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           viewRef.current?.clearSearch();
         },
         getView: () => viewRef.current,
+        getCurrentCfi: () => {
+          const cfi = (viewRef.current?.lastLocation as { cfi?: string } | null | undefined)?.cfi;
+          return cfi || null;
+        },
         getVisibleText: () => {
           try {
             const renderer = viewRef.current?.renderer;

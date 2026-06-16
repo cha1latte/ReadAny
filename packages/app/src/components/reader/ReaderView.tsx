@@ -2035,6 +2035,14 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
   const startPageTTS = useCallback(
     async (continuous = ttsContinuousEnabled) => {
+      if (readerTab?.currentCfi) {
+        setTtsSourceKind("page");
+        setTtsContinuousEnabled(continuous);
+        ttsContinuousRef.current = continuous;
+        await startPageTTSFromCfiRef.current?.(readerTab.currentCfi);
+        return;
+      }
+
       const segments =
         (await foliateRef.current?.getVisibleTTSSegments())?.map((segment) => ({
           text: segment.text.trim(),

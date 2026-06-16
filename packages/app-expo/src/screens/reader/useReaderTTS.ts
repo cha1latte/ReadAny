@@ -1344,10 +1344,14 @@ export function useReaderTTS({
   // ─── startPageTTS ─────────────────────────────────────────────────────────
   const startPageTTS = useCallback(
     async (continuous = ttsContinuousEnabled) => {
-      // Start from the currently visible page, not from currentCfi. During fast
-      // page/chapter transitions currentCfi can still point at the previous
-      // relocation or a mid-page sentence, which makes TTS skip the real first
-      // visible sentence.
+      if (currentCfi) {
+        setTtsSourceKind("page");
+        setTtsContinuousEnabled(continuous);
+        ttsContinuousRef.current = continuous;
+        await startPageTTSFromCfi(currentCfi);
+        return;
+      }
+
       const normalizedSegments = await getNormalizedVisibleTTSSegments(null);
       const pageAnchorCfi = normalizedSegments[0]?.cfi || currentCfi || null;
       if (__DEV__) {
@@ -1476,6 +1480,7 @@ export function useReaderTTS({
       primeTTSLyricContext,
       setShowControls,
       setShowTTS,
+      startPageTTSFromCfi,
       syncTTSChunkOffset,
       ttsContinuousEnabled,
       ttsCoverUri,

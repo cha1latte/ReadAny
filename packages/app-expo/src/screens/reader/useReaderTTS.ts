@@ -409,9 +409,21 @@ export function useReaderTTS({
 
   const resolvedTTSSegmentCfi = useMemo(() => {
     if (ttsCurrentBookId !== bookId) return null;
+    const indexCfi =
+      localTTSChunkIndex >= 0 && localTTSChunkIndex < ttsSegments.length
+        ? ttsSegments[localTTSChunkIndex]?.cfi || null
+        : null;
+    if (indexCfi) return indexCfi;
     if (currentTTSSegment?.cfi) return currentTTSSegment.cfi;
     return ttsCurrentLocationCfi || null;
-  }, [bookId, currentTTSSegment?.cfi, ttsCurrentBookId, ttsCurrentLocationCfi]);
+  }, [
+    bookId,
+    currentTTSSegment?.cfi,
+    localTTSChunkIndex,
+    ttsCurrentBookId,
+    ttsCurrentLocationCfi,
+    ttsSegments,
+  ]);
 
   const ttsSourceLabel = ttsSourceKind === "selection" ? "来自选中文本" : "从当前页开始";
 

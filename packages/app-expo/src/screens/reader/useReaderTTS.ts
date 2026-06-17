@@ -2201,7 +2201,7 @@ export function useReaderTTS({
       lastFollowedTTSCfiRef.current = null;
       return;
     }
-    if (showTTS || ttsSourceKind !== "page") {
+    if (ttsSourceKind !== "page") {
       lastFollowedTTSCfiRef.current = null;
       return;
     }
@@ -2216,7 +2216,6 @@ export function useReaderTTS({
   }, [
     bridgeRef,
     resolvedTTSSegmentCfi,
-    showTTS,
     ttsCurrentBookId,
     ttsPlayState,
     ttsSourceKind,

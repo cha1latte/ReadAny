@@ -1,6 +1,6 @@
 {
   "notes": {
-    "title": "笔记",
+    "title": "知识库",
     "underDevelopment": "此功能正在开发中。",
     "noNotes": "暂无笔记",
     "selectToCreate": "选择文本创建笔记",
@@ -10,8 +10,8 @@
     "searchPlaceholder": "搜索高亮和笔记...",
     "noSearchResults": "没有找到匹配的内容",
     "tryDifferentSearch": "试试其他关键词",
-    "empty": "暂无高亮和笔记",
-    "emptyHint": "在阅读时选择文本添加高亮或笔记",
+    "empty": "暂无知识库内容",
+    "emptyHint": "导入或打开一本书后，可以在这里创建知识文档、整理高亮和笔记",
     "unknownBook": "未知书籍",
     "unknownAuthor": "未知作者",
     "unknownChapter": "未分类",

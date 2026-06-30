@@ -1,6 +1,6 @@
 {
   "notes": {
-    "title": "Notes",
+    "title": "Knowledge",
     "underDevelopment": "This feature is under development.",
     "noNotes": "No notes yet",
     "selectToCreate": "Select text and create a note",
@@ -10,8 +10,8 @@
     "searchPlaceholder": "Search highlights and notes...",
     "noSearchResults": "No matching results found",
     "tryDifferentSearch": "Try different keywords",
-    "empty": "No highlights or notes yet",
-    "emptyHint": "Select text while reading to add highlights or notes",
+    "empty": "No knowledge content yet",
+    "emptyHint": "Import or open a book, then create knowledge documents and organize highlights or notes here",
     "unknownBook": "Unknown Book",
     "unknownAuthor": "Unknown Author",
     "unknownChapter": "Uncategorized",

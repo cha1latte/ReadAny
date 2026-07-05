@@ -6,7 +6,7 @@ module.exports = {
   expo: {
     name: variant.name,
     slug: "readany",
-    version: "1.3.3",
+    version: "1.3.4",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "automatic",
@@ -68,9 +68,16 @@ module.exports = {
         },
       ],
       "expo-font",
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "ReadAny uses your photo library to choose custom book covers.",
+        },
+      ],
       "expo-secure-store",
       "expo-sqlite",
       "expo-asset",
+      "./plugins/withVolumeKeyPaging",
       [
         "expo-camera",
         {

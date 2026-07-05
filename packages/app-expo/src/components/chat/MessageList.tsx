@@ -2,6 +2,7 @@ import { CheckIcon, ChevronDownIcon, CopyIcon } from "@/components/ui/Icon";
 import { fontSize as fs, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
 import type { CitationPart, MessageV2, QuotePart, TextPart } from "@readany/core/types/message";
+import * as Clipboard from "expo-clipboard";
 /**
  * MessageList — FlatList message renderer matching app-mobile MessageList.
  * Scroll-to-bottom button, streaming gap indicator.
@@ -12,6 +13,8 @@ import {
   FlatList,
   Keyboard,
   Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -20,7 +23,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import { PartRenderer } from "./PartRenderer";
 import { StreamingIndicator } from "./StreamingIndicator";
 
@@ -60,14 +62,7 @@ export function MessageList({
   const isAtBottomRef = useRef(true);
   const [showScrollDown, setShowScrollDown] = useState(false);
 
-  // Track last part count for auto-scroll dependency
   const lastMsg = messages[messages.length - 1];
-  const lastMsgPartsCount = lastMsg?.parts?.length ?? 0;
-  const lastMsgTextLength =
-    lastMsg?.parts?.reduce(
-      (acc, p) => acc + (p.type === "text" ? (p as TextPart).text?.length || 0 : 0),
-      0,
-    ) ?? 0;
 
   // Auto-scroll when new messages arrive or parts update
   useEffect(() => {
@@ -119,7 +114,7 @@ export function MessageList({
     };
   }, [messages.length]);
 
-  const handleScroll = useCallback((e: any) => {
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const nearBottom =
       contentSize.height - contentOffset.y - layoutMeasurement.height < BOTTOM_THRESHOLD;
@@ -166,7 +161,7 @@ export function MessageList({
     (!lastMsg || lastMsg.role !== "assistant" || lastMsg.parts.length === 0);
 
   return (
-    <View style={s.container}>
+    <View style={s.container} onTouchStart={Keyboard.dismiss}>
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -174,6 +169,7 @@ export function MessageList({
         renderItem={renderMessage}
         contentContainerStyle={s.listContent}
         onScroll={handleScroll}
+        onScrollBeginDrag={Keyboard.dismiss}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -305,11 +301,7 @@ function MessageBubble({
 
     return (
       <View style={s.userRow}>
-        <Pressable
-          style={s.userBubble}
-          onLongPress={triggerLongPress}
-          delayLongPress={300}
-        >
+        <Pressable style={s.userBubble} onLongPress={triggerLongPress} delayLongPress={300}>
           {quoteParts.length > 0 && (
             <View style={{ gap: 4, marginBottom: textParts.length > 0 ? 6 : 0 }}>
               {quoteParts.map((q) => (
@@ -370,9 +362,7 @@ function MessageBubble({
         ))}
       </Pressable>
       {showGapIndicator && <StreamingIndicator step="thinking" />}
-      {!isStreaming && (
-        <CopyButton onPress={copyText} colors={colors} />
-      )}
+      {!isStreaming && <CopyButton onPress={copyText} colors={colors} />}
     </View>
   );
 }
@@ -431,12 +421,7 @@ function SelectableTextModal({
   }, [text]);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
         onPress={onClose}

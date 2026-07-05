@@ -41,6 +41,8 @@ const THEME_COLORS: Record<AppTheme, { bg: string; fg: string; link: string }> =
   sepia: { bg: "#f0e6d2", fg: "#3d2b1f", link: "#6b4c2a" },
 };
 
+const READER_OVERRIDE_STYLE_ID = "__readany_reader_overrides__";
+
 function getAppTheme(): AppTheme {
   if (typeof document === "undefined") return "dark";
   const theme = document.documentElement.getAttribute("data-theme") as AppTheme | null;
@@ -662,7 +664,6 @@ interface FoliateViewerProps {
   onError?: (error: Error) => void;
   onSelection?: (selection: BookSelection | null) => void;
   onShowAnnotation?: (cfi: string, range: Range, index: number) => void;
-  onShowNotePanel?: (cfi: string) => void;
   onToggleSearch?: () => void;
   onToggleToc?: () => void;
   onToggleChat?: () => void;
@@ -699,7 +700,6 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       onError,
       onSelection,
       onShowAnnotation,
-      onShowNotePanel,
       onToggleSearch,
       onToggleToc,
       onToggleChat,
@@ -790,7 +790,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         void view.next(getScrollNavigationDistance());
         return;
       }
-      void view.goRight();
+      void view.next();
     }, [getScrollNavigationDistance]);
 
     const goPrevByMode = useCallback(() => {
@@ -808,7 +808,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         void view.prev(getScrollNavigationDistance());
         return;
       }
-      void view.goLeft();
+      void view.prev();
     }, [getScrollNavigationDistance]);
 
     const ensureDesktopTTS = useCallback(async () => {
@@ -1783,7 +1783,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     );
 
     // --- Hooks ---
-    usePagination({ bookKey, viewRef, containerRef });
+    usePagination({ bookKey, viewRef, containerRef, isFixedLayout });
     useBookShortcuts({
       bookKey,
       viewRef,
@@ -1839,7 +1839,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         getDirection(detail.doc);
 
         // Apply theme styles to loaded document
-        applyDocumentStyles(detail.doc, viewSettings, isFixedLayout);
+        applyDocumentStyles(detail.doc, viewSettings, isFixedLayout, appTheme);
 
         // Register iframe event handlers for this section
         registerIframeEventHandlers(bookKey, detail.doc);
@@ -1879,7 +1879,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
         })();
       },
-      [bookKey, viewSettings, onLoaded, onSectionLoad, isFixedLayout],
+      [appTheme, bookKey, viewSettings, onLoaded, onSectionLoad, isFixedLayout],
     );
     const docLoadHandlerRef = useRef(docLoadHandlerImpl);
     docLoadHandlerRef.current = docLoadHandlerImpl;
@@ -2124,11 +2124,6 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     const onShowAnnotationRef = useRef(onShowAnnotation);
     onShowAnnotationRef.current = onShowAnnotation;
 
-    // --- Show note panel handler ---
-    // This is called when user clicks on a wavy underline (note annotation)
-    const onShowNotePanelRef = useRef(onShowNotePanel);
-    onShowNotePanelRef.current = onShowNotePanel;
-
     const showAnnotationHandler = useCallback((event: Event) => {
       const detail = (event as CustomEvent).detail;
       const { value, index, range } = detail;
@@ -2139,13 +2134,8 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       // show-annotation fires synchronously before the setTimeout(10ms) in pointerup
       annotationClickedRef.current = true;
 
-      // Check if this annotation has a note - if so, open note panel instead of popover
-      if (cfisWithNotes.has(value) && onShowNotePanelRef.current) {
-        onShowNotePanelRef.current(value);
-        return;
-      }
-
-      // Call the callback with annotation info
+      // Always show the same annotation popover for existing highlights, including
+      // highlights with notes, so actions like copy remain available.
       onShowAnnotationRef.current?.(value, range, index);
     }, []);
 
@@ -2683,7 +2673,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           setViewReady(true);
 
           // Navigate to last location or start
-          if (lastLocation && !isFixedLayout) {
+          if (isFixedLayout) {
+            await view.init({});
+          } else if (lastLocation) {
             try {
               await view.init({ lastLocation });
             } catch (initErr) {
@@ -2793,7 +2785,13 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       }
 
       applyReflowLayoutSettings(view, viewSettings);
-    }, [viewSettings.viewMode, viewSettings.paginatedLayout, isFixedLayout, appTheme]);
+    }, [
+      viewSettings.viewMode,
+      viewSettings.paginatedLayout,
+      viewSettings.fixedLayoutZoom,
+      isFixedLayout,
+      appTheme,
+    ]);
 
     const handleViewerShellClick = useCallback(
       (event: {
@@ -2910,13 +2908,20 @@ function syncRemoteFontStyles(view: FoliateView, settings: ViewSettings) {
 }
 
 /** Apply CSS styles to a loaded section document */
-function applyDocumentStyles(doc: Document, settings: ViewSettings, isFixedLayout: boolean) {
+function applyDocumentStyles(
+  doc: Document,
+  settings: ViewSettings,
+  isFixedLayout: boolean,
+  theme: AppTheme,
+) {
   if (isFixedLayout) {
     // PDF/CBZ: don't inject styles that would break layout
     return;
   }
 
+  normalizeBrOnlyParagraphs(doc);
   syncRemoteFontStylesInDocument(doc, settings.customFontCssUrls);
+  syncReaderOverrideStylesInDocument(doc, getRendererStyles(settings, theme));
 
   // Basic styles for images
   const images = doc.querySelectorAll("img");
@@ -2924,6 +2929,166 @@ function applyDocumentStyles(doc: Document, settings: ViewSettings, isFixedLayou
     img.style.maxWidth = "100%";
     img.style.height = "auto";
   }
+}
+
+function syncReaderOverrideStylesInDocument(doc: Document, css: string) {
+  const head = doc.head || doc.documentElement;
+  if (!head) return;
+  let style = doc.getElementById(READER_OVERRIDE_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = doc.createElement("style");
+    style.id = READER_OVERRIDE_STYLE_ID;
+    head.appendChild(style);
+  }
+  style.textContent = css;
+  head.appendChild(style);
+}
+
+function syncReaderOverrideStyles(view: FoliateView, css: string) {
+  for (const content of getRendererContents(view)) {
+    const doc = content?.doc;
+    if (doc) syncReaderOverrideStylesInDocument(doc, css);
+  }
+}
+
+function normalizeBrOnlyParagraphs(doc: Document) {
+  const docWithMarker = doc as Document & { __readanyBrParagraphsNormalized?: boolean };
+  if (docWithMarker.__readanyBrParagraphsNormalized) return;
+  docWithMarker.__readanyBrParagraphsNormalized = true;
+
+  const body = doc.body;
+  if (!body || body.querySelectorAll("p").length > 2) return;
+
+  const containers: Element[] = Array.from(body.querySelectorAll("div, section, article, main")).filter(
+    shouldNormalizeBrParagraphContainer,
+  );
+  if (shouldNormalizeBrParagraphContainer(body)) containers.push(body);
+
+  for (const container of containers) {
+    if (normalizeBrParagraphContainer(doc, container)) return;
+  }
+}
+
+function shouldNormalizeBrParagraphContainer(container: Element) {
+  if (container.querySelector("p")) return false;
+
+  const inlineTags = new Set([
+    "a",
+    "abbr",
+    "b",
+    "bdi",
+    "bdo",
+    "br",
+    "cite",
+    "code",
+    "em",
+    "font",
+    "i",
+    "img",
+    "kbd",
+    "mark",
+    "q",
+    "ruby",
+    "rb",
+    "rp",
+    "rt",
+    "s",
+    "small",
+    "span",
+    "strong",
+    "sub",
+    "sup",
+    "time",
+    "u",
+    "var",
+  ]);
+  let brCount = 0;
+  let textLength = 0;
+
+  for (const node of Array.from(container.childNodes)) {
+    if (isBrNode(node)) {
+      brCount += 1;
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      textLength += node.nodeValue?.trim().length ?? 0;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as Element).localName.toLowerCase();
+      if (!inlineTags.has(tag) && (node.textContent || "").trim()) return false;
+    }
+  }
+
+  return brCount >= 4 && textLength >= 80;
+}
+
+function normalizeBrParagraphContainer(doc: Document, container: Element) {
+  const originalNodes = Array.from(container.childNodes);
+  const fragment = doc.createDocumentFragment();
+  let pending: Node[] = [];
+  let breakNodes: Node[] = [];
+  let breakCount = 0;
+  let paragraphCount = 0;
+
+  const flushPending = () => {
+    while (pending.length && isBlankTextNode(pending[0])) pending.shift();
+    while (pending.length && isBlankTextNode(pending[pending.length - 1])) pending.pop();
+    if (!pending.some(hasParagraphContent)) {
+      pending = [];
+      return;
+    }
+
+    const paragraph = doc.createElement("p");
+    paragraph.className = "__readany_br_paragraph";
+    for (const node of pending) paragraph.appendChild(node);
+    fragment.appendChild(paragraph);
+    pending = [];
+    paragraphCount += 1;
+  };
+
+  const commitBreak = () => {
+    if (!breakNodes.length) return;
+    if (breakCount >= 2) flushPending();
+    else pending.push(...breakNodes);
+    breakNodes = [];
+    breakCount = 0;
+  };
+
+  for (const node of Array.from(container.childNodes)) {
+    if (isBrNode(node)) {
+      breakNodes.push(node);
+      breakCount += 1;
+    } else if (isBlankTextNode(node) && breakCount > 0) {
+      breakNodes.push(node);
+    } else {
+      commitBreak();
+      pending.push(node);
+    }
+  }
+
+  commitBreak();
+  flushPending();
+
+  if (paragraphCount < 2) {
+    container.replaceChildren(...originalNodes);
+    return false;
+  }
+  container.replaceChildren(fragment);
+  container.setAttribute("data-readany-br-paragraphs", "");
+  return true;
+}
+
+function isBrNode(node: Node) {
+  return node.nodeType === Node.ELEMENT_NODE && (node as Element).localName.toLowerCase() === "br";
+}
+
+function isBlankTextNode(node: Node) {
+  return node.nodeType === Node.TEXT_NODE && !node.nodeValue?.trim();
+}
+
+function hasParagraphContent(node: Node) {
+  if (node.nodeType === Node.TEXT_NODE) return Boolean(node.nodeValue?.trim());
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    return !isBrNode(node) && Boolean(node.textContent?.trim());
+  }
+  return false;
 }
 
 /** Apply renderer-level settings (layout, columns, margins) */
@@ -2943,6 +3108,7 @@ function applyRendererSettings(
     // EPUBs do not look "shrunk inside a spread". Double-page mode still uses
     // fit-page to keep both pages fully visible inside the viewport.
     renderer.setAttribute("zoom", isSinglePage ? "fit-width" : "fit-page");
+    renderer.setAttribute("zoom-factor", String(settings.fixedLayoutZoom ?? 1));
     if (view.book?.rendition) {
       view.book.rendition.spread = spreadMode;
     }
@@ -2996,7 +3162,7 @@ function getRendererStyles(settings: ViewSettings, theme: AppTheme): string {
 
   // Custom font takes precedence over font theme
   const fontFamily = settings.customFontFamily
-    ? settings.customFontFamily
+    ? JSON.stringify(settings.customFontFamily)
     : `'${fontTheme.cjk}', '${fontTheme.serif}', serif`;
 
   // paragraphSpacing is stored as px tuned at the default 16px font size.
@@ -3028,6 +3194,10 @@ html, body {
 
 body *:not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *) {
   font-family: var(--readany-font-family) !important;
+}
+
+body :not(#__readany_font_size_override):not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *):not(rt):not(rp) {
+  font-size: ${settings.fontSize}px !important;
 }
 
 pre, code, kbd, samp {
@@ -3122,6 +3292,7 @@ function applyRendererStyles(
   });
   const styles = getRendererStyles(settings, theme);
   renderer.setStyles(styles);
+  syncReaderOverrideStyles(view, styles);
 }
 
 /**

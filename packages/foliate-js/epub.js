@@ -11,6 +11,7 @@ const NS = {
   NCX: "http://www.daisy.org/z3986/2005/ncx/",
   XLINK: "http://www.w3.org/1999/xlink",
   SMIL: "http://www.w3.org/ns/SMIL",
+  SVG: "http://www.w3.org/2000/svg",
 };
 
 const MIME = {
@@ -98,10 +99,39 @@ const childGetter = (doc, ns) => {
   };
 };
 
+const decodePath = (path) =>
+  path
+    .split("/")
+    .map((segment) => {
+      // Keep encoded separators that would change URL structure after decoding.
+      const protectedSegment = segment
+        .replace(/%2f/gi, "__READANY_ENCODED_SLASH__")
+        .replace(/%23/gi, "__READANY_ENCODED_HASH__");
+      try {
+        return decodeURIComponent(protectedSegment)
+          .replace(/__READANY_ENCODED_SLASH__/g, "%2F")
+          .replace(/__READANY_ENCODED_HASH__/g, "%23");
+      } catch {
+        try {
+          return decodeURI(segment);
+        } catch {
+          return segment;
+        }
+      }
+    })
+    .join("/");
+
+const decodeHash = (hash) => {
+  if (!hash) return "";
+  try {
+    return decodeURI(hash);
+  } catch {
+    return hash;
+  }
+};
+
 const resolveURL = (url, relativeTo) => {
   try {
-    // Pre-decode common percent-encoded characters that tools like Calibre may introduce
-    url = url.replace(/%2c/gi, ",").replace(/%3a/gi, ":");
     // Only treat relativeTo as a URL if it contains a scheme (e.g. https://)
     // Don't mistake file paths with ':' in filenames (e.g. Duokan obfuscated names) for URLs
     if (relativeTo.includes("://")) return new URL(url, relativeTo);
@@ -109,7 +139,8 @@ const resolveURL = (url, relativeTo) => {
     const root = "https://invalid.invalid/";
     const obj = new URL(url, root + relativeTo);
     obj.search = "";
-    return decodeURI(obj.href.replace(root, ""));
+    if (!obj.href.startsWith(root)) return obj.href;
+    return decodePath(obj.pathname.replace(/^\//, "")) + decodeHash(obj.hash);
   } catch (e) {
     console.warn(e);
     return url;
@@ -145,6 +176,36 @@ const replaceSeries = async (str, regex, f) => {
 };
 
 const regexEscape = (str) => str.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+const parseSrcset = (srcset) => {
+  const candidates = [];
+  let i = 0;
+  while (i < srcset.length) {
+    let leading = "";
+    while (i < srcset.length && /[\t\n\f\r ,]/.test(srcset[i])) leading += srcset[i++];
+    if (i >= srcset.length) {
+      if (leading) candidates.push({ leading, url: "", descriptor: "", comma: "" });
+      break;
+    }
+
+    const urlStart = i;
+    const isDataURL = srcset.slice(i, i + 5).toLowerCase() === "data:";
+    while (
+      i < srcset.length &&
+      !/[\t\n\f\r ]/.test(srcset[i]) &&
+      (isDataURL || srcset[i] !== ",")
+    )
+      i++;
+
+    const url = srcset.slice(urlStart, i);
+    const descriptorStart = i;
+    while (i < srcset.length && srcset[i] !== ",") i++;
+    const descriptor = srcset.slice(descriptorStart, i);
+    const comma = i < srcset.length && srcset[i] === "," ? srcset[i++] : "";
+    candidates.push({ leading, url, descriptor, comma });
+  }
+  return candidates;
+};
 
 const tidy = (obj) => {
   for (const [key, val] of Object.entries(obj))
@@ -426,6 +487,26 @@ const parseClock = (str) => {
   const n = Number.parseFloat(x);
   const f = unit === "h" ? 60 * 60 : unit === "min" ? 60 : unit === "ms" ? 0.001 : 1;
   return n * f;
+};
+
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+const FONT_EXTENSIONS = ["woff", "woff2", "ttf", "otf"];
+
+const getMediaTypeForExtension = (path, fallback) => {
+  const extension = path.toLowerCase().split(".").pop();
+  const mediaTypeMap = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    woff: "font/woff",
+    woff2: "font/woff2",
+    ttf: "font/ttf",
+    otf: "font/otf",
+  };
+  return mediaTypeMap[extension] || fallback;
 };
 
 class MediaOverlay extends EventTarget {
@@ -863,14 +944,16 @@ class Resources {
 
 class Loader {
   #cache = new Map();
+  #cacheXHTMLContent = new Map();
   #children = new Map();
   #refCount = new Map();
   eventTarget = new EventTarget();
-  constructor({ loadText, loadBlob, resources }) {
+  constructor({ loadText, loadBlob, resources, entries }) {
     this.loadText = loadText;
     this.loadBlob = loadBlob;
     this.manifest = resources.manifest;
     this.assets = resources.manifest;
+    this.entries = entries;
     // needed only when replacing in (X)HTML w/o parsing (see below)
     //.filter(({ mediaType }) => ![MIME.XHTML, MIME.HTML].includes(mediaType))
   }
@@ -885,6 +968,9 @@ class Loader {
     const url = URL.createObjectURL(new Blob([newData], { type: newType }));
     this.#cache.set(href, url);
     this.#refCount.set(href, 1);
+    if (newType === MIME.XHTML || newType === MIME.HTML) {
+      this.#cacheXHTMLContent.set(url, { href, type: newType, data: newData });
+    }
     if (parent) {
       const childList = this.#children.get(parent);
       if (childList) childList.push(href);
@@ -908,8 +994,10 @@ class Loader {
     //console.log(`unreferencing ${href}, now ${count}`)
     if (count < 1) {
       //console.log(`unloading ${href}`)
-      URL.revokeObjectURL(this.#cache.get(href));
+      const url = this.#cache.get(href);
+      URL.revokeObjectURL(url);
       this.#cache.delete(href);
+      this.#cacheXHTMLContent.delete(url);
       this.#refCount.delete(href);
       // unref children
       const childList = this.#children.get(href);
@@ -941,12 +1029,32 @@ class Loader {
     const tryLoadBlob = Promise.resolve().then(() => this.loadBlob(href));
     return this.createURL(href, tryLoadBlob, mediaType, parent);
   }
+  async loadItemXHTMLContent(item, parents = []) {
+    if (this.#cache.has(item?.href)) {
+      return this.#cacheXHTMLContent.get(this.#cache.get(item.href))?.data;
+    }
+    const url = await this.loadItem(item, parents);
+    if (url) return this.#cacheXHTMLContent.get(url)?.data;
+  }
+  getEntryItem(path) {
+    const extension = path.toLowerCase().split(".").pop();
+    if (IMAGE_EXTENSIONS.includes(extension) && this.entries?.has(path))
+      return { href: path, mediaType: getMediaTypeForExtension(path, "image/jpeg") };
+    if (!FONT_EXTENSIONS.includes(extension)) return null;
+    const fontPath = this.entries?.has(path) ? path : `fonts/${path.split("/").pop()}`;
+    return this.entries?.has(fontPath)
+      ? { href: fontPath, mediaType: getMediaTypeForExtension(fontPath, "font/ttf") }
+      : null;
+  }
   async loadHref(href, base, parents = []) {
+    if (!href || href.startsWith("#")) return href;
     if (isExternal(href)) return href;
-    const path = resolveURL(href, base);
-    const item = this.manifest.find((item) => item.href === path);
+    const resolved = resolveURL(href, base);
+    const [path, hash = ""] = resolved.split(/(#.*)/s);
+    const item = this.manifest.find((item) => item.href === path) ?? this.getEntryItem(path);
     if (!item) return href;
-    return this.loadItem(item, parents.concat(base));
+    const url = await this.loadItem(item, parents.concat(base));
+    return url ? url + hash : href;
   }
   async loadReplaced(item, parents = []) {
     const { href, mediaType } = item;
@@ -996,14 +1104,22 @@ class Loader {
           child = child.nextSibling;
         }
       }
-      // replace hrefs (excluding anchors)
-      // TODO: srcset?
+      // replace resource hrefs (excluding anchors)
       const replace = async (el, attr) =>
         el.setAttribute(attr, await this.loadHref(el.getAttribute(attr), href, parents));
+      const replaceSrcset = async (el, attr) =>
+        el.setAttribute(attr, await this.replaceSrcset(el.getAttribute(attr), href, parents));
       for (const el of doc.querySelectorAll("link[href]")) await replace(el, "href");
       for (const el of doc.querySelectorAll("[src]")) await replace(el, "src");
+      for (const el of doc.querySelectorAll("[srcset]")) await replaceSrcset(el, "srcset");
+      for (const el of doc.querySelectorAll("[imagesrcset]"))
+        await replaceSrcset(el, "imagesrcset");
       for (const el of doc.querySelectorAll("[poster]")) await replace(el, "poster");
       for (const el of doc.querySelectorAll("object[data]")) await replace(el, "data");
+      for (const el of doc.querySelectorAll("[href]")) {
+        if (el.namespaceURI === NS.SVG && ["image", "use"].includes(el.localName))
+          await replace(el, "href");
+      }
       for (const el of doc.querySelectorAll("[*|href]:not([href])"))
         el.setAttributeNS(
           NS.XLINK,
@@ -1042,6 +1158,16 @@ class Loader {
     return replaceSeries(replacedUrls, /@import\s*["']([^"'\n]*?)["']/gi, (_, url) =>
       this.loadHref(url, href, parents).then((url) => `@import "${url}"`),
     );
+  }
+  async replaceSrcset(str, href, parents = []) {
+    if (!str) return str;
+    let result = "";
+    for (const { leading, url, descriptor, comma } of parseSrcset(str)) {
+      result += leading;
+      result += url ? await this.loadHref(url, href, parents) : "";
+      result += descriptor + comma;
+    }
+    return result;
   }
   // find & replace all possible relative paths for all assets without parsing
   replaceString(str, href, parents = []) {
@@ -1097,7 +1223,14 @@ export class EPUB {
   parser = new DOMParser();
   #loader;
   #encryption;
-  constructor({ loadText, loadBlob, getSize, sha1 }) {
+  constructor({ entries, loadText, loadBlob, getSize, sha1 }) {
+    this.entries = entries
+      ? new Map(
+          entries
+            .map((entry) => [entry.filename ?? entry.fullPath, entry])
+            .filter(([name]) => name),
+        )
+      : new Map();
     this.loadText = loadText;
     this.loadBlob = loadBlob;
     this.getSize = getSize;
@@ -1141,6 +1274,7 @@ ${doc.querySelector("parsererror").innerText}`);
       loadText: this.loadText,
       loadBlob: (uri) => Promise.resolve(this.loadBlob(uri)).then(this.#encryption.getDecoder(uri)),
       resources: this.resources,
+      entries: this.entries,
     });
     this.transformTarget = this.#loader.eventTarget;
     this.sections = this.resources.spine
@@ -1155,10 +1289,12 @@ ${doc.querySelector("parsererror").innerText}`);
           id: item.href,
           load: () => this.#loader.loadItem(item),
           unload: () => this.#loader.unloadItem(item),
+          loadContent: () => this.#loader.loadItemXHTMLContent(item),
           createDocument: () => this.loadDocument(item),
           size: this.getSize(item.href),
           cfi: this.resources.cfis[index],
           linear,
+          spineProperties: properties,
           pageSpread: getPageSpread(properties),
           resolveHref: (href) => resolveURL(href, item.href),
           mediaOverlay: item.mediaOverlay ? this.resources.getItemByID(item.mediaOverlay) : null,
@@ -1217,10 +1353,10 @@ ${doc.querySelector("parsererror").innerText}`);
   }
   resolveHref(href) {
     const [path, hash] = href.split("#");
-    const item = this.resources.getItemByHref(decodeURI(path));
+    const item = this.resources.getItemByHref(decodePath(path));
     if (!item) return null;
     const index = this.resources.spine.findIndex(({ idref }) => idref === item.id);
-    const anchor = hash ? (doc) => getHTMLFragment(doc, hash) : () => 0;
+    const anchor = hash ? (doc) => getHTMLFragment(doc, decodeHash(hash)) : () => 0;
     return { index, anchor };
   }
   splitTOCHref(href) {

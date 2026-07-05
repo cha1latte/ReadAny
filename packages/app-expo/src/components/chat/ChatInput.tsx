@@ -1,4 +1,12 @@
-import { BrainIcon, EyeOffIcon, SendIcon, StopCircleIcon, XIcon } from "@/components/ui/Icon";
+import {
+  BrainIcon,
+  ChevronDownIcon,
+  EyeOffIcon,
+  SendIcon,
+  StopCircleIcon,
+  XIcon,
+} from "@/components/ui/Icon";
+import { useKeyboardInsets } from "@/hooks/use-keyboard-insets";
 import { fontSize as fs, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
 import type { AttachedQuote } from "@readany/core/types";
@@ -8,7 +16,16 @@ import type { AttachedQuote } from "@readany/core/types";
  */
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  type TextInputContentSizeChangeEvent,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface ChatInputProps {
   onSend: (
@@ -22,6 +39,7 @@ interface ChatInputProps {
   quotes?: AttachedQuote[];
   onRemoveQuote?: (id: string) => void;
   placeholder?: string;
+  keyboardBottomOffset?: number;
 }
 
 const SINGLE_LINE_INPUT_HEIGHT = 46;
@@ -35,6 +53,7 @@ export function ChatInput({
   quotes = [],
   onRemoveQuote,
   placeholder,
+  keyboardBottomOffset = 0,
 }: ChatInputProps) {
   const [text, setText] = useState("");
   const [deepThinking, setDeepThinking] = useState(false);
@@ -44,11 +63,19 @@ export function ChatInput({
   const colors = useColors();
   const s = makeStyles(colors);
   const inputRef = useRef<TextInput>(null);
+  const keyboardInsets = useKeyboardInsets();
+  const effectiveKeyboardBottomOffset = keyboardBottomOffset ?? keyboardInsets.safeAreaBottom;
+  const visibleKeyboardPadding =
+    Platform.OS === "ios"
+      ? Math.max(8, keyboardInsets.rawHeight - effectiveKeyboardBottomOffset + 14)
+      : 8;
+  const bottomPadding = keyboardInsets.isVisible
+    ? visibleKeyboardPadding
+    : Math.max(4, Math.min(keyboardInsets.safeAreaBottom, 8));
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed && quotes.length === 0) return;
-    inputRef.current?.blur();
     onSend(trimmed, deepThinking, spoilerFree, quotes.length > 0 ? quotes : undefined);
     setInputHeight(SINGLE_LINE_INPUT_HEIGHT);
     setText("");
@@ -63,21 +90,24 @@ export function ChatInput({
     }
   }, []);
 
-  const handleContentSizeChange = useCallback((e: any) => {
-    if (!text) {
-      setInputHeight(SINGLE_LINE_INPUT_HEIGHT);
-      return;
-    }
-    const contentHeight = e.nativeEvent.contentSize.height;
-    const totalHeight = contentHeight + INPUT_PADDING_VERTICAL;
-    const h = Math.min(totalHeight, MAX_INPUT_HEIGHT);
-    setInputHeight(Math.max(SINGLE_LINE_INPUT_HEIGHT, h));
-  }, [text]);
+  const handleContentSizeChange = useCallback(
+    (e: TextInputContentSizeChangeEvent) => {
+      if (!text) {
+        setInputHeight(SINGLE_LINE_INPUT_HEIGHT);
+        return;
+      }
+      const contentHeight = e.nativeEvent.contentSize.height;
+      const totalHeight = contentHeight + INPUT_PADDING_VERTICAL;
+      const h = Math.min(totalHeight, MAX_INPUT_HEIGHT);
+      setInputHeight(Math.max(SINGLE_LINE_INPUT_HEIGHT, h));
+    },
+    [text],
+  );
 
   const canSend = text.trim().length > 0 || quotes.length > 0;
 
   return (
-    <View style={s.wrapper}>
+    <View style={[s.wrapper, { paddingBottom: bottomPadding }]}>
       <View style={s.container}>
         {/* Attached quotes chips */}
         {quotes.length > 0 && (
@@ -143,23 +173,36 @@ export function ChatInput({
             </TouchableOpacity>
           </View>
 
-          {isStreaming ? (
-            <TouchableOpacity style={s.sendBtn} onPress={onStop} activeOpacity={0.7}>
-              <StopCircleIcon size={16} color={colors.destructive} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[s.sendBtn, canSend && s.sendBtnActive]}
-              onPress={handleSend}
-              disabled={!canSend}
-              activeOpacity={0.7}
-            >
-              <SendIcon
-                size={14}
-                color={canSend ? colors.primaryForeground : colors.mutedForeground}
-              />
-            </TouchableOpacity>
-          )}
+          <View style={s.actionButtons}>
+            {keyboardInsets.isVisible && (
+              <TouchableOpacity
+                style={s.sendBtn}
+                onPress={Keyboard.dismiss}
+                activeOpacity={0.7}
+                accessibilityLabel={t("chat.dismissKeyboard", "收起键盘")}
+              >
+                <ChevronDownIcon size={15} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+
+            {isStreaming ? (
+              <TouchableOpacity style={s.sendBtn} onPress={onStop} activeOpacity={0.7}>
+                <StopCircleIcon size={16} color={colors.destructive} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[s.sendBtn, canSend && s.sendBtnActive]}
+                onPress={handleSend}
+                disabled={!canSend}
+                activeOpacity={0.7}
+              >
+                <SendIcon
+                  size={14}
+                  color={canSend ? colors.primaryForeground : colors.mutedForeground}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
       {deepThinking && (
@@ -241,6 +284,13 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+      flexShrink: 1,
+    },
+    actionButtons: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginLeft: 8,
     },
     deepThinkBtn: {
       flexDirection: "row",

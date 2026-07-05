@@ -1,16 +1,11 @@
 import type { Window as TauriWindow } from "@tauri-apps/api/window";
-import {
-  StateFlags,
-  restoreStateCurrent,
-  saveWindowState,
-} from "@tauri-apps/plugin-window-state";
+import { StateFlags, restoreStateCurrent, saveWindowState } from "@tauri-apps/plugin-window-state";
 
 const WINDOW_STATE_SETTLE_MS = 40;
 const FULLSCREEN_TRANSITION_MASK_HOLD_MS = 140;
 const FULLSCREEN_RESTORE_STATE_KEY = "readany:restore-window-state-after-fullscreen";
 
-const FULLSCREEN_SNAPSHOT_FLAGS =
-  StateFlags.MAXIMIZED | StateFlags.POSITION | StateFlags.SIZE;
+const FULLSCREEN_SNAPSHOT_FLAGS = StateFlags.MAXIMIZED | StateFlags.POSITION | StateFlags.SIZE;
 
 const waitForWindowState = (ms: number) =>
   new Promise<void>((resolve) => {

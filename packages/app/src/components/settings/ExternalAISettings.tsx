@@ -20,6 +20,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Terminal,
+  Trash2,
   Wrench,
   XCircle,
 } from "lucide-react";
@@ -29,8 +30,10 @@ import { useTranslation } from "react-i18next";
 type CliAction =
   | "version"
   | "install"
+  | "uninstall"
   | "repair"
   | "agent_setup"
+  | "agent_uninstall"
   | "doctor"
   | "mcp_config"
   | "tools_list"
@@ -626,6 +629,16 @@ export function ExternalAISettings() {
     await refreshAll();
   }
 
+  async function handleUninstallExternalAccess() {
+    await runCli("agent_uninstall");
+    await refreshAll();
+  }
+
+  async function handleCliUninstall() {
+    await runCli("uninstall");
+    await refreshAll();
+  }
+
   async function copyMcpConfig() {
     if (!canCopyMcpConfig) return;
     const result = await runCli("mcp_config", { mcpProfile, mcpClient });
@@ -718,6 +731,16 @@ export function ExternalAISettings() {
             >
               <Wrench className="mr-1.5 h-3.5 w-3.5" />
               {t("settings.externalAiSettings.actions.repairExternalAI")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleUninstallExternalAccess}
+              disabled={busy}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.externalAiSettings.actions.uninstallAccess")}
             </Button>
           </div>
         </div>
@@ -937,6 +960,16 @@ export function ExternalAISettings() {
             </Button>
             <Button size="sm" variant="outline" onClick={handleCliRepair} disabled={busy}>
               {t("settings.externalAiSettings.actions.repair")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCliUninstall}
+              disabled={busy}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {t("settings.externalAiSettings.actions.uninstall")}
             </Button>
             <Button size="sm" variant="outline" onClick={copyEvidenceSnapshot} disabled={busy}>
               {copiedTarget === "evidence"

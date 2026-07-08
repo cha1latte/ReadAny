@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Clipboard,
   FileCheck2,
+  Loader2,
   PackageCheck,
   RefreshCw,
   ShieldCheck,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
 type CliAction =
   | "version"
@@ -630,12 +632,24 @@ export function ExternalAISettings() {
   }
 
   async function handleUninstallExternalAccess() {
-    await runCli("agent_uninstall");
+    const result = await runCli("agent_uninstall");
+    const parsed = parseCliJson(result);
+    if (result.ok && parsed?.ok !== false) {
+      toast.success(t("settings.externalAiSettings.output.accessUninstalled"));
+    } else {
+      toast.error(outputSummary(result, parsed, outputLabels));
+    }
     await refreshAll();
   }
 
   async function handleCliUninstall() {
-    await runCli("uninstall");
+    const result = await runCli("uninstall");
+    const parsed = parseCliJson(result);
+    if (result.ok && parsed?.ok !== false) {
+      toast.success(t("settings.externalAiSettings.output.cliUninstalled"));
+    } else {
+      toast.error(outputSummary(result, parsed, outputLabels));
+    }
     await refreshAll();
   }
 
@@ -700,6 +714,8 @@ export function ExternalAISettings() {
   }, []);
 
   const busy = loadingAction !== null;
+  const uninstallingAccess = loadingAction === "agent_uninstall";
+  const uninstallingCli = loadingAction === "uninstall";
 
   return (
     <div className="space-y-3 p-4 pt-3">
@@ -739,7 +755,11 @@ export function ExternalAISettings() {
               disabled={busy}
               className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {uninstallingAccess ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
               {t("settings.externalAiSettings.actions.uninstallAccess")}
             </Button>
           </div>
@@ -968,7 +988,11 @@ export function ExternalAISettings() {
               disabled={busy}
               className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {uninstallingCli ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              )}
               {t("settings.externalAiSettings.actions.uninstall")}
             </Button>
             <Button size="sm" variant="outline" onClick={copyEvidenceSnapshot} disabled={busy}>

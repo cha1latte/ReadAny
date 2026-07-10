@@ -353,6 +353,7 @@
       if (currentViewMode === 'scroll') {
         renderer.removeAttribute('no-continuous-scroll');
         renderer.setAttribute('flow', 'scrolled');
+        renderer.setAttribute('max-block-size', '100%');
         renderer.setAttribute('max-inline-size', '9999px');
         return;
       }

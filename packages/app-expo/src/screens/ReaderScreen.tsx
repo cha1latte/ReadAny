@@ -151,11 +151,7 @@ const NOTE_TOOLTIP_TOP_THRESHOLD = 180;
 import { useRubyStore } from "@readany/core/stores/ruby-store";
 import { ReaderSettingsPanel } from "./reader/ReaderSettingsPanel";
 import { ReaderTOCPanel } from "./reader/ReaderTOCPanel";
-import {
-  CONTROLS_TIMEOUT,
-  SCREEN_HEIGHT,
-  SCREEN_WIDTH,
-} from "./reader/reader-constants";
+import { CONTROLS_TIMEOUT, SCREEN_HEIGHT, SCREEN_WIDTH } from "./reader/reader-constants";
 import { BatteryIcon, ListIcon, SettingsIcon } from "./reader/reader-icons";
 import { makeStyles, noteTooltipMdStyles } from "./reader/reader-styles";
 import { useReaderBookmark } from "./reader/useReaderBookmark";
@@ -176,12 +172,14 @@ type PendingRelocateState = {
   pageCurrent: number;
   pageTotal: number;
   chapter?: string;
-  context?: {
-    chapterIndex: number;
-    chapterTitle: string;
-    chapterHref: string;
-    percentage: number;
-  };
+};
+type PendingReadingContextState = {
+  bookId: string;
+  cfi?: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  chapterHref: string;
+  percentage: number;
 };
 
 // ──────────────────────────── helpers ────────────────────────────
@@ -217,6 +215,24 @@ function buildCustomFontFaceCSS(
     })
     .filter(Boolean)
     .join("\n");
+}
+
+function syncReadingContextFromRelocate(pending: PendingReadingContextState | null): void {
+  if (!pending) return;
+  const currentBook = useLibraryStore.getState().books.find((item) => item.id === pending.bookId);
+  readingContextService.updateContext({
+    bookId: pending.bookId,
+    bookTitle: currentBook?.meta?.title || "",
+    currentChapter: {
+      index: pending.chapterIndex,
+      title: pending.chapterTitle,
+      href: pending.chapterHref,
+    },
+    currentPosition: {
+      cfi: pending.cfi || "",
+      percentage: pending.percentage,
+    },
+  });
 }
 
 // ──────────────────────────── ReaderScreen ────────────────────────────
@@ -366,7 +382,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const lastNavigatedCfiRef = useRef<string | undefined>(undefined);
   const fileServerRef = useRef<string | null>(null);
   const pendingRelocateStateRef = useRef<PendingRelocateState | null>(null);
-  const lastRelocateContextUpdateAtRef = useRef(0);
+  const pendingReadingContextRef = useRef<PendingReadingContextState | null>(null);
   const isMountedRef = useRef(true);
   const sessionProgressRef = useRef<{
     mode: "location" | "page" | "characters";
@@ -408,26 +424,15 @@ export function ReaderScreen({ route, navigation }: Props) {
       setTotalPages(pending.pageTotal);
       if (pending.chapter) setCurrentChapter(pending.chapter);
       if (pending.cfi) setCurrentCfi(pending.cfi);
-
-      if (pending.context) {
-        const currentBook = useLibraryStore
-          .getState()
-          .books.find((item) => item.id === pending.bookId);
-        readingContextService.updateContext({
-          bookId: pending.bookId,
-          bookTitle: currentBook?.meta?.title || "",
-          currentChapter: {
-            index: pending.context.chapterIndex,
-            title: pending.context.chapterTitle,
-            href: pending.context.chapterHref,
-          },
-          currentPosition: {
-            cfi: pending.cfi || "",
-            percentage: pending.context.percentage,
-          },
-        });
-      }
     }, RELOCATE_UI_UPDATE_MS),
+  ).current;
+  const flushPendingReadingContext = useRef(
+    throttle(() => {
+      if (!isMountedRef.current) return;
+      const pending = pendingReadingContextRef.current;
+      pendingReadingContextRef.current = null;
+      syncReadingContextFromRelocate(pending);
+    }, RELOCATE_CONTEXT_UPDATE_MS),
   ).current;
   const {
     addHighlight,
@@ -791,13 +796,6 @@ export function ReaderScreen({ route, navigation }: Props) {
         throttledSaveProgress(bookId, detail.fraction ?? 0, detail.cfi);
       }
 
-      const now = Date.now();
-      const shouldUpdateReadingContext =
-        lastRelocateContextUpdateAtRef.current === 0 ||
-        now - lastRelocateContextUpdateAtRef.current >= RELOCATE_CONTEXT_UPDATE_MS;
-      if (shouldUpdateReadingContext) {
-        lastRelocateContextUpdateAtRef.current = now;
-      }
       pendingRelocateStateRef.current = {
         bookId,
         fraction: detail.fraction,
@@ -805,16 +803,17 @@ export function ReaderScreen({ route, navigation }: Props) {
         pageCurrent: nextPageCurrent,
         pageTotal: nextPageTotal,
         chapter: detail.tocItem?.label,
-        context: shouldUpdateReadingContext
-          ? {
-              chapterIndex: detail.section?.current ?? 0,
-              chapterTitle: detail.tocItem?.label || "",
-              chapterHref: detail.tocItem?.href || "",
-              percentage: (detail.fraction ?? 0) * 100,
-            }
-          : pendingRelocateStateRef.current?.context,
       };
       flushPendingRelocateState();
+      pendingReadingContextRef.current = {
+        bookId,
+        cfi: detail.cfi,
+        chapterIndex: detail.section?.current ?? 0,
+        chapterTitle: detail.tocItem?.label || "",
+        chapterHref: detail.tocItem?.href || "",
+        percentage: (detail.fraction ?? 0) * 100,
+      };
+      flushPendingReadingContext();
 
       // Mark translation ready after first successful relocate (CFI navigation done)
       if (!translationReady) setTranslationReady(true);
@@ -960,10 +959,25 @@ export function ReaderScreen({ route, navigation }: Props) {
       appActive,
     // 维护约定：任何新增遮盖正文/输入态/导航跳转，必须在此追加判定。
     [
-      readSettings.volumeButtonsPageTurn, webViewReady, loading, error, isReimporting,
-      showSearch, showTOC, showSettings, showNotebook, showTTS,
-      showTranslation, showChapterTranslation, chapterTranslation.state.status,
-      selection, noteViewHighlight, noteTooltip, ttsPlayState, isFocused, appActive,
+      readSettings.volumeButtonsPageTurn,
+      webViewReady,
+      loading,
+      error,
+      isReimporting,
+      showSearch,
+      showTOC,
+      showSettings,
+      showNotebook,
+      showTTS,
+      showTranslation,
+      showChapterTranslation,
+      chapterTranslation.state.status,
+      selection,
+      noteViewHighlight,
+      noteTooltip,
+      ttsPlayState,
+      isFocused,
+      appActive,
     ],
   );
 
@@ -1133,8 +1147,17 @@ export function ReaderScreen({ route, navigation }: Props) {
   // Save progress immediately on unmount
   useEffect(() => {
     return () => {
-      isMountedRef.current = false;
+      const pendingRelocate = pendingRelocateStateRef.current;
+      if (pendingRelocate?.fraction != null) {
+        progressRef.current = pendingRelocate.fraction;
+      }
+      if (pendingRelocate?.cfi) {
+        lastCfiRef.current = pendingRelocate.cfi;
+      }
+      syncReadingContextFromRelocate(pendingReadingContextRef.current);
       pendingRelocateStateRef.current = null;
+      pendingReadingContextRef.current = null;
+      isMountedRef.current = false;
       if (fileServerRef.current) {
         stopFileServer();
         fileServerRef.current = null;

@@ -224,6 +224,29 @@ function getPlayerForConfig(config: TTSConfig): ITTSPlayer {
   return getSystemTTS();
 }
 
+function applyPlayerMetadataGetters(player: ITTSPlayer, get: () => TTSState): void {
+  if (
+    "setArtworkGetter" in player &&
+    typeof (player as { setArtworkGetter?: unknown }).setArtworkGetter === "function"
+  ) {
+    (player as { setArtworkGetter: (getter: () => string | undefined) => void }).setArtworkGetter(
+      () => get().currentArtwork || undefined,
+    );
+  }
+
+  if (
+    "setTitleGetter" in player &&
+    typeof (player as { setTitleGetter?: unknown }).setTitleGetter === "function"
+  ) {
+    (player as { setTitleGetter: (getter: () => string | undefined) => void }).setTitleGetter(
+      () => {
+        const state = get();
+        return state.currentChapterTitle || state.currentBookTitle || undefined;
+      },
+    );
+  }
+}
+
 function startPlayback(
   segments: string[],
   config: TTSConfig,
@@ -236,29 +259,7 @@ function startPlayback(
   let isStarting = true;
   _activeTTS = player;
 
-  // Set artwork getter for RNTP players
-  if (
-    "setArtworkGetter" in player &&
-    typeof (player as { setArtworkGetter?: unknown }).setArtworkGetter === "function"
-  ) {
-    (player as { setArtworkGetter: (getter: () => string | undefined) => void }).setArtworkGetter(
-      () => get().currentArtwork || undefined,
-    );
-  }
-
-  // Set title getter for RNTP players — chapter name shown on lock screen
-  // / control center / notification, with fallback to book title.
-  if (
-    "setTitleGetter" in player &&
-    typeof (player as { setTitleGetter?: unknown }).setTitleGetter === "function"
-  ) {
-    (player as { setTitleGetter: (getter: () => string | undefined) => void }).setTitleGetter(
-      () => {
-        const state = get();
-        return state.currentChapterTitle || state.currentBookTitle || undefined;
-      },
-    );
-  }
+  applyPlayerMetadataGetters(player, get);
 
   player.onStateChange = (playState) => {
     if (gen !== _sessionGeneration) return;
@@ -326,6 +327,8 @@ function startSystemPlaybackWithFallback(
   const fallbackPlayer = new ExpoSpeechTTSPlayer();
   let nativeSettled = false;
   let fallbackStarted = false;
+
+  applyPlayerMetadataGetters(nativePlayer, get);
 
   const attachPlayer = (player: ITTSPlayer) => {
     _activeTTS = player;

@@ -1067,6 +1067,9 @@ export class Paginator extends HTMLElement {
             grid-row: 1 / -1;
             overflow: auto;
             overflow-anchor: auto;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
             flex-direction: column;
             background: var(--_scrollbar-track-bg, transparent);
             scrollbar-width: none;
@@ -1107,6 +1110,7 @@ export class Paginator extends HTMLElement {
         }
         :host([flow="scrolled"]) #container.vertical {
             flex-direction: row;
+            touch-action: pan-x;
         }
         #header {
             grid-column: 3 / 4;
@@ -2062,6 +2066,11 @@ export class Paginator extends HTMLElement {
     }
     #onTouchStart(e) {
         if (this.#navigationLocked) return
+        if (this.scrolled) {
+            this.#touchState = null
+            this.#touchScrolled = false
+            return
+        }
         const contents = this.getContents?.() ?? []
         for (const { doc } of contents) {
             const selection = doc?.getSelection?.()
@@ -2087,6 +2096,7 @@ export class Paginator extends HTMLElement {
     #onTouchMove(e) {
         const state = this.#touchState
         if (this.#navigationLocked || !state) return
+        if (this.scrolled) return
         const contents = this.getContents?.() ?? []
         for (const { doc } of contents) {
             const selection = doc?.getSelection?.()
@@ -2095,7 +2105,6 @@ export class Paginator extends HTMLElement {
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (state.pinched) return
-        if (this.scrolled) return
         // When the host opts out of swipe-to-paginate, let touch events reach
         // native behavior (text selection, etc.) without us tracking or
         // pre-empting them.

@@ -109,7 +109,9 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
   const handleVectorize = useCallback(
     (book: Book) => {
       const prepareAndQueue = async () => {
-        const info = await inspectMobileBookForVectorize(book);
+        const info = await inspectMobileBookForVectorize(book, {
+          maxBytes: MOBILE_AUTO_VECTORIZE_MAX_BYTES,
+        });
         if (info.reason === "unsupported-format") {
           Alert.alert(
             t("vectorize.unsupportedFormatTitle", "Unsupported format"),
@@ -132,12 +134,34 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
         }
         if (info.reason === "file-too-large") {
           const maxMb = Math.round(MOBILE_AUTO_VECTORIZE_MAX_BYTES / 1024 / 1024);
+          const shouldContinue = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              t("vectorize.largeBookTitle", "文件较大"),
+              t("vectorize.largeBookDesc", {
+                maxMb,
+                defaultValue: `这本书超过 ${maxMb}MB，移动端向量化可能较慢并占用较多内存。仍要继续吗？`,
+              }),
+              [
+                {
+                  text: t("common.cancel", "取消"),
+                  style: "cancel",
+                  onPress: () => resolve(false),
+                },
+                {
+                  text: t("common.continue", "继续"),
+                  onPress: () => resolve(true),
+                },
+              ],
+              { cancelable: true, onDismiss: () => resolve(false) },
+            );
+          });
+          if (!shouldContinue) {
+            return;
+          }
+        } else if (!info.canVectorize) {
           Alert.alert(
-            t("vectorize.tooLargeTitle", "文件过大"),
-            t("vectorize.tooLargeDesc", {
-              maxMb,
-              defaultValue: `移动端暂不处理超过 ${maxMb}MB 的书籍向量化，请在桌面端处理或换用更小的文件。`,
-            }),
+            t("common.error", "Error"),
+            t("vectorize.prepareFailed", "Failed to prepare vectorization."),
           );
           return;
         }

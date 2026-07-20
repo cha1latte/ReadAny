@@ -39,7 +39,10 @@ export async function getMobileBookFileSize(filePath: string): Promise<number | 
   return typeof info.size === "number" ? info.size : null;
 }
 
-export async function inspectMobileBookForVectorize(book: Book): Promise<{
+export async function inspectMobileBookForVectorize(
+  book: Book,
+  options?: { maxBytes?: number },
+): Promise<{
   absPath: string;
   mimeType: string | null;
   size: number | null;
@@ -56,7 +59,7 @@ export async function inspectMobileBookForVectorize(book: Book): Promise<{
   if (size == null) {
     return { absPath, mimeType, size, canVectorize: false, reason: "missing-file" };
   }
-  if (size > MOBILE_AUTO_VECTORIZE_MAX_BYTES) {
+  if (options?.maxBytes != null && size > options.maxBytes) {
     return { absPath, mimeType, size, canVectorize: false, reason: "file-too-large" };
   }
 
@@ -64,7 +67,9 @@ export async function inspectMobileBookForVectorize(book: Book): Promise<{
 }
 
 export async function queueBookForAutoVectorize(book: Book): Promise<boolean> {
-  const info = await inspectMobileBookForVectorize(book);
+  const info = await inspectMobileBookForVectorize(book, {
+    maxBytes: MOBILE_AUTO_VECTORIZE_MAX_BYTES,
+  });
   if (!info.canVectorize || !info.mimeType) {
     console.warn(
       `[AutoVectorize] Skip mobile book: ${book.meta.title} (${info.reason}, size=${info.size ?? "unknown"}, format=${book.format})`,

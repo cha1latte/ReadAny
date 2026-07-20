@@ -1,5 +1,8 @@
 import type { ExtractorRef } from "@/components/rag/ExtractorWebView";
-import { inspectMobileBookForVectorize } from "@/lib/rag/auto-vectorize-book";
+import {
+  MOBILE_AUTO_VECTORIZE_MAX_BYTES,
+  inspectMobileBookForVectorize,
+} from "@/lib/rag/auto-vectorize-book";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useVectorModelStore } from "@/stores/vector-model-store";
@@ -124,6 +127,17 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
               "vectorize.missingFileDesc",
               "The local book file is missing. Please download or re-import it.",
             ),
+          );
+          return;
+        }
+        if (info.reason === "file-too-large") {
+          const maxMb = Math.round(MOBILE_AUTO_VECTORIZE_MAX_BYTES / 1024 / 1024);
+          Alert.alert(
+            t("vectorize.tooLargeTitle", "文件过大"),
+            t("vectorize.tooLargeDesc", {
+              maxMb,
+              defaultValue: `移动端暂不处理超过 ${maxMb}MB 的书籍向量化，请在桌面端处理或换用更小的文件。`,
+            }),
           );
           return;
         }

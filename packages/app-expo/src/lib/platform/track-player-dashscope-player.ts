@@ -27,6 +27,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
 
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
   onChunkChange?: (index: number, total: number) => void;
+  onError?: (error: Error) => void;
   onEnd?: () => void;
 
   private _stopped = false;
@@ -66,15 +67,13 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     await this._cleanup();
     if (gen !== this._speakGen) return;
 
+    this._stopped = false;
+    this._paused = false;
     if (!config.dashscopeApiKey) {
-      console.warn("[TrackPlayerDashScopeTTSPlayer] No API key provided");
-      this.onStateChange?.("stopped");
-      this.onEnd?.();
+      this._failPlayback(new Error("DashScope API key is required"));
       return;
     }
 
-    this._stopped = false;
-    this._paused = false;
     this._config = config;
     this._downloadComplete = false;
     this._retryCount = 0;
@@ -182,8 +181,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
           TrackPlayer.retry().catch(() => {});
         } else {
           console.error("[TrackPlayerDashScopeTTSPlayer] playback error, max retries reached");
-          this._stopped = true;
-          this.onStateChange?.("stopped");
+          this._failPlayback(new Error("DashScope playback failed after retries"));
         }
       } else if (event.state === State.Ended || event.state === State.Stopped) {
         this._handlePlaybackEnded(gen);
@@ -274,8 +272,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     } catch (err) {
       if (!this._stopped && (err as Error)?.message !== "aborted") {
         console.error("[TrackPlayerDashScopeTTSPlayer] download error:", err);
-        this._stopped = true;
-        this.onStateChange?.("stopped");
+        this._failPlayback(err);
       }
     }
   }
@@ -629,6 +626,16 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     this._stopProgressPolling();
     this.onStateChange?.("stopped");
     this.onEnd?.();
+  }
+
+  private _failPlayback(error: unknown): void {
+    if (this._stopped) return;
+    this._stopped = true;
+    this._paused = false;
+    this._queueStarved = false;
+    this._stopProgressPolling();
+    this.onStateChange?.("stopped");
+    this.onError?.(error instanceof Error ? error : new Error(String(error)));
   }
 
   private async _fetchChunkFile(index: number, gen: number): Promise<string> {

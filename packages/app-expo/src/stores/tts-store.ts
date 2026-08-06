@@ -117,6 +117,7 @@ function detachAndStopPlayer(player: ITTSPlayer | null): void {
   if (!player) return;
   player.onStateChange = undefined;
   player.onChunkChange = undefined;
+  player.onError = undefined;
   player.onEnd = undefined;
   try {
     player.stop();
@@ -204,7 +205,7 @@ function syncProfileUpdatesFromLegacyFields(
 }
 
 function getPlayerForConfig(config: TTSConfig): ITTSPlayer {
-  if (config.engine === "dashscope" && config.dashscopeApiKey) {
+  if (config.engine === "dashscope") {
     return getDashScopeTTS();
   }
   if (config.engine === "edge") {
@@ -288,6 +289,13 @@ function startPlayback(
       totalChunks: _sessionSegments.length,
       currentSegmentText: _sessionSegments[absoluteIndex] || "",
     });
+  };
+
+  player.onError = (error) => {
+    if (gen !== _sessionGeneration) return;
+    console.error("[TTSStore][player] error", error);
+    _activeTTS = null;
+    set({ playState: "stopped" });
   };
 
   player.onEnd = () => {

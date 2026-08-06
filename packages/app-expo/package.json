@@ -32,6 +32,7 @@
     "build:reader": "node scripts/build-reader.js",
     "sync:native-variant": "node scripts/configure-native-variant.js",
     "lint": "biome check .",
+    "test": "vitest run",
     "eas-build-pre-install": "bash scripts/eas-install-ios-build-tools.sh",
     "eas-build-post-install": "pnpm run build:reader && node scripts/configure-native-variant.js",
     "eas:device:create": "pnpm exec eas device:create",
@@ -117,6 +118,7 @@
     "eas-cli": "^18.11.0",
     "esbuild": "^0.27.3",
     "react-native-svg-transformer": "^1.5.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
   }
 }

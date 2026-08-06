@@ -406,6 +406,8 @@ export interface ITTSPlayer {
 
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
   onChunkChange?: (index: number, total: number) => void;
+  /** Called when playback cannot continue. Must not be followed by onEnd. */
+  onError?: (error: Error) => void;
   /** Called when all chunks finish playing naturally (not by stop()) */
   onEnd?: () => void;
 }

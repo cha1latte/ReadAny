@@ -3,6 +3,7 @@ package expo.modules.systemttssynthesis
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
@@ -27,6 +28,7 @@ class SystemTtsSynthesisModule : Module() {
 
   private val pendingRequests = ArrayDeque<PendingRequest>()
   private val pendingPromises = mutableMapOf<String, Promise>()
+  private val pendingVoicePromises = ArrayDeque<Promise>()
   private var tts: TextToSpeech? = null
   private var ready = false
   private var failedInit = false
@@ -41,9 +43,23 @@ class SystemTtsSynthesisModule : Module() {
     OnDestroy {
       pendingRequests.clear()
       pendingPromises.clear()
+      pendingVoicePromises.clear()
       tts?.shutdown()
       tts = null
       ready = false
+    }
+
+    AsyncFunction("getVoices") { promise: Promise ->
+      if (failedInit) {
+        promise.resolve(emptyList<Map<String, Any?>>())
+        return@AsyncFunction
+      }
+      ensureTts()
+      if (ready) {
+        promise.resolve(getVoiceRecords())
+      } else {
+        pendingVoicePromises.add(promise)
+      }
     }
 
     AsyncFunction("synthesizeToFile") { text: String, options: SynthesisOptions, promise: Promise ->
@@ -104,7 +120,26 @@ class SystemTtsSynthesisModule : Module() {
         }
       })
 
+      while (pendingVoicePromises.isNotEmpty()) {
+        pendingVoicePromises.removeFirst().resolve(getVoiceRecords())
+      }
+
       flushPendingRequests()
+    }
+  }
+
+  private fun getVoiceRecords(): List<Map<String, Any?>> {
+    return try {
+      tts?.voices?.map { voice ->
+        mapOf(
+          "identifier" to voice.name,
+          "name" to voice.name,
+          "language" to voice.locale.toLanguageTag(),
+          "quality" to if (voice.quality > Voice.QUALITY_NORMAL) "Enhanced" else "Default",
+        )
+      } ?: emptyList()
+    } catch (_: Exception) {
+      emptyList()
     }
   }
 

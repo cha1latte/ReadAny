@@ -34,6 +34,7 @@ function extensionForConfig(config: TTSConfig): string {
 export class TrackPlayerCloudTTSPlayer implements ITTSPlayer {
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
   onChunkChange?: (index: number, total: number) => void;
+  onError?: (error: Error) => void;
   onEnd?: () => void;
 
   private _stopped = true;
@@ -174,7 +175,7 @@ export class TrackPlayerCloudTTSPlayer implements ITTSPlayer {
     } catch (error) {
       if ((error as Error)?.message === "aborted" || isTTSAbortError(error)) return;
       console.warn("[TrackPlayerCloudTTSPlayer] chunk error:", error);
-      await this._skipFailedChunk(index, gen);
+      this._failPlayback(error);
     }
   }
 
@@ -223,16 +224,6 @@ export class TrackPlayerCloudTTSPlayer implements ITTSPlayer {
     if (!this._endWatchdog) return;
     clearInterval(this._endWatchdog);
     this._endWatchdog = null;
-  }
-
-  private async _skipFailedChunk(index: number, gen: number): Promise<void> {
-    if (gen !== this._speakGen || this._stopped || this._paused) return;
-    const next = index + 1;
-    if (next >= this._chunks.length) {
-      this._finishPlayback();
-      return;
-    }
-    await this._playChunk(next, gen);
   }
 
   private _prefetchUpcomingChunks(index: number, gen: number): void {
@@ -326,6 +317,18 @@ export class TrackPlayerCloudTTSPlayer implements ITTSPlayer {
     this._cleanupEvents();
     this.onStateChange?.("stopped");
     this.onEnd?.();
+  }
+
+  private _failPlayback(error: unknown): void {
+    if (this._stopped) return;
+    this._stopped = true;
+    this._paused = false;
+    this._clearEndWatchdog();
+    this._cleanupEvents();
+    TrackPlayer.stop().catch(() => {});
+    TrackPlayer.reset().catch(() => {});
+    this.onStateChange?.("stopped");
+    this.onError?.(error instanceof Error ? error : new Error(String(error)));
   }
 
   private async _cleanup(): Promise<void> {

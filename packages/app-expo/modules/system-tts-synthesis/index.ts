@@ -2,6 +2,14 @@ import { NativeModule, requireNativeModule } from "expo";
 import { Platform } from "react-native";
 
 declare class SystemTtsSynthesisModule extends NativeModule {
+  getVoices(): Promise<
+    Array<{
+      identifier: string;
+      name: string;
+      language: string;
+      quality: "Default" | "Enhanced";
+    }>
+  >;
   synthesizeToFile(
     text: string,
     options: {
@@ -14,6 +22,7 @@ declare class SystemTtsSynthesisModule extends NativeModule {
 }
 
 const noop = {
+  getVoices: async () => [],
   synthesizeToFile: async () => {
     throw new Error("SystemTtsSynthesis module is unavailable");
   },

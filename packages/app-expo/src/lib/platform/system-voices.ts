@@ -1,5 +1,7 @@
 import * as Speech from "expo-speech";
+import { Platform } from "react-native";
 import { compareVoiceLanguage } from "@readany/core/tts";
+import SystemTtsSynthesis from "../../../modules/system-tts-synthesis";
 
 export const DEFAULT_SYSTEM_VOICE_VALUE = "__default__";
 
@@ -12,7 +14,14 @@ export interface NativeSystemVoiceOption {
 
 export async function getSystemVoiceOptionsAsync(): Promise<NativeSystemVoiceOption[]> {
   try {
-    const voices = await Speech.getAvailableVoicesAsync();
+    // On Android, expo-speech creates a separate TextToSpeech instance for
+    // getAvailableVoicesAsync(). Some vendor engines (notably ColorOS) crash
+    // in that second instance's onInit callback while another TTS is active.
+    // Reuse the app's synthesis module instead.
+    const voices =
+      Platform.OS === "android"
+        ? await SystemTtsSynthesis.getVoices()
+        : await Speech.getAvailableVoicesAsync();
     const deduped = new Map<string, NativeSystemVoiceOption>();
     for (const voice of voices) {
       const option = {

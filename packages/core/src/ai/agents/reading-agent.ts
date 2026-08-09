@@ -29,6 +29,32 @@ const CHAPTER_TASK_RECURSION_LIMIT = 24;
 const DEFAULT_TOOL_TIMEOUT_MS = 45_000;
 const TOOL_EXECUTION_LIMIT = 12;
 const REPEATED_TOOL_CALL_LIMIT = 2;
+const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
+  getSelection: 5_000,
+  getCurrentChapter: 5_000,
+  getReadingProgress: 5_000,
+  getSurroundingContext: 8_000,
+  getRecentHighlights: 8_000,
+  getAnnotations: 8_000,
+  addCitation: 20_000,
+  ragSearch: 30_000,
+  ragToc: 20_000,
+  ragContext: 30_000,
+  summarize: 35_000,
+  extractEntities: 35_000,
+  analyzeArguments: 35_000,
+  findQuotes: 35_000,
+  compareSections: 35_000,
+  fallbackSearch: 60_000,
+  fallbackToc: 45_000,
+  fallbackChapterContext: 60_000,
+  classifyBooks: 60_000,
+  tagBooks: 30_000,
+  manageBookTags: 30_000,
+  updateBookMetadata: 30_000,
+  manageBookGroups: 30_000,
+  mindmap: 10_000,
+};
 
 const CHAPTER_LOOKUP_STOP_TOOL_NAMES = new Set([
   "resolveChapterReference",
@@ -553,13 +579,36 @@ function buildZodSchema(
 
     switch (param.type) {
       case "number":
-        fieldSchema = z.number().describe(param.description);
+        fieldSchema = z
+          .preprocess((value) => {
+            if (typeof value !== "string" || !value.trim()) return value;
+            const numberValue = Number(value);
+            return Number.isFinite(numberValue) ? numberValue : value;
+          }, z.number())
+          .describe(param.description);
         break;
       case "boolean":
-        fieldSchema = z.boolean().describe(param.description);
+        fieldSchema = z
+          .preprocess((value) => {
+            if (typeof value !== "string") return value;
+            const normalized = value.trim().toLowerCase();
+            if (normalized === "true") return true;
+            if (normalized === "false") return false;
+            return value;
+          }, z.boolean())
+          .describe(param.description);
         break;
       default:
-        fieldSchema = z.string().describe(param.description);
+        fieldSchema = /json/i.test(param.description)
+          ? z
+              .preprocess((value) => {
+                if (Array.isArray(value) || (value && typeof value === "object")) {
+                  return JSON.stringify(value);
+                }
+                return value;
+              }, z.string())
+              .describe(param.description)
+          : z.string().describe(param.description);
         break;
     }
 
@@ -592,16 +641,68 @@ function withToolTimeout<T>(promise: Promise<T>, timeoutMs: number, toolName: st
   });
 }
 
+function getToolTimeoutMs(tool: ToolDefinition, defaultTimeoutMs: number): number {
+  return tool.timeoutMs ?? TOOL_TIMEOUT_MS_BY_NAME[tool.name] ?? defaultTimeoutMs;
+}
+
+function compactToolLogValue(value: unknown, maxLength = 240): unknown {
+  if (typeof value === "string") {
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength)}...(${value.length} chars)`;
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 8).map((item) => compactToolLogValue(item, 120));
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const result: Record<string, unknown> = {};
+  for (const [key, childValue] of Object.entries(value as Record<string, unknown>).slice(0, 12)) {
+    result[key] = compactToolLogValue(childValue, 120);
+  }
+  return result;
+}
+
 async function executeTool(
   tool: ToolDefinition,
   args: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<unknown> {
+  const startedAt = Date.now();
+  console.log(
+    "[ReadingAgent][tool-start]",
+    JSON.stringify({
+      name: tool.name,
+      timeoutMs,
+      args: compactToolLogValue(args),
+    }),
+  );
   try {
-    return await withToolTimeout(Promise.resolve(tool.execute(args)), timeoutMs, tool.name);
+    const result = await withToolTimeout(Promise.resolve(tool.execute(args)), timeoutMs, tool.name);
+    console.log(
+      "[ReadingAgent][tool-end]",
+      JSON.stringify({
+        name: tool.name,
+        durationMs: Date.now() - startedAt,
+        ok: true,
+        result: compactToolLogValue(result),
+      }),
+    );
+    return result;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const payload = {
+      name: tool.name,
+      durationMs: Date.now() - startedAt,
+      ok: false,
+      error: message,
+    };
+    if (/timed out/i.test(message)) {
+      console.warn("[ReadingAgent][tool-timeout]", JSON.stringify(payload));
+    } else {
+      console.warn("[ReadingAgent][tool-error]", JSON.stringify(payload));
+    }
     return {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     };
   }
 }
@@ -947,7 +1048,7 @@ export async function* streamReadingAgent(
             return JSON.stringify(cachedResult);
           }
 
-          const result = await executeTool(tool, toolInput, toolTimeoutMs);
+          const result = await executeTool(tool, toolInput, getToolTimeoutMs(tool, toolTimeoutMs));
           if (exactCacheKey) {
             toolResultCache.set(exactCacheKey, result);
           }
@@ -991,8 +1092,8 @@ export async function* streamReadingAgent(
     );
 
     // Track tool calls already emitted (from streaming chunks or on_chat_model_end)
-    // so we can deduplicate against on_tool_start events.
-    let pendingEarlyToolCalls = 0;
+    // so we can deduplicate against on_tool_start events without hiding unrelated calls.
+    const pendingEarlyToolStartNames: string[] = [];
 
     // Accumulate tool_call_chunks from streaming to emit tool_call as early as possible.
     // Key: chunk index, Value: { name accumulated so far, args accumulated so far }
@@ -1100,7 +1201,7 @@ export async function* streamReadingAgent(
               // Emit as soon as we have a tool name (don't wait for full args)
               if (entry.name && !entry.emitted) {
                 entry.emitted = true;
-                pendingEarlyToolCalls++;
+                pendingEarlyToolStartNames.push(entry.name);
                 yield {
                   type: "tool_call" as const,
                   name: entry.name,
@@ -1132,25 +1233,38 @@ export async function* streamReadingAgent(
 
         if (output) {
           if (Array.isArray(toolCalls)) {
+            const alreadyEmittedNames = [...pendingEarlyToolStartNames];
             for (const tc of toolCalls) {
+              const toolName =
+                typeof tc?.name === "string"
+                  ? tc.name
+                  : typeof tc?.function?.name === "string"
+                    ? tc.function.name
+                    : "";
+              if (!toolName) continue;
+
               // Check if already emitted from streaming chunks
-              if (pendingEarlyToolCalls > 0) {
-                // Already emitted — skip but don't decrement yet (that's for on_tool_start)
+              const alreadyEmittedIndex = alreadyEmittedNames.findIndex(
+                (name) => name === toolName,
+              );
+              if (alreadyEmittedIndex >= 0) {
+                alreadyEmittedNames.splice(alreadyEmittedIndex, 1);
                 continue;
               }
               let args: Record<string, unknown>;
+              const rawArgs = tc.args ?? tc.function?.arguments;
               try {
-                args = (typeof tc.args === "string" ? JSON.parse(tc.args) : tc.args) as Record<
+                args = (typeof rawArgs === "string" ? JSON.parse(rawArgs) : rawArgs) as Record<
                   string,
                   unknown
                 >;
               } catch {
                 args = {};
               }
-              pendingEarlyToolCalls++;
+              pendingEarlyToolStartNames.push(toolName);
               yield {
                 type: "tool_call" as const,
-                name: tc.name,
+                name: toolName,
                 args,
               };
             }
@@ -1161,8 +1275,11 @@ export async function* streamReadingAgent(
       // Tool call started — skip if already emitted earlier
       if (event.event === "on_tool_start") {
         pendingToolCallNames.push(event.name);
-        if (pendingEarlyToolCalls > 0) {
-          pendingEarlyToolCalls--;
+        const pendingEarlyIndex = pendingEarlyToolStartNames.findIndex(
+          (name) => name === event.name,
+        );
+        if (pendingEarlyIndex >= 0) {
+          pendingEarlyToolStartNames.splice(pendingEarlyIndex, 1);
         } else {
           // Fallback: emit if not already emitted (e.g. non-OpenAI model)
           yield {

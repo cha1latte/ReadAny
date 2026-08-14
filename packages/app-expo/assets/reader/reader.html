@@ -2378,6 +2378,31 @@ html, body {
       return childStyle.writingMode === 'vertical-rl' || childStyle.writingMode === 'vertical-lr';
     }
 
+    function getColorLuminance(color) {
+      const match = color && color.match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);
+      if (!match) return 1;
+      const channels = match.slice(1, 4).map((value) => Number(value) / 255);
+      return channels.reduce((sum, channel) => sum + channel, 0) / channels.length;
+    }
+
+    // EPUBs often hard-code black/dark-gray body text. In dark mode, only
+    // brighten simple text leaves with transparent backgrounds; preserve
+    // links, code, media, and nested/colorful markup authored by the book.
+    function compensateDarkText(doc, foreground, background) {
+      const darkTheme = getColorLuminance(background) < 0.35;
+      const candidates = doc.querySelectorAll('p, div, span, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label');
+      for (const element of candidates) {
+        element.style.removeProperty('--readany-dark-text-color');
+        if (!darkTheme || /^(a|code|pre|kbd|samp)$/i.test(element.tagName)) continue;
+        if (!Array.from(element.childNodes).some((node) => node.nodeType === 3 && node.nodeValue.trim())) continue;
+        const computed = doc.defaultView.getComputedStyle(element);
+        if (computed.backgroundColor !== 'rgba(0, 0, 0, 0)' && computed.backgroundColor !== 'transparent') continue;
+        if (getColorLuminance(computed.color) >= 0.22) continue;
+        element.style.setProperty('--readany-dark-text-color', foreground);
+        element.style.setProperty('color', 'var(--readany-dark-text-color)', 'important');
+      }
+    }
+
     function applyDocStyles(doc) {
       if (currentBookIsPdf) {
         const styleId = '__readany_pdf_styles__';
@@ -2414,6 +2439,7 @@ html, body {
         ${verticalDoc ? getVerticalWritingCompatibilityStyles() : ''}
       `;
       doc.head.appendChild(style);
+      compensateDarkText(doc, fg, bg);
       if (lastRendererStyles) {
         const themedStyles = injectThemeIntoStyles(
           lastRendererStyles,

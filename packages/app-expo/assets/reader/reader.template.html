@@ -2510,6 +2510,10 @@ a { color: ${primary} !important; }
 
         const state = tapState;
         tapState = null;
+        if (doc.__readany_selection_tap_guard_until > Date.now() && !doc.__readany_selection_tap_guard_consumed) {
+          doc.__readany_selection_tap_guard_consumed = true;
+          return;
+        }
         if (!state || state.moved || e.changedTouches.length !== 1) return;
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
         const touch = e.changedTouches[0];
@@ -2800,6 +2804,10 @@ a { color: ${primary} !important; }
     function emitSelection(doc, sel, range) {
       const text = getRangeTextWithoutRuby(range, sel.toString());
       if (!text) return;
+      // iOS may emit one synthetic tap 100-200ms after the selection handle is
+      // released. Consume only that one trailing tap; later user taps remain
+      // available for immediate page navigation.
+      armSelectionTapGuardForDocument(doc);
 
       const rect = range.getBoundingClientRect();
       const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
@@ -2827,6 +2835,11 @@ a { color: ${primary} !important; }
           selectionBottom: iframeRect.top + lastRect.bottom,
         },
       });
+    }
+
+    function armSelectionTapGuardForDocument(doc) {
+      doc.__readany_selection_tap_guard_until = Date.now() + 250;
+      doc.__readany_selection_tap_guard_consumed = false;
     }
 
     // ─── TOC conversion ───

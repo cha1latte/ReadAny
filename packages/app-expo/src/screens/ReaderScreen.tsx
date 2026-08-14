@@ -259,10 +259,6 @@ export function ReaderScreen({ route, navigation }: Props) {
   const noteTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteTooltipVisibleRef = useRef(false);
   const suppressReaderTapUntilRef = useRef(0);
-  // iOS can dispatch the WebView tap that ends a long-press/drag selection
-  // after the selection event, especially when the handle is near an edge.
-  // Keep the suppression in a ref so the bridge callback always sees it.
-  const selectionGestureSuppressMs = 900;
   const assetLoadedRef = useRef(false);
   // Mediator ref so onRelocate can fire TTS continuation without direct hook dependency
   const ttsPendingContinueRef = useRef<{
@@ -790,9 +786,6 @@ export function ReaderScreen({ route, navigation }: Props) {
       setToc(items);
     },
     onSelection: (detail: SelectionEvent) => {
-      // A selection release must never be interpreted as the reader tap that
-      // toggles controls (or advances a page at the WebView layer).
-      suppressReaderTapUntilRef.current = Date.now() + selectionGestureSuppressMs;
       setSelection(detail);
       // Sync selection for AI tools
       if (detail.cfi) {
@@ -805,10 +798,6 @@ export function ReaderScreen({ route, navigation }: Props) {
       }
     },
     onSelectionCleared: () => {
-      // Clearing a selection is also commonly the tail end of a long press.
-      // Suppress the trailing tap so an edge selection cannot turn into a page
-      // navigation when iOS sends both events in the same gesture.
-      suppressReaderTapUntilRef.current = Date.now() + selectionGestureSuppressMs;
       setSelection(null);
       readingContextService.clearSelection();
     },

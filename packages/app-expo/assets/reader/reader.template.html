@@ -2246,10 +2246,6 @@ html, body {
   background-color: ${bg} !important;
   color: ${fg} !important;
 }
-p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label, a {
-  color: inherit !important;
-}
-a { color: ${primary} !important; }
 ::selection { background: rgba(59, 130, 246, 0.3) !important; }
 /* __end_theme_colors__ */`;
       return themeBlock + '\n' + cleaned;
@@ -2414,8 +2410,6 @@ a { color: ${primary} !important; }
           -webkit-user-drag: none !important;
           touch-action: manipulation !important;
         }
-        p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label { color: inherit !important; }
-        a { color: ${primary} !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
         ${verticalDoc ? getVerticalWritingCompatibilityStyles() : ''}
       `;

@@ -1274,10 +1274,10 @@
           await openBook(msg);
           break;
         case 'goNext':
-          if (view) await goNextByMode();
+          if (view) await goNextByMode(undefined, 'rn:goNext');
           break;
         case 'goPrev':
-          if (view) await goPrevByMode();
+          if (view) await goPrevByMode(undefined, 'rn:goPrev');
           break;
         case 'goToFraction':
           if (view && msg.fraction != null) await view.goToFraction(msg.fraction);
@@ -1995,21 +1995,55 @@
       return Math.max(1, (Number.isFinite(size) && size > 0 ? size : fallbackSize) - 96);
     }
 
-    async function goNextByMode(distance) {
+    function readerNavDebug(event, detail) {
+      try {
+        postToRN('debug', {
+          message: `[ReaderNav] ${Date.now()} ${event} ${JSON.stringify(detail || {})}`,
+        });
+      } catch {}
+    }
+
+    async function goNextByMode(distance, source) {
       if (!view) return;
-      if (view.renderer && view.renderer.scrolled) {
-        await view.next(Math.max(1, Number(distance || getScrollNavigationDistance())));
-      } else {
-        await view.next();
+      const detail = {
+        source: source || 'unknown',
+        mode: view.renderer && view.renderer.scrolled ? 'scroll' : 'paginated',
+        section: currentSectionIndex,
+        navigationLocked: !!(view.renderer && view.renderer.navigationLocked),
+      };
+      readerNavDebug('next:start', detail);
+      try {
+        if (view.renderer && view.renderer.scrolled) {
+          await view.next(Math.max(1, Number(distance || getScrollNavigationDistance())));
+        } else {
+          await view.next();
+        }
+        readerNavDebug('next:done', detail);
+      } catch (error) {
+        readerNavDebug('next:error', { ...detail, error: String(error) });
+        throw error;
       }
     }
 
-    async function goPrevByMode(distance) {
+    async function goPrevByMode(distance, source) {
       if (!view) return;
-      if (view.renderer && view.renderer.scrolled) {
-        await view.prev(Math.max(1, Number(distance || getScrollNavigationDistance())));
-      } else {
-        await view.prev();
+      const detail = {
+        source: source || 'unknown',
+        mode: view.renderer && view.renderer.scrolled ? 'scroll' : 'paginated',
+        section: currentSectionIndex,
+        navigationLocked: !!(view.renderer && view.renderer.navigationLocked),
+      };
+      readerNavDebug('prev:start', detail);
+      try {
+        if (view.renderer && view.renderer.scrolled) {
+          await view.prev(Math.max(1, Number(distance || getScrollNavigationDistance())));
+        } else {
+          await view.prev();
+        }
+        readerNavDebug('prev:done', detail);
+      } catch (error) {
+        readerNavDebug('prev:error', { ...detail, error: String(error) });
+        throw error;
       }
     }
 
@@ -2499,6 +2533,11 @@ a { color: ${primary} !important; }
       }, { passive: true });
 
       doc.addEventListener('touchend', (e) => {
+        if (doc.__readany_selection_tap_guard_until > Date.now() && !doc.__readany_selection_tap_guard_consumed) {
+          doc.__readany_selection_tap_guard_consumed = true;
+          tapState = null;
+          return;
+        }
         if (bookmarkPullGestureActive || tapNavigationInFlight) {
           tapState = null;
           return;
@@ -2510,10 +2549,6 @@ a { color: ${primary} !important; }
 
         const state = tapState;
         tapState = null;
-        if (doc.__readany_selection_tap_guard_until > Date.now() && !doc.__readany_selection_tap_guard_consumed) {
-          doc.__readany_selection_tap_guard_consumed = true;
-          return;
-        }
         if (!state || state.moved || e.changedTouches.length !== 1) return;
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
         const touch = e.changedTouches[0];
@@ -2575,9 +2610,9 @@ a { color: ${primary} !important; }
         e.stopPropagation();
 
         if (normalizedX < centerStart) {
-          if (view) goPrevByMode();
+          if (view) goPrevByMode(undefined, 'tap:left');
         } else {
-          if (view) goNextByMode();
+          if (view) goNextByMode(undefined, 'tap:right');
         }
       }, { passive: false, capture: true });
     }
@@ -2744,10 +2779,15 @@ a { color: ${primary} !important; }
 
       doc.addEventListener('touchend', () => {
         if (!isIOSLike) return;
+        const currentSelection = doc.getSelection();
+        if (currentSelection && !currentSelection.isCollapsed && currentSelection.toString().trim()) {
+          armSelectionTapGuardForDocument(doc);
+        }
         setTimeout(() => {
           if (iosHackPending) return;
           const sel = doc.getSelection();
           if (!sel || sel.isCollapsed || !sel.toString().trim() || !sel.rangeCount) return;
+          armSelectionTapGuardForDocument(doc);
           const range = sel.getRangeAt(0);
           // iOS hack: remove and re-add to dismiss system menu
           iosHackPending = true;
@@ -2760,7 +2800,7 @@ a { color: ${primary} !important; }
             emitSelection(doc, sel, range);
           }, 30);
         }, 50);
-      }, { passive: true });
+      }, { passive: true, capture: true });
 
       doc.addEventListener('selectionchange', () => {
         if (doc.__readany_isJiggling) return;
@@ -2838,7 +2878,7 @@ a { color: ${primary} !important; }
     }
 
     function armSelectionTapGuardForDocument(doc) {
-      doc.__readany_selection_tap_guard_until = Date.now() + 250;
+      doc.__readany_selection_tap_guard_until = Date.now() + 350;
       doc.__readany_selection_tap_guard_consumed = false;
     }
 
@@ -3986,8 +4026,8 @@ a { color: ${primary} !important; }
     }
 
     // ─── Expose global functions for injectJavaScript ───
-    window.goNext = function (distance) { goNextByMode(distance); };
-    window.goPrev = function (distance) { goPrevByMode(distance); };
+    window.goNext = function (distance) { goNextByMode(distance, 'api:goNext'); };
+    window.goPrev = function (distance) { goPrevByMode(distance, 'api:goPrev'); };
     window.goLeft = function () { if (view) view.goLeft(); };
     window.goRight = function () { if (view) view.goRight(); };
     window.goToHref = function (href) { if (view) view.goTo(href); };

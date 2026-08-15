@@ -1648,6 +1648,13 @@ export class Paginator extends HTMLElement {
                 this.render()
                 break
             case 'gap':
+                // percentage (e.g. "7%"); sets --_gap which drives the column
+                // gap, the per-page side padding and the outer spacing. (This
+                // was previously conflated with `margin`, so --_gap never got
+                // updated from the attribute and stayed at its 7% default.)
+                this.#top.style.setProperty('--_gap', value)
+                this.render()
+                break
             case 'margin':
                 this.#top.style.setProperty('--_margin-top', value)
                 this.#top.style.setProperty('--_margin-right', value)

@@ -3352,16 +3352,27 @@ function getRendererStyles(settings: ViewSettings, theme: AppTheme): string {
   const layoutScale = settings.fontSize / BASELINE_FONT_SIZE;
   const scaledParagraphSpacing = Math.round(settings.paragraphSpacing * layoutScale);
 
-  // When useBookFonts is enabled (default), do not force the reader font
-  // family onto every element so the book's own fonts (e.g. embedded
-  // @font-face families) render where the book specifies them.
-  const bodyStarFontOverride =
+  // When useBookFonts is enabled (default), do not force the reader font onto
+  // html/body with !important: the book's own font-family (on html, body, or
+  // any element) must win where specified, so body text follows the book too.
+  // The reader font stays as a zero-specificity fallback via :where(). Target
+  // only `html` (not body): body then INHERITS html's font-family, so when the
+  // book sets one on html it propagates to body text instead of body being
+  // pinned to the reader font by a direct rule. When disabled, force the
+  // reader font on html/body and every descendant.
+  const readerFontOverride =
     settings.useBookFonts === false
-      ? `body *:not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *) {
+      ? `html, body {
+  font-family: var(--readany-font-family) !important;
+}
+body *:not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *) {
   font-family: var(--readany-font-family) !important;
 }
 `
-      : "";
+      : `:where(html) {
+  font-family: var(--readany-font-family);
+}
+`;
 
   return `${settings.customFontFaceCSS ? `/* Custom font faces */\n${settings.customFontFaceCSS}\n\n` : ""}/* Font styles */
 html {
@@ -3375,13 +3386,12 @@ html {
 html, body {
   background-color: ${bgColor} !important;
   color: ${fgColor} !important;
-  font-family: var(--readany-font-family) !important;
   font-size: ${settings.fontSize}px !important;
   -webkit-text-size-adjust: none;
   text-size-adjust: none;
 }
 
-${bodyStarFontOverride}
+${readerFontOverride}
 body :not(#__readany_font_size_override):not(svg):not(svg *):not(math):not(math *):not(pre):not(pre *):not(code):not(code *):not(kbd):not(kbd *):not(samp):not(samp *):not(rt):not(rp) {
   font-size: ${settings.fontSize}px !important;
 }

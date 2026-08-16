@@ -227,6 +227,7 @@ const expectedReleaseSteps: WorkflowStep[] = [
 
 const expectReleaseWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
+  expect(Object.keys(workflow).sort()).toEqual(["jobs", "name", "on", "permissions"]);
   expect(Object.keys(workflow.on ?? {})).toEqual(["workflow_dispatch"]);
   expect(workflow.permissions).toEqual({ contents: "read" });
 
@@ -251,6 +252,16 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(Object.keys(jobs).sort()).toEqual(["release", "validate"]);
   const validate = jobs.validate;
   const release = jobs.release;
+  expect(Object.keys(validate ?? {}).sort()).toEqual(["name", "runs-on", "steps"]);
+  expect(Object.keys(release ?? {}).sort()).toEqual([
+    "env",
+    "environment",
+    "name",
+    "needs",
+    "permissions",
+    "runs-on",
+    "steps",
+  ]);
   expect(validate?.name).toBe("Validate");
   expect(release?.name).toBe("Release ReadAny Shlai");
   expect(release?.needs).toBe("validate");
@@ -481,6 +492,14 @@ const unsafeMutations = [
 ] as const;
 
 const unsafeReleaseMutations = [
+  {
+    name: "top-level shell default",
+    mutate: (source: string) =>
+      source.replace(
+        "permissions:\n  contents: read",
+        "defaults:\n  run:\n    shell: bash\n\npermissions:\n  contents: read",
+      ),
+  },
   {
     name: "pull request trigger",
     mutate: (source: string) =>

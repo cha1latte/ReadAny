@@ -11,6 +11,7 @@ type WorkflowStep = {
   name?: string;
   uses?: string;
   run?: string;
+  "continue-on-error"?: unknown;
   env?: Record<string, unknown>;
   with?: Record<string, unknown>;
 };
@@ -138,22 +139,21 @@ const releaseSecretNames = [
   "SHLAI_ANDROID_KEY_PASSWORD",
 ] as const;
 
-const secretExpressionPattern =
-  /\$\{\{\s*secrets\s*(?:\.\s*[A-Za-z_][A-Za-z0-9_]*|\[\s*["'][^"']+["']\s*\])\s*}}/g;
+const secretContextAccessPattern = /\bsecrets\s*(?:\.|\[)/gi;
 
-const collectSecretExpressions = (value: unknown): string[] => {
+const collectSecretContextAccesses = (value: unknown): string[] => {
   if (typeof value === "string") {
-    return [...value.matchAll(secretExpressionPattern)].map(([match]) => match);
+    return [...value.matchAll(secretContextAccessPattern)].map(([match]) => match);
   }
   if (Array.isArray(value)) {
-    return value.flatMap(collectSecretExpressions);
+    return value.flatMap(collectSecretContextAccesses);
   }
   if (!value || typeof value !== "object") {
     return [];
   }
   return Object.entries(value).flatMap(([key, nestedValue]) => [
-    ...collectSecretExpressions(key),
-    ...collectSecretExpressions(nestedValue),
+    ...collectSecretContextAccesses(key),
+    ...collectSecretContextAccesses(nestedValue),
   ]);
 };
 
@@ -238,9 +238,11 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(release?.["continue-on-error"]).toBeUndefined();
   expect(validate?.permissions).toBeUndefined();
   expect(validate?.environment).toBeUndefined();
-  expect(workflow.env).toBeUndefined();
   expect(hasParsedKey(workflow, "secrets")).toBe(false);
-  expect(collectSecretExpressions(validate)).toEqual([]);
+  expect(collectSecretContextAccesses(validate)).toEqual([]);
+  for (const step of validate?.steps ?? []) {
+    expect(step["continue-on-error"] ?? false).toBe(false);
+  }
 
   expect(release?.permissions).toEqual({ contents: "write" });
   expect(release?.environment).toBe("shlai-production");
@@ -252,15 +254,14 @@ const expectReleaseWorkflowContract = (source: string) => {
     ...Object.fromEntries(releaseSecretNames.map((name) => [name, `\${{ secrets.${name} }}`])),
   });
   const { env: releaseEnv, ...releaseWithoutEnv } = release ?? {};
-  expect(collectSecretExpressions(releaseWithoutEnv)).toEqual([]);
-  expect(collectSecretExpressions(releaseEnv)).toEqual(
-    releaseSecretNames.map((name) => `\${{ secrets.${name} }}`),
+  expect(collectSecretContextAccesses(releaseWithoutEnv)).toEqual([]);
+  expect(collectSecretContextAccesses(releaseEnv)).toEqual(
+    releaseSecretNames.map(() => "secrets."),
   );
   expect(
-    collectSecretExpressions({
-      on: workflow.on,
-      permissions: workflow.permissions,
-      jobs: Object.fromEntries(Object.entries(jobs).filter(([jobId]) => jobId !== "release")),
+    collectSecretContextAccesses({
+      ...workflow,
+      jobs: { ...jobs, release: releaseWithoutEnv },
     }),
   ).toEqual([]);
   expectPnpmBeforeCachedNodeSetup(jobs);
@@ -290,6 +291,21 @@ const expectReleaseWorkflowContract = (source: string) => {
   );
   expect(buildSteps).toHaveLength(1);
   expect(buildSteps[0]?.run?.replaceAll("\r\n", "\n").trim()).toBe(stableReleaseScript);
+
+  const nonBuildReleaseSteps = releaseSteps.filter((step) => step !== buildSteps[0]);
+  const nonBuildReleaseActions = nonBuildReleaseSteps
+    .map((step) => step.uses)
+    .filter((action): action is string => typeof action === "string");
+  const nonBuildReleaseCommands = nonBuildReleaseSteps
+    .map((step) => step.run)
+    .filter((command): command is string => typeof command === "string");
+  expect(
+    nonBuildReleaseActions.some((action) => /\b(?:publish|release|upload)\w*/i.test(action)),
+  ).toBe(false);
+  expect(nonBuildReleaseCommands.some((command) => /\bgh\s+release\b/i.test(command))).toBe(false);
+  expect(
+    nonBuildReleaseCommands.some((command) => /\b(?:publish|release|upload)\w*/i.test(command)),
+  ).toBe(false);
 };
 
 const addWrongCacheOrderJob = (source: string, jobId: string) =>
@@ -515,6 +531,14 @@ const unsafeReleaseMutations = [
       ),
   },
   {
+    name: "required validation test errors are ignored",
+    mutate: (source: string) =>
+      source.replace(
+        "      - run: pnpm --filter @readany/core test",
+        "      - run: pnpm --filter @readany/core test\n        continue-on-error: true",
+      ),
+  },
+  {
     name: "validate secret",
     mutate: (source: string) =>
       source.replace(
@@ -536,6 +560,22 @@ const unsafeReleaseMutations = [
       source.replace(
         "permissions:\n  contents: read",
         "env:\n  TOKEN: ${{ secrets.UNRELATED_TOKEN }}\n\npermissions:\n  contents: read",
+      ),
+  },
+  {
+    name: "compound secret expression",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate",
+        "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ secrets.UNRELATED_TOKEN || '' }}",
+      ),
+  },
+  {
+    name: "dynamic bracket secret expression",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate",
+        "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ secrets[inputs.secret_name] }}",
       ),
   },
   {
@@ -592,6 +632,22 @@ const unsafeReleaseMutations = [
       source.replace(
         "      - uses: pnpm/action-setup@v3\n        with:\n          version: 9.15.0\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20.18.0\n          cache: pnpm\n",
         "      - uses: actions/setup-node@v4\n        with:\n          node-version: 20.18.0\n          cache: pnpm\n      - uses: pnpm/action-setup@v3\n        with:\n          version: 9.15.0\n",
+      ),
+  },
+  {
+    name: "separate release command",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Build, sign, verify, and publish APK",
+        "      - run: gh release upload release-tag ReadAny-Shlai.apk --clobber\n      - name: Build, sign, verify, and publish APK",
+      ),
+  },
+  {
+    name: "separate release action",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Build, sign, verify, and publish APK",
+        "      - uses: softprops/action-gh-release@v2\n      - name: Build, sign, verify, and publish APK",
       ),
   },
 ] as const;

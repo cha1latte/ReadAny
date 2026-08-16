@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasMissingBookMetadataAutoFillTargets,
   mergeBookMetadataSources,
   mergeMissingBookMetadataValues,
 } from "./book-metadata";
@@ -53,4 +54,24 @@ it("does not copy subjects into user tags during details repair", () => {
   const next = mergeMissingBookMetadataValues(values, { subjects: ["History"] });
   expect(next?.subjectsText).toBe("History");
   expect(next?.tagsText).toBe("");
+});
+
+it("does not request autofill when publication metadata is complete and tags are empty", () => {
+  expect(
+    hasMissingBookMetadataAutoFillTargets({
+      title: "Book",
+      author: "Author",
+      coverUrl: "",
+      publisher: "Publisher",
+      language: "en",
+      isbn: "9781234567890",
+      publishDate: "2024",
+      rating: null,
+      description: "Description",
+      reviews: [],
+      subjectsText: "History",
+      tagsText: "",
+      groupId: "",
+    }),
+  ).toBe(false);
 });

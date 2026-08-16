@@ -81,8 +81,7 @@ export function hasMissingBookMetadataAutoFillTargets(values: BookMetadataFormVa
     !values.isbn.trim() ||
     !values.publishDate.trim() ||
     !values.description.trim() ||
-    !values.subjectsText.trim() ||
-    !values.tagsText.trim()
+    !values.subjectsText.trim()
   );
 }
 

@@ -302,7 +302,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       foreground: string;
       muted: string;
       primary?: string;
-      themeMode?: "light" | "dark" | "sepia";
+      themeMode?: "light" | "dark" | "sepia" | "oled";
     }) => {
       const msg = JSON.stringify({ type: "setThemeColors", colors, themeMode: colors.themeMode });
       inject(`handleCommand(${msg})`);

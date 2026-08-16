@@ -41,7 +41,7 @@ const LINKS = [
   { label: "Report a Shlai issue", url: "https://github.com/cha1latte/ReadAny/issues" },
 ];
 
-const FORK_NOTICE = "Unofficial GPL-3.0 fork of ReadAny maintained by Chai.";
+const FORK_NOTICE = "Unofficial GPL-3.0-or-later fork of ReadAny maintained by Chai.";
 
 export default function AboutScreen() {
   const colors = useColors();
@@ -102,7 +102,7 @@ export default function AboutScreen() {
             <Text style={styles.appName}>ReadAny Shlai</Text>
             <Text style={styles.version}>v{version}</Text>
             <Text style={styles.desc}>
-              {t("about.desc", "一个跨平台的智能电子书阅读器，支持 AI 对话、TTS 朗读、多语言翻译")}
+              {t("about.desc", "ReadAny 的非官方 Android 分支，支持 AI 对话、TTS 朗读和多语言翻译")}
             </Text>
             <Text style={styles.forkNotice}>{FORK_NOTICE}</Text>
           </View>

@@ -125,7 +125,7 @@ export function AnimatedSplash({ onFinish }: Props) {
         <Animated.View style={ghostStyle}>
           <Animated.View style={bookStyle}>
             <Image
-              source={require("../../../assets/splash-icon.png")}
+              source={require("../../../assets/shlai/splash-icon.png")}
               style={{ width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: LOGO_SIZE * 0.18 }}
               resizeMode="contain"
             />

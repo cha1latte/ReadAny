@@ -22,7 +22,7 @@ import { File, Paths } from "expo-file-system";
 import { LinearGradient } from "expo-linear-gradient";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
-import AppIcon from "../../assets/icon.png";
+import AppIcon from "../../assets/shlai/icon.png";
 import {
   Alert,
   Image,

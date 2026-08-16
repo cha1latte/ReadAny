@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **ReadAny Shlai** is an unofficial GPL-3.0 fork maintained at
+> **ReadAny Shlai** — Unofficial GPL-3.0-or-later fork maintained at
 > [cha1latte/ReadAny](https://github.com/cha1latte/ReadAny). The official project is
 > [codedogQBY/ReadAny](https://github.com/codedogQBY/ReadAny). Shlai Android releases use a
 > separate package and do not replace the official app.
@@ -326,9 +326,9 @@ Please run `pnpm lint` before submitting to ensure code style consistency.
 
 ## License
 
-[GPL-3.0](LICENSE) © 2024 ReadAny Team
+[GPL-3.0-or-later](LICENSE) © 2024 ReadAny Team
 
-This project is open source under the GNU General Public License v3.0. You are free to use, modify, and distribute the code, but any derivative works must also be open source under the same license.
+This project is open source under the GNU General Public License version 3 or later. You are free to use, modify, and distribute the code, but any derivative works must also be open source under the same license.
 
 **Note:** While the source code is freely available, the official app store versions may be offered for a fee to support ongoing development and cover certificate costs. You can always build the app yourself at no cost.
 

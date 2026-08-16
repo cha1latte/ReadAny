@@ -238,7 +238,7 @@ extra: {
 },
 ```
 
-Do not retain the official Expo `projectId` or App Store `ascAppId`. Set `appVersionSource` to `local` in `packages/app-expo/eas.json` and keep only the `development`, `development-simulator`, and `preview` build profiles. Remove the unsupported production EAS profiles plus the generic `eas:build:android` and `eas:build:ios` scripts from both package files; the named development and preview scripts remain. Remove the inherited Android `build-android` job from `.github/workflows/release.yml` and make its desktop updater job depend only on `build`, so no legacy workflow references the deleted `production-apk` profile. Stable Shlai Android builds use only `.github/workflows/shlai-release.yml`; stable iOS distribution remains unsupported. Update hard-coded development schemes in `packages/app-expo/package.json` to `readany-shlai-dev`.
+Do not retain the official Expo `projectId` or App Store `ascAppId`. Set `appVersionSource` to `local` in `packages/app-expo/eas.json` and keep only the `development`, `development-simulator`, and `preview` build profiles. Remove the unsupported production EAS profiles plus the generic `eas:build:android` and `eas:build:ios` scripts from both package files; the named development and preview scripts remain. The variant-aware EAS post-install hook must configure the same standalone Android autolinking exclusions as the GitHub preview workflow while leaving development-client profiles untouched, and the Android preview Gradle command must use the bounded 4 GB heap. Remove the inherited Android `build-android` job from `.github/workflows/release.yml` and make its desktop updater job depend only on `build`, so no legacy workflow references the deleted `production-apk` profile. Stable Shlai Android builds use only `.github/workflows/shlai-release.yml`; stable iOS distribution remains unsupported. Update hard-coded development schemes in `packages/app-expo/package.json` to `readany-shlai-dev`.
 
 Broaden the three iOS replacement patterns in `configure-native-variant.js` so they recognize both inherited official identifiers and all Shlai identifiers before substituting `variant` values. This preserves local tooling without adding iOS distribution.
 
@@ -667,10 +667,11 @@ jobs:
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @readany/app-expo run build:reader
+      - run: node packages/app-expo/scripts/configure-standalone-autolinking.js packages/app-expo/package.json
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
       - name: Build preview APK
         working-directory: packages/app-expo/android
-        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" assembleRelease -PreactNativeArchitectures=arm64-v8a
       - name: Stage preview APK
         shell: bash
         run: |
@@ -687,18 +688,20 @@ jobs:
 
 ```powershell
 pnpm --filter @readany/app-expo exec vitest run src/config/shlai-workflows.test.ts
-$env:APP_VARIANT='preview'; $env:SHLAI_UPSTREAM_VERSION='1.3.5'; $env:SHLAI_REVISION='0'; $env:SHLAI_VERSION_CODE='1'; pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
+$env:APP_VARIANT='preview'; $env:SHLAI_UPSTREAM_VERSION='1.3.5'; $env:SHLAI_REVISION='0'; $env:SHLAI_VERSION_CODE='1'
+node packages/app-expo/scripts/configure-standalone-autolinking.js packages/app-expo/package.json
+pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
 Set-Location packages/app-expo/android
-.\gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
+.\gradlew.bat --no-daemon '-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g' assembleRelease -PreactNativeArchitectures=arm64-v8a
 Set-Location ../../../
 ```
 
-Expected: workflow contract PASS and `packages/app-expo/android/app/build/outputs/apk/release/app-release.apk` exists with preview package identity, bundled JavaScript, and no Expo development launcher.
+Expected: workflow contract PASS and `packages/app-expo/android/app/build/outputs/apk/release/app-release.apk` exists with preview package identity, bundled JavaScript, and no Expo development launcher. The standalone-autolinking script deliberately changes `packages/app-expo/package.json` only in the disposable build checkout; discard that generated manifest change after a local proof.
 
 - [ ] **Step 5: Commit the preview workflow slice**
 
 ```powershell
-git add .github/workflows/shlai-pr.yml packages/app-expo/src/config/shlai-workflows.test.ts
+git add .github/workflows/shlai-pr.yml packages/app-expo/scripts/configure-standalone-autolinking.js packages/app-expo/src/config/shlai-app-config.test.ts packages/app-expo/src/config/shlai-workflows.test.ts
 git commit -m "ci: build Shlai pull request previews"
 ```
 
@@ -760,14 +763,14 @@ RELEASE_ROWS="$(printf '%s' "$RELEASES_JSON" | jq -r '.[][] | select(.draft == f
 
 It accepts only exact stable tags matching `^shlai-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.([1-9][0-9]*)$`, selects the greatest four-component tuple with the tested `decimal_gt` and `tuple_gt` string comparators, and requires the requested tuple to be strictly greater. When a prior stable release exists, its body must contain exactly one line matching `^Android versionCode: ([1-9][0-9]*)$`; that value must be bounded and the requested Android version code must be strictly greater. API, JSON, or provenance errors fail the job. Only the first stable release may proceed without prior metadata.
 
-After `validate` succeeds, the separate secret-free `build` job checks out the repository, installs pinned Node, pnpm, Java, Android tooling, and Build Tools `36.0.0`, generates the reader assets, runs Expo prebuild, and builds only the unsigned arm64 package:
+After `validate` succeeds, the separate secret-free `build` job checks out the repository, installs pinned Node, pnpm, Java, Android tooling, and Build Tools `36.0.0`, generates the reader assets, temporarily configures package-level Expo autolinking to exclude the development launcher modules, runs Expo prebuild, and builds only the unsigned arm64 package:
 
 ```bash
 set -euo pipefail
 
 node packages/app-expo/scripts/remove-release-debug-signing.js packages/app-expo/android/app/build.gradle
 cd packages/app-expo/android
-./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" assembleRelease -PreactNativeArchitectures=arm64-v8a
 cd ../../..
 
 UNSIGNED_APK="packages/app-expo/android/app/build/outputs/apk/release/app-release-unsigned.apk"

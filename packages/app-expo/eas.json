@@ -29,7 +29,7 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
+        "gradleCommand": "--no-daemon -Dorg.gradle.jvmargs=\"-Xmx4g -XX:MaxMetaspaceSize=1g\" :app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       },
       "ios": {
         "simulator": false

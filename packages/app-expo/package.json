@@ -31,7 +31,7 @@
     "lint": "biome check .",
     "test": "vitest run",
     "eas-build-pre-install": "bash scripts/eas-install-ios-build-tools.sh",
-    "eas-build-post-install": "pnpm run build:reader && node scripts/configure-native-variant.js",
+    "eas-build-post-install": "pnpm run build:reader && node scripts/configure-native-variant.js && node scripts/configure-standalone-autolinking.js package.json",
     "eas:device:create": "pnpm exec eas device:create",
     "eas:build:android:dev": "APP_VARIANT=development pnpm exec eas build --profile development --platform android",
     "eas:build:android:preview": "APP_VARIANT=preview pnpm exec eas build --profile preview --platform android",

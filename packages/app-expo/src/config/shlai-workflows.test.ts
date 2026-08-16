@@ -123,6 +123,14 @@ const expectPreviewWorkflowContract = (source: string) => {
 
   const previewSteps = preview?.steps ?? [];
   expect(previewSteps.map((step) => step.uses)).toContain(actionPins.android);
+  const standaloneAutolinkingIndex = previewSteps.findIndex(
+    (step) => step.run === configureStandaloneAutolinkingCommand,
+  );
+  const prebuildIndex = previewSteps.findIndex(
+    (step) => step.run?.includes("expo prebuild") === true,
+  );
+  expect(standaloneAutolinkingIndex).toBeGreaterThanOrEqual(0);
+  expect(standaloneAutolinkingIndex).toBeLessThan(prebuildIndex);
   const prebuildCommands = previewSteps
     .map((step) => step.run)
     .filter((command): command is string => command?.includes("expo prebuild") === true);
@@ -133,9 +141,7 @@ const expectPreviewWorkflowContract = (source: string) => {
   const assembleCommands = previewSteps
     .map((step) => step.run)
     .filter((command): command is string => command?.includes("assemble") === true);
-  expect(assembleCommands).toEqual([
-    "./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a",
-  ]);
+  expect(assembleCommands).toEqual([releaseGradleCommand]);
   const architecture = assembleCommands[0]?.match(/-PreactNativeArchitectures=([^\s]+)/)?.[1];
   expect(architecture).toBe("arm64-v8a");
 
@@ -195,12 +201,16 @@ const actionVersionComments = {
 } as const;
 
 const androidBuildToolsVersion = "36.0.0";
+const configureStandaloneAutolinkingCommand =
+  "node packages/app-expo/scripts/configure-standalone-autolinking.js packages/app-expo/package.json";
+const releaseGradleCommand =
+  './gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" assembleRelease -PreactNativeArchitectures=arm64-v8a';
 
 const unsignedBuildScript = `set -euo pipefail
 
 node packages/app-expo/scripts/remove-release-debug-signing.js packages/app-expo/android/app/build.gradle
 cd packages/app-expo/android
-./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+${releaseGradleCommand}
 cd ../../..
 
 UNSIGNED_APK="packages/app-expo/android/app/build/outputs/apk/release/app-release-unsigned.apk"
@@ -300,6 +310,7 @@ const expectedBuildSteps: WorkflowStep[] = [
   },
   { run: "pnpm install --frozen-lockfile" },
   { run: "pnpm --filter @readany/app-expo run build:reader" },
+  { run: configureStandaloneAutolinkingCommand },
   {
     run: "pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install",
   },
@@ -1098,8 +1109,8 @@ const unsafeReleaseMutations = [
     name: "release build injects signing properties",
     mutate: (source: string) =>
       source.replace(
-        "./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a",
-        "./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -Pandroid.injected.signing.store.file=unsafe.jks",
+        releaseGradleCommand,
+        `${releaseGradleCommand} -Pandroid.injected.signing.store.file=unsafe.jks`,
       ),
   },
   {

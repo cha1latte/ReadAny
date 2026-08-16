@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,10 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const { APP_VARIANTS } = require("../../scripts/app-variant.js");
 const { getShlaiVersionConfig } = require("../../scripts/shlai-version.js");
+const standaloneAutolinkingScriptPath = resolve(
+  import.meta.dirname,
+  "../../scripts/configure-standalone-autolinking.js",
+);
 
 const loadExpoConfig = (variant: "development" | "preview" | "production") => {
   const configPath = resolve(import.meta.dirname, "../../app.config.js");
@@ -41,6 +45,50 @@ describe("ReadAny Shlai app configuration", () => {
     }
   });
 
+  it("excludes development-only Expo modules from standalone native builds", () => {
+    expect(existsSync(standaloneAutolinkingScriptPath)).toBe(true);
+    if (!existsSync(standaloneAutolinkingScriptPath)) return;
+
+    const { configureStandaloneAutolinking } = require(standaloneAutolinkingScriptPath);
+    const configured = configureStandaloneAutolinking({
+      name: "test-app",
+      expo: {
+        autolinking: {
+          exclude: ["globally-excluded"],
+          android: { exclude: ["already-excluded"] },
+        },
+      },
+    });
+    expect(configured).toEqual({
+      name: "test-app",
+      expo: {
+        autolinking: {
+          exclude: ["globally-excluded"],
+          android: {
+            exclude: [
+              "globally-excluded",
+              "already-excluded",
+              "expo-dev-client",
+              "expo-dev-launcher",
+              "expo-dev-menu",
+              "expo-dev-menu-interface",
+            ],
+          },
+        },
+      },
+    });
+  });
+
+  it("keeps the Expo development client in development EAS builds only", () => {
+    const { shouldConfigureStandaloneAutolinking } = require(standaloneAutolinkingScriptPath);
+    expect(shouldConfigureStandaloneAutolinking({ APP_VARIANT: "development" })).toBe(false);
+    expect(
+      shouldConfigureStandaloneAutolinking({ EAS_BUILD_PROFILE: "development-simulator" }),
+    ).toBe(false);
+    expect(shouldConfigureStandaloneAutolinking({ APP_VARIANT: "preview" })).toBe(true);
+    expect(shouldConfigureStandaloneAutolinking({ APP_VARIANT: "production" })).toBe(true);
+  });
+
   it("keeps EAS limited to development and preview builds", () => {
     const root = resolve(import.meta.dirname, "../../../..");
     const eas = JSON.parse(readFileSync(resolve(root, "packages/app-expo/eas.json"), "utf8"));
@@ -66,6 +114,13 @@ describe("ReadAny Shlai app configuration", () => {
         /^eas:build:(android|ios)$/.test(name),
       ),
     ).toEqual([]);
+    expect(expoPackage.scripts["eas-build-post-install"]).toContain(
+      "node scripts/configure-standalone-autolinking.js package.json",
+    );
+    expect(expoPackage.expo.autolinking?.android?.exclude).toBeUndefined();
+    expect(eas.build.preview.android.gradleCommand).toBe(
+      '--no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" :app:assembleRelease -PreactNativeArchitectures=arm64-v8a',
+    );
     expect(legacyReleaseWorkflow).not.toContain("production-apk");
     expect(legacyReleaseWorkflow).not.toContain("build-android:");
   });

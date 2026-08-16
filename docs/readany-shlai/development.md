@@ -50,6 +50,8 @@ GitHub places `pull_request` workflows created by automation using `GITHUB_TOKEN
 
 Every pull request to `main` runs the secret-free **Shlai Pull Request** workflow. After its `Preview APK` job succeeds, open that workflow run in GitHub Actions and download the artifact named `ReadAny-Shlai-Preview-<PR number>`. The downloaded ZIP contains `ReadAny-Shlai-Preview-<PR number>.apk`; extract it and install that APK for review. It is a self-contained release-mode preview with bundled JavaScript and no Expo development launcher or Metro dependency. Preview artifacts are retained for 14 days.
 
+The GitHub workflows and the variant-aware EAS post-install hook temporarily add package-level Expo autolinking exclusions for `expo-dev-client`, `expo-dev-launcher`, and their menu modules before native generation. This keeps development-client builds untouched while preventing every supported preview and stable Android APK from opening a blank launcher screen. Android release builds also use a bounded 4 GB Gradle heap so R8 can finish on hosted runners.
+
 The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so it can be installed alongside official ReadAny and stable ReadAny Shlai without changing either app's data.
 
 ## No secrets in development or previews

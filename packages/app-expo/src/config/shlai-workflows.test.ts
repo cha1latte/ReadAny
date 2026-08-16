@@ -196,8 +196,16 @@ if [[ ! "\$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]; then
   echo "Invalid positive Shlai revision: \$INPUT_REVISION" >&2
   exit 1
 fi
+if (( \${#INPUT_REVISION} > 16 )) || { (( \${#INPUT_REVISION} == 16 )) && [[ "\$INPUT_REVISION" > "9007199254740991" ]]; }; then
+  echo "Shlai revision exceeds JavaScript's maximum safe integer." >&2
+  exit 1
+fi
 if [[ ! "\$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
   echo "Invalid positive Android version code: \$INPUT_VERSION_CODE" >&2
+  exit 1
+fi
+if (( \${#INPUT_VERSION_CODE} > 10 )) || { (( \${#INPUT_VERSION_CODE} == 10 )) && [[ "\$INPUT_VERSION_CODE" > "2100000000" ]]; }; then
+  echo "Android version code exceeds 2100000000." >&2
   exit 1
 fi`;
 
@@ -642,6 +650,11 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(sign?.steps).toEqual(expectedSignSteps);
   const finalStep = sign?.steps?.at(-1);
   expect(finalStep?.env).toEqual(expectedSignSteps.at(-1)?.env);
+  expect(finalStep?.env?.SHLAI_UPSTREAM_VERSION).toBe(build?.env?.SHLAI_UPSTREAM_VERSION);
+  expect(finalStep?.env?.SHLAI_REVISION).toBe(build?.env?.SHLAI_REVISION);
+  expect(signAndPublishScript).toContain(
+    'TAG="shlai-v${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}"',
+  );
   expect(collectSecretsTokens(finalStep?.env)).toEqual(releaseSecretNames.map(() => "secrets"));
   expect(collectSecretsTokens({ ...finalStep, env: undefined })).toEqual([]);
   expect(collectSecretsTokens(sign?.steps?.slice(0, -1))).toEqual([]);
@@ -1128,6 +1141,30 @@ const unsafeReleaseMutations = [
       source.replace(
         'if [[ ! "$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]',
         'if [[ ! "$INPUT_VERSION_CODE" =~ ^[0-9]+$ ]]',
+      ),
+  },
+  {
+    name: "revision accepts Number.MAX_SAFE_INTEGER plus one",
+    mutate: (source: string) => source.replace("9007199254740991", "9007199254740992"),
+  },
+  {
+    name: "revision upper bound is omitted",
+    mutate: (source: string) =>
+      source.replace(
+        '          if (( ${#INPUT_REVISION} > 16 )) || { (( ${#INPUT_REVISION} == 16 )) && [[ "$INPUT_REVISION" > "9007199254740991" ]]; }; then\n            echo "Shlai revision exceeds JavaScript\'s maximum safe integer." >&2\n            exit 1\n          fi\n',
+        "",
+      ),
+  },
+  {
+    name: "Android version code accepts 2100000001",
+    mutate: (source: string) => source.replaceAll("2100000000", "2100000001"),
+  },
+  {
+    name: "Android version-code upper bound is omitted",
+    mutate: (source: string) =>
+      source.replace(
+        '          if (( ${#INPUT_VERSION_CODE} > 10 )) || { (( ${#INPUT_VERSION_CODE} == 10 )) && [[ "$INPUT_VERSION_CODE" > "2100000000" ]]; }; then\n            echo "Android version code exceeds 2100000000." >&2\n            exit 1\n          fi\n',
+        "",
       ),
   },
   {

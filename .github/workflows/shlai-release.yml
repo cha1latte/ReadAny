@@ -46,8 +46,16 @@ jobs:
             echo "Invalid positive Shlai revision: $INPUT_REVISION" >&2
             exit 1
           fi
+          if (( ${#INPUT_REVISION} > 16 )) || { (( ${#INPUT_REVISION} == 16 )) && [[ "$INPUT_REVISION" > "9007199254740991" ]]; }; then
+            echo "Shlai revision exceeds JavaScript's maximum safe integer." >&2
+            exit 1
+          fi
           if [[ ! "$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
             echo "Invalid positive Android version code: $INPUT_VERSION_CODE" >&2
+            exit 1
+          fi
+          if (( ${#INPUT_VERSION_CODE} > 10 )) || { (( ${#INPUT_VERSION_CODE} == 10 )) && [[ "$INPUT_VERSION_CODE" > "2100000000" ]]; }; then
+            echo "Android version code exceeds 2100000000." >&2
             exit 1
           fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

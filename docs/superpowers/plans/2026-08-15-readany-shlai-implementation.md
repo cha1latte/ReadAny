@@ -960,11 +960,11 @@ Before continuing, Celia verifies two encrypted copies in two independent locati
 
 ```powershell
 $keystorePath='D:\dev\_secrets\readany-shlai\readany-shlai-release.jks'
-[Convert]::ToBase64String([IO.File]::ReadAllBytes($keystorePath)) | gh secret set SHLAI_ANDROID_KEYSTORE_BASE64 --repo cha1latte/ReadAny
-gh secret set SHLAI_ANDROID_KEYSTORE_PASSWORD --repo cha1latte/ReadAny
-gh secret set SHLAI_ANDROID_KEY_ALIAS --repo cha1latte/ReadAny --body 'readany-shlai'
-gh secret set SHLAI_ANDROID_KEY_PASSWORD --repo cha1latte/ReadAny
-gh secret list --repo cha1latte/ReadAny
+[Convert]::ToBase64String([IO.File]::ReadAllBytes($keystorePath)) | gh secret set SHLAI_ANDROID_KEYSTORE_BASE64 --env shlai-production --repo cha1latte/ReadAny
+gh secret set SHLAI_ANDROID_KEYSTORE_PASSWORD --env shlai-production --repo cha1latte/ReadAny
+gh secret set SHLAI_ANDROID_KEY_ALIAS --env shlai-production --repo cha1latte/ReadAny --body 'readany-shlai'
+gh secret set SHLAI_ANDROID_KEY_PASSWORD --env shlai-production --repo cha1latte/ReadAny
+gh secret list --env shlai-production --repo cha1latte/ReadAny
 $certSha256 = Read-Host 'Paste the 64-character signing certificate SHA-256 digest without separators'
 if ($certSha256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Invalid certificate SHA-256 digest' }
 gh variable set SHLAI_ANDROID_CERT_SHA256 --repo cha1latte/ReadAny --env shlai-production --body ($certSha256.ToUpperInvariant())

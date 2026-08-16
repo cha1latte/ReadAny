@@ -35,6 +35,7 @@ describe("ReadAny Shlai app configuration", () => {
   it("derives the release tag, display version, and Android build number", () => {
     expect(
       getShlaiVersionConfig({
+        APP_VARIANT: "production",
         SHLAI_UPSTREAM_VERSION: "1.3.5",
         SHLAI_REVISION: "2",
         SHLAI_VERSION_CODE: "9",
@@ -48,10 +49,41 @@ describe("ReadAny Shlai app configuration", () => {
     });
   });
 
+  it("keeps the largest safe revision and Android version code canonical", () => {
+    const env = {
+      APP_VARIANT: "production",
+      SHLAI_UPSTREAM_VERSION: "1.3.5",
+      SHLAI_REVISION: String(Number.MAX_SAFE_INTEGER),
+      SHLAI_VERSION_CODE: "2100000000",
+    };
+
+    expect(getShlaiVersionConfig(env)).toEqual({
+      upstreamVersion: env.SHLAI_UPSTREAM_VERSION,
+      revision: Number.MAX_SAFE_INTEGER,
+      version: `${env.SHLAI_UPSTREAM_VERSION}-shlai.${env.SHLAI_REVISION}`,
+      tag: `shlai-v${env.SHLAI_UPSTREAM_VERSION}.${env.SHLAI_REVISION}`,
+      versionCode: 2100000000,
+    });
+  });
+
+  it("allows revision zero only for non-production variants", () => {
+    expect(
+      getShlaiVersionConfig({
+        APP_VARIANT: "preview",
+        SHLAI_UPSTREAM_VERSION: "1.3.5",
+        SHLAI_REVISION: "0",
+        SHLAI_VERSION_CODE: "1",
+      }).revision,
+    ).toBe(0);
+  });
+
   it.each([
     [{ SHLAI_UPSTREAM_VERSION: "one" }, "Invalid SHLAI_UPSTREAM_VERSION"],
     [{ SHLAI_REVISION: "-1" }, "Invalid SHLAI_REVISION"],
+    [{ APP_VARIANT: "production", SHLAI_REVISION: "0" }, "Invalid SHLAI_REVISION"],
+    [{ SHLAI_REVISION: "9007199254740992" }, "Invalid SHLAI_REVISION"],
     [{ SHLAI_VERSION_CODE: "0" }, "Invalid SHLAI_VERSION_CODE"],
+    [{ SHLAI_VERSION_CODE: "2100000001" }, "Invalid SHLAI_VERSION_CODE"],
   ])("rejects invalid release metadata", (env, message) => {
     expect(() => getShlaiVersionConfig(env)).toThrow(message);
   });

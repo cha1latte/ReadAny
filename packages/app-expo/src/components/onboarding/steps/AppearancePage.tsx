@@ -15,7 +15,7 @@ type NavProp = NativeStackNavigationProp<OnboardingStackParamList, "Appearance">
 export function AppearancePage() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavProp>();
-  const { mode: currentTheme, setMode: setTheme, colors, isDark } = useTheme();
+  const { mode: currentTheme, setMode: setTheme, colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const handleNext = () => navigation.navigate("AI");

@@ -99,7 +99,7 @@ export default function App() {
         // Vectorization and Reader Agent queries use separate core paths.
         // Synchronize the query-side service immediately and after settings
         // hydration/changes so remote semantic search works on mobile too.
-          unsubscribeRagSearch = await subscribeRagSearchConfiguration();
+        unsubscribeRagSearch = await subscribeRagSearchConfiguration();
 
         console.log("[App] bootstrap: register sync adapter");
         setSyncAdapter(new MobileSyncAdapter());

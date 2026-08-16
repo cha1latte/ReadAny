@@ -36,6 +36,68 @@ describe("mergeBookMetadataSources", () => {
       mergeBookMetadataSources({ title: "" }, { title: "Book", publishDate: "not-a-date" }),
     ).toEqual({ title: "Book" });
   });
+
+  it("preserves every populated saved value verbatim while filling saved blanks", () => {
+    const reviews = [{ id: "review-1", content: "Keep exactly", createdAt: 1, updatedAt: 2 }];
+
+    expect(
+      mergeBookMetadataSources(
+        {
+          title: "  Saved Title  ",
+          author: "",
+          publisher: " Saved Press ",
+          language: "en-US",
+          isbn: " ISBN 978-1-4028-9462-6 ",
+          publishDate: " 2020-4-3 ",
+          description: "  Saved description  ",
+          coverUrl: " covers/saved.webp ",
+          subjects: [" History ", "History"],
+          rating: 4,
+          reviews,
+          totalPages: 321,
+          totalChapters: 17,
+        },
+        {
+          title: "Catalog title",
+          author: " Catalog author ",
+          publisher: "Catalog Press",
+          language: "fr-FR",
+          isbn: "9781402894626",
+          publishDate: "2024-8-6",
+          description: "Catalog description",
+          coverUrl: "covers/catalog.jpg",
+          subjects: ["Catalog"],
+        },
+      ),
+    ).toEqual({
+      title: "  Saved Title  ",
+      author: "Catalog author",
+      publisher: " Saved Press ",
+      language: "en-US",
+      isbn: " ISBN 978-1-4028-9462-6 ",
+      publishDate: " 2020-4-3 ",
+      description: "  Saved description  ",
+      coverUrl: " covers/saved.webp ",
+      subjects: [" History ", "History"],
+      rating: 4,
+      reviews,
+      totalPages: 321,
+      totalChapters: 17,
+    });
+  });
+
+  it("accepts valid ISBNs but rejects generic UIDs and UUIDs from imported sources", () => {
+    expect(mergeBookMetadataSources(undefined, { isbn: "123456" })).toEqual({});
+    expect(mergeBookMetadataSources(undefined, { isbn: "97814028946260" })).toEqual({});
+    expect(
+      mergeBookMetadataSources(undefined, {
+        isbn: "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
+      }),
+    ).toEqual({});
+    expect(mergeBookMetadataSources(undefined, { isbn: "urn:isbn:978-1-4028-9462-6" })).toEqual({
+      isbn: "9781402894626",
+    });
+  });
 });
 
 it("does not copy subjects into user tags during details repair", () => {

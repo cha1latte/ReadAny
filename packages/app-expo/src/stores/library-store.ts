@@ -1,3 +1,4 @@
+import { saveCoverBytesToAppData } from "@/lib/book/cover-storage";
 import { buildImportedBookMeta } from "@/lib/book/imported-book-meta";
 import {
   type ExtractedMeta,
@@ -444,12 +445,9 @@ async function restoreDeletedMobileBook(
     await platform.writeFile(await resolveAppPath(relativePath), conversion.epubBytes);
 
     let coverUrl = originalBook.meta.coverUrl;
-    if (conversion.coverBytes && conversion.coverBytes.length > 0) {
+    if (!coverUrl?.trim() && conversion.coverBytes && conversion.coverBytes.length > 0) {
       try {
-        await ensureAppSubDir("covers");
-        const coverRelPath = `covers/${bookId}.jpg`;
-        await platform.writeFile(await resolveAppPath(coverRelPath), conversion.coverBytes);
-        coverUrl = coverRelPath;
+        coverUrl = await saveCoverBytesToAppData(bookId, conversion.coverBytes);
       } catch (coverErr) {
         console.warn(`[restoreDeletedMobileBook] UMD cover save failed: ${coverErr}`);
       }
@@ -486,14 +484,9 @@ async function restoreDeletedMobileBook(
       fileName,
       fileSize,
     });
-    if (meta.coverBytes && meta.coverBytes.length > 0) {
+    if (!coverUrl?.trim() && meta.coverBytes && meta.coverBytes.length > 0) {
       try {
-        const mimeType = meta.coverMimeType || "image/jpeg";
-        const coverExt = mimeType.includes("png") ? "png" : "jpg";
-        await ensureAppSubDir("covers");
-        const coverRelPath = `covers/${bookId}.${coverExt}`;
-        await platform.writeFile(await resolveAppPath(coverRelPath), meta.coverBytes);
-        coverUrl = coverRelPath;
+        coverUrl = await saveCoverBytesToAppData(bookId, meta.coverBytes, meta.coverMimeType);
       } catch (coverErr) {
         console.warn(`[restoreDeletedMobileBook] Cover save failed for ${fileName}:`, coverErr);
       }
@@ -1052,14 +1045,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const absPath = await resolveAppPath(relativePath);
               await platform.writeFile(absPath, conversion.epubBytes);
 
-              let coverUrl: string | undefined;
-              if (conversion.coverBytes && conversion.coverBytes.length > 0) {
+              let coverUrl = deletedMatch?.meta.coverUrl;
+              if (!coverUrl?.trim() && conversion.coverBytes && conversion.coverBytes.length > 0) {
                 try {
-                  await ensureAppSubDir("covers");
-                  const coverRelPath = `covers/${bookId}.jpg`;
-                  const coverAbsPath = await resolveAppPath(coverRelPath);
-                  await platform.writeFile(coverAbsPath, conversion.coverBytes);
-                  coverUrl = coverRelPath;
+                  coverUrl = await saveCoverBytesToAppData(bookId, conversion.coverBytes);
                 } catch (coverErr) {
                   console.warn(`[importBooks] Failed to save UMD cover for ${fileName}:`, coverErr);
                 }
@@ -1143,7 +1132,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           console.log(`[importBooks] File copied. relativePath: ${relativePath}`);
 
           // Extract metadata and cover from book content.
-          let coverUrl: string | undefined;
+          let coverUrl = deletedMatch?.meta.coverUrl;
           let embeddedMeta: (ExtractedMeta & { coverUrl?: string }) | undefined;
 
           try {
@@ -1158,17 +1147,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               `[importBooks] Metadata result: title="${meta.title}", author="${meta.author}", hasCover=${!!meta.coverBytes}, coverSize=${meta.coverBytes?.length ?? 0}`,
             );
             // Save cover image to app data
-            if (meta.coverBytes && meta.coverBytes.length > 0) {
+            if (!coverUrl?.trim() && meta.coverBytes && meta.coverBytes.length > 0) {
               try {
-                const mimeType = meta.coverMimeType || "image/jpeg";
-                const coverExt = mimeType.includes("png") ? "png" : "jpg";
-                await ensureAppSubDir("covers");
-                const coverRelPath = `covers/${bookId}.${coverExt}`;
-                const coverAbsPath = await resolveAppPath(coverRelPath);
-                console.log(`[importBooks] Saving cover to: ${coverAbsPath}`);
-                const platform = getPlatformService();
-                await platform.writeFile(coverAbsPath, meta.coverBytes);
-                coverUrl = coverRelPath;
+                coverUrl = await saveCoverBytesToAppData(
+                  bookId,
+                  meta.coverBytes,
+                  meta.coverMimeType,
+                );
+                console.log(`[importBooks] Saving cover to: ${coverUrl}`);
                 console.log(`[importBooks] Cover saved. coverUrl=${coverUrl}`);
               } catch (coverErr) {
                 console.warn(`[importBooks] Failed to save cover for ${fileName}:`, coverErr);

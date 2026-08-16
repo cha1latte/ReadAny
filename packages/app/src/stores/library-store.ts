@@ -1,5 +1,13 @@
 import { saveCoverToAppData } from "@/lib/book/cover-storage";
-import { buildImportedBookMeta, fromDocumentMetadata } from "@/lib/book/imported-book-meta";
+import {
+  type DesktopImportFile,
+  type FoliateDocumentMetadata,
+  buildDesktopImportedBookMeta,
+  buildImportedBookMeta,
+  fromDocumentMetadata,
+  fromPdfMetadata,
+  normalizeDesktopImportFile,
+} from "@/lib/book/imported-book-meta";
 import * as db from "@/lib/db/database";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import {
@@ -16,7 +24,7 @@ import {
 import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
 import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import type { Book, BookGroup, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
-import type { ExtractedBookMetadata } from "@readany/core/utils";
+import { type ExtractedBookMetadata, normalizeIsbn } from "@readany/core/utils";
 import { create } from "zustand";
 
 type DesktopExtractedMetadata = ExtractedBookMetadata & {
@@ -183,17 +191,28 @@ export async function extractEpubMetadata(blob: Blob): Promise<DesktopExtractedM
 function extractIsbn(elements: Element[]): string {
   for (const element of elements) {
     if (element.localName !== "identifier") continue;
-    const scheme =
-      element.getAttribute("opf:scheme") ||
-      element.getAttribute("scheme") ||
-      element.getAttributeNS("http://www.idpf.org/2007/opf", "scheme") ||
-      "";
     const text = element.textContent?.trim() || "";
-    if (scheme.toLowerCase() === "isbn" || /(?:97[89][-\s]?)?(?:\d[-\s]?){9,12}[\dXx]/.test(text)) {
-      return text;
-    }
+    const isbn = normalizeIsbn(text);
+    if (isbn) return isbn;
   }
   return "";
+}
+
+async function extractPdfMetadata(source: string): Promise<ExtractedBookMetadata> {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  const pdfDoc = await pdfjsLib.getDocument({
+    url: source,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  }).promise;
+
+  try {
+    const { info, metadata } = await pdfDoc.getMetadata();
+    return fromPdfMetadata(info as Record<string, unknown>, metadata);
+  } finally {
+    await pdfDoc.destroy();
+  }
 }
 
 function extractPublishDate(elements: Element[]): string {
@@ -381,7 +400,7 @@ export interface LibraryState {
   setViewMode: (mode: LibraryViewMode) => void;
   setSortField: (field: SortField) => void;
   setSortOrder: (order: SortOrder) => void;
-  importBooks: (filePaths: string[]) => Promise<ImportBooksResult>;
+  importBooks: (files: DesktopImportFile[]) => Promise<ImportBooksResult>;
   inspectDeletedBookCandidate: (
     bookId: string,
     filePath: string,
@@ -498,15 +517,24 @@ async function restoreDeletedDesktopBook(bookId: string, filePath: string): Prom
       const blob = new Blob([epubBytes]);
       const epubMeta = await extractEpubMetadata(blob);
       embeddedMeta = epubMeta;
-      if (epubMeta.coverBlob) {
+      if (!originalBook.meta.coverUrl?.trim() && epubMeta.coverBlob) {
         embeddedMeta.coverUrl = await saveCoverToAppData(bookId, epubMeta.coverBlob);
       }
     } else if (format === "pdf") {
       const { convertFileSrc } = await import("@tauri-apps/api/core");
       const pdfUrl = convertFileSrc(destPath);
-      const coverBlob = await generatePdfCover(pdfUrl);
-      if (coverBlob) {
-        embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
+      try {
+        embeddedMeta = await extractPdfMetadata(pdfUrl);
+      } catch (err) {
+        console.warn("[restoreDeletedDesktopBook] PDF metadata extraction failed:", err);
+      }
+      try {
+        const coverBlob = await generatePdfCover(pdfUrl);
+        if (!originalBook.meta.coverUrl?.trim() && coverBlob) {
+          embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
+        }
+      } catch (err) {
+        console.warn("[restoreDeletedDesktopBook] PDF cover generation failed:", err);
       }
     } else {
       const { readFile } = await import("@tauri-apps/plugin-fs");
@@ -520,10 +548,10 @@ async function restoreDeletedDesktopBook(bookId: string, filePath: string): Prom
       const { DocumentLoader } = await import("@/lib/reader/document-loader");
       const loader = new DocumentLoader(file);
       const { book: bookDoc } = await loader.open();
-      embeddedMeta = fromDocumentMetadata(bookDoc.metadata as unknown as Record<string, unknown>);
+      embeddedMeta = fromDocumentMetadata(bookDoc.metadata as unknown as FoliateDocumentMetadata);
       try {
         const coverBlob = await bookDoc.getCover();
-        if (coverBlob) {
+        if (!originalBook.meta.coverUrl?.trim() && coverBlob) {
           embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
         }
       } catch (err) {
@@ -532,17 +560,6 @@ async function restoreDeletedDesktopBook(bookId: string, filePath: string): Prom
     }
   } catch (err) {
     console.warn("[restoreDeletedDesktopBook] Metadata extraction failed, falling back:", err);
-    if (format === "pdf") {
-      try {
-        const { convertFileSrc } = await import("@tauri-apps/api/core");
-        const coverBlob = await generatePdfCover(convertFileSrc(destPath));
-        if (coverBlob) {
-          embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
-        }
-      } catch (err) {
-        console.warn("[Library] PDF cover generation failed:", err);
-      }
-    }
   }
 
   return {
@@ -870,7 +887,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   setSortOrder: (order) => set((state) => ({ filter: { ...state.filter, sortOrder: order } })),
 
-  importBooks: async (filePaths) => {
+  importBooks: async (files) => {
     set({ isImporting: true });
     const result = createEmptyImportBooksResult();
     const duplicateIndex = createImportDuplicateIndex(get().books);
@@ -878,7 +895,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       await db.initDatabase();
       const { DocumentLoader } = await import("@/lib/reader/document-loader");
 
-      for (const filePath of filePaths) {
+      for (const fileInput of files) {
+        const fileInfo = normalizeDesktopImportFile(fileInput);
+        const filePath = fileInfo.path;
         const fileName = decodeURIComponent(
           filePath.replace(/\\/g, "/").split("/").pop() || "book",
         );
@@ -1005,32 +1024,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const blob = new Blob([epubBytes]);
               const epubMeta = await extractEpubMetadata(blob);
               embeddedMeta = epubMeta;
-              if (epubMeta.coverBlob) {
+              if (!deletedMatch?.meta.coverUrl?.trim() && epubMeta.coverBlob) {
                 embeddedMeta.coverUrl = await saveCoverToAppData(bookId, epubMeta.coverBlob);
               }
             } else if (format === "pdf") {
               // PDF: use convertFileSrc URL so pdfjs streams from disk
               const { convertFileSrc } = await import("@tauri-apps/api/core");
               const pdfUrl = convertFileSrc(destPath);
-              // PDF title: try extracting from PDF metadata
               try {
-                const pdfjsLib = await import("pdfjs-dist");
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-                const pdfDoc = await pdfjsLib.getDocument({
-                  url: pdfUrl,
-                  useWorkerFetch: false,
-                  isEvalSupported: false,
-                }).promise;
-                const metadata = await pdfDoc.getMetadata();
-                const pdfTitle = (metadata?.info as Record<string, unknown>)?.Title as string;
-                if (pdfTitle?.trim()) embeddedMeta.title = pdfTitle.trim();
-                pdfDoc.destroy();
+                embeddedMeta = await extractPdfMetadata(pdfUrl);
               } catch (err) {
                 console.warn("[Library] PDF metadata extraction failed:", err);
               }
               try {
                 const coverBlob = await generatePdfCover(pdfUrl);
-                if (coverBlob) {
+                if (!deletedMatch?.meta.coverUrl?.trim() && coverBlob) {
                   embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
                 }
               } catch (err) {
@@ -1048,12 +1056,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const loader = new DocumentLoader(file);
               const { book: bookDoc } = await loader.open();
               embeddedMeta = fromDocumentMetadata(
-                bookDoc.metadata as unknown as Record<string, unknown>,
+                bookDoc.metadata as unknown as FoliateDocumentMetadata,
               );
 
               try {
                 const coverBlob = await bookDoc.getCover();
-                if (coverBlob) {
+                if (!deletedMatch?.meta.coverUrl?.trim() && coverBlob) {
                   embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
                 }
               } catch (err) {
@@ -1068,7 +1076,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             id: bookId,
             filePath: relativePath,
             format,
-            meta: buildImportedBookMeta({
+            meta: buildDesktopImportedBookMeta({
+              file: fileInfo,
               existing: deletedMatch?.meta,
               embedded: embeddedMeta,
               fallbackTitle,

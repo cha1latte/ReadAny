@@ -32,14 +32,35 @@ export interface ExtractedBookMetadata {
 export function mergeBookMetadataSources(
   ...sources: Array<Partial<BookMeta> | ExtractedBookMetadata | null | undefined>
 ): Partial<BookMeta> {
-  const result: Partial<BookMeta> = {};
+  const [saved, ...fillSources] = sources;
+  const result: Partial<BookMeta> = saved ? { ...saved } : {};
+  const publicationKeys: Array<keyof ExtractedBookMetadata> = [
+    "title",
+    "author",
+    "coverUrl",
+    "publisher",
+    "language",
+    "isbn",
+    "publishDate",
+    "description",
+    "subjects",
+  ];
+
+  for (const key of publicationKeys) {
+    const value = result[key];
+    const populated = Array.isArray(value)
+      ? value.some((item) => typeof item === "string" && item.trim())
+      : typeof value === "string" && Boolean(value.trim());
+    if (!populated) delete result[key];
+  }
+
   const text = (key: keyof BookMeta, value: unknown) => {
     if (result[key] != null || typeof value !== "string") return;
     const trimmed = value.trim();
     if (trimmed) Object.assign(result, { [key]: trimmed });
   };
 
-  for (const source of sources) {
+  for (const source of fillSources) {
     if (!source) continue;
     text("title", source.title);
     text("author", source.author);
@@ -176,10 +197,35 @@ function normalizeBookLanguage(value: unknown): string {
   return normalized;
 }
 
-function normalizeIsbn(value: unknown): string {
+export function normalizeIsbn(value: unknown): string {
   if (typeof value !== "string") return "";
-  const match = value.match(/(?:97[89][-\s]?)?(?:\d[-\s]?){9,12}[\dXx]/);
-  return (match?.[0] ?? value).replace(/\s+/g, "").trim();
+  const candidates = value.matchAll(
+    /(?:^|[^\dXx])((?:97[89](?:[-\s]*\d){10}|(?:\d[-\s]*){9}[\dXx]))(?![\dXx])/g,
+  );
+  for (const match of candidates) {
+    const candidate = match[1];
+    const compact = candidate.replace(/[-\s]/g, "").toUpperCase();
+    if (isValidIsbn10(compact) || isValidIsbn13(compact)) return compact;
+  }
+  return "";
+}
+
+function isValidIsbn10(value: string): boolean {
+  if (!/^\d{9}[\dX]$/.test(value)) return false;
+  const sum = Array.from(value).reduce((total, char, index) => {
+    const digit = char === "X" ? 10 : Number(char);
+    return total + digit * (10 - index);
+  }, 0);
+  return sum % 11 === 0;
+}
+
+function isValidIsbn13(value: string): boolean {
+  if (!/^97[89]\d{10}$/.test(value)) return false;
+  const sum = Array.from(value).reduce(
+    (total, char, index) => total + Number(char) * (index % 2 === 0 ? 1 : 3),
+    0,
+  );
+  return sum % 10 === 0;
 }
 
 function normalizePublishDate(value: unknown): string {

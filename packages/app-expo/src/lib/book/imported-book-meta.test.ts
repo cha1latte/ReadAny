@@ -82,4 +82,33 @@ describe("buildImportedBookMeta", () => {
       totalChapters: 12,
     });
   });
+
+  it("restores saved publication values byte-for-byte while catalog metadata fills blanks", () => {
+    expect(
+      buildImportedBookMeta({
+        existing: {
+          title: "  Saved Mobile Title  ",
+          author: "",
+          publisher: " Saved Mobile Press ",
+          language: "en-US",
+          isbn: " ISBN 978-1-4028-9462-6 ",
+          publishDate: " 2020-4-3 ",
+          description: "  Saved mobile description  ",
+          subjects: [" History ", "History"],
+        },
+        opds: { author: " Catalog author ", language: "fr-FR" },
+        embedded: { author: "Embedded author" },
+        fallbackTitle: "filename",
+      }),
+    ).toMatchObject({
+      title: "  Saved Mobile Title  ",
+      author: "Catalog author",
+      publisher: " Saved Mobile Press ",
+      language: "en-US",
+      isbn: " ISBN 978-1-4028-9462-6 ",
+      publishDate: " 2020-4-3 ",
+      description: "  Saved mobile description  ",
+      subjects: [" History ", "History"],
+    });
+  });
 });

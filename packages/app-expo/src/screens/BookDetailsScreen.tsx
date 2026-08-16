@@ -9,6 +9,7 @@ import {
 import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { extractLocalBookMetadata } from "@/lib/book/auto-metadata";
+import { saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { SettingsHeader } from "@/screens/settings/SettingsHeader";
 import { useLibraryStore } from "@/stores/library-store";
@@ -325,10 +326,25 @@ export function BookDetailsScreen({ route }: Props) {
     autoFilledBookIdRef.current = book.id;
 
     let cancelled = false;
-    void extractLocalBookMetadata(book).then((metadata) => {
+    void extractLocalBookMetadata(book).then(async (metadata) => {
       if (cancelled || !metadata) return;
+      let extracted = metadata;
+      if (metadata.coverBytes?.length) {
+        try {
+          const coverUrl = await saveExtractedCoverIfStillMissing(
+            book.id,
+            metadata.coverBytes,
+            metadata.coverMimeType,
+            () => (cancelled ? "__cancelled__" : latestValuesRef.current?.coverUrl),
+          );
+          if (coverUrl) extracted = { ...metadata, coverUrl };
+        } catch (error) {
+          console.warn("[BookMetadata] Failed to persist extracted mobile cover:", error);
+        }
+      }
+      if (cancelled) return;
       const nextValues = latestValuesRef.current
-        ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
+        ? mergeMissingBookMetadataValues(latestValuesRef.current, extracted)
         : null;
       if (!nextValues) return;
       commitValues(nextValues);

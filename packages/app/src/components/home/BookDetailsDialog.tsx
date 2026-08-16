@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import { extractLocalBookMetadata } from "@/lib/book/auto-metadata";
+import { saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import type { Book, BookReview } from "@readany/core/types";
@@ -327,10 +328,24 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     autoFilledBookIdRef.current = book.id;
 
     let cancelled = false;
-    void extractLocalBookMetadata(book).then((metadata) => {
+    void extractLocalBookMetadata(book).then(async (metadata) => {
       if (cancelled || !metadata) return;
+      let extracted = metadata;
+      if (metadata.coverBlob) {
+        try {
+          const coverUrl = await saveExtractedCoverIfStillMissing(
+            book.id,
+            metadata.coverBlob,
+            () => (cancelled ? "__cancelled__" : latestValuesRef.current?.coverUrl),
+          );
+          if (coverUrl) extracted = { ...metadata, coverUrl };
+        } catch (error) {
+          console.warn("[BookMetadata] Failed to persist extracted desktop cover:", error);
+        }
+      }
+      if (cancelled) return;
       const nextValues = latestValuesRef.current
-        ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
+        ? mergeMissingBookMetadataValues(latestValuesRef.current, extracted)
         : null;
       if (!nextValues) return;
       commitValues(nextValues);

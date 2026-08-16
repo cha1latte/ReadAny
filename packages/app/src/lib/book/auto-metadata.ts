@@ -1,10 +1,13 @@
 import { resolveDesktopDataPath } from "@/lib/storage/desktop-library-root";
 import type { Book } from "@readany/core/types";
 import type { ExtractedBookMetadata } from "@readany/core/utils";
-import { saveCoverToAppData } from "./cover-storage";
-import { fromDocumentMetadata } from "./imported-book-meta";
+import { type FoliateDocumentMetadata, fromDocumentMetadata } from "./imported-book-meta";
 
-export async function extractLocalBookMetadata(book: Book): Promise<ExtractedBookMetadata | null> {
+export type DesktopExtractedBookMetadata = ExtractedBookMetadata & { coverBlob?: Blob | null };
+
+export async function extractLocalBookMetadata(
+  book: Book,
+): Promise<DesktopExtractedBookMetadata | null> {
   if (book.syncStatus === "remote" || !isRepairableFormat(book.format) || !book.filePath) {
     return null;
   }
@@ -18,15 +21,15 @@ export async function extractLocalBookMetadata(book: Book): Promise<ExtractedBoo
     const file = new File([bytes], fileName, { type: "application/octet-stream" });
     const { DocumentLoader } = await import("@/lib/reader/document-loader");
     const { book: document } = await new DocumentLoader(file).open();
-    const metadata = fromDocumentMetadata(document.metadata as unknown as Record<string, unknown>);
+    const metadata = fromDocumentMetadata(document.metadata as unknown as FoliateDocumentMetadata);
     if (book.meta.coverUrl?.trim()) return metadata;
 
     try {
       const coverBlob = await document.getCover?.();
       if (!coverBlob) return metadata;
-      return { ...metadata, coverUrl: await saveCoverToAppData(book.id, coverBlob) };
+      return { ...metadata, coverBlob };
     } catch (error) {
-      console.warn("[BookMetadata] Failed to extract or persist local cover:", error);
+      console.warn("[BookMetadata] Failed to extract local cover:", error);
       return metadata;
     }
   } catch (error) {

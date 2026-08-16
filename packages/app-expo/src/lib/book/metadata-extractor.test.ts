@@ -91,20 +91,17 @@ describe("range-readable book metadata extraction", () => {
     ).resolves.toMatchObject({
       title: "Large Book",
       publisher: "Range Press",
-      coverUrl: "covers/legacy-large.png",
+      coverBytes: expect.any(Uint8Array),
+      coverMimeType: "image/png",
     });
     expect(platform.readFile).not.toHaveBeenCalled();
-    expect(platform.writeFile).toHaveBeenCalledWith(
-      "/app/covers/legacy-large.png",
-      expect.any(Uint8Array),
-    );
+    expect(platform.writeFile).not.toHaveBeenCalled();
   });
 
-  it("keeps extracted text metadata when cover persistence fails", async () => {
+  it("returns extracted text and cover bytes without persisting during extraction", async () => {
     const file = createLargeEpubFile();
     mobileFile.size = file.size;
     mobileFile.read = file.read;
-    platform.writeFile.mockRejectedValueOnce(new Error("disk full"));
 
     await expect(
       extractLocalBookMetadata({
@@ -116,8 +113,12 @@ describe("range-readable book metadata extraction", () => {
         progress: 0,
         addedAt: 1,
       } as Book),
-    ).resolves.toMatchObject({ title: "Large Book", publisher: "Range Press" });
-    expect(platform.writeFile).toHaveBeenCalledOnce();
+    ).resolves.toMatchObject({
+      title: "Large Book",
+      publisher: "Range Press",
+      coverBytes: expect.any(Uint8Array),
+    });
+    expect(platform.writeFile).not.toHaveBeenCalled();
   });
 
   it.each(["mobi", "azw", "azw3"])(

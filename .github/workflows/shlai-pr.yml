@@ -1,0 +1,86 @@
+name: Shlai Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shlai-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @readany/core test
+      - run: pnpm --filter @readany/app-expo test
+      - run: pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
+      - name: Check changed files with Biome
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css')
+          if (( ${#FILES[@]} > 0 )); then
+            pnpm exec biome check --no-errors-on-unmatched "${FILES[@]}"
+          fi
+          git diff --check "$BASE_SHA" HEAD
+
+  preview:
+    name: Preview APK
+    needs: validate
+    runs-on: ubuntu-22.04
+    env:
+      APP_VARIANT: preview
+      SHLAI_UPSTREAM_VERSION: 1.3.5
+      SHLAI_REVISION: 0
+      SHLAI_VERSION_CODE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @readany/app-expo run build:reader
+      - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
+      - name: Build preview APK
+        working-directory: packages/app-expo/android
+        run: ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a
+      - name: Stage preview APK
+        shell: bash
+        run: |
+          NUMBER="${{ github.event.pull_request.number || github.run_number }}"
+          cp packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}
+          path: ReadAny-Shlai-Preview-*.apk
+          retention-days: 14

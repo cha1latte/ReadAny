@@ -99,7 +99,7 @@ const expectPreviewWorkflowContract = (source: string) => {
     .filter((command): command is string => typeof command === "string");
   expect(actions.some((action) => /(?:publish|release)/i.test(action))).toBe(false);
   expect(commands.some((command) => /(?:publish|release)/i.test(command))).toBe(false);
-  expect(commands.some((command) => /\$\{?GITHUB_ENV\}?/.test(command))).toBe(false);
+  expect(commands.some((command) => /GITHUB_ENV/i.test(command))).toBe(false);
   expect(commands.join("\n")).not.toContain("--platform ios");
   expect(commands.join("\n")).not.toContain("xcodebuild");
 
@@ -262,6 +262,14 @@ const unsafeMutations = [
       source.replace(
         "      - name: Build preview APK",
         '      - run: echo "APP_VARIANT=production" >> "$GITHUB_ENV"\n      - name: Build preview APK',
+      ),
+  },
+  {
+    name: "PowerShell GITHUB_ENV production override",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Build preview APK",
+        '      - shell: pwsh\n        run: Add-Content -Path $env:GITHUB_ENV -Value "APP_VARIANT=production"\n      - name: Build preview APK',
       ),
   },
   {

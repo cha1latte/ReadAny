@@ -28,6 +28,12 @@ export interface UpdateCheckResult {
   release?: ReleaseInfo;
 }
 
+export interface UpdateCheckOptions {
+  apiUrl?: string;
+  tagPrefix?: string;
+  throttleKey?: string;
+}
+
 /**
  * Check for a new version of the app via GitHub Releases API.
  *
@@ -39,10 +45,15 @@ export async function checkForUpdate(
   currentVersion: string,
   platform: IPlatformService,
   force = false,
+  options: UpdateCheckOptions = {},
 ): Promise<UpdateCheckResult> {
+  const apiUrl = options.apiUrl || GITHUB_API_URL;
+  const tagPrefix = options.tagPrefix || "v";
+  const throttleKey = options.throttleKey || THROTTLE_KEY;
+
   // Throttle auto-checks to once per day
   if (!force) {
-    const lastCheck = await platform.kvGetItem(THROTTLE_KEY);
+    const lastCheck = await platform.kvGetItem(throttleKey);
     if (lastCheck) {
       const elapsed = Date.now() - Number.parseInt(lastCheck, 10);
       if (elapsed < THROTTLE_HOURS * 60 * 60 * 1000) {
@@ -51,7 +62,7 @@ export async function checkForUpdate(
     }
   }
 
-  const response = await platform.fetch(GITHUB_API_URL, {
+  const response = await platform.fetch(apiUrl, {
     headers: { Accept: "application/vnd.github.v3+json" },
   });
 
@@ -60,9 +71,9 @@ export async function checkForUpdate(
   }
 
   const release = await response.json();
-  await platform.kvSetItem(THROTTLE_KEY, String(Date.now()));
+  await platform.kvSetItem(throttleKey, String(Date.now()));
 
-  const latestVersion = (release.tag_name || "").replace(/^v/, "");
+  const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
   const hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
 
   return {
@@ -91,10 +102,18 @@ export async function checkForUpdate(
   };
 }
 
+export function releaseTagToVersion(tag: string, prefix = "v"): string {
+  return tag.startsWith(prefix) ? tag.slice(prefix.length) : tag.replace(/^v/, "");
+}
+
+function versionParts(value: string): number[] {
+  return (value.match(/\d+/g) || []).map(Number);
+}
+
 /** Compare two semver version strings. Returns >0 if a > b, <0 if a < b, 0 if equal. */
 export function compareVersions(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
+  const pa = versionParts(a);
+  const pb = versionParts(b);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const va = pa[i] || 0;
     const vb = pb[i] || 0;

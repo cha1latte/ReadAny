@@ -1,5 +1,6 @@
 import { getPlatformService } from "@readany/core/services";
 import { checkForUpdate } from "@readany/core/update";
+import { getShlaiReleaseConfig } from "@/lib/shlai-release";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -62,7 +63,7 @@ export default function AboutScreen() {
     try {
       const platform = getPlatformService();
       const v = await platform.getAppVersion();
-      const result = await checkForUpdate(v, platform, true);
+      const result = await checkForUpdate(v, platform, true, getShlaiReleaseConfig());
       setCheckResult(result);
       if (result.hasUpdate && result.release) {
         showDialog();

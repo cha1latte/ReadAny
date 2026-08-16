@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { getPlatformService } from "@readany/core/services";
 import { checkForUpdate } from "@readany/core/update";
+import { getShlaiReleaseConfig } from "@/lib/shlai-release";
 import { useUpdateStore } from "@/stores/update-store";
 
 /**
@@ -22,7 +23,7 @@ export function useUpdateChecker() {
       try {
         const platform = getPlatformService();
         const version = await platform.getAppVersion();
-        const result = await checkForUpdate(version, platform);
+        const result = await checkForUpdate(version, platform, false, getShlaiReleaseConfig());
 
         if (cancelled) return;
 

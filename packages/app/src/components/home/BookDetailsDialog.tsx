@@ -25,7 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import { extractLocalBookMetadata } from "@/lib/book/auto-metadata";
-import { saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
+import { commitCustomCover, saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import type { Book, BookReview } from "@readany/core/types";
@@ -538,7 +538,7 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
       await mkdir(coversDir, { recursive: true });
       const relativePath = `covers/${book.id}-custom-${Date.now()}.${safeExt}`;
       await copyFile(selected, await join(libraryRoot, relativePath));
-      await persistCoverUrl(relativePath);
+      await commitCustomCover(book.id, relativePath, persistCoverUrl);
       toast.success(t("library.detailsCoverSaved", "Cover saved"));
     } catch (err) {
       console.warn("[BookDetailsDialog] Failed to change cover:", err);

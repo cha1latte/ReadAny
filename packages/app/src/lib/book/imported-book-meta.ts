@@ -39,6 +39,13 @@ export interface DesktopImportFileContext {
 
 export type DesktopImportFile = string | DesktopImportFileContext;
 
+export function shouldPersistEmbeddedCover(
+  existing?: Partial<BookMeta>,
+  imported?: Partial<BookMeta>,
+): boolean {
+  return !existing?.coverUrl?.trim() && !imported?.coverUrl?.trim();
+}
+
 export function buildImportedBookMeta(input: {
   existing?: Partial<BookMeta>;
   opds?: Partial<BookMeta>;
@@ -110,11 +117,13 @@ export function fromPdfMetadata(
     language:
       firstMetadataText(xmp("dc:language")) || firstMetadataText(info?.Language) || undefined,
     isbn: firstValidIsbn(xmp("dc:identifier"), info?.ISBN, info?.Isbn, info?.isbn) || undefined,
-    publishDate: normalizePdfDate(
-      firstMetadataText(xmp("dc:date")) ||
-        firstMetadataText(info?.CreationDate) ||
-        firstMetadataText(info?.ModDate),
-    ),
+    publishDate:
+      firstMetadataText(xmp("prism:publicationdate")) ||
+      firstMetadataText(xmp("dcterms:issued")) ||
+      firstMetadataText(getPdfCustomInfo(info, "PublicationDate")) ||
+      firstMetadataText(getPdfCustomInfo(info, "PublishDate")) ||
+      firstMetadataText(getPdfCustomInfo(info, "Published")) ||
+      undefined,
     description:
       firstMetadataText(xmp("dc:description")) || firstMetadataText(info?.Subject) || undefined,
     subjects: xmpSubjects.length > 0 ? xmpSubjects : infoSubjects,
@@ -176,10 +185,9 @@ function splitPdfKeywords(value: unknown): string[] {
     : [];
 }
 
-function normalizePdfDate(value: string): string | undefined {
-  if (!value) return undefined;
-  if (!value.startsWith("D:")) return value;
-  const match = value.match(/^D:(\d{4})(\d{2})?(\d{2})?/);
-  if (!match) return value;
-  return [match[1], match[2], match[3]].filter(Boolean).join("-");
+function getPdfCustomInfo(info: Record<string, unknown> | undefined, key: string): unknown {
+  const custom = info?.Custom;
+  return custom && typeof custom === "object"
+    ? (custom as Record<string, unknown>)[key]
+    : undefined;
 }

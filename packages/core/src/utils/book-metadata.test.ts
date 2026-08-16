@@ -98,6 +98,48 @@ describe("mergeBookMetadataSources", () => {
       isbn: "9781402894626",
     });
   });
+
+  it("accepts only complete publication date formats and valid calendar dates", () => {
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2024" })).toEqual({
+      publishDate: "2024",
+    });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2024-02" })).toEqual({
+      publishDate: "2024-02",
+    });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2024-02-29" })).toEqual({
+      publishDate: "2024-02-29",
+    });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2000-02-29" })).toEqual({
+      publishDate: "2000-02-29",
+    });
+  });
+
+  it("rejects impossible, incomplete, and trailing-junk publication dates", () => {
+    for (const publishDate of [
+      "2024-00",
+      "2024-13",
+      "2023-02-29",
+      "1900-02-29",
+      "2024-02-30",
+      "2024-04-31",
+      "2024-2-9",
+      "2024/02/29",
+      "2024-02-29T12:00:00Z",
+      "2024-02-29junk",
+    ]) {
+      expect(mergeBookMetadataSources(undefined, { publishDate })).toEqual({});
+    }
+  });
+
+  it("falls through an invalid higher-priority publication date", () => {
+    expect(
+      mergeBookMetadataSources(
+        undefined,
+        { publishDate: "2023-02-29" },
+        { publishDate: "2024-02-29" },
+      ),
+    ).toEqual({ publishDate: "2024-02-29" });
+  });
 });
 
 it("does not copy subjects into user tags during details repair", () => {

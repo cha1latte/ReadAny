@@ -9,7 +9,7 @@ import {
 import { KeyboardAwareScrollView } from "@/components/ui/KeyboardAwareScrollView";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { extractLocalBookMetadata } from "@/lib/book/auto-metadata";
-import { saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
+import { commitCustomCover, saveExtractedCoverIfStillMissing } from "@/lib/book/cover-storage";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { SettingsHeader } from "@/screens/settings/SettingsHeader";
 import { useLibraryStore } from "@/stores/library-store";
@@ -502,7 +502,7 @@ export function BookDetailsScreen({ route }: Props) {
       const targetPath = await platform.joinPath(appData, relativePath);
       const bytes = await platform.readFile(selected.uri);
       await platform.writeFile(targetPath, bytes);
-      await persistCoverUrl(relativePath);
+      await commitCustomCover(book.id, relativePath, persistCoverUrl);
       Alert.alert(t("common.success", "成功"), t("library.detailsCoverSaved", "封面已保存"));
     } catch (error) {
       console.warn("[BookDetailsScreen] Failed to change cover:", error);

@@ -1,5 +1,5 @@
 import { saveCoverBytesToAppData } from "@/lib/book/cover-storage";
-import { buildImportedBookMeta } from "@/lib/book/imported-book-meta";
+import { buildImportedBookMeta, shouldPersistEmbeddedCover } from "@/lib/book/imported-book-meta";
 import {
   type ExtractedMeta,
   createRangeReadableFile,
@@ -877,6 +877,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               })
             : null;
           const bookId = deletedMatch?.id ?? generateId();
+          const persistEmbeddedCover = shouldPersistEmbeddedCover(
+            deletedMatch?.meta,
+            fileInfo.metadata,
+          );
 
           console.log(
             `[importBooks] Importing: name=${fileName}, format=${format}, uri=${filePath}`,
@@ -1046,7 +1050,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               await platform.writeFile(absPath, conversion.epubBytes);
 
               let coverUrl = deletedMatch?.meta.coverUrl;
-              if (!coverUrl?.trim() && conversion.coverBytes && conversion.coverBytes.length > 0) {
+              if (
+                persistEmbeddedCover &&
+                conversion.coverBytes &&
+                conversion.coverBytes.length > 0
+              ) {
                 try {
                   coverUrl = await saveCoverBytesToAppData(bookId, conversion.coverBytes);
                 } catch (coverErr) {
@@ -1147,7 +1155,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               `[importBooks] Metadata result: title="${meta.title}", author="${meta.author}", hasCover=${!!meta.coverBytes}, coverSize=${meta.coverBytes?.length ?? 0}`,
             );
             // Save cover image to app data
-            if (!coverUrl?.trim() && meta.coverBytes && meta.coverBytes.length > 0) {
+            if (persistEmbeddedCover && meta.coverBytes && meta.coverBytes.length > 0) {
               try {
                 coverUrl = await saveCoverBytesToAppData(
                   bookId,

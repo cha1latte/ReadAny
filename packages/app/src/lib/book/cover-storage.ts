@@ -1,5 +1,7 @@
 import { getDesktopLibraryRoot } from "@/lib/storage/desktop-library-root";
 
+const extractedCoverPaths = new Map<string, Set<string>>();
+
 /** Save a cover under the managed desktop library and return its relative path. */
 export async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<string> {
   const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
@@ -37,16 +39,46 @@ export async function saveExtractedCoverIfStillMissing(
   if (getCurrentCoverUrl()?.trim()) return undefined;
 
   const relativePath = await saveCoverToAppData(bookId, coverBlob);
+  trackExtractedCover(bookId, relativePath);
   if (!getCurrentCoverUrl()?.trim()) return relativePath;
 
+  await removeTrackedExtractedCover(bookId, relativePath);
+  return undefined;
+}
+
+export async function commitCustomCover(
+  bookId: string,
+  customCoverUrl: string,
+  persist: (coverUrl: string) => Promise<void>,
+): Promise<void> {
+  await persist(customCoverUrl);
+  const paths = extractedCoverPaths.get(bookId);
+  if (!paths) return;
+
+  for (const relativePath of [...paths]) {
+    if (relativePath !== customCoverUrl) {
+      await removeTrackedExtractedCover(bookId, relativePath);
+    }
+  }
+}
+
+function trackExtractedCover(bookId: string, relativePath: string): void {
+  const paths = extractedCoverPaths.get(bookId) ?? new Set<string>();
+  paths.add(relativePath);
+  extractedCoverPaths.set(bookId, paths);
+}
+
+async function removeTrackedExtractedCover(bookId: string, relativePath: string): Promise<void> {
   try {
     const { remove } = await import("@tauri-apps/plugin-fs");
     const { join } = await import("@tauri-apps/api/path");
     await remove(await join(await getDesktopLibraryRoot(), relativePath));
+    const paths = extractedCoverPaths.get(bookId);
+    paths?.delete(relativePath);
+    if (paths?.size === 0) extractedCoverPaths.delete(bookId);
   } catch (error) {
     console.warn("[BookMetadata] Failed to clean up rejected extracted cover:", error);
   }
-  return undefined;
 }
 
 function extensionFromMimeType(mimeType: string): string | null {

@@ -1,5 +1,7 @@
 import { getPlatformService } from "@readany/core/services";
 
+const extractedCoverPaths = new Map<string, Set<string>>();
+
 export async function saveCoverBytesToAppData(
   bookId: string,
   coverBytes: Uint8Array,
@@ -78,14 +80,44 @@ export async function saveExtractedCoverIfStillMissing(
   if (getCurrentCoverUrl()?.trim()) return undefined;
 
   const relativePath = await saveCoverBytesToAppData(bookId, coverBytes, coverMimeType);
+  trackExtractedCover(bookId, relativePath);
   if (!getCurrentCoverUrl()?.trim()) return relativePath;
 
+  await deleteTrackedExtractedCover(bookId, relativePath);
+  return undefined;
+}
+
+export async function commitCustomCover(
+  bookId: string,
+  customCoverUrl: string,
+  persist: (coverUrl: string) => Promise<void>,
+): Promise<void> {
+  await persist(customCoverUrl);
+  const paths = extractedCoverPaths.get(bookId);
+  if (!paths) return;
+
+  for (const relativePath of [...paths]) {
+    if (relativePath !== customCoverUrl) {
+      await deleteTrackedExtractedCover(bookId, relativePath);
+    }
+  }
+}
+
+function trackExtractedCover(bookId: string, relativePath: string): void {
+  const paths = extractedCoverPaths.get(bookId) ?? new Set<string>();
+  paths.add(relativePath);
+  extractedCoverPaths.set(bookId, paths);
+}
+
+async function deleteTrackedExtractedCover(bookId: string, relativePath: string): Promise<void> {
   try {
     const platform = getPlatformService();
     const appData = await platform.getAppDataDir();
     await platform.deleteFile(await platform.joinPath(appData, relativePath));
+    const paths = extractedCoverPaths.get(bookId);
+    paths?.delete(relativePath);
+    if (paths?.size === 0) extractedCoverPaths.delete(bookId);
   } catch (error) {
     console.warn("[BookMetadata] Failed to clean up rejected extracted cover:", error);
   }
-  return undefined;
 }

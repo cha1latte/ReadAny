@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildImportedBookMeta } from "./imported-book-meta";
+import * as importedBookMeta from "./imported-book-meta";
+
+const { buildImportedBookMeta } = importedBookMeta;
 
 describe("buildImportedBookMeta", () => {
   it("persists rich extracted metadata", () => {
@@ -13,7 +15,7 @@ describe("buildImportedBookMeta", () => {
           publisher: "Press",
           language: "en-US",
           isbn: "978 1 4028 9462 6",
-          publishDate: "2020-4-3",
+          publishDate: "2020-04-03",
           description: "Summary",
           subjects: ["History"],
           coverUrl: "covers/1.jpg",
@@ -110,5 +112,24 @@ describe("buildImportedBookMeta", () => {
       description: "  Saved mobile description  ",
       subjects: [" History ", "History"],
     });
+  });
+
+  it("skips embedded cover persistence when saved or OPDS metadata owns the cover", () => {
+    const shouldPersistEmbeddedCover = (
+      importedBookMeta as typeof importedBookMeta & {
+        shouldPersistEmbeddedCover?: (
+          existing?: { coverUrl?: string },
+          imported?: { coverUrl?: string },
+        ) => boolean;
+      }
+    ).shouldPersistEmbeddedCover;
+    expect(shouldPersistEmbeddedCover).toBeTypeOf("function");
+    if (!shouldPersistEmbeddedCover) return;
+
+    expect(shouldPersistEmbeddedCover({ coverUrl: "covers/saved.jpg" }, undefined)).toBe(false);
+    expect(shouldPersistEmbeddedCover(undefined, { coverUrl: "https://catalog/cover.jpg" })).toBe(
+      false,
+    );
+    expect(shouldPersistEmbeddedCover({ coverUrl: "  " }, { coverUrl: "" })).toBe(true);
   });
 });

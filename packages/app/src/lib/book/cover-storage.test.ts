@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fs = vi.hoisted(() => ({
   mkdir: vi.fn(async () => undefined),
@@ -22,6 +22,10 @@ describe("desktop cover file extensions", () => {
       getCoverFileExtension?: (blob: Blob) => Promise<string>;
     }
   ).getCoverFileExtension;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("maps recognized image MIME types", async () => {
     expect(getCoverFileExtension).toBeTypeOf("function");
@@ -82,5 +86,36 @@ describe("desktop cover file extensions", () => {
     ).resolves.toBeUndefined();
     expect(fs.remove).toHaveBeenCalledWith("C:/library/covers/book.webp");
     expect(fs.remove).not.toHaveBeenCalledWith("C:/library/covers/book-custom-user.webp");
+  });
+
+  it("cleans an extracted cover when custom selection completes after persistence", async () => {
+    const commitCustomCover = (
+      coverStorage as typeof coverStorage & {
+        commitCustomCover?: (
+          bookId: string,
+          customCoverUrl: string,
+          persist: (coverUrl: string) => Promise<void>,
+        ) => Promise<void>;
+      }
+    ).commitCustomCover;
+    expect(commitCustomCover).toBeTypeOf("function");
+    if (!commitCustomCover) return;
+
+    await expect(
+      coverStorage.saveExtractedCoverIfStillMissing(
+        "book",
+        new Blob([new Uint8Array([1])], { type: "image/webp" }),
+        () => "",
+      ),
+    ).resolves.toBe("covers/book.webp");
+
+    const persisted: string[] = [];
+    await commitCustomCover("book", "covers/book-custom-user.png", async (coverUrl) => {
+      persisted.push(coverUrl);
+    });
+
+    expect(persisted).toEqual(["covers/book-custom-user.png"]);
+    expect(fs.remove).toHaveBeenCalledWith("C:/library/covers/book.webp");
+    expect(fs.remove).not.toHaveBeenCalledWith("C:/library/covers/book-custom-user.png");
   });
 });

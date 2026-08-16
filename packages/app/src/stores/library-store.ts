@@ -7,6 +7,7 @@ import {
   fromDocumentMetadata,
   fromPdfMetadata,
   normalizeDesktopImportFile,
+  shouldPersistEmbeddedCover,
 } from "@/lib/book/imported-book-meta";
 import * as db from "@/lib/db/database";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
@@ -951,6 +952,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             });
           }
           const bookId = deletedMatch?.id ?? crypto.randomUUID();
+          const persistEmbeddedCover = shouldPersistEmbeddedCover(
+            deletedMatch?.meta,
+            fileInfo.metadata,
+          );
 
           // For TXT files, convert to EPUB first before storing
           if (ext === "txt") {
@@ -1024,7 +1029,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const blob = new Blob([epubBytes]);
               const epubMeta = await extractEpubMetadata(blob);
               embeddedMeta = epubMeta;
-              if (!deletedMatch?.meta.coverUrl?.trim() && epubMeta.coverBlob) {
+              if (persistEmbeddedCover && epubMeta.coverBlob) {
                 embeddedMeta.coverUrl = await saveCoverToAppData(bookId, epubMeta.coverBlob);
               }
             } else if (format === "pdf") {
@@ -1038,7 +1043,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               }
               try {
                 const coverBlob = await generatePdfCover(pdfUrl);
-                if (!deletedMatch?.meta.coverUrl?.trim() && coverBlob) {
+                if (persistEmbeddedCover && coverBlob) {
                   embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
                 }
               } catch (err) {
@@ -1061,7 +1066,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
               try {
                 const coverBlob = await bookDoc.getCover();
-                if (!deletedMatch?.meta.coverUrl?.trim() && coverBlob) {
+                if (persistEmbeddedCover && coverBlob) {
                   embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
                 }
               } catch (err) {

@@ -156,7 +156,7 @@ describe("desktop imported book metadata", () => {
       ["dc:language", ["en-US"]],
       ["dc:publisher", [{ name: "XMP Press" }]],
       ["dc:identifier", "urn:isbn:978-1-4028-9462-6"],
-      ["dc:date", ["2024-08-06"]],
+      ["prism:publicationdate", ["2024-08-06"]],
       ["dc:subject", ["History", "Science"]],
     ]);
     const embedded = fromPdfMetadata(
@@ -180,6 +180,33 @@ describe("desktop imported book metadata", () => {
       description: "XMP description",
       subjects: ["History", "Science"],
     });
+  });
+
+  it("does not fabricate a publication date from generic PDF timestamps", () => {
+    const xmp = new Map<string, unknown>([["dc:date", "2024-08-06"]]);
+
+    expect(
+      importedBookMeta.fromPdfMetadata(
+        {
+          CreationDate: "D:20230805000000Z",
+          ModDate: "D:20250102000000Z",
+        },
+        { get: (name) => xmp.get(name) },
+      ).publishDate,
+    ).toBeUndefined();
+  });
+
+  it("reads explicitly publication-scoped PDF metadata exposed by pdfjs", () => {
+    expect(
+      importedBookMeta.fromPdfMetadata(undefined, {
+        get: (name) => (name === "dcterms:issued" ? "2020-05" : undefined),
+      }).publishDate,
+    ).toBe("2020-05");
+
+    expect(
+      importedBookMeta.fromPdfMetadata({ Custom: { PublicationDate: "2019" } }, undefined)
+        .publishDate,
+    ).toBe("2019");
   });
 
   it("restores saved publication values byte-for-byte while catalog metadata fills blanks", () => {
@@ -244,5 +271,24 @@ describe("desktop imported book metadata", () => {
         fallbackTitle: "filename",
       }),
     ).toMatchObject({ title: "Embedded title" });
+  });
+
+  it("skips embedded cover persistence when saved or import metadata owns the cover", () => {
+    const shouldPersistEmbeddedCover = (
+      importedBookMeta as typeof importedBookMeta & {
+        shouldPersistEmbeddedCover?: (
+          existing?: { coverUrl?: string },
+          imported?: { coverUrl?: string },
+        ) => boolean;
+      }
+    ).shouldPersistEmbeddedCover;
+    expect(shouldPersistEmbeddedCover).toBeTypeOf("function");
+    if (!shouldPersistEmbeddedCover) return;
+
+    expect(shouldPersistEmbeddedCover({ coverUrl: "covers/saved.jpg" }, undefined)).toBe(false);
+    expect(shouldPersistEmbeddedCover(undefined, { coverUrl: "https://catalog/cover.jpg" })).toBe(
+      false,
+    );
+    expect(shouldPersistEmbeddedCover({ coverUrl: "  " }, { coverUrl: "" })).toBe(true);
   });
 });

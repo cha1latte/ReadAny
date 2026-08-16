@@ -57,4 +57,19 @@ describe("justified EPUB text setting", () => {
       expect(messages.reader.justifyBodyTextDesc).toBe(description);
     }
   });
+
+  it("inlines and invokes the justification helper across reader lifecycle events", () => {
+    const template = readSource("packages/app-expo/assets/reader/reader.template.html");
+    const builtReader = readSource("packages/app-expo/assets/reader/reader.html");
+    const buildScript = readSource("packages/app-expo/scripts/build-reader.js");
+
+    expect(template).toContain("__READANY_JUSTIFIED_TEXT_INSERT_POINT_6c18f4d2__");
+    expect(template).toContain("let currentJustifyBodyText = true");
+    expect(template).toContain("settings.justifyBodyText !== undefined");
+    expect(template).toContain("syncJustifiedTextForAllDocs()");
+    expect(template).toContain("globalThis.ReadAnyJustifiedText?.apply(");
+    expect(buildScript).toContain('"justified-text.js"');
+    expect(buildScript).toContain("JUSTIFIED_TEXT_MARKER");
+    expect(builtReader).toContain("data-readany-justify-body");
+  });
 });

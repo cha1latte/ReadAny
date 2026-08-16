@@ -27,7 +27,6 @@
 - Modify: `packages/core/src/stores/settings-store.ts`
 - Modify: `packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx`
 - Modify: `packages/app-expo/src/hooks/use-reader-bridge.ts`
-- Modify: `packages/app-expo/src/screens/ReaderScreen.tsx`
 - Modify: `packages/core/src/i18n/locales/en/reader.json`
 - Modify: `packages/core/src/i18n/locales/es/reader.json`
 - Modify: `packages/core/src/i18n/locales/fr/reader.json`
@@ -42,7 +41,7 @@
 
 - [ ] **Step 1: Write the failing cross-layer contract test**
 
-Create a Vitest test that reads the exact source files and asserts the optional type, default, migration, settings toggle, bridge field, every `ReaderScreen` settings payload, and English translation are present. The central assertions are:
+Create a Vitest test that reads the exact source files and asserts the optional type, default, migration, settings toggle, centralized bridge propagation, and English translation are present. The central assertions are:
 
 ```ts
 expect(bookTypes).toMatch(/justifyBodyText\?: boolean/);
@@ -51,8 +50,9 @@ expect(settingsStore).toMatch(/readSettings\?\.justifyBodyText === undefined[\s\
 expect(settingsPanel).toMatch(/t\("reader\.justifyBodyText"/);
 expect(settingsPanel).toMatch(/onUpdateSetting\("justifyBodyText", readSettings\.justifyBodyText === false\)/);
 expect(readerBridge).toMatch(/justifyBodyText\?: boolean/);
-expect(readerScreen.match(/justifyBodyText: .*justifyBodyText !== false/g)).toHaveLength(2);
-expect(readerScreen).toMatch(/bridge\.applySettings\(\{[\s\S]*\.\.\.merged/);
+expect(readerBridge).toContain("function withJustifiedTextSetting");
+expect(readerBridge).toContain("useSettingsStore.getState().readSettings.justifyBodyText !== false");
+expect(readerBridge.match(/withJustifiedTextSetting\(/g)).toHaveLength(3);
 expect(englishReader.justifyBodyText).toBe("Justify body text");
 ```
 
@@ -125,13 +125,18 @@ Add these exact localized `justifyBodyText` and `justifyBodyTextDesc` entries:
 
 - [ ] **Step 5: Carry the setting through every bridge payload**
 
-Add `justifyBodyText?: boolean` to `ReaderInitialSettings` and the `applySettings` parameter. In each full settings payload in `ReaderScreen.tsx`, send:
+Add `justifyBodyText?: boolean` to `ReaderInitialSettings` and the `applySettings` parameter. Centralize the persisted default in the bridge so both initial `openBook` commands and later partial `applySettings` commands always carry the current value:
 
 ```ts
-justifyBodyText: settings.justifyBodyText !== false,
+function withJustifiedTextSetting(settings: ReaderInitialSettings = {}): ReaderInitialSettings {
+  return {
+    justifyBodyText: useSettingsStore.getState().readSettings.justifyBodyText !== false,
+    ...settings,
+  };
+}
 ```
 
-Use `readSettings.justifyBodyText !== false` at the `openBook` payload and `settings.justifyBodyText !== false` in the `onLoaded` payload. The existing `updateSetting` callback spreads `merged` settings into `bridge.applySettings`, so the toggle updates an open book immediately without another effect.
+Apply that helper when serializing both commands, with explicit caller values taking precedence. The existing `updateSetting` callback spreads merged settings into `bridge.applySettings`, so the toggle still updates an open book immediately without another effect.
 
 - [ ] **Step 6: Run focused tests and verify GREEN**
 
@@ -140,7 +145,7 @@ Run the same focused Vitest command. Expected: PASS.
 - [ ] **Step 7: Commit the settings slice**
 
 ```powershell
-git add packages/core/src/types/book.ts packages/core/src/stores/settings-store.ts packages/core/src/i18n/locales packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx packages/app-expo/src/hooks/use-reader-bridge.ts packages/app-expo/src/screens/ReaderScreen.tsx packages/app-expo/src/screens/reader/justified-text-contract.test.ts
+git add packages/core/src/types/book.ts packages/core/src/stores/settings-store.ts packages/core/src/i18n/locales packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx packages/app-expo/src/hooks/use-reader-bridge.ts packages/app-expo/src/screens/reader/justified-text-contract.test.ts
 git commit -m "feat(reader): add justified text setting"
 ```
 
@@ -296,7 +301,7 @@ $env:TZ='UTC'
 pnpm --filter @readany/core test
 pnpm --filter @readany/app-expo test
 pnpm --filter @readany/app-expo exec tsc --noEmit
-pnpm exec biome check packages/core/src/types/book.ts packages/core/src/stores/settings-store.ts packages/core/src/i18n/locales packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx packages/app-expo/src/hooks/use-reader-bridge.ts packages/app-expo/src/screens/ReaderScreen.tsx packages/app-expo/src/screens/reader/justified-text-contract.test.ts packages/app-expo/src/screens/reader/justified-text-behavior.test.ts packages/app-expo/scripts/build-reader.js packages/app-expo/assets/reader/justified-text.js
+pnpm exec biome check packages/core/src/types/book.ts packages/core/src/stores/settings-store.ts packages/core/src/i18n/locales packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx packages/app-expo/src/hooks/use-reader-bridge.ts packages/app-expo/src/screens/reader/justified-text-contract.test.ts packages/app-expo/src/screens/reader/justified-text-behavior.test.ts packages/app-expo/scripts/build-reader.js packages/app-expo/assets/reader/justified-text.js
 git diff --check
 ```
 

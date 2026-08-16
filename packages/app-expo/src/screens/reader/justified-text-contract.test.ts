@@ -26,16 +26,17 @@ describe("justified EPUB text setting", () => {
       "packages/app-expo/src/screens/reader/ReaderSettingsPanel.tsx",
     );
     const readerBridge = readSource("packages/app-expo/src/hooks/use-reader-bridge.ts");
-    const readerScreen = readSource("packages/app-expo/src/screens/ReaderScreen.tsx");
 
     expect(settingsPanel).toMatch(/t\("reader\.justifyBodyText"/);
     expect(settingsPanel).toMatch(
       /onUpdateSetting\(\s*"justifyBodyText",\s*readSettings\.justifyBodyText === false\s*\)/,
     );
     expect(readerBridge.match(/justifyBodyText\?: boolean/g)).toHaveLength(2);
-    expect(readerScreen).toContain("justifyBodyText: settings.justifyBodyText !== false");
-    expect(readerScreen).toContain("justifyBodyText: readSettings.justifyBodyText !== false");
-    expect(readerScreen).toMatch(/bridge\.applySettings\(\{[\s\S]*?\.\.\.merged/);
+    expect(readerBridge).toContain("function withJustifiedTextSetting");
+    expect(readerBridge).toContain(
+      "useSettingsStore.getState().readSettings.justifyBodyText !== false",
+    );
+    expect(readerBridge.match(/withJustifiedTextSetting\(/g)).toHaveLength(3);
   });
 
   it("provides reader copy in every supported locale", () => {

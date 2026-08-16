@@ -1,13 +1,13 @@
 import { create } from "zustand";
+import { getEndpointFetch } from "../ai/llm-provider";
+import { logAIEndpointDebug, summarizeDebugText } from "../ai/request-debug";
 import type { AIConfig, AIEndpoint, ReadSettings } from "../types";
 import type { TranslationConfig, TranslationTargetLang } from "../types/translation";
 import {
   buildProviderModelsUrl,
-  providerSupportsExactRequestUrl,
   providerRequiresApiKey,
+  providerSupportsExactRequestUrl,
 } from "../utils";
-import { logAIEndpointDebug, summarizeDebugText } from "../ai/request-debug";
-import { getEndpointFetch } from "../ai/llm-provider";
 import { withPersist } from "./persist";
 
 export interface SettingsState {
@@ -141,7 +141,6 @@ async function fetchModelsFromEndpoint(endpoint: AIEndpoint): Promise<string[]> 
       return fetchOllamaModels(endpoint);
     case "lmstudio":
       return fetchLMStudioModels(endpoint);
-    case "openai":
     default:
       return fetchOpenAIModels(endpoint);
   }

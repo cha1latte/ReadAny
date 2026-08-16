@@ -4,14 +4,23 @@
 import { XIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useColors } from "@/styles/theme";
-import type { ReadSettings } from "@readany/core/types";
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
-import { makeStyles } from "./reader-styles";
 import { useFontStore } from "@readany/core/stores";
-import { useRubyStore, type RubyMode } from "@readany/core/stores/ruby-store";
+import { type RubyMode, useRubyStore } from "@readany/core/stores/ruby-store";
+import type { ReadSettings } from "@readany/core/types";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { makeStyles } from "./reader-styles";
 
 interface Props {
   visible: boolean;

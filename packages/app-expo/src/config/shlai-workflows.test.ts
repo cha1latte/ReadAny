@@ -11,6 +11,8 @@ type WorkflowStep = {
   name?: string;
   uses?: string;
   run?: string;
+  if?: string;
+  shell?: string;
   "continue-on-error"?: unknown;
   env?: Record<string, unknown>;
   with?: Record<string, unknown>;
@@ -139,38 +141,22 @@ const releaseSecretNames = [
   "SHLAI_ANDROID_KEY_PASSWORD",
 ] as const;
 
-const secretContextAccessPattern = /\bsecrets\s*(?:\.|\[)/gi;
+const secretsTokenPattern = /\bsecrets\b/gi;
 
-const collectSecretContextAccesses = (value: unknown): string[] => {
+const collectSecretsTokens = (value: unknown): string[] => {
   if (typeof value === "string") {
-    return [...value.matchAll(secretContextAccessPattern)].map(([match]) => match);
+    return [...value.matchAll(secretsTokenPattern)].map(([match]) => match);
   }
   if (Array.isArray(value)) {
-    return value.flatMap(collectSecretContextAccesses);
+    return value.flatMap(collectSecretsTokens);
   }
   if (!value || typeof value !== "object") {
     return [];
   }
   return Object.entries(value).flatMap(([key, nestedValue]) => [
-    ...collectSecretContextAccesses(key),
-    ...collectSecretContextAccesses(nestedValue),
+    ...collectSecretsTokens(key),
+    ...collectSecretsTokens(nestedValue),
   ]);
-};
-
-const expectPnpmBeforeCachedNodeSetup = (jobs: Record<string, WorkflowJob>) => {
-  for (const job of Object.values(jobs)) {
-    const steps = job.steps ?? [];
-    for (const [setupNodeIndex, step] of steps.entries()) {
-      if (step.uses?.startsWith("actions/setup-node@") && step.with?.cache === "pnpm") {
-        const pnpmSetupIndex = steps.findIndex(
-          (candidate) =>
-            candidate.uses === "pnpm/action-setup@v3" && candidate.with?.version === "9.15.0",
-        );
-        expect(pnpmSetupIndex).toBeGreaterThanOrEqual(0);
-        expect(pnpmSetupIndex).toBeLessThan(setupNodeIndex);
-      }
-    }
-  }
 };
 
 const stableReleaseScript = `TAG="shlai-v\${SHLAI_UPSTREAM_VERSION}.\${SHLAI_REVISION}"
@@ -203,6 +189,41 @@ gh release create "\$TAG" "\$APK" \\
   --target "\$GITHUB_SHA" \\
   --title "ReadAny Shlai \${SHLAI_UPSTREAM_VERSION}.\${SHLAI_REVISION}" \\
   --notes "Unofficial ReadAny Shlai Android release. Source: \${GITHUB_SERVER_URL}/\${GITHUB_REPOSITORY}/tree/\${GITHUB_SHA}"`;
+
+const expectedValidateSteps: WorkflowStep[] = [
+  { uses: "actions/checkout@v4", with: { "fetch-depth": 0 } },
+  { uses: "pnpm/action-setup@v3", with: { version: "9.15.0" } },
+  { uses: "actions/setup-node@v4", with: { "node-version": "20.18.0", cache: "pnpm" } },
+  { run: "pnpm install --frozen-lockfile" },
+  { run: "pnpm --filter @readany/core test" },
+  { run: "pnpm --filter @readany/app-expo test" },
+  { run: "pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json" },
+  {
+    name: "Check changed files with Biome",
+    shell: "bash",
+    run: `BASE_SHA="$(git rev-parse HEAD^)"
+mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css')
+if (( \${#FILES[@]} > 0 )); then
+  pnpm exec biome check --no-errors-on-unmatched "\${FILES[@]}"
+fi
+git diff --check "$BASE_SHA" HEAD\n`,
+  },
+];
+
+const expectedReleaseSteps: WorkflowStep[] = [
+  { uses: "actions/checkout@v4" },
+  { uses: "pnpm/action-setup@v3", with: { version: "9.15.0" } },
+  { uses: "actions/setup-node@v4", with: { "node-version": "20.18.0", cache: "pnpm" } },
+  { uses: "actions/setup-java@v4", with: { distribution: "temurin", "java-version": 17 } },
+  { uses: "android-actions/setup-android@v3" },
+  { run: "pnpm install --frozen-lockfile" },
+  {
+    name: "Build, sign, verify, and publish APK",
+    shell: "bash",
+    env: { GH_TOKEN: "${{ github.token }}" },
+    run: `${stableReleaseScript}\n`,
+  },
+];
 
 const expectReleaseWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
@@ -239,8 +260,10 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(validate?.permissions).toBeUndefined();
   expect(validate?.environment).toBeUndefined();
   expect(hasParsedKey(workflow, "secrets")).toBe(false);
-  expect(collectSecretContextAccesses(validate)).toEqual([]);
+  expect(validate?.steps).toEqual(expectedValidateSteps);
+  expect(collectSecretsTokens(validate)).toEqual([]);
   for (const step of validate?.steps ?? []) {
+    expect(step.if).toBeUndefined();
     expect(step["continue-on-error"] ?? false).toBe(false);
   }
 
@@ -254,58 +277,16 @@ const expectReleaseWorkflowContract = (source: string) => {
     ...Object.fromEntries(releaseSecretNames.map((name) => [name, `\${{ secrets.${name} }}`])),
   });
   const { env: releaseEnv, ...releaseWithoutEnv } = release ?? {};
-  expect(collectSecretContextAccesses(releaseWithoutEnv)).toEqual([]);
-  expect(collectSecretContextAccesses(releaseEnv)).toEqual(
-    releaseSecretNames.map(() => "secrets."),
-  );
+  expect(collectSecretsTokens(releaseWithoutEnv)).toEqual([]);
+  expect(collectSecretsTokens(releaseEnv)).toEqual(releaseSecretNames.map(() => "secrets"));
   expect(
-    collectSecretContextAccesses({
+    collectSecretsTokens({
       ...workflow,
       jobs: { ...jobs, release: releaseWithoutEnv },
     }),
   ).toEqual([]);
-  expectPnpmBeforeCachedNodeSetup(jobs);
 
-  const validateCommands = (validate?.steps ?? [])
-    .map((step) => step.run)
-    .filter((command): command is string => typeof command === "string");
-  expect(validateCommands).toContain("pnpm install --frozen-lockfile");
-  expect(validateCommands).toContain("pnpm --filter @readany/core test");
-  expect(validateCommands).toContain("pnpm --filter @readany/app-expo test");
-  expect(validateCommands).toContain("pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json");
-  expect(validateCommands.join("\n")).toContain("git diff --check");
-
-  const releaseSteps = release?.steps ?? [];
-  const releaseActions = releaseSteps
-    .map((step) => step.uses)
-    .filter((action): action is string => typeof action === "string");
-  expect(releaseActions).toContain("android-actions/setup-android@v3");
-  const setupNode = releaseSteps.find((step) => step.uses === "actions/setup-node@v4");
-  expect(setupNode?.with).toEqual({ "node-version": "20.18.0", cache: "pnpm" });
-  const setupJava = releaseSteps.find((step) => step.uses === "actions/setup-java@v4");
-  expect(setupJava?.with).toEqual({ distribution: "temurin", "java-version": 17 });
-  expect(releaseSteps.map((step) => step.run)).toContain("pnpm install --frozen-lockfile");
-
-  const buildSteps = releaseSteps.filter(
-    (step) => step.name === "Build, sign, verify, and publish APK",
-  );
-  expect(buildSteps).toHaveLength(1);
-  expect(buildSteps[0]?.run?.replaceAll("\r\n", "\n").trim()).toBe(stableReleaseScript);
-
-  const nonBuildReleaseSteps = releaseSteps.filter((step) => step !== buildSteps[0]);
-  const nonBuildReleaseActions = nonBuildReleaseSteps
-    .map((step) => step.uses)
-    .filter((action): action is string => typeof action === "string");
-  const nonBuildReleaseCommands = nonBuildReleaseSteps
-    .map((step) => step.run)
-    .filter((command): command is string => typeof command === "string");
-  expect(
-    nonBuildReleaseActions.some((action) => /\b(?:publish|release|upload)\w*/i.test(action)),
-  ).toBe(false);
-  expect(nonBuildReleaseCommands.some((command) => /\bgh\s+release\b/i.test(command))).toBe(false);
-  expect(
-    nonBuildReleaseCommands.some((command) => /\b(?:publish|release|upload)\w*/i.test(command)),
-  ).toBe(false);
+  expect(release?.steps).toEqual(expectedReleaseSteps);
 };
 
 const addWrongCacheOrderJob = (source: string, jobId: string) =>
@@ -539,6 +520,14 @@ const unsafeReleaseMutations = [
       ),
   },
   {
+    name: "required validation test is skipped",
+    mutate: (source: string) =>
+      source.replace(
+        "      - run: pnpm --filter @readany/core test",
+        "      - run: pnpm --filter @readany/core test\n        if: ${{ false }}",
+      ),
+  },
+  {
     name: "validate secret",
     mutate: (source: string) =>
       source.replace(
@@ -576,6 +565,14 @@ const unsafeReleaseMutations = [
       source.replace(
         "  validate:\n    name: Validate",
         "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ secrets[inputs.secret_name] }}",
+      ),
+  },
+  {
+    name: "serialized secrets context",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate",
+        "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ toJSON(secrets) }}",
       ),
   },
   {
@@ -648,6 +645,14 @@ const unsafeReleaseMutations = [
       source.replace(
         "      - name: Build, sign, verify, and publish APK",
         "      - uses: softprops/action-gh-release@v2\n      - name: Build, sign, verify, and publish APK",
+      ),
+  },
+  {
+    name: "generic GitHub script release step",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Build, sign, verify, and publish APK",
+        "      - uses: actions/github-script@v7\n        with:\n          script: core.info('deploy')\n      - name: Build, sign, verify, and publish APK",
       ),
   },
 ] as const;

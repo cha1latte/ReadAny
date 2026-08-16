@@ -59,6 +59,7 @@ const expectPreviewWorkflowContract = (source: string) => {
   expect(workflow.permissions).toEqual({ contents: "read" });
 
   const jobs = workflow.jobs ?? {};
+  expect(Object.keys(jobs)).toEqual(["validate", "preview"]);
   const validate = jobs.validate;
   const preview = jobs.preview;
   expect(validate?.name).toBe("Validate");
@@ -66,6 +67,7 @@ const expectPreviewWorkflowContract = (source: string) => {
   expect(preview?.needs).toBe("validate");
 
   for (const job of Object.values(jobs)) {
+    expect(job.uses).toBeUndefined();
     expect(job.permissions).toBeUndefined();
     expect(job.environment).toBeUndefined();
     const steps = job.steps ?? [];
@@ -760,6 +762,11 @@ const addWrongCacheOrderJob = (source: string, jobId: string) =>
 
 const unsafeMutations = [
   {
+    name: "unpinned reusable job action",
+    mutate: (source: string) =>
+      source.replace("jobs:\n", "jobs:\n  attacker:\n    uses: attacker/reusable@main\n\n"),
+  },
+  {
     name: "pull_request_target trigger",
     mutate: (source: string) => source.replace("  pull_request:\n", "  pull_request_target:\n"),
   },
@@ -1306,11 +1313,13 @@ const unsafeReleaseMutations = [
 
 describe("ReadAny Shlai workflows", () => {
   it("pins every third-party action in Shlai workflows", () => {
-    for (const name of ["shlai-pr.yml", "shlai-upstream-sync.yml"]) {
+    for (const name of ["shlai-pr.yml", "shlai-release.yml", "shlai-upstream-sync.yml"]) {
       const source = readWorkflow(name);
       const workflow = parse(source, { version: "1.2" }) as Workflow;
       const uses = Object.values(workflow.jobs ?? {}).flatMap((job) =>
-        (job.steps ?? []).flatMap((step) => (step.uses ? [step.uses] : [])),
+        [job.uses, ...(job.steps ?? []).map((step) => step.uses)].filter(
+          (action): action is string => typeof action === "string",
+        ),
       );
 
       expect(uses.length).toBeGreaterThan(0);

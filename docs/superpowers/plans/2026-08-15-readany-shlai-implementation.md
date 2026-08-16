@@ -104,6 +104,7 @@ describe("ReadAny Shlai app configuration", () => {
   it("derives the release tag, display version, and Android build number", () => {
     expect(
       getShlaiVersionConfig({
+        APP_VARIANT: "production",
         SHLAI_UPSTREAM_VERSION: "1.3.5",
         SHLAI_REVISION: "2",
         SHLAI_VERSION_CODE: "9",
@@ -119,8 +120,12 @@ describe("ReadAny Shlai app configuration", () => {
 
   it.each([
     [{ SHLAI_UPSTREAM_VERSION: "one" }, "Invalid SHLAI_UPSTREAM_VERSION"],
+    [{ SHLAI_UPSTREAM_VERSION: "01.3.5" }, "Invalid SHLAI_UPSTREAM_VERSION"],
     [{ SHLAI_REVISION: "-1" }, "Invalid SHLAI_REVISION"],
+    [{ APP_VARIANT: "production", SHLAI_REVISION: "0" }, "Invalid SHLAI_REVISION"],
+    [{ SHLAI_REVISION: "9007199254740992" }, "Invalid SHLAI_REVISION"],
     [{ SHLAI_VERSION_CODE: "0" }, "Invalid SHLAI_VERSION_CODE"],
+    [{ SHLAI_VERSION_CODE: "2100000001" }, "Invalid SHLAI_VERSION_CODE"],
   ])("rejects invalid release metadata", (env, message) => {
     expect(() => getShlaiVersionConfig(env)).toThrow(message);
   });
@@ -143,16 +148,21 @@ Create `packages/app-expo/scripts/shlai-version.js`:
 
 ```js
 const { version: packageVersion } = require("../package.json");
+const { normalizeAppVariant } = require("./app-variant");
+
+const MAX_ANDROID_VERSION_CODE = 2100000000;
 
 function getShlaiVersionConfig(env = process.env) {
-  const upstreamVersion = String(env.SHLAI_UPSTREAM_VERSION || packageVersion).trim();
-  const revisionText = String(env.SHLAI_REVISION || "0").trim();
-  const versionCodeText = String(env.SHLAI_VERSION_CODE || "1").trim();
+  const upstreamVersion = String(env.SHLAI_UPSTREAM_VERSION || packageVersion);
+  const revisionText = String(env.SHLAI_REVISION || "0");
+  const versionCodeText = String(env.SHLAI_VERSION_CODE || "1");
+  const isProduction =
+    normalizeAppVariant(env.APP_VARIANT || env.EAS_BUILD_PROFILE) === "production";
 
-  if (!/^\d+\.\d+\.\d+$/.test(upstreamVersion)) {
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(upstreamVersion)) {
     throw new Error(`Invalid SHLAI_UPSTREAM_VERSION: ${upstreamVersion}`);
   }
-  if (!/^\d+$/.test(revisionText)) {
+  if (!/^(0|[1-9]\d*)$/.test(revisionText)) {
     throw new Error(`Invalid SHLAI_REVISION: ${revisionText}`);
   }
   if (!/^[1-9]\d*$/.test(versionCodeText)) {
@@ -161,6 +171,12 @@ function getShlaiVersionConfig(env = process.env) {
 
   const revision = Number(revisionText);
   const versionCode = Number(versionCodeText);
+  if (!Number.isSafeInteger(revision) || (isProduction && revision <= 0)) {
+    throw new Error(`Invalid SHLAI_REVISION: ${revisionText}`);
+  }
+  if (!Number.isSafeInteger(versionCode) || versionCode > MAX_ANDROID_VERSION_CODE) {
+    throw new Error(`Invalid SHLAI_VERSION_CODE: ${versionCodeText}`);
+  }
   return {
     upstreamVersion,
     revision,
@@ -222,7 +238,7 @@ extra: {
 },
 ```
 
-Do not retain the official Expo `projectId` or App Store `ascAppId`. Set `appVersionSource` to `local` in `packages/app-expo/eas.json`. Update hard-coded development schemes in `packages/app-expo/package.json` to `readany-shlai-dev`.
+Do not retain the official Expo `projectId` or App Store `ascAppId`. Set `appVersionSource` to `local` in `packages/app-expo/eas.json` and keep only the `development`, `development-simulator`, and `preview` build profiles. Remove the unsupported production EAS profiles plus the generic `eas:build:android` and `eas:build:ios` scripts from both package files; the named development and preview scripts remain. Remove the inherited Android `build-android` job from `.github/workflows/release.yml` and make its desktop updater job depend only on `build`, so no legacy workflow references the deleted `production-apk` profile. Stable Shlai Android builds use only `.github/workflows/shlai-release.yml`; stable iOS distribution remains unsupported. Update hard-coded development schemes in `packages/app-expo/package.json` to `readany-shlai-dev`.
 
 Broaden the three iOS replacement patterns in `configure-native-variant.js` so they recognize both inherited official identifiers and all Shlai identifiers before substituting `variant` values. This preserves local tooling without adding iOS distribution.
 
@@ -288,7 +304,13 @@ function makePlatform() {
 
 describe("Shlai update routing", () => {
   it("normalizes Shlai release tags and prerelease-style app versions", () => {
+    expect(releaseTagToVersion("v1.3.5")).toBe("1.3.5");
     expect(releaseTagToVersion("shlai-v1.3.5.2", "shlai-v")).toBe("1.3.5.2");
+    expect(releaseTagToVersion("v1.3", "v")).toBeNull();
+    expect(releaseTagToVersion("v01.3.5", "v")).toBeNull();
+    expect(releaseTagToVersion("shlai-v1.3.5", "shlai-v")).toBeNull();
+    expect(releaseTagToVersion("shlai-v1.3.5.0", "shlai-v")).toBeNull();
+    expect(releaseTagToVersion("shlai-v1.3.5.2-extra", "shlai-v")).toBeNull();
     expect(compareVersions("1.3.5.2", "1.3.5-shlai.1")).toBeGreaterThan(0);
     expect(compareVersions("1.3.5.2", "1.3.5-shlai.2")).toBe(0);
   });
@@ -332,7 +354,14 @@ export interface UpdateCheckOptions {
 }
 
 export function releaseTagToVersion(tag: string, prefix = "v"): string | null {
-  return tag.startsWith(prefix) ? tag.slice(prefix.length) : null;
+  const canonicalComponent = "(?:0|[1-9]\\d*)";
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const versionPattern =
+    prefix === "shlai-v"
+      ? `${canonicalComponent}\\.${canonicalComponent}\\.${canonicalComponent}\\.[1-9]\\d*`
+      : `${canonicalComponent}\\.${canonicalComponent}\\.${canonicalComponent}`;
+  const match = tag.match(new RegExp(`^${escapedPrefix}(${versionPattern})$`));
+  return match?.[1] ?? null;
 }
 
 function versionParts(value: string): number[] {
@@ -585,13 +614,13 @@ jobs:
     name: Validate
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
         with:
           version: 9.15.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20.18.0
           cache: pnpm
@@ -623,19 +652,19 @@ jobs:
       SHLAI_REVISION: 0
       SHLAI_VERSION_CODE: 1
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
         with:
           version: 9.15.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20.18.0
           cache: pnpm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @readany/app-expo run build:reader
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
@@ -647,7 +676,7 @@ jobs:
         run: |
           NUMBER="${{ github.event.pull_request.number || github.run_number }}"
           cp packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}
           path: ReadAny-Shlai-Preview-*.apk
@@ -696,9 +725,14 @@ it("guards stable signing behind the production environment", () => {
   expect(source).toContain("environment: shlai-production");
   expect(source).toContain("workflow_dispatch:");
   expect(source).toContain("SHLAI_ANDROID_KEYSTORE_BASE64");
-  expect(source).toContain("android.injected.signing.store.file");
-  expect(source).toContain("apksigner verify --verbose --print-certs");
+  expect(source).toContain("Build unsigned production APK");
+  expect(source).toContain("app-release-unsigned.apk");
+  expect(source).toContain("$ANDROID_HOME/build-tools/36.0.0");
+  expect(source).toContain("git/matching-refs/tags/$TAG");
+  expect(source).toContain("Android versionCode:");
+  expect(source).toContain('"$APKSIGNER" verify --verbose --print-certs "$APK"');
   expect(source).toContain('gh release create "$TAG"');
+  expect(source).not.toContain("android.injected.signing");
   expect(source).not.toContain("pull_request:");
 });
 ```
@@ -709,42 +743,106 @@ Run the test and expect failure because the release workflow does not exist.
 
 Create `.github/workflows/shlai-release.yml` with three jobs: secret-free `validate`, secret-free unsigned `build`, then minimal `sign` using `environment: shlai-production`. Set top-level permissions to `contents: read`, then grant only `sign` `contents: write` so `gh release create` can publish. The dispatch inputs are `upstream_version`, `revision`, and `version_code`, all required strings with defaults `1.3.5`, `1`, and `1`. Serialize stable workflow runs. During validation, page through every non-draft, non-prerelease release, select the greatest exact `shlai-vX.Y.Z.N` tuple with string-safe integer comparison, and require both the requested tuple and Android version code to increase. Require exactly one canonical `Android versionCode: N` metadata line from the prior stable release, fail on API or provenance errors, and publish that line in every new release. Keep EAS limited to development and preview profiles; stable Android is built only by this protected workflow and stable iOS remains unsupported.
 
-The release job must use these exact build/sign/release commands:
+The workflow has fixed concurrency so only one stable release can run at a time:
+
+```yaml
+concurrency:
+  group: shlai-stable-release
+  cancel-in-progress: false
+```
+
+The secret-free `validate` job sets `GH_TOKEN` to `github.token`, runs with `set -euo pipefail`, validates canonical positive bounded inputs, and retrieves all release pages with:
 
 ```bash
+RELEASES_JSON="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp)"
+RELEASE_ROWS="$(printf '%s' "$RELEASES_JSON" | jq -r '.[][] | select(.draft == false and .prerelease == false) | @base64')"
+```
+
+It accepts only exact stable tags matching `^shlai-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.([1-9][0-9]*)$`, selects the greatest four-component tuple with the tested `decimal_gt` and `tuple_gt` string comparators, and requires the requested tuple to be strictly greater. When a prior stable release exists, its body must contain exactly one line matching `^Android versionCode: ([1-9][0-9]*)$`; that value must be bounded and the requested Android version code must be strictly greater. API, JSON, or provenance errors fail the job. Only the first stable release may proceed without prior metadata.
+
+After `validate` succeeds, the separate secret-free `build` job checks out the repository, installs pinned Node, pnpm, Java, Android tooling, and Build Tools `36.0.0`, generates the reader assets, runs Expo prebuild, and builds only the unsigned arm64 package:
+
+```bash
+set -euo pipefail
+
+node packages/app-expo/scripts/remove-release-debug-signing.js packages/app-expo/android/app/build.gradle
+cd packages/app-expo/android
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+cd ../../..
+
+UNSIGNED_APK="packages/app-expo/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+test -f "$UNSIGNED_APK"
+BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+if "$BUILD_TOOLS/apksigner" verify "$UNSIGNED_APK" >/dev/null 2>&1; then
+  echo "Expected an unsigned release APK, but signature verification succeeded." >&2
+  exit 1
+fi
+```
+
+Upload exactly `app-release-unsigned.apk` as a one-day internal artifact. The `build` job has no protected environment, write permission, signing secret, signing property, or signing command.
+
+The final `sign` job alone uses `environment: shlai-production` and `contents: write`. Before the secret-bearing final shell step it may only set up Android Build Tools `36.0.0` and download the internal unsigned artifact. It never checks out the repository, installs dependencies, or executes pnpm, Expo, Gradle, or repository code. All four signing secrets are scoped only to the final step, which uses these commands:
+
+```bash
+set -euo pipefail
+
 TAG="shlai-v${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}"
+UNSIGNED_APK="$RUNNER_TEMP/unsigned/app-release-unsigned.apk"
+ALIGNED_APK="$RUNNER_TEMP/ReadAny-Shlai-aligned.apk"
 APK="ReadAny-Shlai.apk"
 KEYSTORE="$RUNNER_TEMP/readany-shlai-release.jks"
+BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+ZIPALIGN="$BUILD_TOOLS/zipalign"
+APKSIGNER="$BUILD_TOOLS/apksigner"
+trap 'rm -f "$KEYSTORE"' EXIT
 
-if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-  echo "Release already exists: $TAG" >&2
+test "$GITHUB_REF" = "refs/heads/main"
+test -f "$UNSIGNED_APK"
+EXPECTED_CERT_SHA256="$(printf '%s' "$SHLAI_ANDROID_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "$EXPECTED_CERT_SHA256" =~ ^[0-9A-F]{64}$ ]]; then
+  echo "SHLAI_ANDROID_CERT_SHA256 must normalize to exactly 64 hexadecimal characters." >&2
+  exit 1
+fi
+EXACT_TAG_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \"refs/tags/$TAG\")] | length")"
+if [[ "$EXACT_TAG_COUNT" != "0" ]]; then
+  echo "Tag already exists: $TAG" >&2
   exit 1
 fi
 
 printf '%s' "$SHLAI_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-pnpm --filter @readany/app-expo run build:reader
-pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
-
-cd packages/app-expo/android
-./gradlew assembleRelease \
-  -PreactNativeArchitectures=arm64-v8a \
-  -Pandroid.injected.signing.store.file="$KEYSTORE" \
-  -Pandroid.injected.signing.store.password="$SHLAI_ANDROID_KEYSTORE_PASSWORD" \
-  -Pandroid.injected.signing.key.alias="$SHLAI_ANDROID_KEY_ALIAS" \
-  -Pandroid.injected.signing.key.password="$SHLAI_ANDROID_KEY_PASSWORD"
-cd ../../..
-
-cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"
-BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+if "$ZIPALIGN" -c -P 16 -v 4 "$UNSIGNED_APK" >/dev/null; then
+  cp "$UNSIGNED_APK" "$ALIGNED_APK"
+else
+  "$ZIPALIGN" -P 16 -f -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
+fi
+"$APKSIGNER" sign \
+  --ks "$KEYSTORE" \
+  --ks-key-alias "$SHLAI_ANDROID_KEY_ALIAS" \
+  --ks-pass env:SHLAI_ANDROID_KEYSTORE_PASSWORD \
+  --key-pass env:SHLAI_ANDROID_KEY_PASSWORD \
+  --out "$APK" \
+  "$ALIGNED_APK"
+CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK")"
+mapfile -t ACTUAL_CERT_DIGESTS < <(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p')
+if (( ${#ACTUAL_CERT_DIGESTS[@]} != 1 )); then
+  echo "Expected exactly one APK signer certificate SHA-256 digest." >&2
+  exit 1
+fi
+ACTUAL_CERT_SHA256="$(printf '%s' "${ACTUAL_CERT_DIGESTS[0]}" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "$ACTUAL_CERT_SHA256" =~ ^[0-9A-F]{64}$ || "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]]; then
+  echo "Signed APK certificate SHA-256 digest does not match SHLAI_ANDROID_CERT_SHA256." >&2
+  exit 1
+fi
+"$APKSIGNER" verify --verbose --print-certs "$APK"
+RELEASE_NOTES="$(printf 'Unofficial ReadAny Shlai Android release. Source: %s/%s/tree/%s\n\nAndroid versionCode: %s' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$SHLAI_VERSION_CODE")"
 gh release create "$TAG" "$APK" \
   --repo "$GITHUB_REPOSITORY" \
   --target "$GITHUB_SHA" \
   --title "ReadAny Shlai ${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}" \
-  --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"
+  --notes "$RELEASE_NOTES"
 ```
 
-Set job environment variables from workflow inputs and secrets. The `validate` job runs the same core tests, Expo tests, type-check, and diff check as Task 4. The `release` job installs Node 20.18, pnpm 9.15, Java 17, Android SDK, and frozen dependencies before the commands above.
+The `validate` job runs the same core tests, Expo tests, type-check, changed-file Biome check, and diff check as Task 4. Every third-party action in the Shlai workflow is pinned to the reviewed full commit SHA with a readable version comment. The signing certificate digest is a protected environment variable; the four keystore values remain protected environment secrets.
 
 - [ ] **Step 3: Write operator documentation**
 
@@ -794,6 +892,11 @@ it("opens reviewable upstream sync pull requests without merging", () => {
   const source = readWorkflow("shlai-upstream-sync.yml");
   expect(source).toContain("cron: '17 13 * * 1'");
   expect(source).toContain("https://github.com/codedogQBY/ReadAny.git");
+  expect(source).toContain("group: shlai-upstream-sync");
+  expect(source).toContain("cancel-in-progress: false");
+  expect(source).toContain("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
+  expect(source).toContain('UPSTREAM_SHA="$(git rev-parse upstream/main)"');
+  expect(source).toContain('[[ "$REMOTE_SHA" != "$UPSTREAM_SHA" ]]');
   expect(source).toContain("gh pr create");
   expect(source).toContain("Sync official ReadAny upstream");
   expect(source).not.toMatch(/gh pr merge|--auto|git merge upstream/);
@@ -814,6 +917,10 @@ on:
     - cron: '17 13 * * 1'
   workflow_dispatch:
 
+concurrency:
+  group: shlai-upstream-sync
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -823,7 +930,7 @@ jobs:
     name: Open upstream sync PR
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       - name: Create sync branch and PR
@@ -846,13 +953,23 @@ jobs:
           fi
 
           BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
+          UPSTREAM_SHA="$(git rev-parse upstream/main)"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "Sync branch already exists: $BRANCH"
-            exit 0
+            REMOTE_SHA="$(git ls-remote --heads origin "$BRANCH" | awk '{print $1}')"
+            if [[ -z "$REMOTE_SHA" ]]; then
+              echo "Existing sync branch could not be resolved: $BRANCH" >&2
+              exit 1
+            fi
+            if [[ "$REMOTE_SHA" != "$UPSTREAM_SHA" ]]; then
+              echo "Existing sync branch does not match upstream main: $BRANCH" >&2
+              exit 1
+            fi
+            echo "Reusing existing sync branch: $BRANCH"
+          else
+            git switch --create "$BRANCH" upstream/main
+            git push origin "$BRANCH"
           fi
 
-          git switch --create "$BRANCH" upstream/main
-          git push origin "$BRANCH"
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \
@@ -861,7 +978,7 @@ jobs:
             --body "Brings the latest codedogQBY/ReadAny main into ReadAny Shlai. This PR is never auto-merged; resolve conflicts and verify the preview APK before approval."
 ```
 
-This deliberately branches from the latest official commit. GitHub's pull request shows whether those commits merge cleanly with Shlai; conflicts remain visible and require human resolution.
+This deliberately branches from the freshly fetched official commit. A retry reuses the dated branch only when its exact remote SHA equals that fetched `upstream/main`; an unresolved or mismatched branch fails closed before PR creation. GitHub's pull request shows whether those commits merge cleanly with Shlai; conflicts remain visible and require human resolution. Static non-cancelling concurrency prevents overlapping sync runs, and the workflow never auto-merges.
 
 - [ ] **Step 3: Document conflict handling**
 

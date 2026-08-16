@@ -226,6 +226,150 @@ const expectedReleaseSteps: WorkflowStep[] = [
   },
 ];
 
+const upstreamSyncScript = `git fetch origin main
+git fetch https://github.com/codedogQBY/ReadAny.git main:refs/remotes/upstream/main
+
+if git merge-base --is-ancestor upstream/main origin/main; then
+  echo "Fork already contains upstream main."
+  exit 0
+fi
+
+OPEN_COUNT="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --search 'in:title "Sync official ReadAny upstream"' --json number --jq 'length')"
+if [[ "$OPEN_COUNT" != "0" ]]; then
+  echo "An upstream sync PR is already open."
+  exit 0
+fi
+
+BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
+if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+  echo "Sync branch already exists: $BRANCH"
+  exit 0
+fi
+
+git switch --create "$BRANCH" upstream/main
+git push origin "$BRANCH"
+gh pr create \\
+  --repo "$GITHUB_REPOSITORY" \\
+  --base main \\
+  --head "$BRANCH" \\
+  --title "Sync official ReadAny upstream $(date -u +%Y-%m-%d)" \\
+  --body "Brings the latest codedogQBY/ReadAny main into ReadAny Shlai. This PR is never auto-merged; resolve conflicts and verify the preview APK before approval."
+`;
+
+const expectedUpstreamSyncSteps: WorkflowStep[] = [
+  { uses: "actions/checkout@v4", with: { "fetch-depth": 0 } },
+  {
+    name: "Create sync branch and PR",
+    env: { GH_TOKEN: "${{ github.token }}" },
+    shell: "bash",
+    run: upstreamSyncScript,
+  },
+];
+
+const expectUpstreamSyncWorkflowContract = (source: string) => {
+  const workflow = parse(source, { version: "1.2" }) as Workflow;
+  expect(Object.keys(workflow).sort()).toEqual(["jobs", "name", "on", "permissions"]);
+  expect(workflow.on).toEqual({
+    schedule: [{ cron: "17 13 * * 1" }],
+    workflow_dispatch: null,
+  });
+  expect(workflow.permissions).toEqual({ contents: "write", "pull-requests": "write" });
+  expect(workflow.env).toBeUndefined();
+  expect(hasParsedKey(workflow, "secrets")).toBe(false);
+  expect(JSON.stringify(workflow)).not.toMatch(/\bsecrets\b/i);
+
+  const jobs = workflow.jobs ?? {};
+  expect(Object.keys(jobs)).toEqual(["sync"]);
+  const sync = jobs.sync;
+  expect(Object.keys(sync ?? {}).sort()).toEqual(["name", "runs-on", "steps"]);
+  expect(sync?.name).toBe("Open upstream sync PR");
+  expect(sync?.["runs-on"]).toBe("ubuntu-22.04");
+  expect(sync?.if).toBeUndefined();
+  expect(sync?.["continue-on-error"]).toBeUndefined();
+  expect(sync?.permissions).toBeUndefined();
+  expect(sync?.environment).toBeUndefined();
+  expect(sync?.env).toBeUndefined();
+  expect(sync?.uses).toBeUndefined();
+  expect(sync?.steps).toEqual(expectedUpstreamSyncSteps);
+
+  for (const step of sync?.steps ?? []) {
+    expect(step.if).toBeUndefined();
+    expect(step["continue-on-error"]).toBeUndefined();
+  }
+  expect(source).not.toMatch(/\bgh\s+pr\s+merge\b|--auto\b|\bgit\s+merge\s+upstream\b/i);
+};
+
+const unsafeUpstreamSyncMutations = [
+  {
+    name: "extra push trigger",
+    mutate: (source: string) =>
+      source.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  push:\n"),
+  },
+  {
+    name: "wrong schedule",
+    mutate: (source: string) => source.replace("17 13 * * 1", "0 0 * * *"),
+  },
+  {
+    name: "extra permission",
+    mutate: (source: string) =>
+      source.replace("  pull-requests: write", "  pull-requests: write\n  issues: write"),
+  },
+  {
+    name: "job permission override",
+    mutate: (source: string) =>
+      source.replace(
+        "    runs-on: ubuntu-22.04",
+        "    runs-on: ubuntu-22.04\n    permissions: write-all",
+      ),
+  },
+  {
+    name: "self-hosted runner",
+    mutate: (source: string) => source.replace("runs-on: ubuntu-22.04", "runs-on: self-hosted"),
+  },
+  {
+    name: "extra execution default",
+    mutate: (source: string) =>
+      source.replace("permissions:\n", "defaults:\n  run:\n    shell: bash\n\npermissions:\n"),
+  },
+  {
+    name: "extra step",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Create sync branch and PR",
+        "      - run: echo unsafe\n      - name: Create sync branch and PR",
+      ),
+  },
+  {
+    name: "secret context",
+    mutate: (source: string) =>
+      source.replace(
+        "        env:\n          GH_TOKEN: ${{ github.token }}",
+        "        env:\n          GH_TOKEN: ${{ secrets.UNRELATED_TOKEN }}",
+      ),
+  },
+  {
+    name: "automatic merge",
+    mutate: (source: string) =>
+      source.replace("gh pr create", "gh pr merge --auto\n          gh pr create"),
+  },
+  {
+    name: "branches from fork main",
+    mutate: (source: string) =>
+      source.replace(
+        'git switch --create "$BRANCH" upstream/main',
+        'git switch --create "$BRANCH" origin/main',
+      ),
+  },
+  {
+    name: "creates PR before branch push",
+    mutate: (source: string) =>
+      source.replace(
+        'git push origin "$BRANCH"\n          gh pr create',
+        'gh pr create\n          git push origin "$BRANCH"',
+      ),
+  },
+] as const;
+
 const expectReleaseWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
   expect(Object.keys(workflow).sort()).toEqual(["jobs", "name", "on", "permissions"]);
@@ -696,6 +840,20 @@ const unsafeReleaseMutations = [
 ] as const;
 
 describe("ReadAny Shlai workflows", () => {
+  it("opens reviewable upstream sync pull requests without merging", () => {
+    expectUpstreamSyncWorkflowContract(readWorkflow("shlai-upstream-sync.yml"));
+  });
+
+  it.each(unsafeUpstreamSyncMutations)(
+    "rejects unsafe upstream sync $name mutation",
+    ({ mutate }) => {
+      const source = readWorkflow("shlai-upstream-sync.yml");
+      const mutatedSource = mutate(source);
+      expect(mutatedSource).not.toBe(source);
+      expect(() => expectUpstreamSyncWorkflowContract(mutatedSource)).toThrow();
+    },
+  );
+
   it("builds secret-free preview APKs after validation", () => {
     expectPreviewWorkflowContract(readWorkflow("shlai-pr.yml"));
   });

@@ -45,12 +45,16 @@ module.exports = {
       ],
     },
     plugins: [
-      [
-        "expo-dev-client",
-        {
-          launchMode: "launcher",
-        },
-      ],
+      ...(variant.key === "development"
+        ? [
+            [
+              "expo-dev-client",
+              {
+                launchMode: "launcher",
+              },
+            ],
+          ]
+        : []),
       [
         "expo-av",
         {

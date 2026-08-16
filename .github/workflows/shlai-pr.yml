@@ -73,12 +73,12 @@ jobs:
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
       - name: Build preview APK
         working-directory: packages/app-expo/android
-        run: ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
       - name: Stage preview APK
         shell: bash
         run: |
           NUMBER="${{ github.event.pull_request.number || github.run_number }}"
-          cp packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
+          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}

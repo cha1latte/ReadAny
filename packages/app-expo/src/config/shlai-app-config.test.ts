@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -7,7 +8,39 @@ const require = createRequire(import.meta.url);
 const { APP_VARIANTS } = require("../../scripts/app-variant.js");
 const { getShlaiVersionConfig } = require("../../scripts/shlai-version.js");
 
+const loadExpoConfig = (variant: "development" | "preview" | "production") => {
+  const configPath = resolve(import.meta.dirname, "../../app.config.js");
+  const revision = variant === "production" ? "1" : "0";
+  const output = execFileSync(
+    process.execPath,
+    ["-e", `process.stdout.write(JSON.stringify(require(${JSON.stringify(configPath)}).expo))`],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        APP_VARIANT: variant,
+        SHLAI_UPSTREAM_VERSION: "1.3.5",
+        SHLAI_REVISION: revision,
+        SHLAI_VERSION_CODE: "1",
+      },
+    },
+  );
+  return JSON.parse(output) as { plugins: Array<string | [string, Record<string, unknown>]> };
+};
+
 describe("ReadAny Shlai app configuration", () => {
+  it("includes the Expo development launcher only in development builds", () => {
+    const developmentPlugins = loadExpoConfig("development").plugins;
+    expect(developmentPlugins).toContainEqual(["expo-dev-client", { launchMode: "launcher" }]);
+
+    for (const variant of ["preview", "production"] as const) {
+      const pluginNames = loadExpoConfig(variant).plugins.map((plugin) =>
+        Array.isArray(plugin) ? plugin[0] : plugin,
+      );
+      expect(pluginNames).not.toContain("expo-dev-client");
+    }
+  });
+
   it("keeps EAS limited to development and preview builds", () => {
     const root = resolve(import.meta.dirname, "../../../..");
     const eas = JSON.parse(readFileSync(resolve(root, "packages/app-expo/eas.json"), "utf8"));

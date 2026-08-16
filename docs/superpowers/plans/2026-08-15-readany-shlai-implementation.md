@@ -553,7 +553,7 @@ git commit -m "feat(mobile): brand the ReadAny Shlai fork"
 
 **Interfaces:**
 - Consumes: preview identity/configuration from Task 1 and existing Expo build scripts.
-- Produces: required checks named `Validate` and `Preview APK`, plus an installable debug-signed preview artifact that has no stable secrets.
+- Produces: required checks named `Validate` and `Preview APK`, plus a self-contained release-mode preview artifact that uses only the generated debug signer and has no stable secrets or development launcher.
 
 - [ ] **Step 1: Write the failing workflow security contract**
 
@@ -574,7 +574,7 @@ describe("ReadAny Shlai workflows", () => {
     expect(source).toContain("name: Validate");
     expect(source).toContain("name: Preview APK");
     expect(source).toContain("APP_VARIANT: preview");
-    expect(source).toContain("assembleDebug");
+    expect(source).toContain("assembleRelease");
     expect(source).toContain("ReadAny-Shlai-Preview-");
     expect(source).not.toContain("SHLAI_ANDROID_KEYSTORE");
     expect(source).not.toContain("environment: shlai-production");
@@ -670,12 +670,12 @@ jobs:
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
       - name: Build preview APK
         working-directory: packages/app-expo/android
-        run: ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
       - name: Stage preview APK
         shell: bash
         run: |
           NUMBER="${{ github.event.pull_request.number || github.run_number }}"
-          cp packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
+          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}
@@ -689,11 +689,11 @@ jobs:
 pnpm --filter @readany/app-expo exec vitest run src/config/shlai-workflows.test.ts
 $env:APP_VARIANT='preview'; $env:SHLAI_UPSTREAM_VERSION='1.3.5'; $env:SHLAI_REVISION='0'; $env:SHLAI_VERSION_CODE='1'; pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
 Set-Location packages/app-expo/android
-.\gradlew.bat assembleDebug -PreactNativeArchitectures=arm64-v8a
+.\gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
 Set-Location ../../../
 ```
 
-Expected: workflow contract PASS and `packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk` exists with preview package identity.
+Expected: workflow contract PASS and `packages/app-expo/android/app/build/outputs/apk/release/app-release.apk` exists with preview package identity, bundled JavaScript, and no Expo development launcher.
 
 - [ ] **Step 5: Commit the preview workflow slice**
 

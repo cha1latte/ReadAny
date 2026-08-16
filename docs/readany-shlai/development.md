@@ -48,7 +48,7 @@ GitHub places `pull_request` workflows created by automation using `GITHUB_TOKEN
 
 ## Preview APKs
 
-Every pull request to `main` runs the secret-free **Shlai Pull Request** workflow. After its `Preview APK` job succeeds, open that workflow run in GitHub Actions and download the artifact named `ReadAny-Shlai-Preview-<PR number>`. The downloaded ZIP contains `ReadAny-Shlai-Preview-<PR number>.apk`; extract it and install that APK for review. Preview artifacts are retained for 14 days.
+Every pull request to `main` runs the secret-free **Shlai Pull Request** workflow. After its `Preview APK` job succeeds, open that workflow run in GitHub Actions and download the artifact named `ReadAny-Shlai-Preview-<PR number>`. The downloaded ZIP contains `ReadAny-Shlai-Preview-<PR number>.apk`; extract it and install that APK for review. It is a self-contained release-mode preview with bundled JavaScript and no Expo development launcher or Metro dependency. Preview artifacts are retained for 14 days.
 
 The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so it can be installed alongside official ReadAny and stable ReadAny Shlai without changing either app's data.
 

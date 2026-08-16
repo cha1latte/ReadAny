@@ -110,7 +110,13 @@ const expectPreviewWorkflowContract = (source: string) => {
     .map((step) => step.run)
     .filter((command): command is string => typeof command === "string");
   expect(actions.some((action) => /(?:publish|release)/i.test(action))).toBe(false);
-  expect(commands.some((command) => /(?:publish|release)/i.test(command))).toBe(false);
+  expect(
+    commands.some((command) =>
+      /(?:\bgh\s+release\b|\b(?:npm|pnpm|yarn)\s+publish\b|\bgradlew(?:\.bat)?\s+publish\b)/i.test(
+        command,
+      ),
+    ),
+  ).toBe(false);
   expect(commands.some((command) => /GITHUB_ENV/i.test(command))).toBe(false);
   expect(commands.join("\n")).not.toContain("--platform ios");
   expect(commands.join("\n")).not.toContain("xcodebuild");
@@ -128,10 +134,14 @@ const expectPreviewWorkflowContract = (source: string) => {
     .map((step) => step.run)
     .filter((command): command is string => command?.includes("assemble") === true);
   expect(assembleCommands).toEqual([
-    "./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a",
+    "./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a",
   ]);
   const architecture = assembleCommands[0]?.match(/-PreactNativeArchitectures=([^\s]+)/)?.[1];
   expect(architecture).toBe("arm64-v8a");
+
+  const stagePreview = previewSteps.find((step) => step.name === "Stage preview APK");
+  expect(stagePreview?.run).toContain("outputs/apk/release/app-release.apk");
+  expect(stagePreview?.run).not.toContain("outputs/apk/debug");
 
   const uploadSteps = previewSteps.filter((step) => step.uses === actionPins.upload);
   expect(uploadSteps).toHaveLength(1);

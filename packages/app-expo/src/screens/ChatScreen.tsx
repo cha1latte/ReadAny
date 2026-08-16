@@ -470,6 +470,7 @@ export function ChatScreen() {
             style={s.content}
             behavior="height"
             enabled={Platform.OS === "android"}
+            keyboardVerticalOffset={insets.top}
           >
             <View style={s.content}>
               {allMessages.length > 0 ? (

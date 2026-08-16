@@ -532,6 +532,7 @@ export function BookChatScreen({ route, navigation }: Props) {
             style={s.content}
             behavior="height"
             enabled={Platform.OS === "android"}
+            keyboardVerticalOffset={insets.top}
           >
             {selectedText?.trim() ? (
               <View style={s.selectionContext} accessibilityLabel="Selected text context">

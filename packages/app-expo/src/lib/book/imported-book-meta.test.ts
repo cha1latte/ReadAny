@@ -48,4 +48,38 @@ describe("buildImportedBookMeta", () => {
       language: "fr",
     });
   });
+
+  it("retains saved rating, reviews, and counts when filling import metadata", () => {
+    const reviews = [
+      {
+        id: "review-1",
+        content: "Keep this review",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+
+    expect(
+      buildImportedBookMeta({
+        existing: {
+          title: "",
+          author: "",
+          rating: 4,
+          reviews,
+          totalPages: 320,
+          totalChapters: 12,
+        },
+        opds: { rating: undefined, reviews: undefined, totalPages: undefined },
+        embedded: { title: "Imported", author: "Author" },
+        fallbackTitle: "file",
+      }),
+    ).toMatchObject({
+      title: "Imported",
+      author: "Author",
+      rating: 4,
+      reviews,
+      totalPages: 320,
+      totalChapters: 12,
+    });
+  });
 });

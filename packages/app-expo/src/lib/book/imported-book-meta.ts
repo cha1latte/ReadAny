@@ -14,5 +14,10 @@ export function buildImportedBookMeta(input: {
     input.embedded,
     { title: input.fallbackTitle, author: "" },
   );
-  return { title: merged.title || "Untitled", author: merged.author || "", ...merged };
+  return {
+    ...input.existing,
+    ...merged,
+    title: merged.title || input.existing?.title || "Untitled",
+    author: merged.author || input.existing?.author || "",
+  };
 }

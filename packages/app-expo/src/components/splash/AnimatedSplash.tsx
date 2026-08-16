@@ -92,7 +92,7 @@ export function AnimatedSplash({ onFinish }: Props) {
       cancelAnimation(ghostFloat);
       cancelAnimation(bookTilt);
     };
-  }, []);
+  }, [bookTilt, containerOpacity, ghostFloat, ghostOpacity, ghostY, handleFinish, titleOpacity]);
 
   // ─── Animated styles ───
 

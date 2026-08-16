@@ -1,6 +1,5 @@
-import i18n from "@readany/core/i18n";
-import { compareVersions, releaseTagToVersion } from "@readany/core/update/update-checker";
 import { getShlaiReleaseConfig } from "@/lib/shlai-release";
+import i18n from "@readany/core/i18n";
 /**
  * ExpoPlatformService — IPlatformService implementation for Expo / React Native.
  *
@@ -21,6 +20,7 @@ import type {
   IWebSocket,
   WebSocketOptions,
 } from "@readany/core/services";
+import { compareVersions, releaseTagToVersion } from "@readany/core/update/update-checker";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
@@ -631,7 +631,6 @@ export class ExpoPlatformService implements IPlatformService {
     const { Linking } = await import("react-native");
     await Linking.openURL(downloadUrl);
   }
-
 
   // ---- KV Storage (backed by expo-secure-store) ----
 

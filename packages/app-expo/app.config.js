@@ -24,10 +24,8 @@ module.exports = {
       buildNumber: "2",
       infoPlist: {
         UIBackgroundModes: ["audio"],
-        NSCameraUsageDescription:
-          `${variant.name} uses the camera to scan sync and configuration QR codes.`,
-        NSLocalNetworkUsageDescription:
-          `${variant.name} uses the local network to connect to sync devices and the development server while debugging.`,
+        NSCameraUsageDescription: `${variant.name} uses the camera to scan sync and configuration QR codes.`,
+        NSLocalNetworkUsageDescription: `${variant.name} uses the local network to connect to sync devices and the development server while debugging.`,
         ITSAppUsesNonExemptEncryption: false,
       },
     },

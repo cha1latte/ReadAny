@@ -13,7 +13,13 @@ function makePlatform() {
         body: "Visible input fix",
         html_url: "https://github.com/cha1latte/ReadAny/releases/tag/shlai-v1.3.5.2",
         published_at: "2026-08-16T00:00:00Z",
-        assets: [{ name: "ReadAny-Shlai.apk", browser_download_url: "https://example.test/shlai.apk", size: 42 }],
+        assets: [
+          {
+            name: "ReadAny-Shlai.apk",
+            browser_download_url: "https://example.test/shlai.apk",
+            size: 42,
+          },
+        ],
       }),
     }),
   } as unknown as IPlatformService;
@@ -37,7 +43,10 @@ describe("Shlai update routing", () => {
       "https://api.github.com/repos/cha1latte/ReadAny/releases/latest",
       expect.any(Object),
     );
-    expect(platform.kvSetItem).toHaveBeenCalledWith("shlai_update_last_check_at", expect.any(String));
+    expect(platform.kvSetItem).toHaveBeenCalledWith(
+      "shlai_update_last_check_at",
+      expect.any(String),
+    );
     expect(result.latestVersion).toBe("1.3.5.2");
     expect(result.hasUpdate).toBe(true);
   });

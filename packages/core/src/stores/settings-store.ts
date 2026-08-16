@@ -141,7 +141,6 @@ async function fetchModelsFromEndpoint(endpoint: AIEndpoint): Promise<string[]> 
       return fetchOllamaModels(endpoint);
     case "lmstudio":
       return fetchLMStudioModels(endpoint);
-    case "openai":
     default:
       return fetchOpenAIModels(endpoint);
   }

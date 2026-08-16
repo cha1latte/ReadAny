@@ -1,3 +1,4 @@
+import { getShlaiReleaseConfig } from "@/lib/shlai-release";
 import i18n from "@readany/core/i18n";
 /**
  * ExpoPlatformService — IPlatformService implementation for Expo / React Native.
@@ -19,6 +20,7 @@ import type {
   IWebSocket,
   WebSocketOptions,
 } from "@readany/core/services";
+import { compareVersions, releaseTagToVersion } from "@readany/core/update/update-checker";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
@@ -598,17 +600,19 @@ export class ExpoPlatformService implements IPlatformService {
 
   async checkUpdate() {
     try {
-      const response = await fetch(
-        "https://api.github.com/repos/codedogQBY/ReadAny/releases/latest",
-      );
+      const { apiUrl, assetName, tagPrefix } = getShlaiReleaseConfig();
+      const response = await fetch(apiUrl);
       if (!response.ok) return null;
 
       const release = await response.json();
-      const latestVersion = release.tag_name.replace(/^v/, "");
+      const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
+      if (!latestVersion) return null;
       const currentVersion = await this.getAppVersion();
 
-      if (this._compareVersions(latestVersion, currentVersion) > 0) {
-        const apkAsset = release.assets.find((a: { name: string }) => a.name === "ReadAny.apk");
+      if (compareVersions(latestVersion, currentVersion) > 0) {
+        const apkAsset = Array.isArray(release.assets)
+          ? release.assets.find((a: { name: string }) => a.name === assetName)
+          : undefined;
         if (apkAsset) {
           return {
             version: latestVersion,
@@ -629,18 +633,6 @@ export class ExpoPlatformService implements IPlatformService {
     if (!downloadUrl) return;
     const { Linking } = await import("react-native");
     await Linking.openURL(downloadUrl);
-  }
-
-  private _compareVersions(a: string, b: string): number {
-    const pa = a.split(".").map(Number);
-    const pb = b.split(".").map(Number);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-      const na = pa[i] || 0;
-      const nb = pb[i] || 0;
-      if (na > nb) return 1;
-      if (na < nb) return -1;
-    }
-    return 0;
   }
 
   // ---- KV Storage (backed by expo-secure-store) ----

@@ -46,6 +46,7 @@
     "system": "System",
     "light": "Light",
     "dark": "Dark",
+    "oled": "OLED Black",
     "sepia": "Sepia",
     "autoSave": "Auto-save interval",
     "autoSaveDesc": "How often to save reading progress",

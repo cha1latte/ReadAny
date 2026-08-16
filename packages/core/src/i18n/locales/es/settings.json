@@ -46,6 +46,7 @@
     "system": "Sistema",
     "light": "Claro",
     "dark": "Oscuro",
+    "oled": "Negro OLED",
     "sepia": "Sepia",
     "autoSave": "Intervalo de autoguardado",
     "autoSaveDesc": "Con qué frecuencia guardar el progreso de lectura",

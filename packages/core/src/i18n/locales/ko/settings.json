@@ -46,6 +46,7 @@
     "system": "시스템",
     "light": "라이트",
     "dark": "다크",
+    "oled": "OLED 블랙",
     "sepia": "세피아",
     "autoSave": "자동 저장 간격",
     "autoSaveDesc": "읽기 진행률 저장 빈도",

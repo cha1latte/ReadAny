@@ -48,17 +48,17 @@ function syncIosInfoPlist(variant) {
   );
   plist = replaceAll(
     plist,
-    /<string>readany(?:-(?:dev|preview))?<\/string>/g,
+    /<string>(?:readany|readany-shlai)(?:-(?:dev|preview))?<\/string>/g,
     `<string>${variant.scheme}</string>`,
   );
   plist = replaceAll(
     plist,
-    /<string>com\.readany\.app(?:\.(?:dev|preview))?<\/string>/g,
+    /<string>(?:com\.readany\.app|io\.github\.cha1latte\.readanyshlai)(?:\.(?:dev|preview))?<\/string>/g,
     `<string>${variant.bundleIdentifier}</string>`,
   );
   plist = replaceAll(
     plist,
-    /<string>exp\+readany(?:-(?:dev|preview))?<\/string>/g,
+    /<string>exp\+(?:readany|readany-shlai)(?:-(?:dev|preview))?<\/string>/g,
     `<string>exp+${variant.scheme}</string>`,
   );
   fs.writeFileSync(iosInfoPlistPath, plist);

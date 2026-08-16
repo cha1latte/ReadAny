@@ -67,6 +67,7 @@ module.exports = {
           },
         },
       ],
+      "./plugins/withGradleMemory",
       "expo-font",
       [
         "expo-image-picker",

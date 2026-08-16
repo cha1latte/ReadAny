@@ -19,4 +19,32 @@ describe("OLED Black mobile theme", () => {
     expect(context).toContain('isDark: mode === "dark" || mode === "oled"');
     expect(app).toContain('<StatusBar style={isDark ? "light" : "dark"} />');
   });
+
+  it("offers OLED in both phone-safe theme pickers and every settings locale", () => {
+    const settings = read("packages/app-expo/src/screens/settings/AppearanceSettingsScreen.tsx");
+    const onboarding = read("packages/app-expo/src/components/onboarding/steps/AppearancePage.tsx");
+
+    for (const source of [settings, onboarding]) {
+      expect(source).toMatch(/id: "oled"/);
+      expect(source).toMatch(/flexWrap: "wrap"/);
+      expect(source).toMatch(/width: "48%"/);
+    }
+
+    const labels = {
+      en: "OLED Black",
+      es: "Negro OLED",
+      fr: "Noir OLED",
+      ja: "OLEDブラック",
+      ko: "OLED 블랙",
+      zh: "OLED 纯黑",
+      "zh-TW": "OLED 純黑",
+    } as const;
+
+    for (const [locale, label] of Object.entries(labels)) {
+      const messages = JSON.parse(
+        read(`packages/core/src/i18n/locales/${locale}/settings.json`),
+      ) as { settings: Record<string, string> };
+      expect(messages.settings.oled).toBe(label);
+    }
+  });
 });

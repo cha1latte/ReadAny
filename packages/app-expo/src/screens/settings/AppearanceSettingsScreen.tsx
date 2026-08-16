@@ -20,6 +20,7 @@ import { SettingsHeader } from "./SettingsHeader";
 const THEMES: { id: ThemeMode; labelKey: string; fallback: string; Icon: typeof SunIcon }[] = [
   { id: "light", labelKey: "settings.light", fallback: "Light", Icon: SunIcon },
   { id: "dark", labelKey: "settings.dark", fallback: "Dark", Icon: MoonIcon },
+  { id: "oled", labelKey: "settings.oled", fallback: "OLED Black", Icon: MoonIcon },
   { id: "sepia", labelKey: "settings.sepia", fallback: "Sepia", Icon: BookOpenIcon },
 ];
 
@@ -201,9 +202,9 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
     },
-    themeGrid: { flexDirection: "row", gap: 12 },
+    themeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
     themeCard: {
-      flex: 1,
+      width: "48%",
       alignItems: "center",
       gap: 8,
       borderRadius: radius.xl,

@@ -8,6 +8,7 @@ const readWorkflow = (name: string) =>
   readFileSync(resolve(root, ".github/workflows", name), "utf8");
 
 type WorkflowStep = {
+  name?: string;
   uses?: string;
   run?: string;
   env?: Record<string, unknown>;
@@ -17,6 +18,8 @@ type WorkflowStep = {
 type WorkflowJob = {
   name?: string;
   needs?: string | string[];
+  if?: string;
+  "continue-on-error"?: unknown;
   permissions?: unknown;
   environment?: unknown;
   env?: Record<string, unknown>;
@@ -27,6 +30,7 @@ type WorkflowJob = {
 type Workflow = {
   on?: Record<string, unknown>;
   permissions?: Record<string, unknown>;
+  env?: Record<string, unknown>;
   jobs?: Record<string, WorkflowJob>;
 };
 
@@ -134,6 +138,72 @@ const releaseSecretNames = [
   "SHLAI_ANDROID_KEY_PASSWORD",
 ] as const;
 
+const secretExpressionPattern =
+  /\$\{\{\s*secrets\s*(?:\.\s*[A-Za-z_][A-Za-z0-9_]*|\[\s*["'][^"']+["']\s*\])\s*}}/g;
+
+const collectSecretExpressions = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return [...value.matchAll(secretExpressionPattern)].map(([match]) => match);
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectSecretExpressions);
+  }
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  return Object.entries(value).flatMap(([key, nestedValue]) => [
+    ...collectSecretExpressions(key),
+    ...collectSecretExpressions(nestedValue),
+  ]);
+};
+
+const expectPnpmBeforeCachedNodeSetup = (jobs: Record<string, WorkflowJob>) => {
+  for (const job of Object.values(jobs)) {
+    const steps = job.steps ?? [];
+    for (const [setupNodeIndex, step] of steps.entries()) {
+      if (step.uses?.startsWith("actions/setup-node@") && step.with?.cache === "pnpm") {
+        const pnpmSetupIndex = steps.findIndex(
+          (candidate) =>
+            candidate.uses === "pnpm/action-setup@v3" && candidate.with?.version === "9.15.0",
+        );
+        expect(pnpmSetupIndex).toBeGreaterThanOrEqual(0);
+        expect(pnpmSetupIndex).toBeLessThan(setupNodeIndex);
+      }
+    }
+  }
+};
+
+const stableReleaseScript = `TAG="shlai-v\${SHLAI_UPSTREAM_VERSION}.\${SHLAI_REVISION}"
+APK="ReadAny-Shlai.apk"
+KEYSTORE="\$RUNNER_TEMP/readany-shlai-release.jks"
+
+if gh release view "\$TAG" --repo "\$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+  echo "Release already exists: \$TAG" >&2
+  exit 1
+fi
+
+printf '%s' "\$SHLAI_ANDROID_KEYSTORE_BASE64" | base64 --decode > "\$KEYSTORE"
+pnpm --filter @readany/app-expo run build:reader
+pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
+
+cd packages/app-expo/android
+./gradlew assembleRelease \\
+  -PreactNativeArchitectures=arm64-v8a \\
+  -Pandroid.injected.signing.store.file="\$KEYSTORE" \\
+  -Pandroid.injected.signing.store.password="\$SHLAI_ANDROID_KEYSTORE_PASSWORD" \\
+  -Pandroid.injected.signing.key.alias="\$SHLAI_ANDROID_KEY_ALIAS" \\
+  -Pandroid.injected.signing.key.password="\$SHLAI_ANDROID_KEY_PASSWORD"
+cd ../../..
+
+cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "\$APK"
+BUILD_TOOLS="\$(find "\$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+"\$BUILD_TOOLS/apksigner" verify --verbose --print-certs "\$APK"
+gh release create "\$TAG" "\$APK" \\
+  --repo "\$GITHUB_REPOSITORY" \\
+  --target "\$GITHUB_SHA" \\
+  --title "ReadAny Shlai \${SHLAI_UPSTREAM_VERSION}.\${SHLAI_REVISION}" \\
+  --notes "Unofficial ReadAny Shlai Android release. Source: \${GITHUB_SERVER_URL}/\${GITHUB_REPOSITORY}/tree/\${GITHUB_SHA}"`;
+
 const expectReleaseWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
   expect(Object.keys(workflow.on ?? {})).toEqual(["workflow_dispatch"]);
@@ -163,9 +233,14 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(validate?.name).toBe("Validate");
   expect(release?.name).toBe("Release ReadAny Shlai");
   expect(release?.needs).toBe("validate");
+  expect(release?.if).toBeUndefined();
+  expect(validate?.["continue-on-error"]).toBeUndefined();
+  expect(release?.["continue-on-error"]).toBeUndefined();
   expect(validate?.permissions).toBeUndefined();
   expect(validate?.environment).toBeUndefined();
-  expect(JSON.stringify(validate)).not.toContain("secrets.");
+  expect(workflow.env).toBeUndefined();
+  expect(hasParsedKey(workflow, "secrets")).toBe(false);
+  expect(collectSecretExpressions(validate)).toEqual([]);
 
   expect(release?.permissions).toEqual({ contents: "write" });
   expect(release?.environment).toBe("shlai-production");
@@ -176,6 +251,19 @@ const expectReleaseWorkflowContract = (source: string) => {
     SHLAI_VERSION_CODE: "${{ inputs.version_code }}",
     ...Object.fromEntries(releaseSecretNames.map((name) => [name, `\${{ secrets.${name} }}`])),
   });
+  const { env: releaseEnv, ...releaseWithoutEnv } = release ?? {};
+  expect(collectSecretExpressions(releaseWithoutEnv)).toEqual([]);
+  expect(collectSecretExpressions(releaseEnv)).toEqual(
+    releaseSecretNames.map((name) => `\${{ secrets.${name} }}`),
+  );
+  expect(
+    collectSecretExpressions({
+      on: workflow.on,
+      permissions: workflow.permissions,
+      jobs: Object.fromEntries(Object.entries(jobs).filter(([jobId]) => jobId !== "release")),
+    }),
+  ).toEqual([]);
+  expectPnpmBeforeCachedNodeSetup(jobs);
 
   const validateCommands = (validate?.steps ?? [])
     .map((step) => step.run)
@@ -197,29 +285,11 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(setupJava?.with).toEqual({ distribution: "temurin", "java-version": 17 });
   expect(releaseSteps.map((step) => step.run)).toContain("pnpm install --frozen-lockfile");
 
-  const releaseCommands = releaseSteps
-    .map((step) => step.run)
-    .filter((command): command is string => typeof command === "string")
-    .join("\n");
-  expect(releaseCommands).toContain('TAG="shlai-v${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}"');
-  expect(releaseCommands).toContain('APK="ReadAny-Shlai.apk"');
-  expect(releaseCommands).toContain('KEYSTORE="$RUNNER_TEMP/readany-shlai-release.jks"');
-  expect(releaseCommands).toContain('gh release view "$TAG" --repo "$GITHUB_REPOSITORY"');
-  expect(releaseCommands).toContain(
-    'printf \'%s\' "$SHLAI_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"',
+  const buildSteps = releaseSteps.filter(
+    (step) => step.name === "Build, sign, verify, and publish APK",
   );
-  expect(releaseCommands).toContain("pnpm --filter @readany/app-expo run build:reader");
-  expect(releaseCommands).toContain(
-    "pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install",
-  );
-  expect(releaseCommands).toContain("./gradlew assembleRelease \\");
-  expect(releaseCommands).toContain("-PreactNativeArchitectures=arm64-v8a \\");
-  expect(releaseCommands).toContain('-Pandroid.injected.signing.store.file="$KEYSTORE" \\');
-  expect(releaseCommands).toContain(
-    '"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"',
-  );
-  expect(releaseCommands).toContain('gh release create "$TAG" "$APK"');
-  expect(releaseCommands).toContain('--target "$GITHUB_SHA"');
+  expect(buildSteps).toHaveLength(1);
+  expect(buildSteps[0]?.run?.replaceAll("\r\n", "\n").trim()).toBe(stableReleaseScript);
 };
 
 const addWrongCacheOrderJob = (source: string, jobId: string) =>
@@ -429,11 +499,43 @@ const unsafeReleaseMutations = [
       source.replace("environment: shlai-production", "environment: preview"),
   },
   {
+    name: "release always runs after a failed validation",
+    mutate: (source: string) =>
+      source.replace(
+        "    runs-on: ubuntu-22.04\n    permissions:",
+        "    if: always()\n    runs-on: ubuntu-22.04\n    permissions:",
+      ),
+  },
+  {
+    name: "validation errors are ignored",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate",
+        "  validate:\n    name: Validate\n    continue-on-error: true",
+      ),
+  },
+  {
     name: "validate secret",
     mutate: (source: string) =>
       source.replace(
         "  validate:\n    name: Validate",
         "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ secrets.UNRELATED_TOKEN }}",
+      ),
+  },
+  {
+    name: "validate bracket secret",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate",
+        "  validate:\n    name: Validate\n    env:\n      TOKEN: ${{ secrets['UNRELATED_TOKEN'] }}",
+      ),
+  },
+  {
+    name: "workflow-level secret",
+    mutate: (source: string) =>
+      source.replace(
+        "permissions:\n  contents: read",
+        "env:\n  TOKEN: ${{ secrets.UNRELATED_TOKEN }}\n\npermissions:\n  contents: read",
       ),
   },
   {
@@ -450,6 +552,46 @@ const unsafeReleaseMutations = [
       source.replace(
         '"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"',
         "true # unsigned",
+      ),
+  },
+  {
+    name: "signing reordered before APK staging",
+    mutate: (source: string) =>
+      source.replace(
+        '          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"',
+        '          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"\n          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"',
+      ),
+  },
+  {
+    name: "duplicate release publication",
+    mutate: (source: string) =>
+      source.replace(
+        '          gh release create "$TAG" "$APK" \\',
+        '          gh release create "$TAG" "$APK" \\\n            --repo "$GITHUB_REPOSITORY"\n          gh release create "$TAG" "$APK" \\',
+      ),
+  },
+  {
+    name: "comment decoy in release script",
+    mutate: (source: string) =>
+      source.replace(
+        '          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"',
+        '          # "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"\n          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"',
+      ),
+  },
+  {
+    name: "missing pnpm setup before cached Node setup",
+    mutate: (source: string) =>
+      source.replace(
+        "      - uses: pnpm/action-setup@v3\n        with:\n          version: 9.15.0\n",
+        "",
+      ),
+  },
+  {
+    name: "cached Node setup before pnpm setup",
+    mutate: (source: string) =>
+      source.replace(
+        "      - uses: pnpm/action-setup@v3\n        with:\n          version: 9.15.0\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20.18.0\n          cache: pnpm\n",
+        "      - uses: actions/setup-node@v4\n        with:\n          node-version: 20.18.0\n          cache: pnpm\n      - uses: pnpm/action-setup@v3\n        with:\n          version: 9.15.0\n",
       ),
   },
 ] as const;
@@ -479,7 +621,7 @@ describe("ReadAny Shlai workflows", () => {
     expect(source).toContain("workflow_dispatch:");
     expect(source).toContain("SHLAI_ANDROID_KEYSTORE_BASE64");
     expect(source).toContain("android.injected.signing.store.file");
-    expect(source).toContain("apksigner verify --verbose --print-certs");
+    expect(source).toContain('"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"');
     expect(source).toContain('gh release create "$TAG"');
     expect(source).not.toContain("pull_request:");
   });

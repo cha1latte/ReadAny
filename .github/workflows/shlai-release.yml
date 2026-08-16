@@ -111,7 +111,6 @@ jobs:
 
           cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          # Verify the release APK with apksigner verify --verbose --print-certs before publishing.
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
           gh release create "$TAG" "$APK" \
             --repo "$GITHUB_REPOSITORY" \

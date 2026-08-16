@@ -41,7 +41,17 @@ jobs:
           fi
 
           BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
+          UPSTREAM_SHA="$(git rev-parse upstream/main)"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            REMOTE_SHA="$(git ls-remote --heads origin "$BRANCH" | awk '{print $1}')"
+            if [[ -z "$REMOTE_SHA" ]]; then
+              echo "Existing sync branch could not be resolved: $BRANCH" >&2
+              exit 1
+            fi
+            if [[ "$REMOTE_SHA" != "$UPSTREAM_SHA" ]]; then
+              echo "Existing sync branch does not match upstream main: $BRANCH" >&2
+              exit 1
+            fi
             echo "Reusing existing sync branch: $BRANCH"
           else
             git switch --create "$BRANCH" upstream/main

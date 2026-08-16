@@ -243,7 +243,17 @@ if [[ "$OPEN_COUNT" != "0" ]]; then
 fi
 
 BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
+UPSTREAM_SHA="$(git rev-parse upstream/main)"
 if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+  REMOTE_SHA="$(git ls-remote --heads origin "$BRANCH" | awk '{print $1}')"
+  if [[ -z "$REMOTE_SHA" ]]; then
+    echo "Existing sync branch could not be resolved: $BRANCH" >&2
+    exit 1
+  fi
+  if [[ "$REMOTE_SHA" != "$UPSTREAM_SHA" ]]; then
+    echo "Existing sync branch does not match upstream main: $BRANCH" >&2
+    exit 1
+  fi
   echo "Reusing existing sync branch: $BRANCH"
 else
   git switch --create "$BRANCH" upstream/main
@@ -304,6 +314,16 @@ const expectUpstreamSyncWorkflowContract = (source: string) => {
   expect(sync?.env).toBeUndefined();
   expect(sync?.uses).toBeUndefined();
   expect(sync?.steps).toEqual(expectedUpstreamSyncSteps);
+
+  const syncScript = sync?.steps?.[1]?.run;
+  expect(syncScript).toContain(
+    'REMOTE_SHA="$(git ls-remote --heads origin "$BRANCH" | awk \'{print $1}\')"',
+  );
+  expect(syncScript).toContain('UPSTREAM_SHA="$(git rev-parse upstream/main)"');
+  expect(syncScript?.indexOf("REMOTE_SHA=")).toBeLessThan(
+    syncScript?.indexOf("gh pr create") ?? -1,
+  );
+  expect(syncScript).toContain('[[ "$REMOTE_SHA" != "$UPSTREAM_SHA" ]]');
 
   for (const step of sync?.steps ?? []) {
     expect(step.if).toBeUndefined();
@@ -397,6 +417,11 @@ const unsafeUpstreamSyncMutations = [
         'echo "Reusing existing sync branch: $BRANCH"',
         'echo "Sync branch already exists: $BRANCH"\n            exit 0',
       ),
+  },
+  {
+    name: "reuses an existing branch without verifying its upstream provenance",
+    mutate: (source: string) =>
+      source.replace("            REMOTE_SHA=", "            UNVERIFIED_REMOTE_SHA="),
   },
   {
     name: "creates PR before branch push",

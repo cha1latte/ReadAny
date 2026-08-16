@@ -28,6 +28,34 @@ export interface ExtractedBookMetadata {
   subjects?: string[];
 }
 
+export function mergeBookMetadataSources(
+  ...sources: Array<Partial<BookMeta> | ExtractedBookMetadata | null | undefined>
+): Partial<BookMeta> {
+  const result: Partial<BookMeta> = {};
+  const text = (key: keyof BookMeta, value: unknown) => {
+    if (result[key] != null || typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (trimmed) Object.assign(result, { [key]: trimmed });
+  };
+
+  for (const source of sources) {
+    if (!source) continue;
+    text("title", source.title);
+    text("author", source.author);
+    text("publisher", source.publisher);
+    if (result.language == null) text("language", normalizeBookLanguage(source.language));
+    if (result.isbn == null) text("isbn", normalizeIsbn(source.isbn));
+    if (result.publishDate == null) text("publishDate", normalizePublishDate(source.publishDate));
+    text("description", source.description);
+    text("coverUrl", "coverUrl" in source ? source.coverUrl : undefined);
+    if (result.subjects == null) {
+      const subjects = normalizeSubjects(source.subjects);
+      if (subjects.length) result.subjects = subjects;
+    }
+  }
+  return result;
+}
+
 export function createBookMetadataFormValues(book: Book): BookMetadataFormValues {
   return {
     title: book.meta.title || "",
@@ -89,10 +117,6 @@ export function mergeMissingBookMetadataValues(
     const subjectsText = joinEditableList(subjects);
     if (!next.subjectsText.trim()) {
       next.subjectsText = subjectsText;
-      changed = true;
-    }
-    if (!next.tagsText.trim()) {
-      next.tagsText = subjectsText;
       changed = true;
     }
   }

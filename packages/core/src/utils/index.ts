@@ -56,6 +56,7 @@ export {
   createBookMetadataFormValues,
   hasMissingBookMetadataAutoFillTargets,
   joinEditableList,
+  mergeBookMetadataSources,
   mergeMissingBookMetadataValues,
   normalizeRating,
   normalizeReviews,

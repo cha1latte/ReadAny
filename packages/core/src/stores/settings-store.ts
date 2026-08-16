@@ -53,6 +53,7 @@ const defaultReadSettings: ReadSettings = {
   fixedLayoutZoom: 1,
   pageMargin: 40,
   paragraphSpacing: 16,
+  justifyBodyText: true,
   showTopTitleProgress: true,
   showBottomTimeBattery: true,
   volumeButtonsPageTurn: false,
@@ -102,6 +103,15 @@ function migrateSettingsState(state: SettingsState): SettingsState {
       readSettings: {
         ...next.readSettings,
         useBookFonts: true,
+      },
+    };
+  }
+  if (next.readSettings?.justifyBodyText === undefined) {
+    next = {
+      ...next,
+      readSettings: {
+        ...next.readSettings,
+        justifyBodyText: true,
       },
     };
   }

@@ -48,6 +48,7 @@ export interface ReaderInitialSettings {
   fontSize?: number;
   lineHeight?: number;
   paragraphSpacing?: number;
+  justifyBodyText?: boolean;
   pageMargin?: number;
   fontTheme?: string;
   useBookFonts?: boolean;
@@ -265,6 +266,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       fontSize?: number;
       lineHeight?: number;
       paragraphSpacing?: number;
+      justifyBodyText?: boolean;
       pageMargin?: number;
       fontTheme?: string;
       useBookFonts?: boolean;

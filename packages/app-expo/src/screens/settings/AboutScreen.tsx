@@ -1,7 +1,8 @@
+import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { getShlaiReleaseConfig } from "@/lib/shlai-release";
+import { useUpdateStore } from "@/stores/update-store";
 import { getPlatformService } from "@readany/core/services";
 import { checkForUpdate } from "@readany/core/update";
-import { getShlaiReleaseConfig } from "@/lib/shlai-release";
-import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -16,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AppIcon from "../../../assets/shlai/icon.png";
 import {
   type ThemeColors,
   fontSize,
@@ -24,9 +26,7 @@ import {
   spacing,
   useColors,
 } from "../../styles/theme";
-import { useUpdateStore } from "@/stores/update-store";
 import { SettingsHeader } from "./SettingsHeader";
-import AppIcon from "../../../assets/icon.png";
 
 const TECH_STACK = [
   { label: "Expo SDK 55", descKey: "about.nativeContainer" },
@@ -36,11 +36,12 @@ const TECH_STACK = [
 ];
 
 const LINKS = [
-  {
-    label: "GitHub",
-    url: "https://github.com/nicepkg/ReadAny",
-  },
+  { label: "ReadAny Shlai source", url: "https://github.com/cha1latte/ReadAny" },
+  { label: "Official ReadAny", url: "https://github.com/codedogQBY/ReadAny" },
+  { label: "Report a Shlai issue", url: "https://github.com/cha1latte/ReadAny/issues" },
 ];
+
+const FORK_NOTICE = "Unofficial GPL-3.0 fork of ReadAny maintained by Chai.";
 
 export default function AboutScreen() {
   const colors = useColors();
@@ -84,18 +85,26 @@ export default function AboutScreen() {
     >
       <SettingsHeader title={t("about.title", "关于")} />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { alignItems: "center" }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { alignItems: "center" }]}
+      >
         <View style={{ width: "100%", maxWidth: layout.centeredContentWidth }}>
           {/* Logo & Version */}
           <View style={styles.logoSection}>
             <View style={styles.logoBadge}>
-              <Image source={AppIcon} style={{ width: 80, height: 80, borderRadius: 18 }} resizeMode="contain" />
+              <Image
+                source={AppIcon}
+                style={{ width: 80, height: 80, borderRadius: 18 }}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.appName}>ReadAny</Text>
+            <Text style={styles.appName}>ReadAny Shlai</Text>
             <Text style={styles.version}>v{version}</Text>
             <Text style={styles.desc}>
               {t("about.desc", "一个跨平台的智能电子书阅读器，支持 AI 对话、TTS 朗读、多语言翻译")}
             </Text>
+            <Text style={styles.forkNotice}>{FORK_NOTICE}</Text>
           </View>
 
           {/* Check for Updates */}
@@ -153,18 +162,10 @@ export default function AboutScreen() {
                   <Text style={styles.linkArrow}>→</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity
-                style={styles.linkItem}
-                onPress={() => Linking.openURL("https://github.com/nicepkg/ReadAny/issues")}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.linkText}>{t("about.feedback", "问题反馈")}</Text>
-                <Text style={styles.linkArrow}>→</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.madeBy}>{t("about.madeBy", "Made with love by nicepkg")}</Text>
+          <Text style={styles.madeBy}>ReadAny Shlai by Chai · Based on ReadAny</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -210,6 +211,13 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: "center",
       lineHeight: 20,
       marginTop: 12,
+    },
+    forkNotice: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: "center",
+      lineHeight: 18,
+      marginTop: 8,
     },
     section: {
       paddingHorizontal: spacing.lg,

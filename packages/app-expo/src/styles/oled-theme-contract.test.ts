@@ -47,4 +47,16 @@ describe("OLED Black mobile theme", () => {
       expect(messages.settings.oled).toBe(label);
     }
   });
+
+  it("carries OLED into the generated reader and treats PDFs as true black", () => {
+    const bridge = read("packages/app-expo/src/hooks/use-reader-bridge.ts");
+    const template = read("packages/app-expo/assets/reader/reader.template.html");
+    const built = read("packages/app-expo/assets/reader/reader.html");
+
+    expect(bridge).toContain('themeMode?: "light" | "dark" | "sepia" | "oled"');
+    for (const source of [template, built]) {
+      expect(source).toContain("themeMode === 'oled'");
+      expect(source).toMatch(/oled:\s*'invert\(1\)'/);
+    }
+  });
 });

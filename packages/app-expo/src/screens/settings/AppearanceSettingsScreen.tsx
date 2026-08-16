@@ -62,12 +62,12 @@ export default function AppearanceSettingsScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
-      <SettingsHeader
-        title={t("settings.general", "通用")}
-        subtitle={t("settings.realtimeHint")}
-      />
+      <SettingsHeader title={t("settings.general", "通用")} subtitle={t("settings.realtimeHint")} />
 
-      <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { alignItems: "center" }]}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[s.scrollContent, { alignItems: "center" }]}
+      >
         <View style={{ width: "100%", maxWidth: layout.centeredContentWidth, gap: 24 }}>
           {/* Theme */}
           <View style={s.section}>
@@ -85,7 +85,7 @@ export default function AppearanceSettingsScreen() {
                       { borderColor: colors.border, backgroundColor: colors.card },
                       active && {
                         borderColor: colors.primary,
-                        backgroundColor: colors.primary + "0D",
+                        backgroundColor: `${colors.primary}0D`,
                       },
                     ]}
                     onPress={() => setMode(item.id)}
@@ -122,9 +122,7 @@ export default function AppearanceSettingsScreen() {
               onPress={() => setShowLangPicker(true)}
               activeOpacity={0.7}
             >
-              <Text style={[s.langRowLabel, { color: colors.foreground }]}>
-                {currentLangLabel}
-              </Text>
+              <Text style={[s.langRowLabel, { color: colors.foreground }]}>{currentLangLabel}</Text>
               <ChevronDownIcon size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
@@ -157,7 +155,7 @@ export default function AppearanceSettingsScreen() {
                     key={l.code}
                     style={[
                       s.langItem,
-                      { backgroundColor: isActive ? colors.primary + "10" : "transparent" },
+                      { backgroundColor: isActive ? `${colors.primary}10` : "transparent" },
                       idx < LANGUAGES.length - 1 && {
                         borderBottomWidth: StyleSheet.hairlineWidth,
                         borderBottomColor: colors.border,

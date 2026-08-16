@@ -30,6 +30,19 @@ type Workflow = {
   jobs?: Record<string, WorkflowJob>;
 };
 
+const hasParsedKey = (value: unknown, keyName: string): boolean => {
+  if (Array.isArray(value)) {
+    return value.some((item) => hasParsedKey(item, keyName));
+  }
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  return Object.entries(value).some(
+    ([key, nestedValue]) =>
+      key.toLowerCase() === keyName.toLowerCase() || hasParsedKey(nestedValue, keyName),
+  );
+};
+
 const expectPreviewWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
   expect(Object.keys(workflow.on ?? {}).sort()).toEqual(["pull_request", "workflow_dispatch"]);
@@ -45,8 +58,19 @@ const expectPreviewWorkflowContract = (source: string) => {
   for (const job of Object.values(jobs)) {
     expect(job.permissions).toBeUndefined();
     expect(job.environment).toBeUndefined();
+    const steps = job.steps ?? [];
+    for (const [setupNodeIndex, step] of steps.entries()) {
+      if (step.uses?.startsWith("actions/setup-node@") && step.with?.cache === "pnpm") {
+        const pnpmSetupIndex = steps.findIndex((candidate) =>
+          candidate.uses?.startsWith("pnpm/action-setup@"),
+        );
+        expect(pnpmSetupIndex).toBeGreaterThanOrEqual(0);
+        expect(pnpmSetupIndex).toBeLessThan(setupNodeIndex);
+      }
+    }
   }
 
+  expect(hasParsedKey(workflow, "secrets")).toBe(false);
   expect(JSON.stringify(workflow)).not.toMatch(/secrets(?:\.|\s*\[)/);
   expect(preview?.env).toEqual({
     APP_VARIANT: "preview",
@@ -75,6 +99,7 @@ const expectPreviewWorkflowContract = (source: string) => {
     .filter((command): command is string => typeof command === "string");
   expect(actions.some((action) => /(?:publish|release)/i.test(action))).toBe(false);
   expect(commands.some((command) => /(?:publish|release)/i.test(command))).toBe(false);
+  expect(commands.some((command) => /\$\{?GITHUB_ENV\}?/.test(command))).toBe(false);
   expect(commands.join("\n")).not.toContain("--platform ios");
   expect(commands.join("\n")).not.toContain("xcodebuild");
 
@@ -101,6 +126,12 @@ const expectPreviewWorkflowContract = (source: string) => {
   expect(uploadSteps[0]?.with?.["retention-days"]).toBe(14);
   expect(uploadSteps[0]?.with?.name).toContain("ReadAny-Shlai-Preview-");
 };
+
+const addWrongCacheOrderJob = (source: string, jobId: string) =>
+  source.replace(
+    "  preview:\n",
+    `  ${jobId}:\n    runs-on: ubuntu-22.04\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          cache: pnpm\n      - uses: pnpm/action-setup@v3\n\n  preview:\n`,
+  );
 
 const unsafeMutations = [
   {
@@ -147,6 +178,14 @@ const unsafeMutations = [
       source.replace(
         "      APP_VARIANT: preview",
         "      APP_VARIANT: preview\n      RELEASE_TOKEN: $" + "{{ secrets['RELEASE_TOKEN'] }}",
+      ),
+  },
+  {
+    name: "reusable job secrets inherit",
+    mutate: (source: string) =>
+      source.replace(
+        "  preview:\n",
+        "  helper_job:\n    uses: ./.github/workflows/helper.yml\n    secrets: inherit\n\n  preview:\n",
       ),
   },
   {
@@ -218,6 +257,14 @@ const unsafeMutations = [
       ),
   },
   {
+    name: "GITHUB_ENV production override",
+    mutate: (source: string) =>
+      source.replace(
+        "      - name: Build preview APK",
+        '      - run: echo "APP_VARIANT=production" >> "$GITHUB_ENV"\n      - name: Build preview APK',
+      ),
+  },
+  {
     name: "extra preview environment variable",
     mutate: (source: string) =>
       source.replace(
@@ -253,6 +300,14 @@ const unsafeMutations = [
         "      - run: pnpm publish\n      - name: Build preview APK",
       ),
   },
+  {
+    name: "underscore job with cache before pnpm",
+    mutate: (source: string) => addWrongCacheOrderJob(source, "cache_probe"),
+  },
+  {
+    name: "hyphen job with cache before pnpm",
+    mutate: (source: string) => addWrongCacheOrderJob(source, "cache-probe"),
+  },
 ] as const;
 
 describe("ReadAny Shlai workflows", () => {
@@ -265,19 +320,6 @@ describe("ReadAny Shlai workflows", () => {
     const mutatedSource = mutate(source);
     expect(mutatedSource).not.toBe(source);
     expect(() => expectPreviewWorkflowContract(mutatedSource)).toThrow();
-  });
-
-  it("sets up pnpm before using the setup-node pnpm cache", () => {
-    const source = readWorkflow("shlai-pr.yml");
-    const jobSources = source.split(/^ {2}[a-z]+:\s*$/m).slice(1);
-
-    expect(jobSources).toHaveLength(2);
-    for (const jobSource of jobSources) {
-      expect(jobSource.indexOf("pnpm/action-setup@v3")).toBeGreaterThan(-1);
-      expect(jobSource.indexOf("pnpm/action-setup@v3")).toBeLessThan(
-        jobSource.indexOf("actions/setup-node@v4"),
-      );
-    }
   });
 
   it("uses event-safe fallbacks for manual dispatch", () => {

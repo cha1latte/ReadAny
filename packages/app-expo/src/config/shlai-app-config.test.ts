@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
@@ -6,6 +8,35 @@ const { APP_VARIANTS } = require("../../scripts/app-variant.js");
 const { getShlaiVersionConfig } = require("../../scripts/shlai-version.js");
 
 describe("ReadAny Shlai app configuration", () => {
+  it("keeps EAS limited to development and preview builds", () => {
+    const root = resolve(import.meta.dirname, "../../../..");
+    const eas = JSON.parse(readFileSync(resolve(root, "packages/app-expo/eas.json"), "utf8"));
+    const expoPackage = JSON.parse(
+      readFileSync(resolve(root, "packages/app-expo/package.json"), "utf8"),
+    );
+    const workspacePackage = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+    const legacyReleaseWorkflow = readFileSync(
+      resolve(root, ".github/workflows/release.yml"),
+      "utf8",
+    );
+
+    expect(Object.keys(eas.build).sort()).toEqual([
+      "development",
+      "development-simulator",
+      "preview",
+    ]);
+    expect(
+      Object.keys(expoPackage.scripts).filter((name) => /^eas:build:(android|ios)$/.test(name)),
+    ).toEqual([]);
+    expect(
+      Object.keys(workspacePackage.scripts).filter((name) =>
+        /^eas:build:(android|ios)$/.test(name),
+      ),
+    ).toEqual([]);
+    expect(legacyReleaseWorkflow).not.toContain("production-apk");
+    expect(legacyReleaseWorkflow).not.toContain("build-android:");
+  });
+
   it("uses isolated identities for every Android variant", () => {
     expect(APP_VARIANTS).toEqual({
       development: {

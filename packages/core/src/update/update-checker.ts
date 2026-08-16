@@ -115,7 +115,14 @@ export async function checkForUpdate(
 }
 
 export function releaseTagToVersion(tag: string, prefix = "v"): string | null {
-  return tag.startsWith(prefix) ? tag.slice(prefix.length) : null;
+  const canonicalComponent = "(?:0|[1-9]\\d*)";
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const versionPattern =
+    prefix === "shlai-v"
+      ? `${canonicalComponent}\\.${canonicalComponent}\\.${canonicalComponent}\\.[1-9]\\d*`
+      : `${canonicalComponent}\\.${canonicalComponent}\\.${canonicalComponent}`;
+  const match = tag.match(new RegExp(`^${escapedPrefix}(${versionPattern})$`));
+  return match?.[1] ?? null;
 }
 
 function versionParts(value: string): number[] {

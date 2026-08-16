@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: shlai-stable-release
+  cancel-in-progress: false
+
 jobs:
   validate:
     name: Validate
@@ -30,10 +34,13 @@ jobs:
       - name: Validate release request
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_UPSTREAM_VERSION: ${{ inputs.upstream_version }}
           INPUT_REVISION: ${{ inputs.revision }}
           INPUT_VERSION_CODE: ${{ inputs.version_code }}
         run: |
+          set -euo pipefail
+
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "Stable releases must be dispatched from refs/heads/main; got $GITHUB_REF" >&2
             exit 1
@@ -57,6 +64,93 @@ jobs:
           if (( ${#INPUT_VERSION_CODE} > 10 )) || { (( ${#INPUT_VERSION_CODE} == 10 )) && [[ "$INPUT_VERSION_CODE" > "2100000000" ]]; }; then
             echo "Android version code exceeds 2100000000." >&2
             exit 1
+          fi
+
+          decimal_gt() {
+            local left="$1"
+            local right="$2"
+            if (( ${#left} != ${#right} )); then
+              (( ${#left} > ${#right} ))
+              return
+            fi
+            [[ "$left" > "$right" ]]
+          }
+
+          tuple_gt() {
+            local -a left=("$1" "$2" "$3" "$4")
+            local -a right=("$5" "$6" "$7" "$8")
+            local index
+            for index in 0 1 2 3; do
+              if [[ "${left[$index]}" == "${right[$index]}" ]]; then
+                continue
+              fi
+              decimal_gt "${left[$index]}" "${right[$index]}"
+              return
+            done
+            return 1
+          }
+
+          RELEASES_JSON="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp)"
+          RELEASE_ROWS="$(printf '%s' "$RELEASES_JSON" | jq -r '.[][] | select(.draft == false and .prerelease == false) | @base64')"
+          PRIOR_TAG=""
+          PRIOR_BODY=""
+          PRIOR_MAJOR=""
+          PRIOR_MINOR=""
+          PRIOR_PATCH=""
+          PRIOR_REVISION=""
+          while IFS= read -r encoded_release; do
+            [[ -z "$encoded_release" ]] && continue
+            release_json="$(printf '%s' "$encoded_release" | base64 --decode)"
+            release_tag="$(printf '%s' "$release_json" | jq -r '.tag_name')"
+            if [[ ! "$release_tag" =~ ^shlai-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.([1-9][0-9]*)$ ]]; then
+              continue
+            fi
+            candidate_major="${BASH_REMATCH[1]}"
+            candidate_minor="${BASH_REMATCH[2]}"
+            candidate_patch="${BASH_REMATCH[3]}"
+            candidate_revision="${BASH_REMATCH[4]}"
+            if [[ -z "$PRIOR_TAG" ]] || tuple_gt \
+              "$candidate_major" "$candidate_minor" "$candidate_patch" "$candidate_revision" \
+              "$PRIOR_MAJOR" "$PRIOR_MINOR" "$PRIOR_PATCH" "$PRIOR_REVISION"; then
+              PRIOR_TAG="$release_tag"
+              PRIOR_BODY="$(printf '%s' "$release_json" | jq -r '.body // ""')"
+              PRIOR_MAJOR="$candidate_major"
+              PRIOR_MINOR="$candidate_minor"
+              PRIOR_PATCH="$candidate_patch"
+              PRIOR_REVISION="$candidate_revision"
+            fi
+          done <<< "$RELEASE_ROWS"
+
+          IFS=. read -r NEW_MAJOR NEW_MINOR NEW_PATCH <<< "$INPUT_UPSTREAM_VERSION"
+          if [[ -z "$PRIOR_TAG" ]]; then
+            echo "No prior stable Shlai release found; accepting first bounded positive release metadata."
+          else
+            if ! tuple_gt \
+              "$NEW_MAJOR" "$NEW_MINOR" "$NEW_PATCH" "$INPUT_REVISION" \
+              "$PRIOR_MAJOR" "$PRIOR_MINOR" "$PRIOR_PATCH" "$PRIOR_REVISION"; then
+              echo "Requested Shlai semantic tuple must be newer than prior stable release $PRIOR_TAG." >&2
+              exit 1
+            fi
+
+            mapfile -t PRIOR_VERSION_CODE_LINES < <(printf '%s\n' "$PRIOR_BODY" | sed 's/\r$//' | grep '^Android versionCode:' || true)
+            if (( ${#PRIOR_VERSION_CODE_LINES[@]} != 1 )); then
+              echo "Prior stable release $PRIOR_TAG lacks exactly one canonical Android versionCode metadata line." >&2
+              exit 1
+            fi
+            if [[ "${PRIOR_VERSION_CODE_LINES[0]}" =~ ^Android\ versionCode:\ ([1-9][0-9]*)$ ]]; then
+              PRIOR_VERSION_CODE="${BASH_REMATCH[1]}"
+            else
+              echo "Prior stable release $PRIOR_TAG has invalid Android versionCode metadata." >&2
+              exit 1
+            fi
+            if (( ${#PRIOR_VERSION_CODE} > 10 )) || { (( ${#PRIOR_VERSION_CODE} == 10 )) && [[ "$PRIOR_VERSION_CODE" > "2100000000" ]]; }; then
+              echo "Prior stable release $PRIOR_TAG has an invalid Android versionCode." >&2
+              exit 1
+            fi
+            if ! decimal_gt "$INPUT_VERSION_CODE" "$PRIOR_VERSION_CODE"; then
+              echo "Requested Android versionCode must exceed prior Android versionCode $PRIOR_VERSION_CODE." >&2
+              exit 1
+            fi
           fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -156,6 +250,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHLAI_UPSTREAM_VERSION: ${{ inputs.upstream_version }}
           SHLAI_REVISION: ${{ inputs.revision }}
+          SHLAI_VERSION_CODE: ${{ inputs.version_code }}
           SHLAI_ANDROID_CERT_SHA256: ${{ vars.SHLAI_ANDROID_CERT_SHA256 }}
           SHLAI_ANDROID_KEYSTORE_BASE64: ${{ secrets.SHLAI_ANDROID_KEYSTORE_BASE64 }}
           SHLAI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SHLAI_ANDROID_KEYSTORE_PASSWORD }}
@@ -212,8 +307,9 @@ jobs:
             exit 1
           fi
           "$APKSIGNER" verify --verbose --print-certs "$APK"
+          RELEASE_NOTES="$(printf 'Unofficial ReadAny Shlai Android release. Source: %s/%s/tree/%s\n\nAndroid versionCode: %s' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$SHLAI_VERSION_CODE")"
           gh release create "$TAG" "$APK" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "ReadAny Shlai ${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}" \
-            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"
+            --notes "$RELEASE_NOTES"

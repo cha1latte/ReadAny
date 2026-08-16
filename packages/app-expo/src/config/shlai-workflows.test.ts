@@ -114,7 +114,7 @@ const expectPreviewWorkflowContract = (source: string) => {
   expect(commands.join("\n")).not.toContain("xcodebuild");
 
   const previewSteps = preview?.steps ?? [];
-  expect(previewSteps.map((step) => step.uses)).toContain("android-actions/setup-android@v3");
+  expect(previewSteps.map((step) => step.uses)).toContain(actionPins.android);
   const prebuildCommands = previewSteps
     .map((step) => step.run)
     .filter((command): command is string => command?.includes("expo prebuild") === true);
@@ -131,7 +131,7 @@ const expectPreviewWorkflowContract = (source: string) => {
   const architecture = assembleCommands[0]?.match(/-PreactNativeArchitectures=([^\s]+)/)?.[1];
   expect(architecture).toBe("arm64-v8a");
 
-  const uploadSteps = previewSteps.filter((step) => step.uses === "actions/upload-artifact@v4");
+  const uploadSteps = previewSteps.filter((step) => step.uses === actionPins.upload);
   expect(uploadSteps).toHaveLength(1);
   expect(uploadSteps[0]?.with?.["retention-days"]).toBe(14);
   expect(uploadSteps[0]?.with?.name).toContain("ReadAny-Shlai-Preview-");
@@ -183,31 +183,6 @@ const actionVersionComments = {
 } as const;
 
 const androidBuildToolsVersion = "36.0.0";
-
-const releaseRequestValidationScript = `if [[ "\$GITHUB_REF" != "refs/heads/main" ]]; then
-  echo "Stable releases must be dispatched from refs/heads/main; got \$GITHUB_REF" >&2
-  exit 1
-fi
-if [[ ! "\$INPUT_UPSTREAM_VERSION" =~ ^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]; then
-  echo "Invalid canonical upstream version: \$INPUT_UPSTREAM_VERSION" >&2
-  exit 1
-fi
-if [[ ! "\$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]; then
-  echo "Invalid positive Shlai revision: \$INPUT_REVISION" >&2
-  exit 1
-fi
-if (( \${#INPUT_REVISION} > 16 )) || { (( \${#INPUT_REVISION} == 16 )) && [[ "\$INPUT_REVISION" > "9007199254740991" ]]; }; then
-  echo "Shlai revision exceeds JavaScript's maximum safe integer." >&2
-  exit 1
-fi
-if [[ ! "\$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
-  echo "Invalid positive Android version code: \$INPUT_VERSION_CODE" >&2
-  exit 1
-fi
-if (( \${#INPUT_VERSION_CODE} > 10 )) || { (( \${#INPUT_VERSION_CODE} == 10 )) && [[ "\$INPUT_VERSION_CODE" > "2100000000" ]]; }; then
-  echo "Android version code exceeds 2100000000." >&2
-  exit 1
-fi`;
 
 const unsignedBuildScript = `set -euo pipefail
 
@@ -274,23 +249,14 @@ if [[ ! "\$ACTUAL_CERT_SHA256" =~ ^[0-9A-F]{64}$ || "\$ACTUAL_CERT_SHA256" != "\
   exit 1
 fi
 "\$APKSIGNER" verify --verbose --print-certs "\$APK"
+RELEASE_NOTES="\$(printf 'Unofficial ReadAny Shlai Android release. Source: %s/%s/tree/%s\\n\\nAndroid versionCode: %s' "\$GITHUB_SERVER_URL" "\$GITHUB_REPOSITORY" "\$GITHUB_SHA" "\$SHLAI_VERSION_CODE")"
 gh release create "\$TAG" "\$APK" \\
   --repo "\$GITHUB_REPOSITORY" \\
   --target "\$GITHUB_SHA" \\
   --title "ReadAny Shlai \${SHLAI_UPSTREAM_VERSION}.\${SHLAI_REVISION}" \\
-  --notes "Unofficial ReadAny Shlai Android release. Source: \${GITHUB_SERVER_URL}/\${GITHUB_REPOSITORY}/tree/\${GITHUB_SHA}"`;
+  --notes "\$RELEASE_NOTES"`;
 
 const expectedValidateSteps: WorkflowStep[] = [
-  {
-    name: "Validate release request",
-    shell: "bash",
-    env: {
-      INPUT_UPSTREAM_VERSION: "${{ inputs.upstream_version }}",
-      INPUT_REVISION: "${{ inputs.revision }}",
-      INPUT_VERSION_CODE: "${{ inputs.version_code }}",
-    },
-    run: `${releaseRequestValidationScript}\n`,
-  },
   { uses: actionPins.checkout, with: { "fetch-depth": 0 } },
   { uses: actionPins.pnpm, with: { version: "9.15.0" } },
   { uses: actionPins.node, with: { "node-version": "20.18.0", cache: "pnpm" } },
@@ -357,6 +323,7 @@ const expectedSignSteps: WorkflowStep[] = [
       GH_TOKEN: "${{ github.token }}",
       SHLAI_UPSTREAM_VERSION: "${{ inputs.upstream_version }}",
       SHLAI_REVISION: "${{ inputs.revision }}",
+      SHLAI_VERSION_CODE: "${{ inputs.version_code }}",
       SHLAI_ANDROID_CERT_SHA256: "${{ vars.SHLAI_ANDROID_CERT_SHA256 }}",
       ...Object.fromEntries(releaseSecretNames.map((name) => [name, `\${{ secrets.${name} }}`])),
     },
@@ -405,7 +372,7 @@ gh pr create \\
 `;
 
 const expectedUpstreamSyncSteps: WorkflowStep[] = [
-  { uses: "actions/checkout@v4", with: { "fetch-depth": 0 } },
+  { uses: actionPins.checkout, with: { "fetch-depth": 0 } },
   {
     name: "Create sync branch and PR",
     env: { GH_TOKEN: "${{ github.token }}" },
@@ -571,10 +538,20 @@ const unsafeUpstreamSyncMutations = [
 
 const expectReleaseWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
-  expect(Object.keys(workflow).sort()).toEqual(["jobs", "name", "on", "permissions"]);
+  expect(Object.keys(workflow).sort()).toEqual([
+    "concurrency",
+    "jobs",
+    "name",
+    "on",
+    "permissions",
+  ]);
   expect(workflow.name).toBe("Release ReadAny Shlai");
   expect(Object.keys(workflow.on ?? {})).toEqual(["workflow_dispatch"]);
   expect(workflow.permissions).toEqual({ contents: "read" });
+  expect(workflow.concurrency).toEqual({
+    group: "shlai-stable-release",
+    "cancel-in-progress": false,
+  });
 
   const inputs = workflow.on?.workflow_dispatch as { inputs?: Record<string, unknown> };
   expect(inputs.inputs).toEqual({
@@ -625,7 +602,52 @@ const expectReleaseWorkflowContract = (source: string) => {
   expect(validate?.environment).toBeUndefined();
   expect(build?.permissions).toBeUndefined();
   expect(build?.environment).toBeUndefined();
-  expect(validate?.steps).toEqual(expectedValidateSteps);
+  const validationStep = validate?.steps?.[0];
+  expect(validationStep?.name).toBe("Validate release request");
+  expect(validationStep?.shell).toBe("bash");
+  expect(validationStep?.env).toEqual({
+    GH_TOKEN: "${{ github.token }}",
+    INPUT_UPSTREAM_VERSION: "${{ inputs.upstream_version }}",
+    INPUT_REVISION: "${{ inputs.revision }}",
+    INPUT_VERSION_CODE: "${{ inputs.version_code }}",
+  });
+  const validationScript = validationStep?.run ?? "";
+  expect(validationScript).toContain("set -euo pipefail");
+  expect(validationScript).toContain('[[ "$GITHUB_REF" != "refs/heads/main" ]]');
+  expect(validationScript).toContain(
+    '[[ ! "$INPUT_UPSTREAM_VERSION" =~ ^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]',
+  );
+  expect(validationScript).toContain('[[ ! "$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]');
+  expect(validationScript).toContain('[[ ! "$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]');
+  expect(validationScript).toContain("9007199254740991");
+  expect(validationScript).toContain(
+    'if (( ${#INPUT_VERSION_CODE} > 10 )) || { (( ${#INPUT_VERSION_CODE} == 10 )) && [[ "$INPUT_VERSION_CODE" > "2100000000" ]]; }; then',
+  );
+  expect(validationScript).not.toContain('INPUT_UPSTREAM_VERSION="');
+  expect(validationScript).toContain("decimal_gt()");
+  expect(validationScript).toContain("tuple_gt()");
+  expect(validationScript).toContain(
+    'gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp',
+  );
+  expect(validationScript).toContain(
+    'RELEASES_JSON="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp)"',
+  );
+  expect(validationScript).not.toMatch(/gh api[^\n]+\|\|\s*true|gh api[^\n]+\|\|\s*echo/);
+  expect(validationScript).toContain("select(.draft == false and .prerelease == false)");
+  expect(validationScript).toContain(
+    '[[ ! "$release_tag" =~ ^shlai-v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.([1-9][0-9]*)$ ]]',
+  );
+  expect(validationScript).toContain('if [[ -z "$PRIOR_TAG" ]] || tuple_gt');
+  expect(validationScript).toContain("if ! tuple_gt \\\n");
+  expect(validationScript).toContain("must be newer than prior stable release");
+  expect(validationScript).toContain("grep '^Android versionCode:'");
+  expect(validationScript).toContain(
+    'if [[ "${PRIOR_VERSION_CODE_LINES[0]}" =~ ^Android\\ versionCode:\\ ([1-9][0-9]*)$ ]]; then',
+  );
+  expect(validationScript).toContain('PRIOR_VERSION_CODE="${BASH_REMATCH[1]}"');
+  expect(validationScript).toContain('if ! decimal_gt "$INPUT_VERSION_CODE" "$PRIOR_VERSION_CODE"');
+  expect(validationScript).toContain("must exceed prior Android versionCode");
+  expect(validate?.steps?.slice(1)).toEqual(expectedValidateSteps);
   expect(build?.steps).toEqual(expectedBuildSteps);
   expect(collectSecretsTokens(validate)).toEqual([]);
   expect(collectSecretsTokens(build)).toEqual([]);
@@ -1083,8 +1105,8 @@ const unsafeReleaseMutations = [
     name: "signing step runs repository package code",
     mutate: (source: string) =>
       source.replace(
-        "          set -euo pipefail",
-        "          set -euo pipefail\n          pnpm test",
+        "      - name: Sign, verify, and publish APK\n        shell: bash",
+        "      - name: Sign, verify, and publish APK\n        shell: bash\n        run: pnpm test",
       ),
   },
   {
@@ -1099,7 +1121,7 @@ const unsafeReleaseMutations = [
     name: "release is published before certificate verification",
     mutate: (source: string) =>
       source.replace(
-        '          "$APKSIGNER" verify --verbose --print-certs "$APK"\n          gh release create "$TAG" "$APK" \\',
+        '          "$APKSIGNER" verify --verbose --print-certs "$APK"',
         '          gh release create "$TAG" "$APK" \\\n            --repo "$GITHUB_REPOSITORY"\n          "$APKSIGNER" verify --verbose --print-certs "$APK"',
       ),
   },
@@ -1115,8 +1137,42 @@ const unsafeReleaseMutations = [
     name: "mutable action runs after the secret-bearing final step",
     mutate: (source: string) =>
       source.replace(
-        '            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"',
-        '            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"\n      - uses: actions/checkout@v4',
+        '            --notes "$RELEASE_NOTES"',
+        '            --notes "$RELEASE_NOTES"\n      - uses: actions/checkout@v4',
+      ),
+  },
+  {
+    name: "stable release concurrency is removed",
+    mutate: (source: string) =>
+      source.replace(
+        "concurrency:\n  group: shlai-stable-release\n  cancel-in-progress: false\n\n",
+        "",
+      ),
+  },
+  {
+    name: "release history pagination is removed",
+    mutate: (source: string) => source.replace("gh api --paginate", "gh api"),
+  },
+  {
+    name: "release history API failures are treated as an empty history",
+    mutate: (source: string) => source.replace('--slurp)"', "--slurp || printf '[]')\""),
+  },
+  {
+    name: "prereleases are admitted to stable history",
+    mutate: (source: string) =>
+      source.replace("select(.draft == false and .prerelease == false)", "select(.draft == false)"),
+  },
+  {
+    name: "prior semantic tuple comparison is bypassed",
+    mutate: (source: string) =>
+      source.replace("          if ! tuple_gt \\", "          if false && tuple_gt \\"),
+  },
+  {
+    name: "prior Android version code comparison is bypassed",
+    mutate: (source: string) =>
+      source.replace(
+        '          if ! decimal_gt "$INPUT_VERSION_CODE" "$PRIOR_VERSION_CODE"; then',
+        "          if false; then",
       ),
   },
   {
@@ -1249,6 +1305,34 @@ const unsafeReleaseMutations = [
 ] as const;
 
 describe("ReadAny Shlai workflows", () => {
+  it("pins every third-party action in Shlai workflows", () => {
+    for (const name of ["shlai-pr.yml", "shlai-upstream-sync.yml"]) {
+      const source = readWorkflow(name);
+      const workflow = parse(source, { version: "1.2" }) as Workflow;
+      const uses = Object.values(workflow.jobs ?? {}).flatMap((job) =>
+        (job.steps ?? []).flatMap((step) => (step.uses ? [step.uses] : [])),
+      );
+
+      expect(uses.length).toBeGreaterThan(0);
+      expect(uses.every((action) => /^[\w-]+\/[\w-]+@[a-f0-9]{40}$/.test(action))).toBe(true);
+      expect(source).not.toMatch(/uses:\s*[^\s]+@v\d/);
+    }
+  });
+
+  it("fails stable releases closed unless semantic and Android versions increase", () => {
+    const source = readWorkflow("shlai-release.yml");
+    expect(source).toContain("repos/$GITHUB_REPOSITORY/releases?per_page=100");
+    expect(source).toContain("--paginate");
+    expect(source).toContain("^shlai-v");
+    expect(source).toContain("Android versionCode:");
+    expect(source).toContain("tuple_gt");
+    expect(source).toContain("decimal_gt");
+    expect(source).toContain("No prior stable Shlai release found");
+    expect(source).toContain("must be newer than prior stable release");
+    expect(source).toContain("must exceed prior Android versionCode");
+    expect(source).toContain("SHLAI_VERSION_CODE: ${{ inputs.version_code }}");
+  });
+
   it("opens reviewable upstream sync pull requests without merging", () => {
     expectUpstreamSyncWorkflowContract(readWorkflow("shlai-upstream-sync.yml"));
   });

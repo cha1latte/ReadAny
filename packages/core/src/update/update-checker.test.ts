@@ -44,6 +44,45 @@ describe("Shlai update routing", () => {
     expect(releaseTagToVersion("v99.0.0", "shlai-v")).toBeNull();
   });
 
+  it.each([
+    ["v1.2", "v"],
+    ["v1.2.3.4", "v"],
+    ["v1.2.3-beta.1", "v"],
+    ["v01.2.3", "v"],
+    ["shlai-v1.2.3", "shlai-v"],
+    ["shlai-v1.2.3.0", "shlai-v"],
+    ["shlai-v1.2.3.4-extra", "shlai-v"],
+    ["shlai-v1.02.3.4", "shlai-v"],
+  ])("rejects malformed complete release tag %s", (tag, prefix) => {
+    expect(releaseTagToVersion(tag, prefix)).toBeNull();
+  });
+
+  it("accepts only complete official and Shlai versions", () => {
+    expect(releaseTagToVersion("v0.12.3")).toBe("0.12.3");
+    expect(releaseTagToVersion("shlai-v1.3.5.27", "shlai-v")).toBe("1.3.5.27");
+  });
+
+  it("does not throttle a malformed tag inside the configured channel", async () => {
+    const platform = makeReleasePlatform({
+      tag_name: "shlai-v1.3.5.2-extra",
+      assets: [
+        {
+          name: "ReadAny-Shlai.apk",
+          browser_download_url: "https://example.test/shlai.apk",
+          size: 42,
+        },
+      ],
+    });
+
+    await expect(
+      checkForUpdate("1.3.5-shlai.1", platform, false, {
+        tagPrefix: "shlai-v",
+        assetName: "ReadAny-Shlai.apk",
+      }),
+    ).resolves.toEqual({ hasUpdate: false, currentVersion: "1.3.5-shlai.1" });
+    expect(platform.kvSetItem).not.toHaveBeenCalled();
+  });
+
   it("uses the fork API and a fork-specific throttle key", async () => {
     const platform = makePlatform();
     const result = await checkForUpdate("1.3.5-shlai.1", platform, false, {

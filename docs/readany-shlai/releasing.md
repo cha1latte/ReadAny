@@ -28,7 +28,9 @@ The four secrets are exposed only to the final signing-and-publishing shell step
 
 ## Versioning
 
-The first stable Shlai build based on ReadAny `1.3.5` is app version `1.3.5-shlai.1` with `versionCode=1`. Its release tag is `shlai-v1.3.5.1`. Keep the Shlai revision and Android version code increasing for every later stable release.
+The first stable Shlai build based on ReadAny `1.3.5` is app version `1.3.5-shlai.1` with `versionCode=1`. Its release tag is `shlai-v1.3.5.1`. Every later release must use both a strictly greater four-integer semantic tuple (`upstream major`, `minor`, `patch`, then Shlai revision) and a strictly greater Android `versionCode`.
+
+Stable Android builds are supported only through the protected GitHub workflow below. The repository deliberately has no production EAS profile and no generic production EAS build script; development and preview EAS profiles remain available. Stable iOS distribution is not supported.
 
 ## Release
 
@@ -38,7 +40,9 @@ Dispatch the protected workflow from fork `main` only:
 gh workflow run "Release ReadAny Shlai" --repo cha1latte/ReadAny --ref main -f upstream_version=1.3.5 -f revision=1 -f version_code=1
 ```
 
-The workflow fails before checkout unless `GITHUB_REF` is exactly `refs/heads/main`. It also rejects non-canonical version input, including whitespace, leading-zero components such as `01`, zero or leading-zero revisions, and zero or leading-zero Android version codes. The protected signing job repeats the main guard. Do not dispatch a stable release from a feature branch or tag.
+The workflow fails before checkout unless `GITHUB_REF` is exactly `refs/heads/main`. It also rejects non-canonical version input, including whitespace, leading-zero components such as `01`, zero or leading-zero revisions, and zero or leading-zero Android version codes. It pages through all canonical, non-draft, non-prerelease Shlai releases and finds the greatest exact `shlai-vX.Y.Z.N` tuple without converting arbitrary-size tuple components to JavaScript or shell integers. If a prior stable release exists, the requested tuple must be greater and its Android version code must be greater than the prior value. Release-history API or parsing failures stop the workflow. Concurrent stable dispatches are serialized.
+
+Each published release records one exact `Android versionCode: N` line in its notes. A later release fails closed if that line is absent, duplicated, malformed, or outside Android's supported bound on the greatest prior stable Shlai release. Only the first stable Shlai release may proceed without prior metadata. The protected signing job repeats the main guard. Do not dispatch a stable release from a feature branch or tag.
 
 The workflow first validates the selected `main` commit. A separate secret-free production build then:
 
@@ -48,7 +52,7 @@ The workflow first validates the selected `main` commit. A separate secret-free 
 4. verifies that `app-release-unsigned.apk` is unsigned; and
 5. uploads that exact internal artifact for the protected job.
 
-Both APK jobs explicitly install and use Android build tools `36.0.0`; they never select an arbitrary latest runner version. Approve the `shlai-production` environment only after confirming the run targets the intended `main` commit and its unsigned build succeeded. The minimal protected job downloads that artifact, zipaligns it if needed, signs it with `apksigner`, requires the APK's single signer certificate digest to match `SHLAI_ANDROID_CERT_SHA256`, performs verbose signature verification, rejects any pre-existing exact Git tag even when no GitHub Release exists, and publishes exactly one asset named `ReadAny-Shlai.apk` under the matching `shlai-v...` tag.
+Both APK jobs explicitly install and use Android build tools `36.0.0`; they never select an arbitrary latest runner version. Every third-party action in the Shlai release, pull-request, and upstream-sync workflows is pinned to a reviewed commit SHA. Approve the `shlai-production` environment only after confirming the run targets the intended `main` commit and its unsigned build succeeded. The minimal protected job downloads that artifact, zipaligns it if needed, signs it with `apksigner`, requires the APK's single signer certificate digest to match `SHLAI_ANDROID_CERT_SHA256`, performs verbose signature verification, rejects any pre-existing exact Git tag even when no GitHub Release exists, and publishes exactly one asset named `ReadAny-Shlai.apk` under the matching `shlai-v...` tag.
 
 ## Verify
 

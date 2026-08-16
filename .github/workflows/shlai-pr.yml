@@ -17,13 +17,13 @@ jobs:
     name: Validate
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
         with:
           version: 9.15.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20.18.0
           cache: pnpm
@@ -55,19 +55,19 @@ jobs:
       SHLAI_REVISION: 0
       SHLAI_VERSION_CODE: 1
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
         with:
           version: 9.15.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20.18.0
           cache: pnpm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @readany/app-expo run build:reader
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
@@ -79,7 +79,7 @@ jobs:
         run: |
           NUMBER="${{ github.event.pull_request.number || github.run_number }}"
           cp packages/app-expo/android/app/build/outputs/apk/debug/app-debug.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}
           path: ReadAny-Shlai-Preview-*.apk

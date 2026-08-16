@@ -81,7 +81,7 @@ A manual **Release ReadAny Shlai** workflow publishes stable Android updates. Me
 
 The release workflow:
 
-1. accepts an explicit Shlai version and monotonically increasing Android build number;
+1. accepts an explicit canonical Shlai version tuple and Android build number, then requires both to be strictly greater than the greatest prior stable Shlai release;
 2. checks out the exact `main` commit selected for release;
 3. reruns all required automated checks;
 4. builds the production Android package;
@@ -89,9 +89,11 @@ The release workflow:
 6. loads the dedicated Android keystore from encrypted GitHub Actions secrets;
 7. signs and verifies the APK;
 8. creates a Git tag and GitHub Release tied to the same source commit; and
-9. attaches the signed APK and concise release notes.
+9. attaches the signed APK and concise release notes containing the canonical Android version-code metadata needed to validate the next release.
 
-Release tags encode the upstream version followed by a Shlai revision, for example `shlai-v1.3.5.1`. The matching app version name is `1.3.5-shlai.1`. Obtainium watches releases in `cha1latte/ReadAny` and discovers the attached APK.
+Release tags encode the upstream version followed by a Shlai revision, for example `shlai-v1.3.5.1`. The matching app version name is `1.3.5-shlai.1`. Before building, the workflow pages through canonical non-draft, non-prerelease Shlai releases, compares exact integer tuple components without unsafe numeric coercion, and requires the new tuple and Android version code to increase. Existing release notes must contain exactly one canonical `Android versionCode: N` line; missing or malformed provenance and GitHub API failures stop the release. Stable dispatches are serialized to close concurrent-release races. Obtainium watches releases in `cha1latte/ReadAny` and discovers the attached APK.
+
+EAS remains available for development and preview builds only. Stable Android signing and publication use the protected GitHub workflow exclusively; production EAS profiles and generic production EAS scripts are intentionally absent, and stable iOS distribution remains out of scope.
 
 If a release fails at any point, no GitHub Release is published. To roll back behavior, the previous source commit is rebuilt with a newer Android build number so Android accepts it as an update.
 

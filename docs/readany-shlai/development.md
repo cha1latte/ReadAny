@@ -56,6 +56,8 @@ The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so i
 
 Never add a keystore, password, certificate, signing value, or GitHub secret to the repository, pull-request text, issue text, logs, terminal arguments, or preview workflow. Pull-request previews intentionally receive no stable signing secrets. Stable signing is available only through the protected `shlai-production` environment; follow [releasing.md](releasing.md) for that process and its two-encrypted-backup requirement.
 
+EAS is intentionally limited to development and preview profiles. There is no supported production EAS profile or `eas:build:android` / `eas:build:ios` shortcut in this fork. Build and publish stable Android packages only through the protected `Release ReadAny Shlai` GitHub workflow; iOS stable distribution remains out of scope.
+
 ## Installed app identities
 
 | Build | Android package | Deep-link scheme |

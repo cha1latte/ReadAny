@@ -352,7 +352,7 @@ export function compareVersions(a: string, b: string): number {
 }
 ```
 
-Add `options: UpdateCheckOptions = {}` as the fourth `checkForUpdate` parameter. Resolve `apiUrl`, `tagPrefix`, `throttleKey`, and optional `assetName` once at the start. Reject a tag without the exact prefix before throttling. When `assetName` is configured, require that exact asset, expose only that asset in `ReleaseInfo`, and do not burn the 24-hour throttle for a missing required asset. Existing desktop callers that pass only three arguments retain the official `v` prefix and unfiltered release assets.
+Add `options: UpdateCheckOptions = {}` as the fourth `checkForUpdate` parameter. Resolve `apiUrl`, `tagPrefix`, `throttleKey`, and optional `assetName` once at the start. Validate the complete canonical tag before throttling: official defaults accept only exact `vX.Y.Z`, while Shlai accepts only exact `shlai-vX.Y.Z.N` with a positive revision. When `assetName` is configured, require that exact asset, expose only that asset in `ReleaseInfo`, and do not burn the 24-hour throttle for a malformed tag or missing required asset. Existing desktop callers that pass only three arguments retain the official `v` channel and unfiltered release assets.
 
 - [ ] **Step 4: Add the mobile Shlai release configuration boundary**
 
@@ -707,7 +707,7 @@ Run the test and expect failure because the release workflow does not exist.
 
 - [ ] **Step 2: Create the stable-release workflow**
 
-Create `.github/workflows/shlai-release.yml` with two jobs: `validate` without secrets, followed by `release` using `environment: shlai-production`. Set top-level permissions to `contents: read`, then grant only the `release` job `contents: write` so `gh release create` can publish. The dispatch inputs are `upstream_version`, `revision`, and `version_code`, all required strings with defaults `1.3.5`, `1`, and `1`.
+Create `.github/workflows/shlai-release.yml` with three jobs: secret-free `validate`, secret-free unsigned `build`, then minimal `sign` using `environment: shlai-production`. Set top-level permissions to `contents: read`, then grant only `sign` `contents: write` so `gh release create` can publish. The dispatch inputs are `upstream_version`, `revision`, and `version_code`, all required strings with defaults `1.3.5`, `1`, and `1`. Serialize stable workflow runs. During validation, page through every non-draft, non-prerelease release, select the greatest exact `shlai-vX.Y.Z.N` tuple with string-safe integer comparison, and require both the requested tuple and Android version code to increase. Require exactly one canonical `Android versionCode: N` metadata line from the prior stable release, fail on API or provenance errors, and publish that line in every new release. Keep EAS limited to development and preview profiles; stable Android is built only by this protected workflow and stable iOS remains unsupported.
 
 The release job must use these exact build/sign/release commands:
 

@@ -1,10 +1,10 @@
+import { buildImportedBookMeta } from "@/lib/book/imported-book-meta";
 import {
+  type ExtractedMeta,
   createRangeReadableFile,
   extractBookMetadata,
   extractBookMetadataFromFile,
-  type ExtractedMeta,
 } from "@/lib/book/metadata-extractor";
-import { buildImportedBookMeta } from "@/lib/book/imported-book-meta";
 import { queueBook as queueAutoVectorize } from "@/lib/rag/auto-vectorize-service";
 import {
   type ImportBooksResult,
@@ -15,7 +15,14 @@ import {
 import * as db from "@readany/core/db/database";
 import { runWithDbRetry } from "@readany/core/db/write-retry";
 import { getPlatformService } from "@readany/core/services";
-import type { Book, BookGroup, BookMeta, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
+import type {
+  Book,
+  BookGroup,
+  BookMeta,
+  LibraryFilter,
+  SortField,
+  SortOrder,
+} from "@readany/core/types";
 import { generateId } from "@readany/core/utils";
 import { create } from "zustand";
 import { debouncedSave, loadFromFS } from "./persist";

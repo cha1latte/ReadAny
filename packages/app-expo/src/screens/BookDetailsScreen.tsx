@@ -305,7 +305,9 @@ export function BookDetailsScreen({ route }: Props) {
     if (!book) return;
     if (hydratedBookIdRef.current === book.id) return;
     hydratedBookIdRef.current = book.id;
-    setValues(createBookMetadataFormValues(book));
+    const nextValues = createBookMetadataFormValues(book);
+    latestValuesRef.current = nextValues;
+    setValues(nextValues);
   }, [book]);
 
   useEffect(() => {
@@ -325,6 +327,7 @@ export function BookDetailsScreen({ route }: Props) {
         ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
         : null;
       if (!nextValues) return;
+      latestValuesRef.current = nextValues;
       setValues(nextValues);
       updateBook(book.id, buildBookMetadataUpdate(book, nextValues));
     });

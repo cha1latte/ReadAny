@@ -1324,7 +1324,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     // Persist book tag changes to DB
     const books = get().books;
     for (const b of books) {
-      db.updateBook(b.id, { tags: b.tags }).catch((err) => console.warn("[Library] Failed to update book tags:", err));
+      db.updateBook(b.id, { tags: b.tags }).catch((err) =>
+        console.warn("[Library] Failed to update book tags:", err),
+      );
     }
   },
 
@@ -1344,7 +1346,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     });
     for (const b of get().books) {
       if (b.tags.includes(trimmed)) {
-        db.updateBook(b.id, { tags: b.tags }).catch((err) => console.warn("[Library] Failed to update book tags:", err));
+        db.updateBook(b.id, { tags: b.tags }).catch((err) =>
+          console.warn("[Library] Failed to update book tags:", err),
+        );
       }
     }
   },
@@ -1361,7 +1365,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       return { books, allTags };
     });
     const book = get().books.find((b) => b.id === bookId);
-    if (book) db.updateBook(bookId, { tags: book.tags }).catch((err) => console.warn("[Library] Failed to update book tags:", err));
+    if (book)
+      db.updateBook(bookId, { tags: book.tags }).catch((err) =>
+        console.warn("[Library] Failed to update book tags:", err),
+      );
   },
 
   removeTagFromBook: (bookId, tag) => {
@@ -1373,6 +1380,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       return { books };
     });
     const book = get().books.find((b) => b.id === bookId);
-    if (book) db.updateBook(bookId, { tags: book.tags }).catch((err) => console.warn("[Library] Failed to update book tags:", err));
+    if (book)
+      db.updateBook(bookId, { tags: book.tags }).catch((err) =>
+        console.warn("[Library] Failed to update book tags:", err),
+      );
   },
 }));

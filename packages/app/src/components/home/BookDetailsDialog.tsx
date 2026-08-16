@@ -25,7 +25,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import { extractLocalBookMetadata } from "@/lib/book/auto-metadata";
-import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import type { Book, BookReview } from "@readany/core/types";
@@ -40,6 +39,7 @@ import {
   mergeMissingBookMetadataValues,
   splitEditableList,
 } from "@readany/core/utils";
+import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
 import {
   BookOpen,
@@ -282,12 +282,14 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
   const coverSrc = useResolvedSrc(values?.coverUrl);
   const hydratedBookIdRef = useRef<string | null>(null);
   const autoFilledBookIdRef = useRef<string | null>(null);
+  const latestValuesRef = useRef<BookMetadataFormValues | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) {
       hydratedBookIdRef.current = null;
       autoFilledBookIdRef.current = null;
+      latestValuesRef.current = null;
       setEditingBasics(false);
       setEditingTitleField(null);
       setEditingReviewId(null);
@@ -299,7 +301,9 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     if (!book) return;
     if (hydratedBookIdRef.current === book.id) return;
     hydratedBookIdRef.current = book.id;
-    setValues(createBookMetadataFormValues(book));
+    const nextValues = createBookMetadataFormValues(book);
+    latestValuesRef.current = nextValues;
+    setValues(nextValues);
     setEditingBasics(false);
     setEditingTitleField(null);
     setEditingReviewId(null);
@@ -307,6 +311,10 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     setDraftActionBusy(false);
     setDraftActionResult(null);
   }, [book, open]);
+
+  useEffect(() => {
+    latestValuesRef.current = values;
+  }, [values]);
 
   useEffect(() => {
     if (!open || !book || !values) return;
@@ -317,16 +325,19 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     let cancelled = false;
     void extractLocalBookMetadata(book).then((metadata) => {
       if (cancelled || !metadata) return;
-      setValues((current) => {
-        if (!current) return current;
-        return mergeMissingBookMetadataValues(current, metadata) ?? current;
-      });
+      const nextValues = latestValuesRef.current
+        ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
+        : null;
+      if (!nextValues) return;
+      latestValuesRef.current = nextValues;
+      setValues(nextValues);
+      updateBook(book.id, buildBookMetadataUpdate(book, nextValues));
     });
 
     return () => {
       cancelled = true;
     };
-  }, [book, open, values]);
+  }, [book, open, updateBook, values]);
 
   const groupName = useMemo(() => {
     const groupId = values?.groupId ?? book?.groupId;
@@ -936,7 +947,8 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
                                 ? t("library.detailsDraftCreated", "Draft created successfully")
                                 : t("library.detailsDraftCreateFailed", "Draft creation failed")}
                             </p>
-                            {draftActionResult.ok && parseDraftCreateResult(draftActionResult)?.ok ? (
+                            {draftActionResult.ok &&
+                            parseDraftCreateResult(draftActionResult)?.ok ? (
                               <Button
                                 type="button"
                                 size="sm"

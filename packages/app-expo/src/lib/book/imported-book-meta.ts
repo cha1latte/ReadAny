@@ -8,12 +8,10 @@ export function buildImportedBookMeta(input: {
   embedded?: Partial<BookMeta> | (ExtractedMeta & { coverUrl?: string });
   fallbackTitle: string;
 }): BookMeta {
-  const merged = mergeBookMetadataSources(
-    input.existing,
-    input.opds,
-    input.embedded,
-    { title: input.fallbackTitle, author: "" },
-  );
+  const merged = mergeBookMetadataSources(input.existing, input.opds, input.embedded, {
+    title: input.fallbackTitle,
+    author: "",
+  });
   return {
     ...input.existing,
     ...merged,

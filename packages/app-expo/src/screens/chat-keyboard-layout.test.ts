@@ -14,7 +14,7 @@ describe("Android chat keyboard layout", () => {
         /import\s+\{\s*KeyboardAvoidingView\s*\}\s+from\s+"react-native-keyboard-controller";/,
       );
       expect(source).toMatch(
-        /<KeyboardAvoidingView\b[\s\S]*?behavior="height"[\s\S]*?enabled=\{Platform\.OS === "android"\}[\s\S]*?<ChatInput\b[\s\S]*?<\/KeyboardAvoidingView>/,
+        /<KeyboardAvoidingView\b[\s\S]*?behavior="height"[\s\S]*?enabled=\{Platform\.OS === "android"\}[\s\S]*?keyboardVerticalOffset=\{insets\.top\}[\s\S]*?<ChatInput\b[\s\S]*?<\/KeyboardAvoidingView>/,
       );
     });
   }

@@ -11,6 +11,19 @@ Create the protected GitHub environment `shlai-production` before dispatching a 
 
 They are never used by pull-request workflows. Keep the environment approval rule enabled so signing is available only for intentional stable releases.
 
+The same protected environment must contain one non-secret environment variable:
+
+- `SHLAI_ANDROID_CERT_SHA256` — the signing certificate's canonical 64-character SHA-256 hexadecimal digest, without separators
+
+After confirming the fingerprint shown by `keytool -list -v`, configure and verify the environment variable without treating it as a secret:
+
+```powershell
+$certSha256 = Read-Host 'Paste the 64-character signing certificate SHA-256 digest without separators'
+if ($certSha256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Invalid certificate SHA-256 digest' }
+gh variable set SHLAI_ANDROID_CERT_SHA256 --repo cha1latte/ReadAny --env shlai-production --body ($certSha256.ToUpperInvariant())
+gh variable list --repo cha1latte/ReadAny --env shlai-production
+```
+
 The four secrets are exposed only to the final signing-and-publishing shell step. Checkout, dependency installation, Expo prebuild, Gradle compilation, and artifact upload all run without the protected environment or signing secrets. The protected job does not check out the repository or execute pnpm, Expo, Gradle, or repository code.
 
 ## Versioning
@@ -25,7 +38,7 @@ Dispatch the protected workflow from fork `main` only:
 gh workflow run "Release ReadAny Shlai" --repo cha1latte/ReadAny --ref main -f upstream_version=1.3.5 -f revision=1 -f version_code=1
 ```
 
-The workflow fails before checkout unless `GITHUB_REF` is exactly `refs/heads/main`; the protected signing job repeats that guard. Do not dispatch a stable release from a feature branch or tag.
+The workflow fails before checkout unless `GITHUB_REF` is exactly `refs/heads/main`. It also rejects non-canonical version input, including whitespace, leading-zero components such as `01`, zero or leading-zero revisions, and zero or leading-zero Android version codes. The protected signing job repeats the main guard. Do not dispatch a stable release from a feature branch or tag.
 
 The workflow first validates the selected `main` commit. A separate secret-free production build then:
 
@@ -35,7 +48,7 @@ The workflow first validates the selected `main` commit. A separate secret-free 
 4. verifies that `app-release-unsigned.apk` is unsigned; and
 5. uploads that exact internal artifact for the protected job.
 
-Approve the `shlai-production` environment only after confirming the run targets the intended `main` commit and its unsigned build succeeded. The minimal protected job downloads that artifact, zipaligns it if needed, signs it with `apksigner`, verifies the signing certificate, rejects an existing tag, and publishes exactly one asset named `ReadAny-Shlai.apk` under the matching `shlai-v...` tag.
+Both APK jobs explicitly install and use Android build tools `36.0.0`; they never select an arbitrary latest runner version. Approve the `shlai-production` environment only after confirming the run targets the intended `main` commit and its unsigned build succeeded. The minimal protected job downloads that artifact, zipaligns it if needed, signs it with `apksigner`, requires the APK's single signer certificate digest to match `SHLAI_ANDROID_CERT_SHA256`, performs verbose signature verification, rejects any pre-existing exact Git tag even when no GitHub Release exists, and publishes exactly one asset named `ReadAny-Shlai.apk` under the matching `shlai-v...` tag.
 
 ## Verify
 

@@ -27,11 +27,27 @@ jobs:
     name: Validate
     runs-on: ubuntu-22.04
     steps:
-      - name: Require main branch
+      - name: Validate release request
         shell: bash
+        env:
+          INPUT_UPSTREAM_VERSION: ${{ inputs.upstream_version }}
+          INPUT_REVISION: ${{ inputs.revision }}
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
         run: |
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "Stable releases must be dispatched from refs/heads/main; got $GITHUB_REF" >&2
+            exit 1
+          fi
+          if [[ ! "$INPUT_UPSTREAM_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid canonical upstream version: $INPUT_UPSTREAM_VERSION" >&2
+            exit 1
+          fi
+          if [[ ! "$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid positive Shlai revision: $INPUT_REVISION" >&2
+            exit 1
+          fi
+          if [[ ! "$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid positive Android version code: $INPUT_VERSION_CODE" >&2
             exit 1
           fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -81,6 +97,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - name: Install Android build tools 36.0.0
+        run: sdkmanager "build-tools;36.0.0"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @readany/app-expo run build:reader
       - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
@@ -96,7 +114,7 @@ jobs:
 
           UNSIGNED_APK="packages/app-expo/android/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$UNSIGNED_APK"
-          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           if "$BUILD_TOOLS/apksigner" verify "$UNSIGNED_APK" >/dev/null 2>&1; then
             echo "Expected an unsigned release APK, but signature verification succeeded." >&2
             exit 1
@@ -118,6 +136,8 @@ jobs:
     environment: shlai-production
     steps:
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - name: Install Android build tools 36.0.0
+        run: sdkmanager "build-tools;36.0.0"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: readany-shlai-unsigned-${{ github.sha }}
@@ -128,6 +148,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHLAI_UPSTREAM_VERSION: ${{ inputs.upstream_version }}
           SHLAI_REVISION: ${{ inputs.revision }}
+          SHLAI_ANDROID_CERT_SHA256: ${{ vars.SHLAI_ANDROID_CERT_SHA256 }}
           SHLAI_ANDROID_KEYSTORE_BASE64: ${{ secrets.SHLAI_ANDROID_KEYSTORE_BASE64 }}
           SHLAI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SHLAI_ANDROID_KEYSTORE_PASSWORD }}
           SHLAI_ANDROID_KEY_ALIAS: ${{ secrets.SHLAI_ANDROID_KEY_ALIAS }}
@@ -140,15 +161,21 @@ jobs:
           ALIGNED_APK="$RUNNER_TEMP/ReadAny-Shlai-aligned.apk"
           APK="ReadAny-Shlai.apk"
           KEYSTORE="$RUNNER_TEMP/readany-shlai-release.jks"
-          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           ZIPALIGN="$BUILD_TOOLS/zipalign"
           APKSIGNER="$BUILD_TOOLS/apksigner"
           trap 'rm -f "$KEYSTORE"' EXIT
 
           test "$GITHUB_REF" = "refs/heads/main"
           test -f "$UNSIGNED_APK"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release already exists: $TAG" >&2
+          EXPECTED_CERT_SHA256="$(printf '%s' "$SHLAI_ANDROID_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if [[ ! "$EXPECTED_CERT_SHA256" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "SHLAI_ANDROID_CERT_SHA256 must normalize to exactly 64 hexadecimal characters." >&2
+            exit 1
+          fi
+          EXACT_TAG_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \"refs/tags/$TAG\")] | length")"
+          if [[ "$EXACT_TAG_COUNT" != "0" ]]; then
+            echo "Tag already exists: $TAG" >&2
             exit 1
           fi
 
@@ -165,6 +192,17 @@ jobs:
             --key-pass env:SHLAI_ANDROID_KEY_PASSWORD \
             --out "$APK" \
             "$ALIGNED_APK"
+          CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK")"
+          mapfile -t ACTUAL_CERT_DIGESTS < <(printf '%s\n' "$CERT_OUTPUT" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p')
+          if (( ${#ACTUAL_CERT_DIGESTS[@]} != 1 )); then
+            echo "Expected exactly one APK signer certificate SHA-256 digest." >&2
+            exit 1
+          fi
+          ACTUAL_CERT_SHA256="$(printf '%s' "${ACTUAL_CERT_DIGESTS[0]}" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if [[ ! "$ACTUAL_CERT_SHA256" =~ ^[0-9A-F]{64}$ || "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]]; then
+            echo "Signed APK certificate SHA-256 digest does not match SHLAI_ANDROID_CERT_SHA256." >&2
+            exit 1
+          fi
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           gh release create "$TAG" "$APK" \
             --repo "$GITHUB_REPOSITORY" \

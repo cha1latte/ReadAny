@@ -903,7 +903,7 @@ git commit -m "ci: open reviewable upstream sync pull requests"
 
 **Interfaces:**
 - Consumes: the fork/upstream remotes established in Preflight, GitHub account `cha1latte`, Celia's authenticated `gh` session, Celia's GitHub numeric user ID queried at runtime, and `SHLAI_FRIEND_LOGIN` supplied by Celia without guessing.
-- Produces: protected `main`, collaborator write access, protected release environment, and four encrypted GitHub secrets.
+- Produces: protected `main`, collaborator write access, protected release environment, four encrypted GitHub secrets, and the non-secret signing-certificate digest variable `SHLAI_ANDROID_CERT_SHA256`.
 
 - [ ] **Step 1: Write collaborator development instructions**
 
@@ -956,7 +956,7 @@ Never put either password in terminal arguments, chat, files under the repositor
 
 Before continuing, Celia verifies two encrypted copies in two independent locations and records their location labels plus the alias in her password manager. The implementation stops here if either backup is missing or cannot be opened.
 
-- [ ] **Step 4: Upload the four GitHub secrets without printing them**
+- [ ] **Step 4: Upload the four GitHub secrets and configure the certificate digest**
 
 ```powershell
 $keystorePath='D:\dev\_secrets\readany-shlai\readany-shlai-release.jks'
@@ -965,9 +965,13 @@ gh secret set SHLAI_ANDROID_KEYSTORE_PASSWORD --repo cha1latte/ReadAny
 gh secret set SHLAI_ANDROID_KEY_ALIAS --repo cha1latte/ReadAny --body 'readany-shlai'
 gh secret set SHLAI_ANDROID_KEY_PASSWORD --repo cha1latte/ReadAny
 gh secret list --repo cha1latte/ReadAny
+$certSha256 = Read-Host 'Paste the 64-character signing certificate SHA-256 digest without separators'
+if ($certSha256 -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Invalid certificate SHA-256 digest' }
+gh variable set SHLAI_ANDROID_CERT_SHA256 --repo cha1latte/ReadAny --env shlai-production --body ($certSha256.ToUpperInvariant())
+gh variable list --repo cha1latte/ReadAny --env shlai-production
 ```
 
-The two password commands intentionally prompt Celia interactively. Verification checks only secret names and update timestamps, never values.
+The two password commands intentionally prompt Celia interactively. Secret verification checks only names and update timestamps, never values. `SHLAI_ANDROID_CERT_SHA256` is a non-secret environment variable and must match the fingerprint confirmed in Step 3; the release workflow fails before publication if it is missing, malformed, or different from the signed APK.
 
 - [ ] **Step 5: Invite the friend with write—not admin—permission**
 

@@ -182,8 +182,22 @@ const actionVersionComments = {
   download: "v4.3.0",
 } as const;
 
-const mainRefGuardScript = `if [[ "\$GITHUB_REF" != "refs/heads/main" ]]; then
+const androidBuildToolsVersion = "36.0.0";
+
+const releaseRequestValidationScript = `if [[ "\$GITHUB_REF" != "refs/heads/main" ]]; then
   echo "Stable releases must be dispatched from refs/heads/main; got \$GITHUB_REF" >&2
+  exit 1
+fi
+if [[ ! "\$INPUT_UPSTREAM_VERSION" =~ ^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]; then
+  echo "Invalid canonical upstream version: \$INPUT_UPSTREAM_VERSION" >&2
+  exit 1
+fi
+if [[ ! "\$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Invalid positive Shlai revision: \$INPUT_REVISION" >&2
+  exit 1
+fi
+if [[ ! "\$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Invalid positive Android version code: \$INPUT_VERSION_CODE" >&2
   exit 1
 fi`;
 
@@ -196,7 +210,7 @@ cd ../../..
 
 UNSIGNED_APK="packages/app-expo/android/app/build/outputs/apk/release/app-release-unsigned.apk"
 test -f "\$UNSIGNED_APK"
-BUILD_TOOLS="\$(find "\$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+BUILD_TOOLS="\$ANDROID_HOME/build-tools/${androidBuildToolsVersion}"
 if "\$BUILD_TOOLS/apksigner" verify "\$UNSIGNED_APK" >/dev/null 2>&1; then
   echo "Expected an unsigned release APK, but signature verification succeeded." >&2
   exit 1
@@ -209,15 +223,21 @@ UNSIGNED_APK="\$RUNNER_TEMP/unsigned/app-release-unsigned.apk"
 ALIGNED_APK="\$RUNNER_TEMP/ReadAny-Shlai-aligned.apk"
 APK="ReadAny-Shlai.apk"
 KEYSTORE="\$RUNNER_TEMP/readany-shlai-release.jks"
-BUILD_TOOLS="\$(find "\$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+BUILD_TOOLS="\$ANDROID_HOME/build-tools/${androidBuildToolsVersion}"
 ZIPALIGN="\$BUILD_TOOLS/zipalign"
 APKSIGNER="\$BUILD_TOOLS/apksigner"
 trap 'rm -f "\$KEYSTORE"' EXIT
 
 test "\$GITHUB_REF" = "refs/heads/main"
 test -f "\$UNSIGNED_APK"
-if gh release view "\$TAG" --repo "\$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-  echo "Release already exists: \$TAG" >&2
+EXPECTED_CERT_SHA256="\$(printf '%s' "\$SHLAI_ANDROID_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "\$EXPECTED_CERT_SHA256" =~ ^[0-9A-F]{64}$ ]]; then
+  echo "SHLAI_ANDROID_CERT_SHA256 must normalize to exactly 64 hexadecimal characters." >&2
+  exit 1
+fi
+EXACT_TAG_COUNT="\$(gh api "repos/\$GITHUB_REPOSITORY/git/matching-refs/tags/\$TAG" --jq "[.[] | select(.ref == \\\"refs/tags/\$TAG\\\")] | length")"
+if [[ "\$EXACT_TAG_COUNT" != "0" ]]; then
+  echo "Tag already exists: \$TAG" >&2
   exit 1
 fi
 
@@ -234,6 +254,17 @@ fi
   --key-pass env:SHLAI_ANDROID_KEY_PASSWORD \\
   --out "\$APK" \\
   "\$ALIGNED_APK"
+CERT_OUTPUT="\$("\$APKSIGNER" verify --print-certs "\$APK")"
+mapfile -t ACTUAL_CERT_DIGESTS < <(printf '%s\\n' "\$CERT_OUTPUT" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p')
+if (( \${#ACTUAL_CERT_DIGESTS[@]} != 1 )); then
+  echo "Expected exactly one APK signer certificate SHA-256 digest." >&2
+  exit 1
+fi
+ACTUAL_CERT_SHA256="\$(printf '%s' "\${ACTUAL_CERT_DIGESTS[0]}" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "\$ACTUAL_CERT_SHA256" =~ ^[0-9A-F]{64}$ || "\$ACTUAL_CERT_SHA256" != "\$EXPECTED_CERT_SHA256" ]]; then
+  echo "Signed APK certificate SHA-256 digest does not match SHLAI_ANDROID_CERT_SHA256." >&2
+  exit 1
+fi
 "\$APKSIGNER" verify --verbose --print-certs "\$APK"
 gh release create "\$TAG" "\$APK" \\
   --repo "\$GITHUB_REPOSITORY" \\
@@ -242,7 +273,16 @@ gh release create "\$TAG" "\$APK" \\
   --notes "Unofficial ReadAny Shlai Android release. Source: \${GITHUB_SERVER_URL}/\${GITHUB_REPOSITORY}/tree/\${GITHUB_SHA}"`;
 
 const expectedValidateSteps: WorkflowStep[] = [
-  { name: "Require main branch", shell: "bash", run: `${mainRefGuardScript}\n` },
+  {
+    name: "Validate release request",
+    shell: "bash",
+    env: {
+      INPUT_UPSTREAM_VERSION: "${{ inputs.upstream_version }}",
+      INPUT_REVISION: "${{ inputs.revision }}",
+      INPUT_VERSION_CODE: "${{ inputs.version_code }}",
+    },
+    run: `${releaseRequestValidationScript}\n`,
+  },
   { uses: actionPins.checkout, with: { "fetch-depth": 0 } },
   { uses: actionPins.pnpm, with: { version: "9.15.0" } },
   { uses: actionPins.node, with: { "node-version": "20.18.0", cache: "pnpm" } },
@@ -268,6 +308,10 @@ const expectedBuildSteps: WorkflowStep[] = [
   { uses: actionPins.node, with: { "node-version": "20.18.0", cache: "pnpm" } },
   { uses: actionPins.java, with: { distribution: "temurin", "java-version": 17 } },
   { uses: actionPins.android },
+  {
+    name: `Install Android build tools ${androidBuildToolsVersion}`,
+    run: `sdkmanager "build-tools;${androidBuildToolsVersion}"`,
+  },
   { run: "pnpm install --frozen-lockfile" },
   { run: "pnpm --filter @readany/app-expo run build:reader" },
   {
@@ -288,6 +332,10 @@ const expectedBuildSteps: WorkflowStep[] = [
 const expectedSignSteps: WorkflowStep[] = [
   { uses: actionPins.android },
   {
+    name: `Install Android build tools ${androidBuildToolsVersion}`,
+    run: `sdkmanager "build-tools;${androidBuildToolsVersion}"`,
+  },
+  {
     uses: actionPins.download,
     with: {
       name: "readany-shlai-unsigned-${{ github.sha }}",
@@ -301,6 +349,7 @@ const expectedSignSteps: WorkflowStep[] = [
       GH_TOKEN: "${{ github.token }}",
       SHLAI_UPSTREAM_VERSION: "${{ inputs.upstream_version }}",
       SHLAI_REVISION: "${{ inputs.revision }}",
+      SHLAI_ANDROID_CERT_SHA256: "${{ vars.SHLAI_ANDROID_CERT_SHA256 }}",
       ...Object.fromEntries(releaseSecretNames.map((name) => [name, `\${{ secrets.${name} }}`])),
     },
     run: `${signAndPublishScript}\n`,
@@ -618,6 +667,29 @@ const expectReleaseWorkflowContract = (source: string) => {
   ).toBeLessThan(signAndPublishScript.indexOf('gh release create "$TAG" "$APK"'));
   expect(signAndPublishScript).toContain("--ks-pass env:SHLAI_ANDROID_KEYSTORE_PASSWORD");
   expect(signAndPublishScript).toContain("--key-pass env:SHLAI_ANDROID_KEY_PASSWORD");
+  expect(signAndPublishScript).toContain(
+    'gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG"',
+  );
+  expect(signAndPublishScript).not.toContain("gh release view");
+  expect(signAndPublishScript.indexOf("EXACT_TAG_COUNT=")).toBeLessThan(
+    signAndPublishScript.indexOf('gh release create "$TAG" "$APK"'),
+  );
+  expect(signAndPublishScript).toContain(
+    'EXPECTED_CERT_SHA256="$(printf \'%s\' "$SHLAI_ANDROID_CERT_SHA256"',
+  );
+  expect(signAndPublishScript).toContain('"$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256"');
+  expect(signAndPublishScript.indexOf("ACTUAL_CERT_SHA256=")).toBeLessThan(
+    signAndPublishScript.indexOf('"$APKSIGNER" verify --verbose --print-certs "$APK"'),
+  );
+  expect(unsignedBuildScript).toContain(
+    `BUILD_TOOLS="$ANDROID_HOME/build-tools/${androidBuildToolsVersion}"`,
+  );
+  expect(signAndPublishScript).toContain(
+    `BUILD_TOOLS="$ANDROID_HOME/build-tools/${androidBuildToolsVersion}"`,
+  );
+  expect(`${unsignedBuildScript}\n${signAndPublishScript}`).not.toContain(
+    'find "$ANDROID_HOME/build-tools"',
+  );
 
   const uses = Object.values(jobs).flatMap((job) =>
     (job.steps ?? []).flatMap((step) => (step.uses ? [step.uses] : [])),
@@ -990,8 +1062,8 @@ const unsafeReleaseMutations = [
     name: "signing job checks out repository code",
     mutate: (source: string) =>
       source.replace(
-        `      - uses: ${actionPins.android} # ${actionVersionComments.android}\n      - uses: ${actionPins.download}`,
-        `      - uses: ${actionPins.checkout} # ${actionVersionComments.checkout}\n      - uses: ${actionPins.android} # ${actionVersionComments.android}\n      - uses: ${actionPins.download}`,
+        `    steps:\n      - uses: ${actionPins.android} # ${actionVersionComments.android}`,
+        `    steps:\n      - uses: ${actionPins.checkout} # ${actionVersionComments.checkout}\n      - uses: ${actionPins.android} # ${actionVersionComments.android}`,
       ),
   },
   {
@@ -1033,6 +1105,109 @@ const unsafeReleaseMutations = [
         '            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"',
         '            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"\n      - uses: actions/checkout@v4',
       ),
+  },
+  {
+    name: "upstream version accepts a leading-zero component like 01",
+    mutate: (source: string) =>
+      source.replace(
+        "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+        "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      ),
+  },
+  {
+    name: "revision accepts zero",
+    mutate: (source: string) =>
+      source.replace(
+        'if [[ ! "$INPUT_REVISION" =~ ^[1-9][0-9]*$ ]]',
+        'if [[ ! "$INPUT_REVISION" =~ ^[0-9]+$ ]]',
+      ),
+  },
+  {
+    name: "version code accepts zero",
+    mutate: (source: string) =>
+      source.replace(
+        'if [[ ! "$INPUT_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]',
+        'if [[ ! "$INPUT_VERSION_CODE" =~ ^[0-9]+$ ]]',
+      ),
+  },
+  {
+    name: "release input whitespace is silently trimmed",
+    mutate: (source: string) =>
+      source.replace(
+        '          if [[ ! "$INPUT_UPSTREAM_VERSION"',
+        '          INPUT_UPSTREAM_VERSION="${INPUT_UPSTREAM_VERSION// /}"\n          if [[ ! "$INPUT_UPSTREAM_VERSION"',
+      ),
+  },
+  {
+    name: "expected signing certificate variable is missing",
+    mutate: (source: string) =>
+      source.replace(
+        "          SHLAI_ANDROID_CERT_SHA256: ${{ vars.SHLAI_ANDROID_CERT_SHA256 }}\n",
+        "",
+      ),
+  },
+  {
+    name: "missing expected certificate digest is accepted",
+    mutate: (source: string) =>
+      source.replace(
+        '          if [[ ! "$EXPECTED_CERT_SHA256" =~ ^[0-9A-F]{64}$ ]]; then',
+        '          if [[ -n "$EXPECTED_CERT_SHA256" && ! "$EXPECTED_CERT_SHA256" =~ ^[0-9A-F]{64}$ ]]; then',
+      ),
+  },
+  {
+    name: "signing certificate mismatch is not rejected",
+    mutate: (source: string) =>
+      source.replace(' || "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256"', ""),
+  },
+  {
+    name: "certificate digest parsing is removed",
+    mutate: (source: string) =>
+      source.replace(
+        "          mapfile -t ACTUAL_CERT_DIGESTS < <(printf '%s\\n' \"$CERT_OUTPUT\" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p')",
+        '          ACTUAL_CERT_DIGESTS=("$EXPECTED_CERT_SHA256")',
+      ),
+  },
+  {
+    name: "only a pre-existing release is rejected",
+    mutate: (source: string) =>
+      source.replace(
+        '          EXACT_TAG_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \\"refs/tags/$TAG\\")] | length")"',
+        '          EXACT_TAG_COUNT="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && echo 1 || echo 0)"',
+      ),
+  },
+  {
+    name: "tag API failure is converted to no match",
+    mutate: (source: string) =>
+      source.replace(
+        'git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \\"refs/tags/$TAG\\")] | length")"',
+        'git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \\"refs/tags/$TAG\\")] | length" || echo 0)"',
+      ),
+  },
+  {
+    name: "tag prefix matches are treated as the exact tag",
+    mutate: (source: string) =>
+      source.replace('[.[] | select(.ref == \\"refs/tags/$TAG\\")] | length', "length"),
+  },
+  {
+    name: "latest installed Android build tools are selected",
+    mutate: (source: string) =>
+      source.replace(
+        'BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"',
+        'BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"',
+      ),
+  },
+  {
+    name: "Android build-tools installation is omitted",
+    mutate: (source: string) =>
+      source.replace(
+        '      - name: Install Android build tools 36.0.0\n        run: sdkmanager "build-tools;36.0.0"\n',
+        "",
+      ),
+  },
+  {
+    name: "Android build-tools installation is mutable",
+    mutate: (source: string) =>
+      source.replace('sdkmanager "build-tools;36.0.0"', 'sdkmanager "build-tools;latest"'),
   },
 ] as const;
 

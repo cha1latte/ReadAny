@@ -15,7 +15,7 @@ describe("buildImportedBookMeta", () => {
           publisher: "Press",
           language: "en-US",
           isbn: "978 1 4028 9462 6",
-          publishDate: "2020-04-03",
+          publishDate: "2020-4-3",
           description: "Summary",
           subjects: ["History"],
           coverUrl: "covers/1.jpg",

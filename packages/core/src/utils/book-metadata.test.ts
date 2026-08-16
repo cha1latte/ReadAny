@@ -112,6 +112,15 @@ describe("mergeBookMetadataSources", () => {
     expect(mergeBookMetadataSources(undefined, { publishDate: "2000-02-29" })).toEqual({
       publishDate: "2000-02-29",
     });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2020-4-3" })).toEqual({
+      publishDate: "2020-04-03",
+    });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2020/4/3" })).toEqual({
+      publishDate: "2020-04-03",
+    });
+    expect(mergeBookMetadataSources(undefined, { publishDate: "2020.4" })).toEqual({
+      publishDate: "2020-04",
+    });
   });
 
   it("rejects impossible, incomplete, and trailing-junk publication dates", () => {
@@ -122,10 +131,10 @@ describe("mergeBookMetadataSources", () => {
       "1900-02-29",
       "2024-02-30",
       "2024-04-31",
-      "2024-2-9",
-      "2024/02/29",
+      "2024/02-29",
       "2024-02-29T12:00:00Z",
       "2024-02-29junk",
+      "2024/02/29junk",
     ]) {
       expect(mergeBookMetadataSources(undefined, { publishDate })).toEqual({});
     }

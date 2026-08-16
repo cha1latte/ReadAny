@@ -231,22 +231,23 @@ function isValidIsbn13(value: string): boolean {
 function normalizePublishDate(value: unknown): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/);
+  const match = trimmed.match(/^(\d{4})(?:([-/.])(\d{1,2})(?:\2(\d{1,2}))?)?$/);
   if (!match) return "";
   const year = match[1];
-  if (!match[2]) return year;
+  if (!match[3]) return year;
 
-  const month = Number(match[2]);
+  const month = Number(match[3]);
   if (month < 1 || month > 12) return "";
-  if (!match[3]) return `${year}-${match[2]}`;
+  const normalizedMonth = match[3].padStart(2, "0");
+  if (!match[4]) return `${year}-${normalizedMonth}`;
 
   const numericYear = Number(year);
   const isLeapYear = numericYear % 4 === 0 && (numericYear % 100 !== 0 || numericYear % 400 === 0);
   const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  const day = Number(match[3]);
+  const day = Number(match[4]);
   if (day < 1 || day > daysInMonth[month - 1]) return "";
 
-  return `${year}-${match[2]}-${match[3]}`;
+  return `${year}-${normalizedMonth}-${match[4].padStart(2, "0")}`;
 }
 
 function normalizeSubjects(values: unknown): string[] {

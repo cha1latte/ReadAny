@@ -5,6 +5,10 @@ on:
     - cron: '17 13 * * 1'
   workflow_dispatch:
 
+concurrency:
+  group: shlai-upstream-sync
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -38,12 +42,12 @@ jobs:
 
           BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "Sync branch already exists: $BRANCH"
-            exit 0
+            echo "Reusing existing sync branch: $BRANCH"
+          else
+            git switch --create "$BRANCH" upstream/main
+            git push origin "$BRANCH"
           fi
 
-          git switch --create "$BRANCH" upstream/main
-          git push origin "$BRANCH"
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \

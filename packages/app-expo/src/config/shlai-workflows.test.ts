@@ -32,6 +32,8 @@ type WorkflowJob = {
 };
 
 type Workflow = {
+  name?: string;
+  concurrency?: unknown;
   on?: Record<string, unknown>;
   permissions?: Record<string, unknown>;
   env?: Record<string, unknown>;
@@ -242,12 +244,12 @@ fi
 
 BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
 if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-  echo "Sync branch already exists: $BRANCH"
-  exit 0
+  echo "Reusing existing sync branch: $BRANCH"
+else
+  git switch --create "$BRANCH" upstream/main
+  git push origin "$BRANCH"
 fi
 
-git switch --create "$BRANCH" upstream/main
-git push origin "$BRANCH"
 gh pr create \\
   --repo "$GITHUB_REPOSITORY" \\
   --base main \\
@@ -268,7 +270,18 @@ const expectedUpstreamSyncSteps: WorkflowStep[] = [
 
 const expectUpstreamSyncWorkflowContract = (source: string) => {
   const workflow = parse(source, { version: "1.2" }) as Workflow;
-  expect(Object.keys(workflow).sort()).toEqual(["jobs", "name", "on", "permissions"]);
+  expect(Object.keys(workflow).sort()).toEqual([
+    "concurrency",
+    "jobs",
+    "name",
+    "on",
+    "permissions",
+  ]);
+  expect(workflow.name).toBe("Shlai Upstream Sync");
+  expect(workflow.concurrency).toEqual({
+    group: "shlai-upstream-sync",
+    "cancel-in-progress": false,
+  });
   expect(workflow.on).toEqual({
     schedule: [{ cron: "17 13 * * 1" }],
     workflow_dispatch: null,
@@ -300,6 +313,23 @@ const expectUpstreamSyncWorkflowContract = (source: string) => {
 };
 
 const unsafeUpstreamSyncMutations = [
+  {
+    name: "wrong workflow name",
+    mutate: (source: string) => source.replace("name: Shlai Upstream Sync", "name: Unsafe sync"),
+  },
+  {
+    name: "missing fixed concurrency group",
+    mutate: (source: string) =>
+      source.replace(
+        "concurrency:\n  group: shlai-upstream-sync\n  cancel-in-progress: false\n\n",
+        "",
+      ),
+  },
+  {
+    name: "cancels an in-progress sync",
+    mutate: (source: string) =>
+      source.replace("cancel-in-progress: false", "cancel-in-progress: true"),
+  },
   {
     name: "extra push trigger",
     mutate: (source: string) =>
@@ -361,11 +391,19 @@ const unsafeUpstreamSyncMutations = [
       ),
   },
   {
+    name: "exits when a dated sync branch already exists",
+    mutate: (source: string) =>
+      source.replace(
+        'echo "Reusing existing sync branch: $BRANCH"',
+        'echo "Sync branch already exists: $BRANCH"\n            exit 0',
+      ),
+  },
+  {
     name: "creates PR before branch push",
     mutate: (source: string) =>
       source.replace(
-        'git push origin "$BRANCH"\n          gh pr create',
-        'gh pr create\n          git push origin "$BRANCH"',
+        'git push origin "$BRANCH"\n          fi\n\n          gh pr create',
+        'gh pr create\n          git push origin "$BRANCH"\n          fi',
       ),
   },
 ] as const;

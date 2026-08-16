@@ -2,7 +2,7 @@
 
 The **Shlai Upstream Sync** workflow runs every Monday at 13:17 UTC. It can also be started manually from the Actions page with **Run workflow**.
 
-It fetches `codedogQBY/ReadAny:main` and opens at most one pull request whose title begins `Sync official ReadAny upstream`. If the fork already contains official `main`, an identically titled sync PR is already open, or that day's sync branch already exists, it exits without changing the fork.
+It fetches `codedogQBY/ReadAny:main` and opens at most one pull request whose title begins `Sync official ReadAny upstream`. A fixed concurrency group serializes scheduled and manual runs without cancelling an in-progress sync. If the fork already contains official `main` or an open sync PR title matches that phrase, it exits without changing the fork. If that day's branch already exists after a partial failure, it reuses the branch and continues to create the visible pull request.
 
 The sync branch starts at official `main`; it is pushed to the fork and opened as a visible pull request against fork `main`. The workflow never merges or auto-merges that pull request. GitHub makes any conflict visible for a human to resolve and review.
 

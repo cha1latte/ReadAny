@@ -21,6 +21,7 @@ type WorkflowStep = {
 type WorkflowJob = {
   name?: string;
   needs?: string | string[];
+  "runs-on"?: string;
   if?: string;
   "continue-on-error"?: unknown;
   permissions?: unknown;
@@ -263,8 +264,10 @@ const expectReleaseWorkflowContract = (source: string) => {
     "steps",
   ]);
   expect(validate?.name).toBe("Validate");
+  expect(validate?.["runs-on"]).toBe("ubuntu-22.04");
   expect(release?.name).toBe("Release ReadAny Shlai");
   expect(release?.needs).toBe("validate");
+  expect(release?.["runs-on"]).toBe("ubuntu-22.04");
   expect(release?.if).toBeUndefined();
   expect(validate?.["continue-on-error"]).toBeUndefined();
   expect(release?.["continue-on-error"]).toBeUndefined();
@@ -492,6 +495,22 @@ const unsafeMutations = [
 ] as const;
 
 const unsafeReleaseMutations = [
+  {
+    name: "self-hosted validation runner",
+    mutate: (source: string) =>
+      source.replace(
+        "  validate:\n    name: Validate\n    runs-on: ubuntu-22.04",
+        "  validate:\n    name: Validate\n    runs-on: self-hosted",
+      ),
+  },
+  {
+    name: "self-hosted release runner",
+    mutate: (source: string) =>
+      source.replace(
+        "  release:\n    name: Release ReadAny Shlai\n    needs: validate\n    runs-on: ubuntu-22.04",
+        "  release:\n    name: Release ReadAny Shlai\n    needs: validate\n    runs-on: self-hosted",
+      ),
+  },
   {
     name: "top-level shell default",
     mutate: (source: string) =>

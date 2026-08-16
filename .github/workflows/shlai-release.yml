@@ -1,0 +1,120 @@
+name: Release ReadAny Shlai
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_version:
+        description: Official ReadAny version
+        required: true
+        type: string
+        default: "1.3.5"
+      revision:
+        description: Shlai revision
+        required: true
+        type: string
+        default: "1"
+      version_code:
+        description: Android version code
+        required: true
+        type: string
+        default: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @readany/core test
+      - run: pnpm --filter @readany/app-expo test
+      - run: pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
+      - name: Check changed files with Biome
+        shell: bash
+        run: |
+          BASE_SHA="$(git rev-parse HEAD^)"
+          mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css')
+          if (( ${#FILES[@]} > 0 )); then
+            pnpm exec biome check --no-errors-on-unmatched "${FILES[@]}"
+          fi
+          git diff --check "$BASE_SHA" HEAD
+
+  release:
+    name: Release ReadAny Shlai
+    needs: validate
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    environment: shlai-production
+    env:
+      APP_VARIANT: production
+      SHLAI_UPSTREAM_VERSION: ${{ inputs.upstream_version }}
+      SHLAI_REVISION: ${{ inputs.revision }}
+      SHLAI_VERSION_CODE: ${{ inputs.version_code }}
+      SHLAI_ANDROID_KEYSTORE_BASE64: ${{ secrets.SHLAI_ANDROID_KEYSTORE_BASE64 }}
+      SHLAI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SHLAI_ANDROID_KEYSTORE_PASSWORD }}
+      SHLAI_ANDROID_KEY_ALIAS: ${{ secrets.SHLAI_ANDROID_KEY_ALIAS }}
+      SHLAI_ANDROID_KEY_PASSWORD: ${{ secrets.SHLAI_ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - name: Build, sign, verify, and publish APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="shlai-v${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}"
+          APK="ReadAny-Shlai.apk"
+          KEYSTORE="$RUNNER_TEMP/readany-shlai-release.jks"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG" >&2
+            exit 1
+          fi
+
+          printf '%s' "$SHLAI_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          pnpm --filter @readany/app-expo run build:reader
+          pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
+
+          cd packages/app-expo/android
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -Pandroid.injected.signing.store.file="$KEYSTORE" \
+            -Pandroid.injected.signing.store.password="$SHLAI_ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$SHLAI_ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$SHLAI_ANDROID_KEY_PASSWORD"
+          cd ../../..
+
+          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          # Verify the release APK with apksigner verify --verbose --print-certs before publishing.
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+          gh release create "$TAG" "$APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "ReadAny Shlai ${SHLAI_UPSTREAM_VERSION}.${SHLAI_REVISION}" \
+            --notes "Unofficial ReadAny Shlai Android release. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}"

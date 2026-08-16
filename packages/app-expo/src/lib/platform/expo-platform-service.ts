@@ -606,10 +606,13 @@ export class ExpoPlatformService implements IPlatformService {
 
       const release = await response.json();
       const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
+      if (!latestVersion) return null;
       const currentVersion = await this.getAppVersion();
 
       if (compareVersions(latestVersion, currentVersion) > 0) {
-        const apkAsset = release.assets.find((a: { name: string }) => a.name === assetName);
+        const apkAsset = Array.isArray(release.assets)
+          ? release.assets.find((a: { name: string }) => a.name === assetName)
+          : undefined;
         if (apkAsset) {
           return {
             version: latestVersion,

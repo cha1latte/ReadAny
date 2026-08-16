@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a public, maintainable fork named **ReadAny Shlai** that Celia and one invited GitHub collaborator can edit safely, test on Android, and distribute to their own phones through GitHub Releases and Obtainium. The fork must remain easy to synchronize with official ReadAny and must keep broadly useful fixes suitable for upstream contribution.
+Create a public, maintainable fork named **ReadAny Shlai** that Celia owns, while one friend contributes from their own GitHub fork, tests on Android, and receives public releases through GitHub Releases and Obtainium. The fork must remain easy to synchronize with official ReadAny and must keep broadly useful fixes suitable for upstream contribution.
 
 ## Constraints
 
@@ -16,7 +16,9 @@ Create a public, maintainable fork named **ReadAny Shlai** that Celia and one in
 
 ## Repository Ownership and Remotes
 
-The canonical fork is `cha1latte/ReadAny`. Celia owns the repository and invites her friend as a collaborator with write access but not repository-administration access.
+The canonical fork is `cha1latte/ReadAny`, and Celia is its only write-capable maintainer. The friend works from their own GitHub fork, `<friend-login>/ReadAny`, and opens pull requests into `cha1latte/ReadAny:main`; they are not invited as a direct collaborator.
+
+This boundary is intentional: GitHub Releases use the repository's `contents: write` permission. Giving the friend canonical write access would also give them release-channel write power, which is incompatible with owner-only stable release control. The canonical repository and its releases remain public, so the friend can still inspect, test, download, and use each released APK.
 
 Local clones use these remotes:
 
@@ -27,12 +29,12 @@ The fork's protected `main` branch always represents the stable Shlai source. Di
 
 ## Collaboration Workflow
 
-1. A collaborator creates a feature branch from the latest fork `main`.
-2. Changes are committed to that branch and opened as a pull request against the fork's `main`.
+1. The friend creates a feature branch in their own fork from the latest canonical `main`.
+2. Changes are committed to that fork branch and opened as a pull request into `cha1latte/ReadAny:main`.
 3. GitHub runs tests, TypeScript checks, changed-file linting, diff checks, and an Android preview build.
 4. The preview APK is installed and tested separately from stable Shlai.
-5. At least one collaborator approves the pull request before merge.
-6. Merging updates source on `main` but does not publish a stable phone update.
+5. The friend may review and comment, but those reviews are advisory; Celia manually approves the merge after the checks and preview review.
+6. Celia merges the pull request, which updates source on `main` but does not publish a stable phone update.
 
 The preview APK uses a preview package identity and ephemeral debug signing. It may require uninstalling the previous preview build before installation. Stable signing material is never exposed to pull-request code.
 
@@ -119,7 +121,7 @@ ReadAny Shlai names, icons, package identifiers, signing configuration, release 
 
 ## Stable-Release Verification
 
-Before approving each stable release, Celia or her collaborator verifies:
+Before Celia approves each stable release, she and/or her friend verifies:
 
 - a clean installation on Android;
 - an update over the previous stable Shlai release;
@@ -150,7 +152,7 @@ The exact keyboard regression fixed in upstream PR #680 remains an automated lay
 4. Create and back up the stable signing key, then configure the protected release environment.
 5. Add the manual stable-release workflow and validate Obtainium using the first tagged Shlai release.
 6. Add the scheduled upstream-sync pull-request workflow.
-7. Invite the friend as a collaborator and walk through one sample branch, preview, review, merge, and release cycle.
+7. Have the friend fork the canonical repository and walk through one sample fork branch, preview, advisory review, Celia-approved merge, and release cycle.
 
 ## Out of Scope
 

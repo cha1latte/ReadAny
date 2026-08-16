@@ -6,6 +6,10 @@ It fetches `codedogQBY/ReadAny:main` and opens at most one pull request whose ti
 
 The sync branch starts at official `main`; it is pushed to the fork and opened as a visible pull request against fork `main`. The workflow never merges or auto-merges that pull request. GitHub makes any conflict visible for a human to resolve and review.
 
+## Approve the automated workflow
+
+Because the sync pull request is created with `GITHUB_TOKEN`, GitHub initially places its `pull_request` workflows in an approval-required state. Celia opens the sync PR and clicks **Approve workflows** in the Checks/Actions view so `Validate` and `Preview APK` can run. This does not need a PAT, a `workflow_dispatch` workaround, or a bootstrap push: the existing workflow listens to `pull_request`, including its first run before the change reaches the default branch.
+
 ## Resolve a sync conflict
 
 Fetch the pushed sync branch, then merge the current fork `main` into it locally. Use these commands exactly, replacing the example branch only when the workflow chose a different date:
@@ -20,7 +24,7 @@ pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
 git push origin sync/upstream-2026-08-15
 ```
 
-Resolve conflicts deliberately before running the checks. The push updates the same visible sync pull request; review its preview APK and approve it through the normal pull-request process. Do not merge it from the workflow or enable auto-merge.
+Resolve conflicts deliberately before running the checks. The push updates the same visible sync pull request; if GitHub again shows **Approve workflows**, Celia clicks it, then reviews the preview APK and manually approves the merge through the normal pull-request process. Do not merge it from the workflow or enable auto-merge.
 
 ## Preservation rules
 

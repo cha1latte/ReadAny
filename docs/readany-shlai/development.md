@@ -2,7 +2,7 @@
 
 ReadAny Shlai is the public, unofficial GPL-3.0-or-later Android fork at [cha1latte/ReadAny](https://github.com/cha1latte/ReadAny). The official project remains [codedogQBY/ReadAny](https://github.com/codedogQBY/ReadAny).
 
-## Quick start
+## Celia's canonical clone
 
 ```powershell
 git clone https://github.com/cha1latte/ReadAny.git
@@ -13,9 +13,38 @@ pnpm --filter @readany/app-expo test
 git switch -c feature/reader-font-size
 ```
 
+## Friend fork clone
+
+The friend must use their own GitHub fork; do not add them as a direct collaborator on `cha1latte/ReadAny`. First create the fork in the GitHub UI, then clone and configure it exactly like this (replace only `<friend-login>`):
+
+```powershell
+git clone https://github.com/<friend-login>/ReadAny.git
+Set-Location ReadAny
+git remote add canonical https://github.com/cha1latte/ReadAny.git
+git remote add upstream https://github.com/codedogQBY/ReadAny.git
+git fetch canonical
+git fetch upstream
+git switch -c feature/reader-font-size canonical/main
+pnpm install --frozen-lockfile
+pnpm --filter @readany/app-expo test
+```
+
+`origin` is the friend's writable fork; `canonical` is Celia's protected Shlai repository; `upstream` remains the official ReadAny repository. The canonical repository is owner-only because GitHub Releases share the repository's `contents: write` permission. Public releases are still available to everyone, including the friend, through GitHub Releases and Obtainium.
+
 ## Branches and pull requests
 
-Do not push directly to `main`. Make every fork-specific change on a short-lived branch and open a pull request from that branch into `cha1latte/ReadAny:main`. Keep the pull request focused, wait for `Validate` and `Preview APK`, review the preview artifact, and obtain the required approval before merging. Merging a pull request does not publish a stable phone update.
+Do not push directly to `main`. The friend pushes only to their own fork, then opens a focused pull request into `cha1latte/ReadAny:main`:
+
+```powershell
+git push -u origin feature/reader-font-size
+gh pr create --repo cha1latte/ReadAny --base main --head <friend-login>:feature/reader-font-size --fill
+```
+
+Wait for `Validate` and `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. Merging a pull request does not publish a stable phone update.
+
+## Workflow approvals
+
+GitHub places `pull_request` workflows created by automation using `GITHUB_TOKEN` into an approval-required state, and it can require the same approval for a first pull request from a fork. When an automated upstream-sync PR or a first-time fork PR shows **Approve workflows**, Celia clicks it in the pull request's Checks/Actions view; GitHub then runs the normal `Validate` and `Preview APK` jobs. Do not add a PAT, `workflow_dispatch` workaround, or bootstrap push: these workflows are triggered by `pull_request`, not only by default-branch pushes.
 
 ## Preview APKs
 

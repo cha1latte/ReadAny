@@ -32,6 +32,8 @@ export interface UpdateCheckOptions {
   apiUrl?: string;
   tagPrefix?: string;
   throttleKey?: string;
+  /** Required release asset for a dedicated update channel. */
+  assetName?: string;
 }
 
 /**
@@ -50,6 +52,7 @@ export async function checkForUpdate(
   const apiUrl = options.apiUrl || GITHUB_API_URL;
   const tagPrefix = options.tagPrefix || "v";
   const throttleKey = options.throttleKey || THROTTLE_KEY;
+  const assetName = options.assetName?.trim();
 
   // Throttle auto-checks to once per day
   if (!force) {
@@ -71,9 +74,28 @@ export async function checkForUpdate(
   }
 
   const release = await response.json();
-  await platform.kvSetItem(throttleKey, String(Date.now()));
-
   const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
+  if (!latestVersion) {
+    return { hasUpdate: false, currentVersion };
+  }
+
+  const assets: ReleaseInfo["assets"] = (release.assets || []).map(
+    (a: {
+      name: string;
+      browser_download_url: string;
+      size: number;
+    }) => ({
+      name: a.name,
+      downloadUrl: a.browser_download_url,
+      size: a.size,
+    }),
+  );
+  const releaseAssets = assetName ? assets.filter((asset) => asset.name === assetName) : assets;
+  if (assetName && releaseAssets.length === 0) {
+    return { hasUpdate: false, currentVersion };
+  }
+
+  await platform.kvSetItem(throttleKey, String(Date.now()));
   const hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
 
   return {
@@ -86,24 +108,14 @@ export async function checkForUpdate(
           notes: release.body || "",
           htmlUrl: release.html_url || "",
           publishedAt: release.published_at || "",
-          assets: (release.assets || []).map(
-            (a: {
-              name: string;
-              browser_download_url: string;
-              size: number;
-            }) => ({
-              name: a.name,
-              downloadUrl: a.browser_download_url,
-              size: a.size,
-            }),
-          ),
+          assets: releaseAssets,
         }
       : undefined,
   };
 }
 
-export function releaseTagToVersion(tag: string, prefix = "v"): string {
-  return tag.startsWith(prefix) ? tag.slice(prefix.length) : tag.replace(/^v/, "");
+export function releaseTagToVersion(tag: string, prefix = "v"): string | null {
+  return tag.startsWith(prefix) ? tag.slice(prefix.length) : null;
 }
 
 function versionParts(value: string): number[] {

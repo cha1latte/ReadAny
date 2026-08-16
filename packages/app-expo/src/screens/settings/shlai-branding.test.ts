@@ -45,6 +45,7 @@ describe("ReadAny Shlai attribution", () => {
   it("uses the Shlai asset on the active splash surface", () => {
     expect(animatedSplash).toContain('require("../../../assets/shlai/splash-icon.png")');
     expect(animatedSplash).not.toContain('require("../../../assets/splash-icon.png")');
+    expect(animatedSplash).toContain(">ReadAny Shlai</Animated.Text>");
   });
 
   it("uses the Shlai asset on the active badge surface", () => {

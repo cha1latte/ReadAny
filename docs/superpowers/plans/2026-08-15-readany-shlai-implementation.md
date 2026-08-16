@@ -328,10 +328,11 @@ export interface UpdateCheckOptions {
   apiUrl?: string;
   tagPrefix?: string;
   throttleKey?: string;
+  assetName?: string;
 }
 
-export function releaseTagToVersion(tag: string, prefix = "v"): string {
-  return tag.startsWith(prefix) ? tag.slice(prefix.length) : tag.replace(/^v/, "");
+export function releaseTagToVersion(tag: string, prefix = "v"): string | null {
+  return tag.startsWith(prefix) ? tag.slice(prefix.length) : null;
 }
 
 function versionParts(value: string): number[] {
@@ -351,7 +352,7 @@ export function compareVersions(a: string, b: string): number {
 }
 ```
 
-Add `options: UpdateCheckOptions = {}` as the fourth `checkForUpdate` parameter. Resolve `apiUrl`, `tagPrefix`, and `throttleKey` once at the start, then use them for KV reads/writes, fetch, and tag parsing. Existing desktop callers that pass only three arguments retain official behavior.
+Add `options: UpdateCheckOptions = {}` as the fourth `checkForUpdate` parameter. Resolve `apiUrl`, `tagPrefix`, `throttleKey`, and optional `assetName` once at the start. Reject a tag without the exact prefix before throttling. When `assetName` is configured, require that exact asset, expose only that asset in `ReleaseInfo`, and do not burn the 24-hour throttle for a missing required asset. Existing desktop callers that pass only three arguments retain the official `v` prefix and unfiltered release assets.
 
 - [ ] **Step 4: Add the mobile Shlai release configuration boundary**
 
@@ -380,7 +381,7 @@ export function getShlaiReleaseConfig(): ShlaiReleaseConfig {
 }
 ```
 
-Pass this configuration as the fourth argument from `use-update-checker.ts` and `AboutScreen.tsx`. In `ExpoPlatformService.checkUpdate`, replace the official API literal with `getShlaiReleaseConfig().apiUrl`, normalize with `releaseTagToVersion`, compare with the shared `compareVersions`, and select the exact configured `assetName` instead of `ReadAny.apk`.
+Pass this configuration as the fourth argument from `use-update-checker.ts` and `AboutScreen.tsx`. In `ExpoPlatformService.checkUpdate`, replace the official API literal with `getShlaiReleaseConfig().apiUrl`, normalize with `releaseTagToVersion`, compare with the shared `compareVersions`, and select the exact configured `assetName` instead of `ReadAny.apk`. `UpdateDialog` must use that same exact asset name rather than the first `.apk` suffix match.
 
 - [ ] **Step 5: Verify both fork and default update behavior**
 
@@ -895,19 +896,19 @@ git commit -m "ci: open reviewable upstream sync pull requests"
 
 ---
 
-### Task 7: Configure repository governance, collaborator access, and signing secrets
+### Task 7: Configure owner-only repository governance and signing secrets
 
 **Files:**
 - Create: `docs/readany-shlai/development.md`
 - Modify: GitHub repository settings; no product source files.
 
 **Interfaces:**
-- Consumes: the fork/upstream remotes established in Preflight, GitHub account `cha1latte`, Celia's authenticated `gh` session, Celia's GitHub numeric user ID queried at runtime, and `SHLAI_FRIEND_LOGIN` supplied by Celia without guessing.
-- Produces: protected `main`, collaborator write access, protected release environment, four encrypted GitHub secrets, and the non-secret signing-certificate digest variable `SHLAI_ANDROID_CERT_SHA256`.
+- Consumes: the fork/upstream remotes established in Preflight, GitHub account `cha1latte`, Celia's authenticated `gh` session, and Celia's GitHub numeric user ID queried at runtime.
+- Produces: owner-only canonical write access, protected `main`, a protected release environment, four encrypted GitHub secrets, and the non-secret signing-certificate digest variable `SHLAI_ANDROID_CERT_SHA256`.
 
-- [ ] **Step 1: Write collaborator development instructions**
+- [ ] **Step 1: Write owner/friend development instructions**
 
-Create `docs/readany-shlai/development.md` with exact clone/setup commands, the branch/PR rule, preview artifact download instructions, the no-secrets rule, official-vs-Shlai package table, and links to `releasing.md` and `upstream-sync.md`. Add an `Upstreamable fixes` section requiring broadly useful changes to start from `upstream/main`, remain free of Shlai names/assets/signing/release automation, and go to `codedogQBY/ReadAny:main` as a focused PR before being carried into Shlai.
+Create `docs/readany-shlai/development.md` with exact owner and friend-fork clone/setup commands, the branch/PR rule, preview artifact download instructions, the no-secrets rule, official-vs-Shlai package table, and links to `releasing.md` and `upstream-sync.md`. The friend commands must use `<friend-login>`, keep `origin` as the friend's fork, add `canonical` for `cha1latte/ReadAny`, and preserve `upstream` for `codedogQBY/ReadAny`. Explain that the friend must not be invited as a direct collaborator because GitHub Releases use canonical `contents: write`; public releases remain usable. Friend reviews/comments are advisory and Celia manually approves merges. Add an `Upstreamable fixes` section requiring broadly useful changes to start from `upstream/main`, remain free of Shlai names/assets/signing/release automation, and go to `codedogQBY/ReadAny:main` as a focused PR before being carried into Shlai.
 
 The quick start must be:
 
@@ -973,27 +974,22 @@ gh variable list --repo cha1latte/ReadAny --env shlai-production
 
 The two password commands intentionally prompt Celia interactively. Secret verification checks only names and update timestamps, never values. `SHLAI_ANDROID_CERT_SHA256` is a non-secret environment variable and must match the fingerprint confirmed in Step 3; the release workflow fails before publication if it is missing, malformed, or different from the signed APK.
 
-- [ ] **Step 5: Invite the friend with write—not admin—permission**
+- [ ] **Step 5: Use a friend-owned fork, not a canonical collaborator invitation**
 
-Celia supplies the exact GitHub login as the task input `SHLAI_FRIEND_LOGIN`. Do not infer it from a display name or email.
+Do not use `SHLAI_FRIEND_LOGIN`, invite the friend, or grant canonical repository write access. The friend creates `<friend-login>/ReadAny` as a GitHub fork and follows the documented clone/remotes commands. Their pull requests target `cha1latte/ReadAny:main`; their comments and reviews remain advisory.
 
-```powershell
-gh api --method PUT "repos/cha1latte/ReadAny/collaborators/$env:SHLAI_FRIEND_LOGIN" -f permission=push
-gh api "repos/cha1latte/ReadAny/collaborators/$env:SHLAI_FRIEND_LOGIN/permission"
-```
-
-Expected: the invitation is pending or accepted and the reported permission is `push`, never `admin`.
+Expected: only Celia can write canonical branches or release assets, while the friend can contribute through fork pull requests and consume every public release.
 
 - [ ] **Step 6: Protect `main` after the two PR checks have appeared once**
 
 ```powershell
 $protection = @{
   required_status_checks = @{ strict = $true; contexts = @('Validate', 'Preview APK') }
-  enforce_admins = $false
+  enforce_admins = $true
   required_pull_request_reviews = @{
     dismiss_stale_reviews = $true
     require_code_owner_reviews = $false
-    required_approving_review_count = 1
+    required_approving_review_count = 0
   }
   restrictions = $null
   required_conversation_resolution = $true
@@ -1004,9 +1000,9 @@ $protection | gh api --method PUT repos/cha1latte/ReadAny/branches/main/protecti
 gh api repos/cha1latte/ReadAny/branches/main/protection
 ```
 
-Expected: direct pushes, force pushes, and deletion are blocked; both named checks and one approval are required.
+Expected: direct pushes, force pushes, deletion, and administrator bypasses are blocked; `Validate`, `Preview APK`, and conversation resolution are required. Zero required approving reviews avoids deadlocking an owner-only repository; friend reviews/comments remain advisory and Celia explicitly approves every merge manually.
 
-- [ ] **Step 7: Commit only the collaborator documentation**
+- [ ] **Step 7: Commit only the governance documentation**
 
 ```powershell
 git add docs/readany-shlai/development.md
@@ -1025,7 +1021,7 @@ Repository settings and secrets are external state and do not appear in the comm
 
 **Interfaces:**
 - Consumes: all code/workflows from Tasks 1-7, Pixel device `55311JEBF05878`, Obtainium, protected signing secrets, and Celia's explicit approval before merge and stable release.
-- Produces: merged fork PR, stable release, side-by-side installation proof, and an update path both collaborators can repeat.
+- Produces: a Celia-approved merged fork PR, stable release, side-by-side installation proof, and an update path Celia and fork contributors can repeat without canonical write access.
 
 - [ ] **Step 1: Run the complete local gate**
 
@@ -1085,6 +1081,8 @@ gh run download $previewRunId --repo cha1latte/ReadAny --name $previewArtifact -
 ```
 
 Expected: `Validate` and `Preview APK` pass and the artifact named for this exact PR contains one APK.
+
+When an automated sync PR created with `GITHUB_TOKEN`, or a first-time friend-fork PR, shows **Approve workflows**, Celia clicks that control in GitHub before waiting for checks. Do not add a PAT, dispatch workaround, or bootstrap push: the jobs already run on the `pull_request` event, which is not default-branch-only.
 
 - [ ] **Step 5: Install and verify the preview without touching official ReadAny**
 
@@ -1157,7 +1155,7 @@ Report:
 
 - fork and upstream PR URLs;
 - final package IDs and schemes;
-- branch protection and collaborator permission;
+- branch protection and owner-only canonical write boundary;
 - preview and stable workflow run URLs;
 - release tag, APK asset, signature verification, and installed package proof;
 - Obtainium result;

@@ -16,6 +16,8 @@ const mobileFile = vi.hoisted(() => ({
 const platform = vi.hoisted(() => ({
   getAppDataDir: vi.fn(async () => "/app"),
   joinPath: vi.fn(async (...parts: string[]) => parts.join("/")),
+  mkdir: vi.fn(async () => undefined),
+  writeFile: vi.fn(async () => undefined),
   readFile: vi.fn(async () => {
     throw new Error("large repair must not read the whole file");
   }),
@@ -86,8 +88,36 @@ describe("range-readable book metadata extraction", () => {
         progress: 0,
         addedAt: 1,
       } as Book),
-    ).resolves.toMatchObject({ title: "Large Book", publisher: "Range Press" });
+    ).resolves.toMatchObject({
+      title: "Large Book",
+      publisher: "Range Press",
+      coverUrl: "covers/legacy-large.png",
+    });
     expect(platform.readFile).not.toHaveBeenCalled();
+    expect(platform.writeFile).toHaveBeenCalledWith(
+      "/app/covers/legacy-large.png",
+      expect.any(Uint8Array),
+    );
+  });
+
+  it("keeps extracted text metadata when cover persistence fails", async () => {
+    const file = createLargeEpubFile();
+    mobileFile.size = file.size;
+    mobileFile.read = file.read;
+    platform.writeFile.mockRejectedValueOnce(new Error("disk full"));
+
+    await expect(
+      extractLocalBookMetadata({
+        id: "cover-failure",
+        filePath: "books/large.epub",
+        format: "epub",
+        syncStatus: "local",
+        meta: { title: "Saved title", author: "Saved author" },
+        progress: 0,
+        addedAt: 1,
+      } as Book),
+    ).resolves.toMatchObject({ title: "Large Book", publisher: "Range Press" });
+    expect(platform.writeFile).toHaveBeenCalledOnce();
   });
 
   it.each(["mobi", "azw", "azw3"])(
@@ -141,11 +171,13 @@ function createLargeEpubFile() {
     '<?xml version="1.0"?><container><rootfiles><rootfile full-path="content.opf" /></rootfiles></container>',
   );
   const opfXml = encode(
-    "<package><metadata><dc:title>Large Book</dc:title><dc:creator>Author</dc:creator><dc:publisher>Range Press</dc:publisher><dc:subject>History</dc:subject></metadata></package>",
+    '<package><metadata><dc:title>Large Book</dc:title><dc:creator>Author</dc:creator><dc:publisher>Range Press</dc:publisher><dc:subject>History</dc:subject></metadata><manifest><item id="cover" href="cover.png" media-type="image/png" properties="cover-image" /></manifest></package>',
   );
+  const coverBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const entries = [
     { name: "META-INF/container.xml", bytes: containerXml },
     { name: "content.opf", bytes: opfXml },
+    { name: "cover.png", bytes: coverBytes },
   ];
   const segments: SparseSegment[] = [];
   const directoryEntries: Uint8Array[] = [];

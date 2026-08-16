@@ -20,6 +20,7 @@ export interface BookMetadataFormValues {
 export interface ExtractedBookMetadata {
   title?: string;
   author?: string;
+  coverUrl?: string;
   publisher?: string;
   language?: string;
   isbn?: string;
@@ -76,6 +77,7 @@ export function createBookMetadataFormValues(book: Book): BookMetadataFormValues
 
 export function hasMissingBookMetadataAutoFillTargets(values: BookMetadataFormValues): boolean {
   return (
+    !values.coverUrl.trim() ||
     !values.publisher.trim() ||
     !values.language.trim() ||
     !values.isbn.trim() ||
@@ -105,6 +107,7 @@ export function mergeMissingBookMetadataValues(
 
   fillText("title", extracted.title);
   fillText("author", extracted.author);
+  fillText("coverUrl", extracted.coverUrl);
   fillText("publisher", extracted.publisher);
   fillText("language", normalizeBookLanguage(extracted.language));
   fillText("isbn", normalizeIsbn(extracted.isbn));
@@ -121,6 +124,19 @@ export function mergeMissingBookMetadataValues(
   }
 
   return changed ? next : null;
+}
+
+export function applyBookMetadataFormUpdate(
+  valuesRef: { current: BookMetadataFormValues | null },
+  setValues: (values: BookMetadataFormValues) => void,
+  update: BookMetadataFormValues | ((current: BookMetadataFormValues) => BookMetadataFormValues),
+): BookMetadataFormValues | null {
+  const current = valuesRef.current;
+  if (!current && typeof update === "function") return null;
+  const next = typeof update === "function" ? update(current as BookMetadataFormValues) : update;
+  valuesRef.current = next;
+  setValues(next);
+  return next;
 }
 
 export function splitEditableList(value: string): string[] {

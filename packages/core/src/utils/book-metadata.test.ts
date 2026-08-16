@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { Book } from "../types";
 import {
+  applyBookMetadataFormUpdate,
+  buildBookMetadataUpdate,
   hasMissingBookMetadataAutoFillTargets,
   mergeBookMetadataSources,
   mergeMissingBookMetadataValues,
@@ -61,7 +64,7 @@ it("does not request autofill when publication metadata is complete and tags are
     hasMissingBookMetadataAutoFillTargets({
       title: "Book",
       author: "Author",
-      coverUrl: "",
+      coverUrl: "covers/book.jpg",
       publisher: "Publisher",
       language: "en",
       isbn: "9781234567890",
@@ -74,4 +77,80 @@ it("does not request autofill when publication metadata is complete and tags are
       groupId: "",
     }),
   ).toBe(false);
+});
+
+it("requests autofill for a missing cover and never replaces an existing cover", () => {
+  const values = {
+    title: "Book",
+    author: "Author",
+    coverUrl: "",
+    publisher: "Publisher",
+    language: "en",
+    isbn: "9781234567890",
+    publishDate: "2024",
+    rating: null,
+    description: "Description",
+    reviews: [],
+    subjectsText: "History",
+    tagsText: "",
+    groupId: "",
+  };
+
+  expect(hasMissingBookMetadataAutoFillTargets(values)).toBe(true);
+  expect(
+    mergeMissingBookMetadataValues(values, { coverUrl: "covers/extracted.jpg" })?.coverUrl,
+  ).toBe("covers/extracted.jpg");
+  expect(
+    mergeMissingBookMetadataValues(
+      { ...values, coverUrl: "covers/user.jpg" },
+      { coverUrl: "covers/extracted.jpg" },
+    ),
+  ).toBeNull();
+});
+
+it("atomically exposes a just-entered edit to an in-flight metadata merge", () => {
+  const book = {
+    id: "book-1",
+    format: "epub",
+    filePath: "books/book-1.epub",
+    meta: { title: "Book", author: "Author" },
+    progress: 0,
+    addedAt: 1,
+  } as Book;
+  const ref = {
+    current: {
+      title: "Book",
+      author: "Author",
+      coverUrl: "covers/book.jpg",
+      publisher: "",
+      language: "",
+      isbn: "",
+      publishDate: "",
+      rating: null,
+      description: "",
+      reviews: [],
+      subjectsText: "",
+      tagsText: "",
+      groupId: "",
+    },
+  };
+  let rendered = ref.current;
+
+  applyBookMetadataFormUpdate(
+    ref,
+    (next) => {
+      rendered = next;
+    },
+    (current) => ({ ...current, publisher: "User press" }),
+  );
+  const repaired = mergeMissingBookMetadataValues(ref.current, {
+    publisher: "Extracted press",
+    language: "fr",
+  });
+  const finalValues = repaired ?? ref.current;
+  const persisted = buildBookMetadataUpdate(book, finalValues);
+
+  expect(rendered.publisher).toBe("User press");
+  expect(persisted.meta.publisher).toBe("User press");
+  expect(persisted.meta.language).toBe("fr");
 });

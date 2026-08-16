@@ -51,6 +51,7 @@ export type {
 } from "./api";
 export { encodeConfig, decodeConfig } from "./config-transfer";
 export {
+  applyBookMetadataFormUpdate,
   buildBookMetadataUpdate,
   createEmptyBookReview,
   createBookMetadataFormValues,

@@ -4,6 +4,12 @@ import { extractLocalBookMetadata } from "./auto-metadata";
 
 const fsState = vi.hoisted(() => ({ exists: true }));
 const readFile = vi.hoisted(() => vi.fn(async () => new Uint8Array([1, 2, 3])));
+const getCover = vi.hoisted(() =>
+  vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" })),
+);
+const saveCoverToAppData = vi.hoisted(() =>
+  vi.fn(async (bookId: string) => `covers/${bookId}.png`),
+);
 const openDocument = vi.hoisted(() =>
   vi.fn(async () => ({
     book: {
@@ -13,6 +19,7 @@ const openDocument = vi.hoisted(() =>
         publisher: "Embedded press",
         subject: ["History"],
       },
+      getCover,
     },
   })),
 );
@@ -29,23 +36,44 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: vi.fn(async () => fsState.exists),
   readFile,
 }));
+vi.mock("./cover-storage", () => ({ saveCoverToAppData }));
 
 describe("desktop local book metadata repair", () => {
   beforeEach(() => {
     fsState.exists = true;
     vi.clearAllMocks();
+    getCover.mockResolvedValue(new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }));
+    saveCoverToAppData.mockImplementation(async (bookId: string) => `covers/${bookId}.png`);
   });
 
-  it.each(["mobi", "azw", "azw3"])("extracts metadata from a local %s file", async (format) => {
-    await expect(
-      extractLocalBookMetadata(createBook(format as Book["format"])),
-    ).resolves.toMatchObject({
+  it.each(["epub", "mobi", "azw", "azw3"])(
+    "extracts metadata and cover from a local %s file",
+    async (format) => {
+      await expect(
+        extractLocalBookMetadata(createBook(format as Book["format"])),
+      ).resolves.toMatchObject({
+        title: "Embedded title",
+        author: "Embedded author",
+        publisher: "Embedded press",
+        subjects: ["History"],
+        coverUrl: `covers/legacy-${format}.png`,
+      });
+      expect(openDocument).toHaveBeenCalledOnce();
+      expect(getCover).toHaveBeenCalledOnce();
+      expect(saveCoverToAppData).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps document metadata when cover persistence fails", async () => {
+    saveCoverToAppData.mockRejectedValueOnce(new Error("disk full"));
+
+    await expect(extractLocalBookMetadata(createBook("mobi"))).resolves.toMatchObject({
       title: "Embedded title",
-      author: "Embedded author",
       publisher: "Embedded press",
       subjects: ["History"],
     });
-    expect(openDocument).toHaveBeenCalledOnce();
+    expect(getCover).toHaveBeenCalledOnce();
+    expect(saveCoverToAppData).toHaveBeenCalledOnce();
   });
 
   it("does not read a missing local file", async () => {

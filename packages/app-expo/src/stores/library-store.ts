@@ -147,17 +147,6 @@ async function ensureAppSubDir(subDir: string): Promise<void> {
   }
 }
 
-async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<string> {
-  const platform = getPlatformService();
-  await ensureAppSubDir("covers");
-  const ext = coverBlob.type.includes("png") ? "png" : "jpg";
-  const relativePath = `covers/${bookId}.${ext}`;
-  const absPath = await resolveAppPath(relativePath);
-  const arrayBuffer = await coverBlob.arrayBuffer();
-  await platform.writeFile(absPath, new Uint8Array(arrayBuffer));
-  return relativePath;
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
   let binary = "";

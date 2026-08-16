@@ -1,3 +1,4 @@
+import { saveCoverToAppData } from "@/lib/book/cover-storage";
 import { buildImportedBookMeta, fromDocumentMetadata } from "@/lib/book/imported-book-meta";
 import * as db from "@/lib/db/database";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
@@ -293,30 +294,6 @@ async function copyBookToAppData(
   const destPath = await join(libraryRoot, relativePath);
   await copyFile(srcPath, destPath);
   return { relativePath, destPath };
-}
-
-/** Save cover image to desktop library root and return a relative path (covers/{id}.{ext}) */
-async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<string> {
-  const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
-  const { join } = await import("@tauri-apps/api/path");
-
-  const libraryRoot = await getDesktopLibraryRoot();
-  const coversDir = await join(libraryRoot, "covers");
-
-  // Ensure covers directory exists
-  try {
-    await mkdir(coversDir, { recursive: true });
-  } catch {
-    // Directory may already exist
-  }
-
-  const ext = coverBlob.type.includes("png") ? "png" : "jpg";
-  const relativePath = `covers/${bookId}.${ext}`;
-  const coverPath = await join(libraryRoot, relativePath);
-  const arrayBuffer = await coverBlob.arrayBuffer();
-  await writeFile(coverPath, new Uint8Array(arrayBuffer));
-
-  return relativePath;
 }
 
 export async function repairMissingCovers(): Promise<number> {

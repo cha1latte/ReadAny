@@ -30,6 +30,7 @@ import { useLibraryStore } from "@/stores/library-store";
 import type { Book, BookReview } from "@readany/core/types";
 import {
   type BookMetadataFormValues,
+  applyBookMetadataFormUpdate,
   buildBookMetadataUpdate,
   cn,
   createBookMetadataFormValues,
@@ -58,7 +59,7 @@ import {
   Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -284,6 +285,14 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
   const autoFilledBookIdRef = useRef<string | null>(null);
   const latestValuesRef = useRef<BookMetadataFormValues | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const commitValues = useCallback(
+    (
+      update:
+        | BookMetadataFormValues
+        | ((current: BookMetadataFormValues) => BookMetadataFormValues),
+    ) => applyBookMetadataFormUpdate(latestValuesRef, setValues, update),
+    [],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -302,19 +311,14 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     if (hydratedBookIdRef.current === book.id) return;
     hydratedBookIdRef.current = book.id;
     const nextValues = createBookMetadataFormValues(book);
-    latestValuesRef.current = nextValues;
-    setValues(nextValues);
+    commitValues(nextValues);
     setEditingBasics(false);
     setEditingTitleField(null);
     setEditingReviewId(null);
     setActiveTab("basic");
     setDraftActionBusy(false);
     setDraftActionResult(null);
-  }, [book, open]);
-
-  useEffect(() => {
-    latestValuesRef.current = values;
-  }, [values]);
+  }, [book, commitValues, open]);
 
   useEffect(() => {
     if (!open || !book || !values) return;
@@ -329,15 +333,14 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
         ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
         : null;
       if (!nextValues) return;
-      latestValuesRef.current = nextValues;
-      setValues(nextValues);
+      commitValues(nextValues);
       updateBook(book.id, buildBookMetadataUpdate(book, nextValues));
     });
 
     return () => {
       cancelled = true;
     };
-  }, [book, open, updateBook, values]);
+  }, [book, commitValues, open, updateBook, values]);
 
   const groupName = useMemo(() => {
     const groupId = values?.groupId ?? book?.groupId;
@@ -378,7 +381,7 @@ export function BookDetailsDialog({ book, open, onOpenChange }: BookDetailsDialo
     field: K,
     value: BookMetadataFormValues[K],
   ) => {
-    setValues((current) => (current ? { ...current, [field]: value } : current));
+    commitValues((current) => ({ ...current, [field]: value }));
   };
 
   const persistCoverUrl = async (coverUrl: string) => {

@@ -27,6 +27,7 @@ import { getPlatformService } from "@readany/core/services";
 import type { Book, BookReview } from "@readany/core/types";
 import {
   type BookMetadataFormValues,
+  applyBookMetadataFormUpdate,
   buildBookMetadataUpdate,
   createBookMetadataFormValues,
   createEmptyBookReview,
@@ -296,6 +297,14 @@ export function BookDetailsScreen({ route }: Props) {
   const hydratedBookIdRef = useRef<string | null>(null);
   const autoFilledBookIdRef = useRef<string | null>(null);
   const latestValuesRef = useRef<BookMetadataFormValues | null>(null);
+  const commitValues = useCallback(
+    (
+      update:
+        | BookMetadataFormValues
+        | ((current: BookMetadataFormValues) => BookMetadataFormValues),
+    ) => applyBookMetadataFormUpdate(latestValuesRef, setValues, update),
+    [],
+  );
 
   useEffect(() => {
     void loadBooks();
@@ -306,13 +315,8 @@ export function BookDetailsScreen({ route }: Props) {
     if (hydratedBookIdRef.current === book.id) return;
     hydratedBookIdRef.current = book.id;
     const nextValues = createBookMetadataFormValues(book);
-    latestValuesRef.current = nextValues;
-    setValues(nextValues);
-  }, [book]);
-
-  useEffect(() => {
-    latestValuesRef.current = values;
-  }, [values]);
+    commitValues(nextValues);
+  }, [book, commitValues]);
 
   useEffect(() => {
     if (!book || !values) return;
@@ -327,15 +331,14 @@ export function BookDetailsScreen({ route }: Props) {
         ? mergeMissingBookMetadataValues(latestValuesRef.current, metadata)
         : null;
       if (!nextValues) return;
-      latestValuesRef.current = nextValues;
-      setValues(nextValues);
+      commitValues(nextValues);
       updateBook(book.id, buildBookMetadataUpdate(book, nextValues));
     });
 
     return () => {
       cancelled = true;
     };
-  }, [book, updateBook, values]);
+  }, [book, commitValues, updateBook, values]);
 
   useEffect(() => {
     const raw = values?.coverUrl;
@@ -365,73 +368,75 @@ export function BookDetailsScreen({ route }: Props) {
 
   const setField = useCallback(
     <K extends keyof BookMetadataFormValues>(field: K, value: BookMetadataFormValues[K]) => {
-      setValues((current) => {
-        if (!current) return current;
-        const next = { ...current, [field]: value };
-        if (book) updateBook(book.id, buildBookMetadataUpdate(book, next));
-        return next;
-      });
+      const next = commitValues((current) => ({ ...current, [field]: value }));
+      if (book && next) updateBook(book.id, buildBookMetadataUpdate(book, next));
     },
-    [book, updateBook],
+    [book, commitValues, updateBook],
   );
 
   const persistCoverUrl = useCallback(
     async (coverUrl: string) => {
-      if (!book || !values) return;
-      const nextValues = { ...values, coverUrl };
-      setValues(nextValues);
+      if (!book) return;
+      const nextValues = commitValues((current) => ({ ...current, coverUrl }));
+      if (!nextValues) return;
       await updateBook(book.id, buildBookMetadataUpdate(book, nextValues));
     },
-    [book, updateBook, values],
+    [book, commitValues, updateBook],
   );
 
   const setRating = useCallback(
     (rating: number) => {
-      if (!book || !values) return;
-      const next = { ...values, rating: values.rating === rating ? null : rating };
-      setValues(next);
+      if (!book) return;
+      const next = commitValues((current) => ({
+        ...current,
+        rating: current.rating === rating ? null : rating,
+      }));
+      if (!next) return;
       updateBook(book.id, buildBookMetadataUpdate(book, next));
     },
-    [book, updateBook, values],
+    [book, commitValues, updateBook],
   );
 
   const addReview = useCallback(
     (content: string) => {
-      if (!book || !values) return;
+      if (!book) return;
       const review = { ...createEmptyBookReview(), content };
-      const next = { ...values, reviews: [...values.reviews, review] };
-      setValues(next);
+      const next = commitValues((current) => ({
+        ...current,
+        reviews: [...current.reviews, review],
+      }));
+      if (!next) return;
       updateBook(book.id, buildBookMetadataUpdate(book, next));
     },
-    [book, updateBook, values],
+    [book, commitValues, updateBook],
   );
 
   const updateReview = useCallback(
     (reviewId: string, content: string) => {
-      if (!book || !values) return;
-      const next = {
-        ...values,
-        reviews: values.reviews.map((review) =>
+      if (!book) return;
+      const next = commitValues((current) => ({
+        ...current,
+        reviews: current.reviews.map((review) =>
           review.id === reviewId ? { ...review, content } : review,
         ),
-      };
-      setValues(next);
+      }));
+      if (!next) return;
       updateBook(book.id, buildBookMetadataUpdate(book, next));
     },
-    [book, updateBook, values],
+    [book, commitValues, updateBook],
   );
 
   const removeReview = useCallback(
     (reviewId: string) => {
-      if (!book || !values) return;
-      const next = {
-        ...values,
-        reviews: values.reviews.filter((review) => review.id !== reviewId),
-      };
-      setValues(next);
+      if (!book) return;
+      const next = commitValues((current) => ({
+        ...current,
+        reviews: current.reviews.filter((review) => review.id !== reviewId),
+      }));
+      if (!next) return;
       updateBook(book.id, buildBookMetadataUpdate(book, next));
     },
-    [book, updateBook, values],
+    [book, commitValues, updateBook],
   );
 
   const handleTextEditorDone = useCallback(

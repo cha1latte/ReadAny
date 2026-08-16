@@ -5,6 +5,7 @@ import {
 import { getPlatformService } from "@readany/core/services";
 import type { Book } from "@readany/core/types";
 import type { ExtractedBookMetadata } from "@readany/core/utils";
+import { saveCoverBytesToAppData } from "./cover-storage";
 
 export async function extractLocalBookMetadata(book: Book): Promise<ExtractedBookMetadata | null> {
   if (book.syncStatus === "remote" || !isRepairableFormat(book.format) || !book.filePath) {
@@ -22,7 +23,20 @@ export async function extractLocalBookMetadata(book: Book): Promise<ExtractedBoo
 
     const fileName = book.filePath.split(/[\\/]/).pop() || `${book.id}.${book.format}`;
     const rangeReadable = await createRangeReadableFile(filePath, fileSize);
-    return extractBookMetadataFromFile(rangeReadable, book.format, fileName);
+    const metadata = await extractBookMetadataFromFile(rangeReadable, book.format, fileName);
+    if (book.meta.coverUrl?.trim() || !metadata.coverBytes?.length) return metadata;
+
+    try {
+      const coverUrl = await saveCoverBytesToAppData(
+        book.id,
+        metadata.coverBytes,
+        metadata.coverMimeType,
+      );
+      return { ...metadata, coverUrl };
+    } catch (error) {
+      console.warn("[BookMetadata] Failed to persist extracted cover:", error);
+      return metadata;
+    }
   } catch (error) {
     console.warn("[BookMetadata] Failed to extract local metadata:", error);
     return null;

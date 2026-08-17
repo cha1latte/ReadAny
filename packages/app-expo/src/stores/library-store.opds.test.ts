@@ -2,6 +2,7 @@ import type { Book } from "@readany/core/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
+  const existingPaths = new Set<string>();
   const platform = {
     getAppDataDir: vi.fn(async () => "/app"),
     joinPath: vi.fn(async (...parts: string[]) => parts.join("/")),
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => {
     readFile: vi.fn(async () => new Uint8Array([1, 2, 3])),
     writeFile: vi.fn(async () => undefined),
     deleteFile: vi.fn(async (_path: string) => undefined),
-    exists: vi.fn(async () => false),
+    exists: vi.fn(async (path: string) => existingPaths.has(path)),
   };
   const db = {
     initDatabase: vi.fn(async () => undefined),
@@ -29,10 +30,12 @@ const mocks = vi.hoisted(() => {
     })),
     saveCover: vi.fn(async (bookId: string) => `covers/${bookId}.jpg`),
     copied: [] as string[],
+    existingPaths,
   };
 });
 
 vi.mock("@/lib/book/cover-storage", () => ({
+  getCoverFileExtension: () => "jpg",
   saveCoverBytesToAppData: mocks.saveCover,
 }));
 vi.mock("@/lib/book/imported-book-meta", () => ({
@@ -84,8 +87,10 @@ vi.mock("./vector-model-store", () => ({
 vi.mock("expo-file-system/legacy", () => ({ getInfoAsync: mocks.getInfoAsync }));
 vi.mock("expo-file-system", () => ({
   File: class {
-    exists = false;
-    constructor(private readonly path: string) {}
+    exists: boolean;
+    constructor(private readonly path: string) {
+      this.exists = mocks.existingPaths.has(path);
+    }
     copy(destination: { path: string }) {
       mocks.copied.push(destination.path);
     }
@@ -117,6 +122,7 @@ describe("mobile transactional OPDS imports", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.copied.length = 0;
+    mocks.existingPaths.clear();
     mocks.db.getDeletedBookByFileHash.mockResolvedValue(null);
     mocks.db.insertBook.mockResolvedValue(undefined);
     mocks.db.updateBook.mockResolvedValue(undefined);
@@ -170,8 +176,12 @@ describe("mobile transactional OPDS imports", () => {
     );
   });
 
-  it("does not expose a restored row when the durable update fails", async () => {
+  it("preserves existing managed files and state when a strict restore update fails", async () => {
     const deleted = book({ deletedAt: 10 });
+    const priorBooks = [book({ id: "visible-id", fileHash: "visible-hash" })];
+    useLibraryStore.setState({ books: priorBooks });
+    mocks.existingPaths.add("/app/books/existing-id.epub");
+    mocks.existingPaths.add("/app/covers/existing-id.jpg");
     mocks.db.getDeletedBookByFileHash.mockResolvedValueOnce(deleted);
     mocks.db.updateBook.mockRejectedValueOnce(new Error("update failed"));
 
@@ -187,12 +197,21 @@ describe("mobile transactional OPDS imports", () => {
     );
 
     expect(result.failures).toHaveLength(1);
-    expect(useLibraryStore.getState().books).toHaveLength(0);
-    expect(mocks.platform.deleteFile).toHaveBeenCalled();
+    expect(useLibraryStore.getState().books).toEqual(priorBooks);
+    expect(mocks.copied[0]).toMatch(/^\/app\/books\/existing-id-.+\.epub$/);
+    expect(mocks.saveCover.mock.calls[0]?.[0]).toMatch(/^existing-id-.+/);
+    expect(mocks.platform.deleteFile.mock.calls.map(([path]) => path)).toEqual([
+      mocks.copied[0],
+      expect.stringMatching(/^\/app\/covers\/existing-id-.+\.jpg$/),
+    ]);
+    expect(mocks.platform.deleteFile).not.toHaveBeenCalledWith("/app/books/existing-id.epub");
+    expect(mocks.platform.deleteFile).not.toHaveBeenCalledWith("/app/covers/existing-id.jpg");
   });
 
-  it("restores by hash durably while preserving saved user fields", async () => {
+  it("restores to new managed paths while retaining pre-existing files", async () => {
     const deleted = book({ deletedAt: 10 });
+    mocks.existingPaths.add("/app/books/existing-id.epub");
+    mocks.existingPaths.add("/app/covers/existing-id.jpg");
     mocks.db.getDeletedBookByFileHash.mockResolvedValueOnce(deleted);
 
     const result = await useLibraryStore.getState().importBooks(
@@ -210,8 +229,33 @@ describe("mobile transactional OPDS imports", () => {
     expect(mocks.db.updateBook).toHaveBeenCalledTimes(1);
     expect(useLibraryStore.getState().books[0]).toMatchObject({
       id: "existing-id",
+      filePath: expect.stringMatching(/^books\/existing-id-.+\.epub$/),
       tags: ["user-tag"],
-      meta: { title: "Saved title", author: "Saved author" },
+      meta: {
+        title: "Saved title",
+        author: "Saved author",
+        coverUrl: expect.stringMatching(/^covers\/existing-id-.+\.jpg$/),
+      },
     });
+    expect(mocks.platform.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it("does not title-match a deleted book after a conclusive hash miss", async () => {
+    mocks.getInfoAsync.mockResolvedValueOnce({
+      exists: true,
+      isDirectory: false,
+      size: 3,
+      md5: "different-valid-hash",
+    });
+
+    const result = await useLibraryStore
+      .getState()
+      .importBooks([{ uri: "file:///cache/book.epub", name: "Saved title.epub" }], {
+        transactional: true,
+      });
+
+    expect(mocks.db.getDeletedBookByFileHash).toHaveBeenCalledWith("different-valid-hash");
+    expect(mocks.db.getDeletedBookByTitle).not.toHaveBeenCalled();
+    expect(result.imported[0]).not.toMatchObject({ id: "existing-id" });
   });
 });

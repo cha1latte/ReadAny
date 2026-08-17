@@ -1,4 +1,4 @@
-import { saveCoverBytesToAppData } from "@/lib/book/cover-storage";
+import { getCoverFileExtension, saveCoverBytesToAppData } from "@/lib/book/cover-storage";
 import { buildImportedBookMeta, shouldPersistEmbeddedCover } from "@/lib/book/imported-book-meta";
 import {
   type ExtractedMeta,
@@ -153,6 +153,46 @@ async function ensureAppSubDir(subDir: string): Promise<void> {
   } catch {
     /* may exist */
   }
+}
+
+async function getMobileManagedDestination(
+  directory: "books" | "covers",
+  bookId: string,
+  extension: string,
+  avoidExisting: boolean,
+): Promise<{ relativePath: string; absPath: string; storageId: string; created: boolean }> {
+  const platform = getPlatformService();
+  let storageId = bookId;
+  let relativePath = `${directory}/${storageId}.${extension}`;
+  let absPath = await resolveAppPath(relativePath);
+  let exists = await platform.exists(absPath);
+
+  while (avoidExisting && exists) {
+    storageId = `${bookId}-${generateId()}`;
+    relativePath = `${directory}/${storageId}.${extension}`;
+    absPath = await resolveAppPath(relativePath);
+    exists = await platform.exists(absPath);
+  }
+
+  return { relativePath, absPath, storageId, created: !exists };
+}
+
+async function saveImportedMobileCover(input: {
+  bookId: string;
+  bytes: Uint8Array;
+  mimeType?: string | null;
+  avoidExisting: boolean;
+  createdManagedPaths: Set<string>;
+}): Promise<string> {
+  const extension = getCoverFileExtension(input.bytes, input.mimeType);
+  const destination = await getMobileManagedDestination(
+    "covers",
+    input.bookId,
+    extension,
+    input.avoidExisting,
+  );
+  if (destination.created) input.createdManagedPaths.add(destination.absPath);
+  return saveCoverBytesToAppData(destination.storageId, input.bytes, input.mimeType);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -314,12 +354,13 @@ async function copyBookToAppData(
   ext: string,
   srcPath: string,
   sourceBytes?: Uint8Array,
+  avoidExisting = false,
 ): Promise<{ relativePath: string; absPath: string; created: boolean }> {
   const platform = getPlatformService();
   await ensureAppSubDir("books");
-  const relativePath = `books/${bookId}.${ext}`;
-  const absPath = await resolveAppPath(relativePath);
-  let created = !(await platform.exists(absPath));
+  const destination = await getMobileManagedDestination("books", bookId, ext, avoidExisting);
+  const { relativePath, absPath } = destination;
+  let { created } = destination;
 
   if (sourceBytes) {
     // If bytes are already in memory (e.g. from hash calculation), just write them
@@ -979,9 +1020,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
               // Write EPUB bytes directly to final app data location
               await ensureAppSubDir("books");
-              const relativePath = `books/${bookId}.epub`;
-              const absPath = await resolveAppPath(relativePath);
-              if (!(await platform.exists(absPath))) createdManagedPaths.add(absPath);
+              const destination = await getMobileManagedDestination(
+                "books",
+                bookId,
+                "epub",
+                options.transactional === true,
+              );
+              const { relativePath, absPath } = destination;
+              if (destination.created) createdManagedPaths.add(absPath);
               await platform.writeFile(absPath, conversion.epubBytes);
 
               // TXT-converted EPUBs have no cover, and title is already known from converter.
@@ -1072,9 +1118,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const conversion = await converter.convertToBytes({ file: umdFile });
 
               await ensureAppSubDir("books");
-              const relativePath = `books/${bookId}.epub`;
-              const absPath = await resolveAppPath(relativePath);
-              if (!(await platform.exists(absPath))) createdManagedPaths.add(absPath);
+              const destination = await getMobileManagedDestination(
+                "books",
+                bookId,
+                "epub",
+                options.transactional === true,
+              );
+              const { relativePath, absPath } = destination;
+              if (destination.created) createdManagedPaths.add(absPath);
               await platform.writeFile(absPath, conversion.epubBytes);
 
               let coverUrl = deletedMatch?.meta.coverUrl;
@@ -1084,10 +1135,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 conversion.coverBytes.length > 0
               ) {
                 try {
-                  coverUrl = await saveCoverBytesToAppData(bookId, conversion.coverBytes);
-                  if (!deletedMatch?.meta.coverUrl) {
-                    createdManagedPaths.add(await resolveAppPath(coverUrl));
-                  }
+                  coverUrl = await saveImportedMobileCover({
+                    bookId,
+                    bytes: conversion.coverBytes,
+                    avoidExisting: options.transactional === true,
+                    createdManagedPaths,
+                  });
                 } catch (coverErr) {
                   console.warn(`[importBooks] Failed to save UMD cover for ${fileName}:`, coverErr);
                 }
@@ -1148,7 +1201,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             }
           }
 
-          const copiedBook = await copyBookToAppData(bookId, ext || "epub", filePath);
+          const copiedBook = await copyBookToAppData(
+            bookId,
+            ext || "epub",
+            filePath,
+            undefined,
+            options.transactional === true,
+          );
           const { relativePath } = copiedBook;
           if (copiedBook.created) createdManagedPaths.add(copiedBook.absPath);
           console.log(`[importBooks] File copied. relativePath: ${relativePath}`);
@@ -1171,14 +1230,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             // Save cover image to app data
             if (persistEmbeddedCover && meta.coverBytes && meta.coverBytes.length > 0) {
               try {
-                coverUrl = await saveCoverBytesToAppData(
+                coverUrl = await saveImportedMobileCover({
                   bookId,
-                  meta.coverBytes,
-                  meta.coverMimeType,
-                );
-                if (!deletedMatch?.meta.coverUrl) {
-                  createdManagedPaths.add(await resolveAppPath(coverUrl));
-                }
+                  bytes: meta.coverBytes,
+                  mimeType: meta.coverMimeType,
+                  avoidExisting: options.transactional === true,
+                  createdManagedPaths,
+                });
                 console.log(`[importBooks] Saving cover to: ${coverUrl}`);
                 console.log(`[importBooks] Cover saved. coverUrl=${coverUrl}`);
               } catch (coverErr) {

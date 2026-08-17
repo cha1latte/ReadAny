@@ -60,9 +60,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
       })
       .catch(() => {
         if (active) {
-          setError(
-            t("library.opds.catalogsLoadFailed", { defaultValue: "Catalogs could not be loaded." }),
-          );
+          setError(t("library.opds.catalogsLoadFailed"));
         }
       })
       .finally(() => {
@@ -261,44 +259,34 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
       await operation();
       syncCatalogs();
     } catch {
-      setError(
-        t("library.opds.catalogActionFailed", {
-          defaultValue: "The catalog could not be updated.",
-        }),
-      );
+      setError(t("library.opds.catalogActionFailed"));
     } finally {
       setBusyId(undefined);
     }
   };
 
   const confirmDelete = (catalog: OpdsCatalog) => {
-    Alert.alert(
-      t("library.opds.deleteTitle", { defaultValue: "Delete this catalog?" }),
-      t("library.opds.deleteDescription", {
-        defaultValue: "The catalog and its securely stored password will be removed.",
-      }),
-      [
-        { text: t("common.cancel", { defaultValue: "Cancel" }), style: "cancel" },
-        {
-          text: t("common.delete", { defaultValue: "Delete" }),
-          style: "destructive",
-          onPress: () => void mutate(catalog.id, () => store.removeCatalog(catalog.id)),
-        },
-      ],
-    );
+    Alert.alert(t("library.opds.deleteTitle"), t("library.opds.deleteDescription"), [
+      { text: t("library.opds.cancel"), style: "cancel" },
+      {
+        text: t("library.opds.delete"),
+        style: "destructive",
+        onPress: () => void mutate(catalog.id, () => store.removeCatalog(catalog.id)),
+      },
+    ]);
   };
 
   const authenticationLabel = (catalog: OpdsCatalog) => {
     if (catalog.auth === "anonymous") {
-      return t("library.opds.authAnonymous", { defaultValue: "No sign-in required" });
+      return t("library.opds.authAnonymous");
     }
     if (catalog.passwordStorage === "persistent") {
-      return t("library.opds.authSecure", { defaultValue: "Basic sign-in · Secure storage" });
+      return t("library.opds.authSecure");
     }
     if (catalog.passwordStorage === "session-only") {
-      return t("library.opds.authSession", { defaultValue: "Basic sign-in · This session only" });
+      return t("library.opds.authSession");
     }
-    return t("library.opds.authMissing", { defaultValue: "Basic sign-in · Password needed" });
+    return t("library.opds.authMissing");
   };
 
   if (loading) {
@@ -306,9 +294,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
       <SafeAreaView style={s.container}>
         <View style={s.state}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={s.stateTitle}>
-            {t("library.opds.loadingCatalogs", { defaultValue: "Opening catalogs…" })}
-          </Text>
+          <Text style={s.stateTitle}>{t("library.opds.loadingCatalogs")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -322,19 +308,13 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
             style={s.iconButton}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
-            accessibilityLabel={t("common.back", { defaultValue: "Back" })}
+            accessibilityLabel={t("library.opds.back")}
           >
             <ChevronLeftIcon size={20} color={colors.foreground} />
           </TouchableOpacity>
           <View style={s.titleWrap}>
-            <Text style={s.title}>
-              {t("library.opds.catalogsTitle", { defaultValue: "Online catalogs" })}
-            </Text>
-            <Text style={s.subtitle}>
-              {t("library.opds.catalogsSubtitle", {
-                defaultValue: "Browse public shelves and your own OPDS servers.",
-              })}
-            </Text>
+            <Text style={s.title}>{t("library.opds.catalogsTitle")}</Text>
+            <Text style={s.subtitle}>{t("library.opds.catalogsSubtitle")}</Text>
           </View>
           <TouchableOpacity
             style={s.iconButton}
@@ -343,7 +323,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
               setFormOpen(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel={t("library.opds.form.addTitle", { defaultValue: "Add catalog" })}
+            accessibilityLabel={t("library.opds.form.addTitle")}
           >
             <PlusIcon size={20} color={colors.foreground} />
           </TouchableOpacity>
@@ -352,15 +332,8 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
 
       <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={s.intro}>
-          <Text style={s.introEyebrow}>
-            {t("library.opds.readerEyebrow", { defaultValue: "Open shelves" })}
-          </Text>
-          <Text style={s.introText}>
-            {t("library.opds.readerIntro", {
-              defaultValue:
-                "Follow a catalog into its collections, choose a format, and bring the book straight to your library.",
-            })}
-          </Text>
+          <Text style={s.introEyebrow}>{t("library.opds.readerEyebrow")}</Text>
+          <Text style={s.introText}>{t("library.opds.readerIntro")}</Text>
         </View>
 
         {error ? (
@@ -370,9 +343,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
         ) : null}
 
         <View style={s.section}>
-          <Text style={s.sectionTitle}>
-            {t("library.opds.available", { defaultValue: "Available catalogs" })}
-          </Text>
+          <Text style={s.sectionTitle}>{t("library.opds.available")}</Text>
           {visibleCatalogs.map((catalog) => {
             const busy = busyId === catalog.id;
             return (
@@ -386,7 +357,6 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !catalog.enabled || busy }}
                   accessibilityLabel={t("library.opds.browseCatalog", {
-                    defaultValue: "Browse {{name}}",
                     name: catalog.name,
                   })}
                 >
@@ -404,9 +374,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                       </Text>
                       {catalog.builtIn ? (
                         <View style={s.badge}>
-                          <Text style={s.badgeText}>
-                            {t("library.opds.builtIn", { defaultValue: "BUILT IN" })}
-                          </Text>
+                          <Text style={s.badgeText}>{t("library.opds.builtIn")}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -422,17 +390,12 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                 <View style={s.actions}>
                   {catalog.builtIn ? (
                     <>
-                      <Text style={s.switchLabel}>
-                        {t("library.opds.builtInLocked", {
-                          defaultValue: "Preset URL is read-only",
-                        })}
-                      </Text>
+                      <Text style={s.switchLabel}>{t("library.opds.builtInLocked")}</Text>
                       <TouchableOpacity
                         style={s.action}
                         onPress={() => void mutate(catalog.id, () => store.hideBuiltIn(catalog.id))}
                         accessibilityRole="button"
                         accessibilityLabel={t("library.opds.hideCatalog", {
-                          defaultValue: "Hide {{name}}",
                           name: catalog.name,
                         })}
                       >
@@ -442,9 +405,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                   ) : (
                     <>
                       <Text style={s.switchLabel}>
-                        {catalog.enabled
-                          ? t("library.opds.enabled", { defaultValue: "Enabled" })
-                          : t("library.opds.disabled", { defaultValue: "Disabled" })}
+                        {catalog.enabled ? t("library.opds.enabled") : t("library.opds.disabled")}
                       </Text>
                       <Switch
                         value={catalog.enabled}
@@ -453,7 +414,6 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                           void mutate(catalog.id, () => store.setCatalogEnabled(catalog.id, value))
                         }
                         accessibilityLabel={t("library.opds.toggleCatalog", {
-                          defaultValue: "Enable or disable {{name}}",
                           name: catalog.name,
                         })}
                       />
@@ -465,7 +425,6 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                         }}
                         accessibilityRole="button"
                         accessibilityLabel={t("library.opds.editCatalog", {
-                          defaultValue: "Edit {{name}}",
                           name: catalog.name,
                         })}
                       >
@@ -476,7 +435,6 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                         onPress={() => confirmDelete(catalog)}
                         accessibilityRole="button"
                         accessibilityLabel={t("library.opds.deleteCatalog", {
-                          defaultValue: "Delete {{name}}",
                           name: catalog.name,
                         })}
                       >
@@ -492,9 +450,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
 
         {hiddenBuiltIns.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>
-              {t("library.opds.hiddenPresets", { defaultValue: "Hidden presets" })}
-            </Text>
+            <Text style={s.sectionTitle}>{t("library.opds.hiddenPresets")}</Text>
             {hiddenBuiltIns.map((catalog) => (
               <View key={catalog.id} style={s.hiddenCard}>
                 <RotateCcwIcon size={17} color={colors.mutedForeground} />
@@ -504,13 +460,10 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
                   onPress={() => void mutate(catalog.id, () => store.restoreBuiltIn(catalog.id))}
                   accessibilityRole="button"
                   accessibilityLabel={t("library.opds.restoreCatalog", {
-                    defaultValue: "Restore {{name}}",
                     name: catalog.name,
                   })}
                 >
-                  <Text style={s.restoreText}>
-                    {t("common.restore", { defaultValue: "Restore" })}
-                  </Text>
+                  <Text style={s.restoreText}>{t("library.opds.restore")}</Text>
                 </TouchableOpacity>
               </View>
             ))}

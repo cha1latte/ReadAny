@@ -68,8 +68,7 @@ export function WebDavImportSourceSheet({
     Math.max(screenPadding, preferredLeft),
     layout.width - popoverWidth - screenPadding,
   );
-  const showBelow =
-    activeAnchor.y + activeAnchor.height + 12 + 284 < layout.height - screenPadding;
+  const showBelow = activeAnchor.y + activeAnchor.height + 12 + 284 < layout.height - screenPadding;
   const popoverTop = showBelow
     ? activeAnchor.y + activeAnchor.height + 10
     : Math.max(screenPadding, activeAnchor.y - 284);
@@ -146,10 +145,7 @@ export function WebDavImportSourceSheet({
       onDismiss={onDismiss}
     >
       <Pressable style={s.overlay} onPress={onClose}>
-        <Pressable
-          style={s.sheetWrap}
-          onPress={(event) => event.stopPropagation()}
-        >
+        <Pressable style={s.sheetWrap} onPress={(event) => event.stopPropagation()}>
           <View style={s.sheet}>
             <ScrollView style={s.options} bounces={false}>
               <TouchableOpacity
@@ -207,17 +203,13 @@ export function WebDavImportSourceSheet({
                 onPress={onPickOpds}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={t("library.opds.catalogsTitle", {
-                  defaultValue: "Online catalogs",
-                })}
+                accessibilityLabel={t("library.opds.catalogsTitle")}
               >
                 <View style={s.iconWrap}>
                   <LibraryIcon size={18} color={colors.primary} />
                 </View>
                 <View style={s.optionText}>
-                  <Text style={s.optionTitle}>
-                    {t("library.opds.catalogsTitle", { defaultValue: "Online catalogs" })}
-                  </Text>
+                  <Text style={s.optionTitle}>{t("library.opds.catalogsTitle")}</Text>
                 </View>
                 <ChevronRightIcon size={16} color={colors.mutedForeground} />
               </TouchableOpacity>

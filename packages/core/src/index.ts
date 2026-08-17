@@ -87,6 +87,13 @@ export {
 } from "./opds/opds-acquisition";
 export { parseOpdsDocument } from "./opds/opds-parser";
 export { classifyOpdsUrl } from "./opds/opds-security";
+export { createOpdsRuntime } from "./opds/opds-runtime";
+export {
+  createOpdsCoverCache,
+  readOpdsCover,
+  type OpdsCoverLease,
+  type OpdsCoverValue,
+} from "./opds/opds-cover-cache";
 export { sanitizeOpdsDescription } from "./opds/opds-sanitize";
 export type {
   OpdsAcquisition,

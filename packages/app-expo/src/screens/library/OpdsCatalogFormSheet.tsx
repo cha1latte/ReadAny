@@ -225,9 +225,7 @@ export function OpdsCatalogFormSheet({
       setPassword("");
       onSaved();
     } catch {
-      setError(
-        t("library.opds.form.saveFailed", { defaultValue: "The catalog could not be saved." }),
-      );
+      setError(t("library.opds.form.saveFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -243,36 +241,20 @@ export function OpdsCatalogFormSheet({
           : classification.reason === "credentials-not-allowed"
             ? "credentialsInUrl"
             : "invalidUrl";
-      setError(
-        t(`library.opds.form.${key}`, {
-          defaultValue:
-            classification.reason === "public-http"
-              ? "Public catalogs must use HTTPS."
-              : classification.reason === "credentials-not-allowed"
-                ? "Keep credentials out of the catalog URL."
-                : "Enter a valid HTTPS or local HTTP catalog URL.",
-        }),
-      );
+      setError(t(`library.opds.form.${key}`));
       return;
     }
     if (!classification.requiresInsecureConfirmation) {
       void persist();
       return;
     }
-    Alert.alert(
-      t("library.opds.form.localHttpTitle", { defaultValue: "Use a local HTTP catalog?" }),
-      t("library.opds.form.localHttpWarning", {
-        defaultValue:
-          "Traffic and sign-in details can be read on your local network. Continue only if you trust it.",
-      }),
-      [
-        { text: t("common.cancel", { defaultValue: "Cancel" }), style: "cancel" },
-        {
-          text: t("common.continue", { defaultValue: "Continue" }),
-          onPress: () => void persist(),
-        },
-      ],
-    );
+    Alert.alert(t("library.opds.form.localHttpTitle"), t("library.opds.form.localHttpWarning"), [
+      { text: t("library.opds.cancel"), style: "cancel" },
+      {
+        text: t("library.opds.continue"),
+        onPress: () => void persist(),
+      },
+    ]);
   };
 
   return (
@@ -286,16 +268,9 @@ export function OpdsCatalogFormSheet({
             <View style={s.handle} />
             <View>
               <Text style={s.title}>
-                {catalog
-                  ? t("library.opds.form.editTitle", { defaultValue: "Edit catalog" })
-                  : t("library.opds.form.addTitle", { defaultValue: "Add catalog" })}
+                {catalog ? t("library.opds.form.editTitle") : t("library.opds.form.addTitle")}
               </Text>
-              <Text style={s.subtitle}>
-                {t("library.opds.form.subtitle", {
-                  defaultValue:
-                    "Connect a book catalog without putting its password in the address.",
-                })}
-              </Text>
+              <Text style={s.subtitle}>{t("library.opds.form.subtitle")}</Text>
             </View>
             <ScrollView
               style={s.scroll}
@@ -305,22 +280,18 @@ export function OpdsCatalogFormSheet({
               showsVerticalScrollIndicator={false}
             >
               <View style={s.field}>
-                <Text style={s.label}>{t("library.opds.form.name", { defaultValue: "Name" })}</Text>
+                <Text style={s.label}>{t("library.opds.form.name")}</Text>
                 <TextInput
                   style={s.input}
                   value={name}
                   onChangeText={setName}
-                  placeholder={t("library.opds.form.namePlaceholder", {
-                    defaultValue: "My catalog",
-                  })}
+                  placeholder={t("library.opds.form.namePlaceholder")}
                   placeholderTextColor={colors.mutedForeground}
-                  accessibilityLabel={t("library.opds.form.name", { defaultValue: "Name" })}
+                  accessibilityLabel={t("library.opds.form.name")}
                 />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>
-                  {t("library.opds.form.url", { defaultValue: "Catalog URL" })}
-                </Text>
+                <Text style={s.label}>{t("library.opds.form.url")}</Text>
                 <TextInput
                   style={s.input}
                   value={url}
@@ -330,13 +301,11 @@ export function OpdsCatalogFormSheet({
                   keyboardType="url"
                   placeholder="https://catalog.example.com/opds"
                   placeholderTextColor={colors.mutedForeground}
-                  accessibilityLabel={t("library.opds.form.url", { defaultValue: "Catalog URL" })}
+                  accessibilityLabel={t("library.opds.form.url")}
                 />
               </View>
               <View style={s.field}>
-                <Text style={s.label}>
-                  {t("library.opds.form.authentication", { defaultValue: "Authentication" })}
-                </Text>
+                <Text style={s.label}>{t("library.opds.form.authentication")}</Text>
                 <View style={s.segmented} accessibilityRole="radiogroup">
                   {(["anonymous", "basic"] as const).map((mode) => (
                     <TouchableOpacity
@@ -348,8 +317,8 @@ export function OpdsCatalogFormSheet({
                     >
                       <Text style={[s.segmentText, auth === mode && s.segmentTextActive]}>
                         {mode === "anonymous"
-                          ? t("library.opds.form.anonymous", { defaultValue: "Anonymous" })
-                          : t("library.opds.form.basic", { defaultValue: "Basic sign-in" })}
+                          ? t("library.opds.form.anonymous")
+                          : t("library.opds.form.basic")}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -358,24 +327,18 @@ export function OpdsCatalogFormSheet({
               {auth === "basic" ? (
                 <>
                   <View style={s.field}>
-                    <Text style={s.label}>
-                      {t("library.opds.form.username", { defaultValue: "Username" })}
-                    </Text>
+                    <Text style={s.label}>{t("library.opds.form.username")}</Text>
                     <TextInput
                       style={s.input}
                       value={username}
                       onChangeText={setUsername}
                       autoCapitalize="none"
                       autoCorrect={false}
-                      accessibilityLabel={t("library.opds.form.username", {
-                        defaultValue: "Username",
-                      })}
+                      accessibilityLabel={t("library.opds.form.username")}
                     />
                   </View>
                   <View style={s.field}>
-                    <Text style={s.label}>
-                      {t("library.opds.form.password", { defaultValue: "Password" })}
-                    </Text>
+                    <Text style={s.label}>{t("library.opds.form.password")}</Text>
                     <TextInput
                       style={s.input}
                       value={password}
@@ -385,29 +348,19 @@ export function OpdsCatalogFormSheet({
                       autoCorrect={false}
                       placeholder={
                         catalog?.passwordStorage !== "none"
-                          ? t("library.opds.form.passwordUnchanged", {
-                              defaultValue: "Leave blank to keep saved password",
-                            })
+                          ? t("library.opds.form.passwordUnchanged")
                           : undefined
                       }
                       placeholderTextColor={colors.mutedForeground}
-                      accessibilityLabel={t("library.opds.form.password", {
-                        defaultValue: "Password",
-                      })}
+                      accessibilityLabel={t("library.opds.form.password")}
                     />
                     {catalog ? (
                       <Text style={s.helper}>
                         {catalog.passwordStorage === "persistent"
-                          ? t("library.opds.form.passwordStoredSecurely", {
-                              defaultValue: "Password saved in secure storage",
-                            })
+                          ? t("library.opds.form.passwordStoredSecurely")
                           : catalog.passwordStorage === "session-only"
-                            ? t("library.opds.form.passwordSessionOnly", {
-                                defaultValue: "Password available for this session only",
-                              })
-                            : t("library.opds.form.passwordMissing", {
-                                defaultValue: "No password is saved",
-                              })}
+                            ? t("library.opds.form.passwordSessionOnly")
+                            : t("library.opds.form.passwordMissing")}
                       </Text>
                     ) : null}
                   </View>
@@ -415,21 +368,13 @@ export function OpdsCatalogFormSheet({
               ) : null}
               <View style={s.switchRow}>
                 <View style={s.switchCopy}>
-                  <Text style={s.switchTitle}>
-                    {t("library.opds.form.enabled", { defaultValue: "Catalog enabled" })}
-                  </Text>
-                  <Text style={s.switchHint}>
-                    {t("library.opds.form.enabledHint", {
-                      defaultValue: "Disabled catalogs stay saved but cannot be browsed.",
-                    })}
-                  </Text>
+                  <Text style={s.switchTitle}>{t("library.opds.form.enabled")}</Text>
+                  <Text style={s.switchHint}>{t("library.opds.form.enabledHint")}</Text>
                 </View>
                 <Switch
                   value={enabled}
                   onValueChange={setEnabled}
-                  accessibilityLabel={t("library.opds.form.enabled", {
-                    defaultValue: "Catalog enabled",
-                  })}
+                  accessibilityLabel={t("library.opds.form.enabled")}
                 />
               </View>
               {error ? (
@@ -440,7 +385,7 @@ export function OpdsCatalogFormSheet({
             </ScrollView>
             <View style={s.footer}>
               <TouchableOpacity style={[s.button, s.cancelButton]} onPress={onClose}>
-                <Text style={s.cancelText}>{t("common.cancel", { defaultValue: "Cancel" })}</Text>
+                <Text style={s.cancelText}>{t("library.opds.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.button, s.saveButton]}
@@ -452,7 +397,7 @@ export function OpdsCatalogFormSheet({
                 {submitting ? (
                   <ActivityIndicator size="small" color={colors.primaryForeground} />
                 ) : null}
-                <Text style={s.saveText}>{t("common.save", { defaultValue: "Save" })}</Text>
+                <Text style={s.saveText}>{t("library.opds.save")}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

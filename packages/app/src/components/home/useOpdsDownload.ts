@@ -29,6 +29,7 @@ export interface OpdsDownloadRequest {
   credentials?: OpdsCredentials;
   signal?: AbortSignal;
   onProgress?: (progress: OpdsDownloadProgress) => void;
+  onImportStart?: () => void;
 }
 
 export interface OpdsImportDownloadResult {
@@ -99,6 +100,7 @@ export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDepen
         platform: dependencies.platform,
         destinationPath: temporaryPath,
       });
+      request.onImportStart?.();
       try {
         importResult = await dependencies.importBooks(
           [

@@ -59,6 +59,32 @@ function dependencies() {
 }
 
 describe("desktop OPDS download adapter", () => {
+  it("announces the import point of no return after download and before library mutation", async () => {
+    const deps = dependencies();
+    const events: string[] = [];
+    deps.platform.writeFile.mockImplementationOnce(async () => {
+      events.push("downloaded");
+    });
+    deps.importBooks.mockImplementationOnce(async () => {
+      events.push("importing");
+      return {
+        imported: [{ id: "desktop-book" }],
+        skippedDuplicates: [],
+        failures: [],
+      } as unknown as ImportBooksResult;
+    });
+    const run = createOpdsDownloadAdapter(deps as never);
+
+    await run({
+      publication,
+      acquisition: selected,
+      catalogOrigin: "https://catalog.test",
+      onImportStart: () => events.push("point-of-no-return"),
+    });
+
+    expect(events).toEqual(["downloaded", "point-of-no-return", "importing"]);
+  });
+
   it("passes metadata through the backward-compatible desktop input and cleans once", async () => {
     const deps = dependencies();
     const run = createOpdsDownloadAdapter(deps as never);

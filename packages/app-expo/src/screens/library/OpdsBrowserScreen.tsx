@@ -388,25 +388,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
     if (retry) void runDownload(retry.publication, retry.acquisition);
   };
 
-  const errorMessage = (code: OpdsErrorCode) =>
-    t(`library.opds.errors.${code}`, {
-      defaultValue:
-        code === "unauthorized"
-          ? "The catalog rejected the saved sign-in."
-          : code === "unsupported-auth"
-            ? "This catalog uses an authentication method ReadAny does not support yet."
-            : code === "invalid-catalog"
-              ? "This address did not return a valid OPDS catalog."
-              : code === "unsupported-acquisition"
-                ? "This book does not offer a format ReadAny can import."
-                : code === "import-failed"
-                  ? "The book downloaded, but could not be added to your library."
-                  : code === "asset-too-large"
-                    ? "This book is too large to download safely."
-                    : code === "download-failed"
-                      ? "The book download failed."
-                      : "The catalog could not be reached.",
-    });
+  const errorMessage = (code: OpdsErrorCode) => t(`library.opds.errors.${code}`);
 
   const s = useMemo(
     () =>
@@ -743,7 +725,6 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={t("library.opds.publicationDetails", {
-            defaultValue: "Details for {{title}}",
             title: publication.title,
           })}
         >
@@ -754,15 +735,12 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           <View style={s.publicationCopy}>
             <Text style={s.publicationTitle}>{publication.title}</Text>
             <Text style={s.publicationAuthor} numberOfLines={2}>
-              {publication.authors.join(", ") ||
-                t("library.opds.unknownAuthor", { defaultValue: "Unknown author" })}
+              {publication.authors.join(", ") || t("library.opds.unknownAuthor")}
             </Text>
             <Text style={s.publicationMeta} numberOfLines={1}>
               {formats.length > 0
                 ? formats.map((item) => item.format.toUpperCase()).join(" · ")
-                : t("library.opds.noCompatibleFormat", {
-                    defaultValue: "No compatible download format",
-                  })}
+                : t("library.opds.noCompatibleFormat")}
             </Text>
           </View>
           <ChevronRightIcon size={17} color={colors.mutedForeground} />
@@ -793,24 +771,18 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                     state.download.status === "importing",
                 }}
                 accessibilityLabel={t("library.opds.downloadTitle", {
-                  defaultValue: "Download {{title}}",
                   title: publication.title,
                 })}
               >
                 <BookOpenIcon size={18} color={colors.primaryForeground} />
                 <Text style={s.downloadText}>
                   {formats.length > 1
-                    ? t("library.opds.chooseFormat", { defaultValue: "Choose format" })
-                    : t("library.opds.downloadAndImport", { defaultValue: "Download & import" })}
+                    ? t("library.opds.chooseFormat")
+                    : t("library.opds.downloadAndImport")}
                 </Text>
               </TouchableOpacity>
             ) : (
-              <Text style={s.unsupported}>
-                {t("library.opds.unsupportedExplanation", {
-                  defaultValue:
-                    "This entry does not advertise a direct book format that ReadAny can import.",
-                })}
-              </Text>
+              <Text style={s.unsupported}>{t("library.opds.unsupportedExplanation")}</Text>
             )}
           </View>
         ) : null}
@@ -836,9 +808,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
     if (item.kind === "section") {
       const title =
         item.title === "collections"
-          ? t("library.opds.collections", { defaultValue: "Collections" })
+          ? t("library.opds.collections")
           : item.title === "books"
-            ? t("library.opds.books", { defaultValue: "Books" })
+            ? t("library.opds.books")
             : item.title;
       return <Text style={[s.sectionTitle, s.listRow]}>{title}</Text>;
     }
@@ -863,14 +835,8 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
       return (
         <View style={s.centerState}>
           <BookOpenIcon size={30} color={colors.mutedForeground} />
-          <Text style={s.centerTitle}>
-            {t("library.opds.empty", { defaultValue: "Nothing on this shelf yet" })}
-          </Text>
-          <Text style={s.centerText}>
-            {t("library.opds.emptyHint", {
-              defaultValue: "Try another collection or go back one level.",
-            })}
-          </Text>
+          <Text style={s.centerTitle}>{t("library.opds.empty")}</Text>
+          <Text style={s.centerText}>{t("library.opds.emptyHint")}</Text>
         </View>
       );
     }
@@ -882,10 +848,10 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
             onPress={() => openUrl(item.previousUrl as string, "push")}
             accessibilityRole="button"
             accessibilityState={{ disabled: false }}
-            accessibilityLabel={t("common.previous", { defaultValue: "Previous" })}
+            accessibilityLabel={t("library.opds.previous")}
           >
             <ChevronLeftIcon size={17} color={colors.foreground} />
-            <Text style={s.pageText}>{t("common.previous", { defaultValue: "Previous" })}</Text>
+            <Text style={s.pageText}>{t("library.opds.previous")}</Text>
           </TouchableOpacity>
         ) : null}
         {item.nextUrl ? (
@@ -894,9 +860,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
             onPress={() => openUrl(item.nextUrl as string, "push")}
             accessibilityRole="button"
             accessibilityState={{ disabled: false }}
-            accessibilityLabel={t("common.next", { defaultValue: "Next" })}
+            accessibilityLabel={t("library.opds.next")}
           >
-            <Text style={s.pageText}>{t("common.next", { defaultValue: "Next" })}</Text>
+            <Text style={s.pageText}>{t("library.opds.next")}</Text>
             <ChevronRightIcon size={17} color={colors.foreground} />
           </TouchableOpacity>
         ) : null}
@@ -914,16 +880,16 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
               onPress={backController.handleHeaderBack}
               accessibilityRole="button"
               accessibilityState={{ disabled: false }}
-              accessibilityLabel={t("common.back", { defaultValue: "Back" })}
+              accessibilityLabel={t("library.opds.back")}
             >
               <ChevronLeftIcon size={20} color={colors.foreground} />
             </TouchableOpacity>
             <View style={s.headerCopy}>
               <Text style={s.eyebrow} numberOfLines={1}>
-                {catalogName || t("library.opds.catalog", { defaultValue: "Catalog" })}
+                {catalogName || t("library.opds.catalog")}
               </Text>
               <Text style={s.title} numberOfLines={1}>
-                {feed?.title ?? t("library.opds.loading", { defaultValue: "Loading…" })}
+                {feed?.title ?? t("library.opds.loading")}
               </Text>
             </View>
             <TouchableOpacity
@@ -935,7 +901,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 disabled: !feed,
                 busy: state.content.status === "ready" && state.content.refreshing,
               }}
-              accessibilityLabel={t("common.refresh", { defaultValue: "Refresh" })}
+              accessibilityLabel={t("library.opds.refresh")}
             >
               {state.content.status === "ready" && state.content.refreshing ? (
                 <ActivityIndicator size="small" color={colors.foreground} />
@@ -953,13 +919,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 onChangeText={setQuery}
                 onSubmitEditing={handleSearch}
                 returnKeyType="search"
-                placeholder={t("library.opds.searchPlaceholder", {
-                  defaultValue: "Search this catalog",
-                })}
+                placeholder={t("library.opds.searchPlaceholder")}
                 placeholderTextColor={colors.mutedForeground}
-                accessibilityLabel={t("library.opds.searchPlaceholder", {
-                  defaultValue: "Search this catalog",
-                })}
+                accessibilityLabel={t("library.opds.searchPlaceholder")}
               />
               <TouchableOpacity
                 style={s.searchButton}
@@ -967,7 +929,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 disabled={!query.trim()}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !query.trim() }}
-                accessibilityLabel={t("common.search", { defaultValue: "Search" })}
+                accessibilityLabel={t("library.opds.search")}
               >
                 <ChevronRightIcon
                   size={18}
@@ -982,21 +944,13 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
       {initialLoading ? (
         <View style={s.centerState}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={s.centerTitle}>
-            {t("library.opds.loading", { defaultValue: "Loading catalog…" })}
-          </Text>
-          <Text style={s.centerText}>
-            {t("library.opds.loadingHint", {
-              defaultValue: "Opening the shelf and checking its available collections.",
-            })}
-          </Text>
+          <Text style={s.centerTitle}>{t("library.opds.loading")}</Text>
+          <Text style={s.centerText}>{t("library.opds.loadingHint")}</Text>
         </View>
       ) : !feed && contentError ? (
         <View style={s.centerState}>
           <GlobeIcon size={30} color={colors.destructive} />
-          <Text style={s.centerTitle}>
-            {t("library.opds.loadFailed", { defaultValue: "Catalog unavailable" })}
-          </Text>
+          <Text style={s.centerTitle}>{t("library.opds.loadFailed")}</Text>
           <Text style={s.centerText}>{errorMessage(contentError)}</Text>
           <View style={s.errorActions}>
             <TouchableOpacity
@@ -1004,9 +958,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
               onPress={handleRetry}
               accessibilityRole="button"
               accessibilityState={{ disabled: false }}
-              accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
+              accessibilityLabel={t("library.opds.retry")}
             >
-              <Text style={s.smallButtonText}>{t("common.retry", { defaultValue: "Retry" })}</Text>
+              <Text style={s.smallButtonText}>{t("library.opds.retry")}</Text>
             </TouchableOpacity>
             {shouldEditOpdsCredentials(state) ? (
               <TouchableOpacity
@@ -1014,13 +968,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 onPress={() => navigation.navigate("OpdsCatalogs", { editCatalogId: catalogId })}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: false }}
-                accessibilityLabel={t("library.opds.editCredentials", {
-                  defaultValue: "Edit credentials",
-                })}
+                accessibilityLabel={t("library.opds.editCredentials")}
               >
-                <Text style={s.smallButtonText}>
-                  {t("library.opds.editCredentials", { defaultValue: "Edit credentials" })}
-                </Text>
+                <Text style={s.smallButtonText}>{t("library.opds.editCredentials")}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -1045,11 +995,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                     style={s.smallButton}
                     onPress={handleRetry}
                     accessibilityRole="button"
-                    accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
+                    accessibilityLabel={t("library.opds.retry")}
                   >
-                    <Text style={s.smallButtonText}>
-                      {t("common.retry", { defaultValue: "Retry" })}
-                    </Text>
+                    <Text style={s.smallButtonText}>{t("library.opds.retry")}</Text>
                   </TouchableOpacity>
                   {shouldEditOpdsCredentials(state) ? (
                     <TouchableOpacity
@@ -1058,13 +1006,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                         navigation.navigate("OpdsCatalogs", { editCatalogId: catalogId })
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={t("library.opds.editCredentials", {
-                        defaultValue: "Edit credentials",
-                      })}
+                      accessibilityLabel={t("library.opds.editCredentials")}
                     >
-                      <Text style={s.smallButtonText}>
-                        {t("library.opds.editCredentials", { defaultValue: "Edit credentials" })}
-                      </Text>
+                      <Text style={s.smallButtonText}>{t("library.opds.editCredentials")}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -1097,22 +1041,17 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                   accessibilityLiveRegion={downloadAccessibility.liveRegion}
                 >
                   {state.download.status === "downloading"
-                    ? t("library.opds.downloading", {
-                        defaultValue:
-                          state.download.total > 0 ? "Downloading {{percent}}%" : "Downloading…",
-                        percent:
-                          state.download.total > 0
-                            ? Math.round((state.download.loaded / state.download.total) * 100)
-                            : 0,
-                      })
+                    ? state.download.total > 0
+                      ? t("library.opds.downloadingProgress", {
+                          percent: Math.round((state.download.loaded / state.download.total) * 100),
+                        })
+                      : t("library.opds.downloading")
                     : state.download.status === "importing"
-                      ? t("library.opds.importing", { defaultValue: "Adding to your libraryâ€¦" })
+                      ? t("library.opds.importing")
                       : state.download.status === "success"
                         ? state.download.importedCount > 0
-                          ? t("library.opds.imported", { defaultValue: "Imported to your library" })
-                          : t("library.opds.alreadyImported", {
-                              defaultValue: "This book is already in your library",
-                            })
+                          ? t("library.opds.imported")
+                          : t("library.opds.alreadyImported")
                         : errorMessage(state.download.error)}
                 </Text>
               </View>
@@ -1122,11 +1061,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                   onPress={cancelDownload}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: false }}
-                  accessibilityLabel={t("common.cancel", { defaultValue: "Cancel" })}
+                  accessibilityLabel={t("library.opds.cancel")}
                 >
-                  <Text style={s.smallButtonText}>
-                    {t("common.cancel", { defaultValue: "Cancel" })}
-                  </Text>
+                  <Text style={s.smallButtonText}>{t("library.opds.cancel")}</Text>
                 </TouchableOpacity>
               ) : state.download.status === "error" && lastDownload.current ? (
                 <TouchableOpacity
@@ -1134,11 +1071,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                   onPress={retryDownload}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: false }}
-                  accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
+                  accessibilityLabel={t("library.opds.retry")}
                 >
-                  <Text style={s.smallButtonText}>
-                    {t("common.retry", { defaultValue: "Retry" })}
-                  </Text>
+                  <Text style={s.smallButtonText}>{t("library.opds.retry")}</Text>
                 </TouchableOpacity>
               ) : state.download.status === "success" ? (
                 <TouchableOpacity
@@ -1146,11 +1081,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                   onPress={() => dispatch({ type: "downloadReset" })}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: false }}
-                  accessibilityLabel={t("common.done", { defaultValue: "Done" })}
+                  accessibilityLabel={t("library.opds.done")}
                 >
-                  <Text style={s.smallButtonText}>
-                    {t("common.done", { defaultValue: "Done" })}
-                  </Text>
+                  <Text style={s.smallButtonText}>{t("library.opds.done")}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -1164,10 +1097,8 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                     : {
                         text:
                           state.download.status === "importing"
-                            ? t("library.opds.importing", {
-                                defaultValue: "Adding to your libraryâ€¦",
-                              })
-                            : t("library.opds.downloading", { defaultValue: "Downloadingâ€¦" }),
+                            ? t("library.opds.importing")
+                            : t("library.opds.downloading"),
                       }
                 }
               >
@@ -1199,9 +1130,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           >
             <View style={s.pickerHandle} />
             <View ref={formatHeadingRef} accessible accessibilityRole="header">
-              <Text style={s.pickerTitle}>
-                {t("library.opds.chooseFormat", { defaultValue: "Choose format" })}
-              </Text>
+              <Text style={s.pickerTitle}>{t("library.opds.chooseFormat")}</Text>
             </View>
             <Text style={s.pickerSubtitle} numberOfLines={2}>
               {formatChoice?.publication.title}
@@ -1223,7 +1152,6 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                   accessibilityRole="button"
                   accessibilityState={{ disabled: false }}
                   accessibilityLabel={t("library.opds.downloadFormat", {
-                    defaultValue: "Download {{format}}",
                     format: acquisition.format.toUpperCase(),
                   })}
                 >

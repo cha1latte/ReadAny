@@ -13,6 +13,7 @@ import {
   Image,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useStreamingChat } from "@/hooks";
@@ -177,9 +179,14 @@ export function ChatScreen() {
     ? threads.find((th) => th.id === generalActiveThreadId)
     : null;
 
-  const activeCurrentMessage = activeThread?.id === currentMessage?.threadId ? currentMessage : null;
+  const activeCurrentMessage =
+    activeThread?.id === currentMessage?.threadId ? currentMessage : null;
   const displayMessages = convertToMessageV2(activeThread?.messages || []);
-  const allMessages = mergeMessagesWithStreaming(displayMessages, activeCurrentMessage, isStreaming);
+  const allMessages = mergeMessagesWithStreaming(
+    displayMessages,
+    activeCurrentMessage,
+    isStreaming,
+  );
 
   // Handlers
   const handleSend = useCallback(
@@ -459,7 +466,12 @@ export function ChatScreen() {
           </View>
 
           {/* Content */}
-          <View style={s.content}>
+          <KeyboardAvoidingView
+            style={s.content}
+            behavior="height"
+            enabled={Platform.OS === "android"}
+            keyboardVerticalOffset={insets.top}
+          >
             <View style={s.content}>
               {allMessages.length > 0 ? (
                 <MessageList
@@ -485,7 +497,7 @@ export function ChatScreen() {
               isStreaming={isStreaming}
               keyboardBottomOffset={tabBarHeight}
             />
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </View>
 

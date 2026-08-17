@@ -1,0 +1,463 @@
+import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
+import {
+  type OpdsCatalog,
+  type OpdsCatalogAuth,
+  type OpdsCatalogStore,
+  classifyOpdsUrl,
+} from "@readany/core";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+interface OpdsCatalogFormSheetProps {
+  visible: boolean;
+  catalog?: OpdsCatalog;
+  store: OpdsCatalogStore;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+export function OpdsCatalogFormSheet({
+  visible,
+  catalog,
+  store,
+  onClose,
+  onSaved,
+}: OpdsCatalogFormSheetProps) {
+  const { t } = useTranslation();
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const layout = useResponsiveLayout();
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [auth, setAuth] = useState<OpdsCatalogAuth>("anonymous");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    if (!visible) {
+      setPassword("");
+      return;
+    }
+    setName(catalog?.name ?? "");
+    setUrl(catalog?.url ?? "");
+    setAuth(catalog?.auth ?? "anonymous");
+    setUsername(catalog?.username ?? "");
+    setPassword("");
+    setEnabled(catalog?.enabled ?? true);
+    setSubmitting(false);
+    setError(undefined);
+  }, [catalog, visible]);
+
+  const canSubmit =
+    name.trim().length > 0 &&
+    url.trim().length > 0 &&
+    (auth === "anonymous" ||
+      (username.trim().length > 0 &&
+        (password.length > 0 || (catalog?.passwordStorage ?? "none") !== "none"))) &&
+    !submitting;
+
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+        keyboardWrap: { width: "100%", justifyContent: "flex-end" },
+        sheet: {
+          alignSelf: "center",
+          width: "100%",
+          maxWidth: layout.isTablet ? 620 : undefined,
+          maxHeight: "94%",
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: Math.max(insets.bottom, 16) + 12,
+          borderTopLeftRadius: 26,
+          borderTopRightRadius: 26,
+          backgroundColor: colors.background,
+          gap: 14,
+        },
+        handle: {
+          alignSelf: "center",
+          width: 38,
+          height: 4,
+          borderRadius: radius.full,
+          backgroundColor: withOpacity(colors.border, 0.95),
+        },
+        title: { fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: colors.foreground },
+        subtitle: {
+          marginTop: 4,
+          fontSize: fontSize.sm,
+          lineHeight: 20,
+          color: colors.mutedForeground,
+        },
+        scroll: { flexGrow: 0 },
+        content: { gap: 14, paddingBottom: 4 },
+        field: { gap: 7 },
+        label: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.foreground },
+        input: {
+          minHeight: 48,
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          borderColor: withOpacity(colors.border, 0.92),
+          backgroundColor: colors.card,
+          paddingHorizontal: 14,
+          fontSize: fontSize.base,
+          color: colors.foreground,
+        },
+        segmented: {
+          minHeight: 48,
+          padding: 4,
+          borderRadius: radius.xl,
+          backgroundColor: colors.muted,
+          flexDirection: "row",
+          gap: 4,
+        },
+        segment: {
+          flex: 1,
+          minHeight: 40,
+          borderRadius: radius.lg,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        segmentActive: { backgroundColor: colors.card },
+        segmentText: {
+          fontSize: fontSize.sm,
+          fontWeight: fontWeight.medium,
+          color: colors.mutedForeground,
+        },
+        segmentTextActive: { color: colors.foreground },
+        helper: { fontSize: fontSize.xs, lineHeight: 18, color: colors.mutedForeground },
+        switchRow: {
+          minHeight: 56,
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          borderColor: withOpacity(colors.border, 0.92),
+          backgroundColor: colors.card,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        },
+        switchCopy: { flex: 1 },
+        switchTitle: {
+          fontSize: fontSize.sm,
+          fontWeight: fontWeight.medium,
+          color: colors.foreground,
+        },
+        switchHint: { marginTop: 2, fontSize: fontSize.xs, color: colors.mutedForeground },
+        errorBox: {
+          padding: 12,
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          borderColor: withOpacity(colors.destructive, 0.24),
+          backgroundColor: withOpacity(colors.destructive, 0.08),
+        },
+        errorText: { fontSize: fontSize.sm, lineHeight: 20, color: colors.destructive },
+        footer: { flexDirection: "row", gap: 10 },
+        button: {
+          minHeight: 48,
+          borderRadius: radius.xl,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        cancelButton: {
+          flex: 1,
+          borderWidth: 1,
+          borderColor: withOpacity(colors.border, 0.9),
+          backgroundColor: colors.card,
+        },
+        saveButton: {
+          flex: 1.2,
+          flexDirection: "row",
+          gap: 8,
+          backgroundColor: canSubmit ? colors.primary : withOpacity(colors.primary, 0.42),
+        },
+        cancelText: {
+          fontSize: fontSize.sm,
+          fontWeight: fontWeight.medium,
+          color: colors.foreground,
+        },
+        saveText: {
+          fontSize: fontSize.sm,
+          fontWeight: fontWeight.semibold,
+          color: colors.primaryForeground,
+        },
+      }),
+    [canSubmit, colors, insets.bottom, layout.isTablet],
+  );
+
+  const persist = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(undefined);
+    try {
+      const input = {
+        name: name.trim(),
+        url: url.trim(),
+        enabled,
+        auth,
+        ...(auth === "basic"
+          ? { username: username.trim(), ...(password ? { password } : {}) }
+          : {}),
+      };
+      if (catalog) await store.updateCatalog(catalog.id, input);
+      else await store.addCatalog(input);
+      setPassword("");
+      onSaved();
+    } catch {
+      setError(
+        t("library.opds.form.saveFailed", { defaultValue: "The catalog could not be saved." }),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!canSubmit) return;
+    const classification = classifyOpdsUrl(url.trim());
+    if (!classification.allowed) {
+      const key =
+        classification.reason === "public-http"
+          ? "publicHttpBlocked"
+          : classification.reason === "credentials-not-allowed"
+            ? "credentialsInUrl"
+            : "invalidUrl";
+      setError(
+        t(`library.opds.form.${key}`, {
+          defaultValue:
+            classification.reason === "public-http"
+              ? "Public catalogs must use HTTPS."
+              : classification.reason === "credentials-not-allowed"
+                ? "Keep credentials out of the catalog URL."
+                : "Enter a valid HTTPS or local HTTP catalog URL.",
+        }),
+      );
+      return;
+    }
+    if (!classification.requiresInsecureConfirmation) {
+      void persist();
+      return;
+    }
+    Alert.alert(
+      t("library.opds.form.localHttpTitle", { defaultValue: "Use a local HTTP catalog?" }),
+      t("library.opds.form.localHttpWarning", {
+        defaultValue:
+          "Traffic and sign-in details can be read on your local network. Continue only if you trust it.",
+      }),
+      [
+        { text: t("common.cancel", { defaultValue: "Cancel" }), style: "cancel" },
+        {
+          text: t("common.continue", { defaultValue: "Continue" }),
+          onPress: () => void persist(),
+        },
+      ],
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={s.overlay} onPress={onClose}>
+        <KeyboardAvoidingView
+          style={s.keyboardWrap}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable style={s.sheet} onPress={(event) => event.stopPropagation()}>
+            <View style={s.handle} />
+            <View>
+              <Text style={s.title}>
+                {catalog
+                  ? t("library.opds.form.editTitle", { defaultValue: "Edit catalog" })
+                  : t("library.opds.form.addTitle", { defaultValue: "Add catalog" })}
+              </Text>
+              <Text style={s.subtitle}>
+                {t("library.opds.form.subtitle", {
+                  defaultValue:
+                    "Connect a book catalog without putting its password in the address.",
+                })}
+              </Text>
+            </View>
+            <ScrollView
+              style={s.scroll}
+              contentContainerStyle={s.content}
+              automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={s.field}>
+                <Text style={s.label}>{t("library.opds.form.name", { defaultValue: "Name" })}</Text>
+                <TextInput
+                  style={s.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder={t("library.opds.form.namePlaceholder", {
+                    defaultValue: "My catalog",
+                  })}
+                  placeholderTextColor={colors.mutedForeground}
+                  accessibilityLabel={t("library.opds.form.name", { defaultValue: "Name" })}
+                />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>
+                  {t("library.opds.form.url", { defaultValue: "Catalog URL" })}
+                </Text>
+                <TextInput
+                  style={s.input}
+                  value={url}
+                  onChangeText={setUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  placeholder="https://catalog.example.com/opds"
+                  placeholderTextColor={colors.mutedForeground}
+                  accessibilityLabel={t("library.opds.form.url", { defaultValue: "Catalog URL" })}
+                />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>
+                  {t("library.opds.form.authentication", { defaultValue: "Authentication" })}
+                </Text>
+                <View style={s.segmented} accessibilityRole="radiogroup">
+                  {(["anonymous", "basic"] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[s.segment, auth === mode && s.segmentActive]}
+                      onPress={() => setAuth(mode)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: auth === mode }}
+                    >
+                      <Text style={[s.segmentText, auth === mode && s.segmentTextActive]}>
+                        {mode === "anonymous"
+                          ? t("library.opds.form.anonymous", { defaultValue: "Anonymous" })
+                          : t("library.opds.form.basic", { defaultValue: "Basic sign-in" })}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              {auth === "basic" ? (
+                <>
+                  <View style={s.field}>
+                    <Text style={s.label}>
+                      {t("library.opds.form.username", { defaultValue: "Username" })}
+                    </Text>
+                    <TextInput
+                      style={s.input}
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      accessibilityLabel={t("library.opds.form.username", {
+                        defaultValue: "Username",
+                      })}
+                    />
+                  </View>
+                  <View style={s.field}>
+                    <Text style={s.label}>
+                      {t("library.opds.form.password", { defaultValue: "Password" })}
+                    </Text>
+                    <TextInput
+                      style={s.input}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder={
+                        catalog?.passwordStorage !== "none"
+                          ? t("library.opds.form.passwordUnchanged", {
+                              defaultValue: "Leave blank to keep saved password",
+                            })
+                          : undefined
+                      }
+                      placeholderTextColor={colors.mutedForeground}
+                      accessibilityLabel={t("library.opds.form.password", {
+                        defaultValue: "Password",
+                      })}
+                    />
+                    {catalog ? (
+                      <Text style={s.helper}>
+                        {catalog.passwordStorage === "persistent"
+                          ? t("library.opds.form.passwordStoredSecurely", {
+                              defaultValue: "Password saved in secure storage",
+                            })
+                          : catalog.passwordStorage === "session-only"
+                            ? t("library.opds.form.passwordSessionOnly", {
+                                defaultValue: "Password available for this session only",
+                              })
+                            : t("library.opds.form.passwordMissing", {
+                                defaultValue: "No password is saved",
+                              })}
+                      </Text>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+              <View style={s.switchRow}>
+                <View style={s.switchCopy}>
+                  <Text style={s.switchTitle}>
+                    {t("library.opds.form.enabled", { defaultValue: "Catalog enabled" })}
+                  </Text>
+                  <Text style={s.switchHint}>
+                    {t("library.opds.form.enabledHint", {
+                      defaultValue: "Disabled catalogs stay saved but cannot be browsed.",
+                    })}
+                  </Text>
+                </View>
+                <Switch
+                  value={enabled}
+                  onValueChange={setEnabled}
+                  accessibilityLabel={t("library.opds.form.enabled", {
+                    defaultValue: "Catalog enabled",
+                  })}
+                />
+              </View>
+              {error ? (
+                <View style={s.errorBox} accessibilityRole="alert">
+                  <Text style={s.errorText}>{error}</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+            <View style={s.footer}>
+              <TouchableOpacity style={[s.button, s.cancelButton]} onPress={onClose}>
+                <Text style={s.cancelText}>{t("common.cancel", { defaultValue: "Cancel" })}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.button, s.saveButton]}
+                onPress={handleSave}
+                disabled={!canSubmit}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canSubmit, busy: submitting }}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color={colors.primaryForeground} />
+                ) : null}
+                <Text style={s.saveText}>{t("common.save", { defaultValue: "Save" })}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}

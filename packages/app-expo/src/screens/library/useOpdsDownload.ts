@@ -13,7 +13,7 @@ import {
 } from "@readany/core";
 import { type IPlatformService, getPlatformService } from "@readany/core/services";
 import { generateId } from "@readany/core/utils";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type MobileImportFile, useLibraryStore } from "../../stores/library-store";
 
 type OpdsDownloadPlatform = Pick<
@@ -48,6 +48,22 @@ export interface OpdsDownloadAdapterDependencies {
 }
 
 let temporaryFileSequence = 0;
+
+export function createOpdsDownloadUnmountGuard(cancel: () => void) {
+  let mounted = true;
+  let disposed = false;
+  return {
+    runIfMounted(update: () => void): void {
+      if (mounted) update();
+    },
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      mounted = false;
+      cancel();
+    },
+  };
+}
 
 function nextTemporaryName(format: string, createId?: () => string): string {
   temporaryFileSequence += 1;
@@ -138,6 +154,9 @@ export function useOpdsDownload() {
   const importBooks = useLibraryStore((state) => state.importBooks);
   const [progress, setProgress] = useState<OpdsDownloadProgress | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const lifecycleRef = useRef<ReturnType<typeof createOpdsDownloadUnmountGuard> | undefined>(
+    undefined,
+  );
   const runner = useMemo(
     () =>
       createExclusiveOpdsDownloadRunner<
@@ -170,15 +189,30 @@ export function useOpdsDownload() {
         },
         {
           onStart: () => {
-            setIsDownloading(true);
-            setProgress(null);
+            lifecycleRef.current?.runIfMounted(() => {
+              setIsDownloading(true);
+              setProgress(null);
+            });
           },
-          onProgress: setProgress,
-          onFinish: () => setIsDownloading(false),
+          onProgress: (nextProgress) => {
+            lifecycleRef.current?.runIfMounted(() => setProgress(nextProgress));
+          },
+          onFinish: () => {
+            lifecycleRef.current?.runIfMounted(() => setIsDownloading(false));
+          },
         },
       ),
     [importBooks],
   );
+
+  useEffect(() => {
+    const lifecycle = createOpdsDownloadUnmountGuard(runner.cancel);
+    lifecycleRef.current = lifecycle;
+    return () => {
+      lifecycle.dispose();
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = undefined;
+    };
+  }, [runner]);
 
   return { download: runner.download, cancel: runner.cancel, progress, isDownloading };
 }

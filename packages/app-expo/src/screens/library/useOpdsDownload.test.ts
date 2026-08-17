@@ -7,7 +7,7 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import type { MobileImportFile } from "../../stores/library-store";
 vi.mock("../../stores/library-store", () => ({ useLibraryStore: vi.fn() }));
-import { createOpdsDownloadAdapter } from "./useOpdsDownload";
+import { createOpdsDownloadAdapter, createOpdsDownloadUnmountGuard } from "./useOpdsDownload";
 
 const selected: OpdsAcquisition = {
   rel: ["http://opds-spec.org/acquisition"],
@@ -70,6 +70,20 @@ function dependencies(overrides: Record<string, unknown> = {}) {
 }
 
 describe("mobile OPDS download adapter", () => {
+  it("cancels on unmount and suppresses later hook state updates", () => {
+    const cancel = vi.fn();
+    const update = vi.fn();
+    const lifecycle = createOpdsDownloadUnmountGuard(cancel);
+
+    lifecycle.runIfMounted(update);
+    lifecycle.dispose();
+    lifecycle.runIfMounted(update);
+    lifecycle.dispose();
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("imports through the actual mobile file signature and cleans the temp file once", async () => {
     const deps = dependencies();
     const run = createOpdsDownloadAdapter(deps as never);

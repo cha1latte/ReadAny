@@ -3,6 +3,7 @@ import {
   ChevronRightIcon,
   CloudIcon,
   GlobeIcon,
+  LibraryIcon,
 } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
@@ -35,6 +36,7 @@ interface WebDavImportSourceSheetProps {
   onPickLocal: () => void;
   onPickSavedWebDav: () => void;
   onPickTemporaryWebDav: () => void;
+  onPickOpds: () => void;
 }
 
 export function WebDavImportSourceSheet({
@@ -47,6 +49,7 @@ export function WebDavImportSourceSheet({
   onPickLocal,
   onPickSavedWebDav,
   onPickTemporaryWebDav,
+  onPickOpds,
 }: WebDavImportSourceSheetProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -66,10 +69,10 @@ export function WebDavImportSourceSheet({
     layout.width - popoverWidth - screenPadding,
   );
   const showBelow =
-    activeAnchor.y + activeAnchor.height + 12 + 230 < layout.height - screenPadding;
+    activeAnchor.y + activeAnchor.height + 12 + 284 < layout.height - screenPadding;
   const popoverTop = showBelow
     ? activeAnchor.y + activeAnchor.height + 10
-    : Math.max(screenPadding, activeAnchor.y - 230);
+    : Math.max(screenPadding, activeAnchor.y - 284);
 
   const s = useMemo(
     () =>
@@ -97,7 +100,7 @@ export function WebDavImportSourceSheet({
           elevation: 8,
         },
         options: {
-          maxHeight: 240,
+          maxHeight: 294,
         },
         optionCard: {
           paddingHorizontal: 14,
@@ -131,7 +134,7 @@ export function WebDavImportSourceSheet({
           marginHorizontal: 14,
         },
       }),
-    [colors, layout.height, popoverLeft, popoverTop, popoverWidth],
+    [colors, popoverLeft, popoverTop, popoverWidth],
   );
 
   return (
@@ -193,6 +196,27 @@ export function WebDavImportSourceSheet({
                 <View style={s.optionText}>
                   <Text style={s.optionTitle}>
                     {t("library.importSourceTemporaryWebDav", "连接其他 WebDAV")}
+                  </Text>
+                </View>
+                <ChevronRightIcon size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              <View style={s.separator} />
+
+              <TouchableOpacity
+                style={s.optionCard}
+                onPress={onPickOpds}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t("library.opds.catalogsTitle", {
+                  defaultValue: "Online catalogs",
+                })}
+              >
+                <View style={s.iconWrap}>
+                  <LibraryIcon size={18} color={colors.primary} />
+                </View>
+                <View style={s.optionText}>
+                  <Text style={s.optionTitle}>
+                    {t("library.opds.catalogsTitle", { defaultValue: "Online catalogs" })}
                   </Text>
                 </View>
                 <ChevronRightIcon size={16} color={colors.mutedForeground} />

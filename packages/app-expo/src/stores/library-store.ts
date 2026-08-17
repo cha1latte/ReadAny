@@ -4,6 +4,7 @@ import {
   extractBookMetadataFromFile,
 } from "@/lib/book/metadata-extractor";
 import { queueBook as queueAutoVectorize } from "@/lib/rag/auto-vectorize-service";
+import { getMobileVectorizeCapability } from "@/lib/rag/mobile-vectorize-capability";
 import {
   type ImportBooksResult,
   createEmptyImportBooksResult,
@@ -198,10 +199,6 @@ async function extractMobileImportMetadata(params: {
     coverBytes: null,
     coverMimeType: null,
   };
-}
-
-function shouldAutoVectorizeMobile(format: Book["format"]): boolean {
-  return format === "epub" || format === "txt" || format === "umd";
 }
 
 /**
@@ -995,14 +992,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               // successful import doesn't get reported as a failed import.
               try {
                 const vmState = useVectorModelStore.getState();
+                const vectorizeCapability = getMobileVectorizeCapability(book.format);
                 if (
                   vmState.autoVectorizeOnImport &&
                   vmState.vectorModelEnabled &&
                   vmState.hasVectorCapability() &&
-                  shouldAutoVectorizeMobile("txt")
+                  vectorizeCapability.supported
                 ) {
                   const base64 = bytesToBase64(conversion.epubBytes);
-                  queueAutoVectorize(book, base64, "application/epub+zip");
+                  queueAutoVectorize(book, base64, vectorizeCapability.mimeType);
                 }
               } catch (autoVectorizeErr) {
                 console.warn(
@@ -1116,14 +1114,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
               try {
                 const vmState = useVectorModelStore.getState();
+                const vectorizeCapability = getMobileVectorizeCapability(book.format);
                 if (
                   vmState.autoVectorizeOnImport &&
                   vmState.vectorModelEnabled &&
                   vmState.hasVectorCapability() &&
-                  shouldAutoVectorizeMobile("umd")
+                  vectorizeCapability.supported
                 ) {
                   const base64 = bytesToBase64(conversion.epubBytes);
-                  queueAutoVectorize(book, base64, "application/epub+zip");
+                  queueAutoVectorize(book, base64, vectorizeCapability.mimeType);
                 }
               } catch (autoVectorizeErr) {
                 console.warn(
@@ -1235,28 +1234,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           // successful import doesn't get reported as a failed import.
           try {
             const vmState = useVectorModelStore.getState();
+            const vectorizeCapability = getMobileVectorizeCapability(format);
             if (
               vmState.autoVectorizeOnImport &&
               vmState.vectorModelEnabled &&
               vmState.hasVectorCapability() &&
-              shouldAutoVectorizeMobile(format)
+              vectorizeCapability.supported
             ) {
               const sourceBytes = await platform.readFile(filePath);
               const base64 = bytesToBase64(sourceBytes);
-              const mimeTypes: Record<string, string> = {
-                epub: "application/epub+zip",
-                pdf: "application/pdf",
-                mobi: "application/x-mobipocket-ebook",
-                azw: "application/vnd.amazon.ebook",
-                azw3: "application/vnd.amazon.ebook",
-                cbz: "application/vnd.comicbook+zip",
-                cbr: "application/vnd.comicbook+zip",
-                fb2: "application/x-fictionbook+xml",
-                fbz: "application/x-zip-compressed-fb2",
-                txt: "text/plain",
-              };
-              const mimeType = mimeTypes[format] || "application/epub+zip";
-              queueAutoVectorize(book, base64, mimeType);
+              queueAutoVectorize(book, base64, vectorizeCapability.mimeType);
             } else if (vmState.autoVectorizeOnImport && vmState.vectorModelEnabled) {
               console.warn(
                 `[importBooks] Skip auto-vectorize for unsupported mobile import: ${fileName} (${fileSize} bytes, format=${format})`,

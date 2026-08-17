@@ -273,6 +273,56 @@ describe("OpdsCatalogStore", () => {
     await expect(store.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
   });
 
+  it("durably blocks a stale update secret across restart until cleanup succeeds", async () => {
+    const { storage, persisted, secrets, setPersisted } = createStorage();
+    const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+    await store.load();
+    await store.addCatalog({
+      name: "Original",
+      url: "https://catalog.test/opds",
+      auth: "basic",
+      username: "reader",
+      password: "original-password",
+    });
+
+    let writeAttempt = 0;
+    vi.mocked(storage.kvSetItem).mockImplementation(async (_key, value) => {
+      writeAttempt += 1;
+      if (writeAttempt === 2) throw new Error("rollback failed");
+      setPersisted(value);
+    });
+    let removeAttempt = 0;
+    vi.mocked(storage.secretRemoveItem).mockImplementation(async (key) => {
+      removeAttempt += 1;
+      if (removeAttempt <= 3) throw new Error("remove failed");
+      secrets.delete(key);
+    });
+
+    await expect(
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+    ).rejects.toThrow("Catalog update failed and rollback failed");
+
+    const failedState = JSON.parse(persisted() ?? "{}");
+    expect(failedState.customCatalogs[0].url).toBe("https://other.test/opds");
+    expect(failedState.pendingSecretCleanups).toEqual([
+      { id: CUSTOM_ID, revision: 1, action: "remove-secret" },
+    ]);
+    expect(JSON.stringify(failedState)).not.toContain("original-password");
+
+    vi.mocked(storage.secretGetItem).mockClear();
+    const reloaded = new OpdsCatalogStore(storage, () => OTHER_ID);
+    await reloaded.load();
+    expect(removeAttempt).toBe(3);
+    await expect(reloaded.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+    expect(storage.secretGetItem).not.toHaveBeenCalledWith(opdsCatalogSecretKey(CUSTOM_ID));
+
+    await reloaded.updateCatalog(CUSTOM_ID, { name: "Cleanup retried" });
+    expect(removeAttempt).toBe(4);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
+    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
+    await expect(reloaded.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+  });
+
   it("uses only the new session password when identity replacement cannot persist its secret", async () => {
     const { storage, secrets } = createStorage();
     const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
@@ -369,6 +419,154 @@ describe("OpdsCatalogStore", () => {
     expect(persisted()).toBe(before);
     expect(store.getCatalog(CUSTOM_ID)).toMatchObject({ passwordStorage: "persistent" });
     expect(secrets.get(opdsCatalogSecretKey(CUSTOM_ID))).toBe("original-password");
+  });
+
+  it("persists a deletion cleanup tombstone and removes the orphan after restart", async () => {
+    const { storage, persisted, secrets, setPersisted } = createStorage();
+    const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+    await store.load();
+    await store.addCatalog({
+      name: "Original",
+      url: "https://catalog.test/opds",
+      auth: "basic",
+      username: "reader",
+      password: "orphan-password",
+    });
+
+    let writeAttempt = 0;
+    vi.mocked(storage.kvSetItem).mockImplementation(async (_key, value) => {
+      writeAttempt += 1;
+      if (writeAttempt === 2) throw new Error("rollback failed");
+      setPersisted(value);
+    });
+    let removeAttempt = 0;
+    vi.mocked(storage.secretRemoveItem).mockImplementation(async (key) => {
+      removeAttempt += 1;
+      if (removeAttempt <= 2) throw new Error("remove failed");
+      secrets.delete(key);
+    });
+
+    await expect(store.removeCatalog(CUSTOM_ID)).rejects.toThrow(
+      "Catalog removal failed and rollback failed",
+    );
+    expect(JSON.parse(persisted() ?? "{}")).toMatchObject({
+      customCatalogs: [],
+      pendingSecretCleanups: [{ id: CUSTOM_ID, revision: 1, action: "remove-secret" }],
+    });
+    expect(secrets.get(opdsCatalogSecretKey(CUSTOM_ID))).toBe("orphan-password");
+
+    const reloaded = new OpdsCatalogStore(storage, () => OTHER_ID);
+    await reloaded.load();
+
+    expect(removeAttempt).toBe(3);
+    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
+    expect(reloaded.getCatalog(CUSTOM_ID)).toBeUndefined();
+  });
+
+  it("stays fail-closed when clearing a completed cleanup tombstone cannot persist", async () => {
+    const initial = JSON.stringify({
+      version: 1,
+      customCatalogs: [
+        {
+          id: CUSTOM_ID,
+          name: "Changed",
+          url: "https://other.test/opds",
+          enabled: true,
+          auth: "basic",
+          username: "reader",
+        },
+      ],
+      hiddenBuiltInIds: [],
+      pendingSecretCleanups: [{ id: CUSTOM_ID, revision: 7, action: "remove-secret" }],
+    });
+    const { storage, persisted, secrets, setPersisted } = createStorage(initial);
+    secrets.set(opdsCatalogSecretKey(CUSTOM_ID), "stale-password");
+    vi.mocked(storage.kvSetItem)
+      .mockImplementationOnce(async (_key, value) => setPersisted(value))
+      .mockRejectedValueOnce(new Error("cleanup marker write failed"));
+    const store = new OpdsCatalogStore(storage, () => OTHER_ID);
+
+    await expect(store.load()).rejects.toThrow("cleanup marker write failed");
+
+    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toHaveLength(1);
+    await expect(store.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+
+    await expect(store.load()).resolves.toBeUndefined();
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
+    await expect(
+      store.updateCatalog(CUSTOM_ID, { name: "Queue recovered" }),
+    ).resolves.toMatchObject({ name: "Queue recovered" });
+  });
+
+  it("sanitizes cleanup tombstones and prevents ID reuse while cleanup is pending", async () => {
+    const initial = JSON.stringify({
+      version: 1,
+      customCatalogs: [],
+      hiddenBuiltInIds: [],
+      pendingSecretCleanups: [
+        { id: CUSTOM_ID, revision: 2, action: "remove-secret" },
+        { id: CUSTOM_ID, revision: 4, action: "remove-secret" },
+        { id: "gutenberg", revision: 9, action: "remove-secret" },
+        { id: OTHER_ID, revision: -1, action: "remove-secret" },
+        { id: OTHER_ID, revision: 3, action: "restore-secret" },
+        { id: "__proto__", revision: 5, action: "remove-secret" },
+      ],
+    });
+    const { storage, persisted } = createStorage(initial);
+    vi.mocked(storage.secretRemoveItem).mockRejectedValue(new Error("still unavailable"));
+    const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+
+    await store.load();
+
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toEqual([
+      { id: CUSTOM_ID, revision: 4, action: "remove-secret" },
+    ]);
+    await expect(
+      store.addCatalog({
+        name: "Must not reuse",
+        url: "https://catalog.test/opds",
+        auth: "anonymous",
+      }),
+    ).rejects.toThrow("Could not generate a unique catalog id");
+    expect(store.getCatalog(CUSTOM_ID)).toBeUndefined();
+  });
+
+  it("serializes cleanup completion before a following edit", async () => {
+    const initial = JSON.stringify({
+      version: 1,
+      customCatalogs: [
+        {
+          id: CUSTOM_ID,
+          name: "Changed",
+          url: "https://other.test/opds",
+          enabled: true,
+          auth: "basic",
+          username: "reader",
+        },
+      ],
+      hiddenBuiltInIds: [],
+      pendingSecretCleanups: [{ id: CUSTOM_ID, revision: 3, action: "remove-secret" }],
+    });
+    const { storage, setPersisted } = createStorage(initial);
+    const removal = deferred<void>();
+    vi.mocked(storage.secretRemoveItem).mockImplementationOnce(() => removal.promise);
+    vi.mocked(storage.kvSetItem).mockImplementation(async (_key, value) => setPersisted(value));
+    const store = new OpdsCatalogStore(storage, () => OTHER_ID);
+
+    const loading = store.load();
+    await vi.waitFor(() => expect(storage.secretRemoveItem).toHaveBeenCalledTimes(1));
+    const editing = store.updateCatalog(CUSTOM_ID, { name: "After cleanup" });
+    await Promise.resolve();
+    expect(storage.kvSetItem).toHaveBeenCalledTimes(1);
+
+    removal.resolve();
+    await loading;
+    await editing;
+
+    expect(store.getCatalog(CUSTOM_ID)?.name).toBe("After cleanup");
+    expect(storage.kvSetItem).toHaveBeenCalledTimes(3);
   });
 
   it("keeps built-in visibility failure-atomic when KV persistence rejects", async () => {

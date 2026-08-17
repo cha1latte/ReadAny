@@ -75,6 +75,13 @@ interface PersistedCatalogsV1 {
   version: 1;
   customCatalogs: CustomCatalogDefinition[];
   hiddenBuiltInIds: string[];
+  pendingSecretCleanups?: PendingSecretCleanup[];
+}
+
+interface PendingSecretCleanup {
+  id: string;
+  revision: number;
+  action: "remove-secret";
 }
 
 const CUSTOM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -129,6 +136,21 @@ function normalizeCustomCatalog(value: unknown): CustomCatalogDefinition | undef
   };
 }
 
+function normalizePendingSecretCleanup(value: unknown): PendingSecretCleanup | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    typeof value.id !== "string" ||
+    !CUSTOM_ID_PATTERN.test(value.id) ||
+    builtInIds.has(value.id) ||
+    !Number.isSafeInteger(value.revision) ||
+    (value.revision as number) <= 0 ||
+    value.action !== "remove-secret"
+  ) {
+    return undefined;
+  }
+  return { id: value.id, revision: value.revision as number, action: "remove-secret" };
+}
+
 function assertCatalogInputShape(
   value: unknown,
   options: { requireDefinition: boolean },
@@ -166,6 +188,8 @@ export class OpdsCatalogStore {
   private readonly sessionPasswords = new Map<string, string>();
   private readonly passwordStorage = new Map<string, Exclude<OpdsPasswordStorage, "none">>();
   private readonly blockedPersistentPasswords = new Set<string>();
+  private pendingSecretCleanups = new Map<string, PendingSecretCleanup>();
+  private cleanupRevision = 0;
   private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(
@@ -180,7 +204,7 @@ export class OpdsCatalogStore {
   private async loadInternal(): Promise<void> {
     const raw = await this.storage.kvGetItem(OPDS_CATALOG_STORAGE_KEY);
     if (!raw) {
-      this.replaceState(new Map(), new Set(), { clearPasswords: true });
+      this.replaceState(new Map(), new Set(), new Map(), { clearPasswords: true });
       return;
     }
 
@@ -196,6 +220,7 @@ export class OpdsCatalogStore {
 
     const nextCustomCatalogs = new Map<string, CustomCatalogDefinition>();
     const nextHiddenBuiltInIds = new Set<string>();
+    const nextPendingSecretCleanups = new Map<string, PendingSecretCleanup>();
 
     if (Array.isArray(parsed.hiddenBuiltInIds)) {
       for (const id of parsed.hiddenBuiltInIds) {
@@ -211,9 +236,23 @@ export class OpdsCatalogStore {
         }
       }
     }
+    if (Array.isArray(parsed.pendingSecretCleanups)) {
+      for (const value of parsed.pendingSecretCleanups) {
+        const cleanup = normalizePendingSecretCleanup(value);
+        const existing = cleanup ? nextPendingSecretCleanups.get(cleanup.id) : undefined;
+        if (cleanup && (!existing || cleanup.revision > existing.revision)) {
+          nextPendingSecretCleanups.set(cleanup.id, cleanup);
+        }
+      }
+    }
     // Rewrite the validated projection so unknown or malicious fields do not remain in general KV.
-    await this.persistState(nextCustomCatalogs, nextHiddenBuiltInIds);
-    this.replaceState(nextCustomCatalogs, nextHiddenBuiltInIds, { clearPasswords: true });
+    await this.persistState(nextCustomCatalogs, nextHiddenBuiltInIds, nextPendingSecretCleanups);
+    this.replaceState(nextCustomCatalogs, nextHiddenBuiltInIds, nextPendingSecretCleanups, {
+      clearPasswords: true,
+    });
+    for (const id of [...nextPendingSecretCleanups.keys()]) {
+      await this.retryPendingSecretCleanup(id);
+    }
   }
 
   listCatalogs(options: { includeHidden?: boolean } = {}): OpdsCatalog[] {
@@ -240,12 +279,18 @@ export class OpdsCatalogStore {
     }
     return this.enqueueMutation(async () => {
       const id = this.createId();
+      if (this.pendingSecretCleanups.has(id)) {
+        await this.retryPendingSecretCleanup(id);
+      }
       if (!CUSTOM_ID_PATTERN.test(id) || builtInIds.has(id) || this.customCatalogs.has(id)) {
+        throw new Error("Could not generate a unique catalog id");
+      }
+      if (this.pendingSecretCleanups.has(id)) {
         throw new Error("Could not generate a unique catalog id");
       }
       const catalog = this.catalogFromInput(id, input);
       const nextCatalogs = new Map(this.customCatalogs).set(id, catalog);
-      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds, this.pendingSecretCleanups);
       if (input.password) await this.storePassword(id, input.password);
       this.customCatalogs = nextCatalogs;
       return this.toCustomCatalog(catalog);
@@ -256,6 +301,7 @@ export class OpdsCatalogStore {
     assertCatalogInputShape(update, { requireDefinition: false });
     return this.enqueueMutation(async () => {
       if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be edited");
+      await this.requirePendingSecretCleanupResolved(id);
       const current = this.customCatalogs.get(id);
       if (!current) throw new Error("Catalog not found");
 
@@ -279,7 +325,14 @@ export class OpdsCatalogStore {
         : undefined;
       const previousCatalogs = this.customCatalogs;
       const nextCatalogs = new Map(previousCatalogs).set(id, next);
-      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+      const previousPendingSecretCleanups = this.pendingSecretCleanups;
+      const nextPendingSecretCleanups =
+        credentialChanged && this.hasCompleteSecretStorage()
+          ? this.withPendingSecretCleanup(id)
+          : previousPendingSecretCleanups;
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds, nextPendingSecretCleanups);
+      this.customCatalogs = nextCatalogs;
+      this.pendingSecretCleanups = nextPendingSecretCleanups;
 
       if (credentialChanged) {
         try {
@@ -290,10 +343,12 @@ export class OpdsCatalogStore {
             previousPersistentPassword,
             previousCatalogs,
             this.hiddenBuiltInIds,
+            previousPendingSecretCleanups,
+            nextCatalogs,
+            nextPendingSecretCleanups,
             error,
             "Catalog update",
             () => {
-              this.customCatalogs = nextCatalogs;
               this.clearPasswordState(id);
               if (next.auth === "basic" && update.password) {
                 this.sessionPasswords.set(id, update.password);
@@ -304,13 +359,13 @@ export class OpdsCatalogStore {
             },
           );
         }
+        await this.clearPendingSecretCleanup(id, nextCatalogs);
         this.clearPasswordState(id);
         if (next.auth === "basic" && update.password) {
           await this.storePassword(id, update.password);
         }
       }
 
-      this.customCatalogs = nextCatalogs;
       return this.toCustomCatalog(next);
     });
   }
@@ -322,12 +377,19 @@ export class OpdsCatalogStore {
   async removeCatalog(id: string): Promise<boolean> {
     return this.enqueueMutation(async () => {
       if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be deleted");
+      await this.requirePendingSecretCleanupResolved(id);
       if (!this.customCatalogs.has(id)) return false;
       const previousPersistentPassword = await this.readPersistentPassword(id);
       const previousCatalogs = this.customCatalogs;
       const nextCatalogs = new Map(previousCatalogs);
       nextCatalogs.delete(id);
-      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+      const previousPendingSecretCleanups = this.pendingSecretCleanups;
+      const nextPendingSecretCleanups = this.hasCompleteSecretStorage()
+        ? this.withPendingSecretCleanup(id)
+        : previousPendingSecretCleanups;
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds, nextPendingSecretCleanups);
+      this.customCatalogs = nextCatalogs;
+      this.pendingSecretCleanups = nextPendingSecretCleanups;
       try {
         await this.removePersistentPassword(id);
       } catch (error) {
@@ -336,16 +398,18 @@ export class OpdsCatalogStore {
           previousPersistentPassword,
           previousCatalogs,
           this.hiddenBuiltInIds,
+          previousPendingSecretCleanups,
+          nextCatalogs,
+          nextPendingSecretCleanups,
           error,
           "Catalog removal",
           () => {
-            this.customCatalogs = nextCatalogs;
             this.clearPasswordState(id);
           },
         );
       }
+      await this.clearPendingSecretCleanup(id, nextCatalogs);
       this.clearPasswordState(id);
-      this.customCatalogs = nextCatalogs;
       return true;
     });
   }
@@ -354,7 +418,11 @@ export class OpdsCatalogStore {
     return this.enqueueMutation(async () => {
       this.requireBuiltIn(id);
       const nextHiddenBuiltInIds = new Set(this.hiddenBuiltInIds).add(id);
-      await this.persistState(this.customCatalogs, nextHiddenBuiltInIds);
+      await this.persistState(
+        this.customCatalogs,
+        nextHiddenBuiltInIds,
+        this.pendingSecretCleanups,
+      );
       this.hiddenBuiltInIds = nextHiddenBuiltInIds;
     });
   }
@@ -364,7 +432,11 @@ export class OpdsCatalogStore {
       this.requireBuiltIn(id);
       const nextHiddenBuiltInIds = new Set(this.hiddenBuiltInIds);
       nextHiddenBuiltInIds.delete(id);
-      await this.persistState(this.customCatalogs, nextHiddenBuiltInIds);
+      await this.persistState(
+        this.customCatalogs,
+        nextHiddenBuiltInIds,
+        this.pendingSecretCleanups,
+      );
       this.hiddenBuiltInIds = nextHiddenBuiltInIds;
     });
   }
@@ -377,6 +449,7 @@ export class OpdsCatalogStore {
     const { secretGetItem, secretSetItem, secretRemoveItem } = this.storage;
     if (
       !password &&
+      !this.pendingSecretCleanups.has(id) &&
       !this.blockedPersistentPasswords.has(id) &&
       secretGetItem &&
       secretSetItem &&
@@ -384,7 +457,11 @@ export class OpdsCatalogStore {
     ) {
       try {
         password = (await secretGetItem(opdsCatalogSecretKey(id))) ?? undefined;
-        if (this.customCatalogs.get(id) !== catalog || this.blockedPersistentPasswords.has(id)) {
+        if (
+          this.customCatalogs.get(id) !== catalog ||
+          this.pendingSecretCleanups.has(id) ||
+          this.blockedPersistentPasswords.has(id)
+        ) {
           return undefined;
         }
         if (password) this.passwordStorage.set(id, "persistent");
@@ -469,6 +546,9 @@ export class OpdsCatalogStore {
     previousPersistentPassword: string | null | undefined,
     customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
     hiddenBuiltInIds: ReadonlySet<string>,
+    previousPendingSecretCleanups: ReadonlyMap<string, PendingSecretCleanup>,
+    nextCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
+    nextPendingSecretCleanups: ReadonlyMap<string, PendingSecretCleanup>,
     originalError: unknown,
     operation: string,
     onRollbackFailure: () => void,
@@ -482,16 +562,19 @@ export class OpdsCatalogStore {
       }
     }
     try {
-      await this.persistState(customCatalogs, hiddenBuiltInIds);
+      await this.persistState(customCatalogs, hiddenBuiltInIds, previousPendingSecretCleanups);
     } catch {
       try {
-        await this.storage.secretRemoveItem?.(opdsCatalogSecretKey(id));
+        await this.removePersistentPassword(id);
+        await this.clearPendingSecretCleanup(id, nextCatalogs);
       } catch {
-        // The fixed compound error below reports that neither cross-store recovery path completed.
+        this.pendingSecretCleanups = new Map(nextPendingSecretCleanups);
       }
       onRollbackFailure();
       throw new Error(`${operation} failed and rollback failed`);
     }
+    this.customCatalogs = new Map(customCatalogs);
+    this.pendingSecretCleanups = new Map(previousPendingSecretCleanups);
     if (compensationFailed) {
       this.sessionPasswords.set(id, previousPersistentPassword ?? "");
       this.passwordStorage.set(id, "session-only");
@@ -504,11 +587,15 @@ export class OpdsCatalogStore {
   private async persistState(
     customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
     hiddenBuiltInIds: ReadonlySet<string>,
+    pendingSecretCleanups: ReadonlyMap<string, PendingSecretCleanup>,
   ): Promise<void> {
     const value: PersistedCatalogsV1 = {
       version: 1,
       customCatalogs: Array.from(customCatalogs.values(), (catalog) => ({ ...catalog })),
       hiddenBuiltInIds: Array.from(hiddenBuiltInIds),
+      ...(pendingSecretCleanups.size > 0
+        ? { pendingSecretCleanups: Array.from(pendingSecretCleanups.values()) }
+        : {}),
     };
     await this.storage.kvSetItem(OPDS_CATALOG_STORAGE_KEY, JSON.stringify(value));
   }
@@ -516,10 +603,16 @@ export class OpdsCatalogStore {
   private replaceState(
     customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
     hiddenBuiltInIds: ReadonlySet<string>,
+    pendingSecretCleanups: ReadonlyMap<string, PendingSecretCleanup>,
     options: { clearPasswords: boolean },
   ): void {
     this.customCatalogs = new Map(customCatalogs);
     this.hiddenBuiltInIds = new Set(hiddenBuiltInIds);
+    this.pendingSecretCleanups = new Map(pendingSecretCleanups);
+    this.cleanupRevision = Math.max(
+      this.cleanupRevision,
+      ...Array.from(pendingSecretCleanups.values(), ({ revision }) => revision),
+    );
     if (options.clearPasswords) {
       this.sessionPasswords.clear();
       this.passwordStorage.clear();
@@ -534,6 +627,52 @@ export class OpdsCatalogStore {
       () => undefined,
     );
     return result;
+  }
+
+  private hasCompleteSecretStorage(): boolean {
+    return Boolean(
+      this.storage.secretGetItem && this.storage.secretSetItem && this.storage.secretRemoveItem,
+    );
+  }
+
+  private withPendingSecretCleanup(id: string): Map<string, PendingSecretCleanup> {
+    const pending = new Map(this.pendingSecretCleanups);
+    pending.set(id, {
+      id,
+      revision: ++this.cleanupRevision,
+      action: "remove-secret",
+    });
+    return pending;
+  }
+
+  private async clearPendingSecretCleanup(
+    id: string,
+    customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
+  ): Promise<void> {
+    if (!this.pendingSecretCleanups.has(id)) return;
+    const pending = new Map(this.pendingSecretCleanups);
+    pending.delete(id);
+    await this.persistState(customCatalogs, this.hiddenBuiltInIds, pending);
+    this.pendingSecretCleanups = pending;
+    this.blockedPersistentPasswords.delete(id);
+  }
+
+  private async retryPendingSecretCleanup(id: string): Promise<boolean> {
+    if (!this.pendingSecretCleanups.has(id)) return true;
+    if (!this.hasCompleteSecretStorage()) return false;
+    try {
+      await this.removePersistentPassword(id);
+    } catch {
+      return false;
+    }
+    await this.clearPendingSecretCleanup(id, this.customCatalogs);
+    return true;
+  }
+
+  private async requirePendingSecretCleanupResolved(id: string): Promise<void> {
+    if (!this.pendingSecretCleanups.has(id)) return;
+    const resolved = await this.retryPendingSecretCleanup(id);
+    if (!resolved) throw new Error("Pending catalog secret cleanup failed");
   }
 
   private requireBuiltIn(id: string): void {
@@ -552,11 +691,15 @@ export class OpdsCatalogStore {
   }
 
   private toCustomCatalog(definition: CustomCatalogDefinition): OpdsCatalog {
+    const storage = this.passwordStorage.get(definition.id);
     return {
       ...definition,
       builtIn: false,
       hidden: false,
-      passwordStorage: this.passwordStorage.get(definition.id) ?? "none",
+      passwordStorage:
+        this.pendingSecretCleanups.has(definition.id) && storage !== "session-only"
+          ? "none"
+          : (storage ?? "none"),
     };
   }
 }

@@ -1,5 +1,5 @@
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
-import { getShlaiReleaseConfig } from "@/lib/shlai-release";
+import { getShlaiReleaseConfig, shouldShowPublicUpdateControls } from "@/lib/shlai-release";
 import { useUpdateStore } from "@/stores/update-store";
 import { getPlatformService } from "@readany/core/services";
 import { checkForUpdate } from "@readany/core/update";
@@ -50,6 +50,7 @@ export default function AboutScreen() {
   const layout = useResponsiveLayout();
   const [version, setVersion] = useState("1.0.0");
   const [checking, setChecking] = useState(false);
+  const releaseConfig = getShlaiReleaseConfig();
 
   const checkResult = useUpdateStore((s) => s.checkResult);
   const setCheckResult = useUpdateStore((s) => s.setCheckResult);
@@ -60,11 +61,12 @@ export default function AboutScreen() {
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
+    if (!releaseConfig) return;
     setChecking(true);
     try {
       const platform = getPlatformService();
       const v = await platform.getAppVersion();
-      const result = await checkForUpdate(v, platform, true, getShlaiReleaseConfig());
+      const result = await checkForUpdate(v, platform, true, releaseConfig);
       setCheckResult(result);
       if (result.hasUpdate && result.release) {
         showDialog();
@@ -76,7 +78,7 @@ export default function AboutScreen() {
     } finally {
       setChecking(false);
     }
-  }, [t, setCheckResult, showDialog]);
+  }, [t, setCheckResult, showDialog, releaseConfig]);
 
   return (
     <SafeAreaView
@@ -108,31 +110,33 @@ export default function AboutScreen() {
           </View>
 
           {/* Check for Updates */}
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.updateBtn}
-              onPress={handleCheckUpdate}
-              disabled={checking}
-              activeOpacity={0.7}
-            >
-              {checking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
-              <Text style={styles.updateBtnText}>
-                {checking ? t("settings.updateChecking") : t("settings.checkUpdate")}
-              </Text>
-            </TouchableOpacity>
-            {checkResult?.hasUpdate && checkResult.release && (
+          {shouldShowPublicUpdateControls(releaseConfig) && (
+            <View style={styles.section}>
               <TouchableOpacity
-                style={styles.updateBanner}
-                onPress={() => showDialog()}
+                style={styles.updateBtn}
+                onPress={handleCheckUpdate}
+                disabled={checking}
                 activeOpacity={0.7}
               >
-                <Text style={styles.updateBannerText}>
-                  {t("settings.newVersionAvailable", { version: checkResult.latestVersion })}
+                {checking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
+                <Text style={styles.updateBtnText}>
+                  {checking ? t("settings.updateChecking") : t("settings.checkUpdate")}
                 </Text>
-                <Text style={styles.linkArrow}>→</Text>
               </TouchableOpacity>
-            )}
-          </View>
+              {checkResult?.hasUpdate && checkResult.release && (
+                <TouchableOpacity
+                  style={styles.updateBanner}
+                  onPress={() => showDialog()}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.updateBannerText}>
+                    {t("settings.newVersionAvailable", { version: checkResult.latestVersion })}
+                  </Text>
+                  <Text style={styles.linkArrow}>→</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Tech Stack */}
           <View style={styles.section}>

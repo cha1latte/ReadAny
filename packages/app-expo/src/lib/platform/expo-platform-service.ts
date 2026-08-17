@@ -647,7 +647,9 @@ export class ExpoPlatformService implements IPlatformService {
 
   async checkUpdate() {
     try {
-      const { apiUrl, assetName, tagPrefix } = getShlaiReleaseConfig();
+      const releaseConfig = getShlaiReleaseConfig();
+      if (!releaseConfig) return null;
+      const { apiUrl, assetName, tagPrefix } = releaseConfig;
       const response = await fetch(apiUrl);
       if (!response.ok) return null;
 

@@ -9,6 +9,7 @@ const { expoFetch, secureDelete, secureGet, secureSet } = vi.hoisted(() => ({
 }));
 
 vi.mock("expo/fetch", () => ({ fetch: expoFetch }));
+vi.mock("@/lib/shlai-release", () => ({ getShlaiReleaseConfig: () => null }));
 vi.mock("@readany/core/i18n", () => ({ default: { t: (key: string) => key } }));
 vi.mock("expo-clipboard", () => ({}));
 vi.mock("expo-constants", () => ({ default: {} }));

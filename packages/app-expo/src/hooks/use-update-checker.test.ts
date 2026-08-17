@@ -66,4 +66,25 @@ describe("useUpdateChecker", () => {
     expect(setCheckResult).toHaveBeenCalledWith({ hasUpdate: true, latestVersion: "1.3.5.2" });
     expect(showDialog).toHaveBeenCalledTimes(1);
   });
+
+  it("does no platform or network work when public updates are disabled", async () => {
+    const getPlatformService = vi.fn();
+    const checkForUpdate = vi.fn();
+
+    scheduleUpdateCheck({
+      getPlatformService,
+      checkForUpdate,
+      getReleaseConfig: () => null,
+      getUpdateState: () => ({
+        dismissedVersion: null,
+        setCheckResult: vi.fn(),
+        showDialog: vi.fn(),
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(getPlatformService).not.toHaveBeenCalled();
+    expect(checkForUpdate).not.toHaveBeenCalled();
+  });
 });

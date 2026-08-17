@@ -17,7 +17,7 @@ interface ScheduleUpdateCheckOptions<TPlatform, TReleaseConfig, TResult extends 
     force: boolean,
     releaseConfig: TReleaseConfig,
   ) => Promise<TResult>;
-  getReleaseConfig: () => TReleaseConfig;
+  getReleaseConfig: () => TReleaseConfig | null;
   getUpdateState: () => UpdateCheckState<TResult>;
   onError?: (error: unknown) => void;
 }
@@ -33,14 +33,11 @@ export function scheduleUpdateCheck<
 
   const timer = setTimeout(async () => {
     try {
+      const releaseConfig = options.getReleaseConfig();
+      if (releaseConfig === null) return;
       const platform = options.getPlatformService();
       const version = await platform.getAppVersion();
-      const result = await options.checkForUpdate(
-        version,
-        platform,
-        false,
-        options.getReleaseConfig(),
-      );
+      const result = await options.checkForUpdate(version, platform, false, releaseConfig);
 
       if (cancelled) return;
 

@@ -244,6 +244,7 @@ git commit -m "feat(ci): derive Shlai preview releases"
 **Files:**
 - Modify: `packages/core/src/update/update-checker.ts`
 - Modify: `packages/core/src/update/update-checker.test.ts`
+- Modify: `packages/core/src/update/index.ts`
 - Modify: `packages/app-expo/app.config.js`
 - Modify: `packages/app-expo/src/lib/shlai-release.ts`
 - Modify: `packages/app-expo/src/lib/shlai-release.test.ts`
@@ -251,6 +252,9 @@ git commit -m "feat(ci): derive Shlai preview releases"
 - Modify: `packages/app-expo/src/hooks/use-update-checker.ts`
 - Modify: `packages/app-expo/src/hooks/use-update-checker.test.ts`
 - Modify: `packages/app-expo/src/screens/settings/AboutScreen.tsx`
+- Modify: `packages/app-expo/src/components/update/UpdateDialog.tsx`
+- Modify: `packages/app-expo/src/lib/platform/expo-platform-service.ts`
+- Modify: `packages/app-expo/src/lib/platform/expo-platform-service.test.ts`
 - Modify: `packages/app-expo/src/config/shlai-app-config.test.ts`
 
 **Interfaces:**

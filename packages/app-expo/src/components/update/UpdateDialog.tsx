@@ -30,7 +30,9 @@ export function UpdateDialog() {
   const version = release?.version ?? checkResult?.latestVersion;
 
   const apkUrl = useMemo(() => {
-    const apk = selectReleaseAsset(release?.assets, getShlaiReleaseConfig().assetName);
+    const releaseConfig = getShlaiReleaseConfig();
+    if (!releaseConfig) return null;
+    const apk = selectReleaseAsset(release?.assets, releaseConfig.assetName);
     return apk?.downloadUrl ?? null;
   }, [release]);
 

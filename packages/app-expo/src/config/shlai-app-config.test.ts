@@ -29,7 +29,10 @@ const loadExpoConfig = (variant: "development" | "preview" | "production") => {
       },
     },
   );
-  return JSON.parse(output) as { plugins: Array<string | [string, Record<string, unknown>]> };
+  return JSON.parse(output) as {
+    plugins: Array<string | [string, Record<string, unknown>]>;
+    extra: Record<string, unknown>;
+  };
 };
 
 describe("ReadAny Shlai app configuration", () => {
@@ -148,6 +151,24 @@ describe("ReadAny Shlai app configuration", () => {
         androidPackage: "io.github.cha1latte.readanyshlai",
         scheme: "readany-shlai",
       },
+    });
+  });
+
+  it("emits distinct stable and preview release channel metadata", () => {
+    expect(loadExpoConfig("preview").extra).toMatchObject({
+      appVariant: "preview",
+      releaseApiUrl: "https://api.github.com/repos/cha1latte/ReadAny/releases?per_page=100",
+      releaseTagPrefix: "shlai-preview-v",
+      releaseMode: "canonical-prerelease-list",
+      releaseAssetName: "ReadAny-Shlai-Preview.apk",
+      releaseChecksumAssetName: "ReadAny-Shlai-Preview.apk.sha256",
+    });
+    expect(loadExpoConfig("production").extra).toMatchObject({
+      appVariant: "production",
+      releaseApiUrl: "https://api.github.com/repos/cha1latte/ReadAny/releases/latest",
+      releaseTagPrefix: "shlai-v",
+      releaseMode: "single",
+      releaseAssetName: "ReadAny-Shlai.apk",
     });
   });
 

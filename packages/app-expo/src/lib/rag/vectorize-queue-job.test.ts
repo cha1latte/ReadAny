@@ -75,23 +75,61 @@ describe("runVectorizeQueueJob", () => {
     },
   );
 
-  it("treats unmount cancellation as an extraction rejection and never completes", async () => {
+  it("awaits cleanup before publishing cancellation during extraction", async () => {
+    const order: string[] = [];
+    const controller = new AbortController();
+    let releaseCleanup: (() => void) | undefined;
+    const cleanupReleased = new Promise<void>((resolve) => {
+      releaseCleanup = resolve;
+    });
+
+    const job = runVectorizeQueueJob({
+      format: "mobi",
+      signal: controller.signal,
+      extract: (signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+      vectorize: vi.fn(),
+      cleanup: async () => {
+        order.push("cleanup:start");
+        await cleanupReleased;
+        order.push("cleanup:end");
+      },
+      onEvent: (event) => order.push(event.status),
+    });
+    controller.abort();
+
+    await vi.waitFor(() => expect(order).toContain("cleanup:start"));
+    expect(order).not.toContain("cancelled");
+    releaseCleanup?.();
+    const result = await job;
+
+    expect(result).toMatchObject({ ok: false, cancelled: true });
+    expect(order).toEqual(["extracting", "cleanup:start", "cleanup:end", "cancelled"]);
+    expect(order).not.toContain("completed");
+  });
+
+  it("cancels during vectorization without publishing completion", async () => {
     const statuses: string[] = [];
+    const controller = new AbortController();
     const cleanup = vi.fn().mockResolvedValue(undefined);
 
     const result = await runVectorizeQueueJob({
       format: "mobi",
-      extract: async () => {
-        throw new Error("Extractor WebView unmounted");
+      signal: controller.signal,
+      extract: async () => [{ index: 0, title: "Chapter", content: "text", segments: [] }],
+      vectorize: async (_chapters, _onProgress, signal) => {
+        controller.abort();
+        signal.throwIfAborted();
       },
-      vectorize: vi.fn(),
       cleanup,
       onEvent: (event) => statuses.push(event.status),
     });
 
-    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ ok: false, cancelled: true });
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(statuses).toEqual(["extracting", "error"]);
+    expect(statuses).toEqual(["extracting", "vectorizing", "cancelled"]);
     expect(statuses).not.toContain("completed");
   });
 

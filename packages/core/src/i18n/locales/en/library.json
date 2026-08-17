@@ -196,6 +196,10 @@
     "vec_indexing": "Indexing...",
     "vec_processing": "Processing...",
     "vec_queued": "Queued",
+    "vec_cancel": "Cancel",
+    "vec_cancelQueued": "Cancel queued vectorization",
+    "vec_cancelling": "Cancelling…",
+    "vec_cancelled": "Cancelled",
     "manageTags": "Manage Tags",
     "remote": "Download required",
     "downloading": "Downloading"

@@ -5,7 +5,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { toBookExtractionError } from "../../lib/rag/extractor-error";
-import { createExtractorRequest } from "../../lib/rag/extractor-format";
+import { createExtractorCommand } from "../../lib/rag/extractor-format";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
 const EXTRACTION_TIMEOUT_MS = 45_000;
@@ -16,14 +16,29 @@ export interface ExtractorRef {
     mimeType?: string,
     bookFormat?: Book["format"],
     fileName?: string,
+    signal?: AbortSignal,
   ) => Promise<ChapterData[]>;
 }
 
 interface PendingExtraction {
+  requestId: string;
   resolve: (chapters: ChapterData[]) => void;
   reject: (err: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   bookFormat?: Book["format"];
+  signal?: AbortSignal;
+  abortHandler?: () => void;
+}
+
+function getAbortError(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  if (reason instanceof Error) {
+    if (reason.name !== "AbortError") reason.name = "AbortError";
+    return reason;
+  }
+  const error = new Error("Vectorization cancelled");
+  error.name = "AbortError";
+  return error;
 }
 
 export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
@@ -38,6 +53,9 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
     return () => {
       for (const pending of pendingRequests.current) {
         clearTimeout(pending.timeoutId);
+        if (pending.abortHandler) {
+          pending.signal?.removeEventListener("abort", pending.abortHandler);
+        }
         pending.reject(
           toBookExtractionError(new Error("Extractor WebView unmounted"), pending.bookFormat),
         );
@@ -67,20 +85,30 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       if (msg.type === "ready") {
         setReady(true);
       } else if (msg.type === "loaded") {
+        const pending = pendingRequests.current.find(
+          (request) => request.requestId === msg.requestId,
+        );
+        if (!pending) return;
         // Trigger extraction once the book is fully loaded
         webViewRef.current?.injectJavaScript(`
           if (window.handleExtractChapters) {
-             window.handleExtractChapters();
+             window.handleExtractChapters(${JSON.stringify(msg.requestId)});
           } else {
-             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'chaptersExtracted', error: 'Extraction not supported' }));
+             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'chaptersExtracted', requestId: ${JSON.stringify(msg.requestId)}, error: 'Extraction not supported' }));
           }
           true;
         `);
       } else if (msg.type === "chaptersExtracted") {
-        const pending = pendingRequests.current.shift();
+        const index = pendingRequests.current.findIndex(
+          (request) => request.requestId === msg.requestId,
+        );
+        const pending = index >= 0 ? pendingRequests.current.splice(index, 1)[0] : undefined;
         if (!pending) return;
 
         clearTimeout(pending.timeoutId);
+        if (pending.abortHandler) {
+          pending.signal?.removeEventListener("abort", pending.abortHandler);
+        }
         if (msg.error) {
           pending.reject(toBookExtractionError(new Error(String(msg.error)), pending.bookFormat));
         } else if (msg.chapters) {
@@ -90,9 +118,15 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         console.log("[ExtractorWebView]", msg.message);
       } else if (msg.type === "error") {
         console.error("[ExtractorWebView] WebView error:", msg.message);
-        const pending = pendingRequests.current.shift();
+        const index = pendingRequests.current.findIndex(
+          (request) => request.requestId === msg.requestId,
+        );
+        const pending = index >= 0 ? pendingRequests.current.splice(index, 1)[0] : undefined;
         if (pending) {
           clearTimeout(pending.timeoutId);
+          if (pending.abortHandler) {
+            pending.signal?.removeEventListener("abort", pending.abortHandler);
+          }
           pending.reject(toBookExtractionError(new Error(String(msg.message)), pending.bookFormat));
         }
       }
@@ -107,14 +141,19 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       mimeType = "application/epub+zip",
       bookFormat?: Book["format"],
       fileName?: string,
+      signal?: AbortSignal,
     ) => {
-      const { command, classificationFormat } = createExtractorRequest({
+      const requestId = `extract-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const baseCommand = createExtractorCommand({
         base64BookData,
         mimeType,
         bookFormat,
         fileName,
       });
+      const command = { ...baseCommand, requestId };
+      const classificationFormat = command.bookFormat ?? undefined;
       return new Promise<ChapterData[]>((resolve, reject) => {
+        if (signal?.aborted) return reject(getAbortError(signal));
         if (!ready || !webViewRef.current) {
           return reject(
             toBookExtractionError(new Error("Extractor WebView not ready"), classificationFormat),
@@ -124,6 +163,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         const timeoutId = setTimeout(() => {
           const index = pendingRequests.current.findIndex((pending) => pending.reject === reject);
           if (index >= 0) pendingRequests.current.splice(index, 1);
+          signal?.removeEventListener("abort", abortHandler);
           reject(
             toBookExtractionError(
               new Error("Timed out extracting book content"),
@@ -132,13 +172,29 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           );
         }, EXTRACTION_TIMEOUT_MS);
 
-        const pendingRequest = {
+        const abortHandler = () => {
+          clearTimeout(timeoutId);
+          const index = pendingRequests.current.indexOf(pendingRequest);
+          if (index >= 0) pendingRequests.current.splice(index, 1);
+          webViewRef.current?.injectJavaScript(`
+            window.postMessage(${JSON.stringify(
+              JSON.stringify({ type: "cancelExtraction", requestId }),
+            )}, "*");
+            true;
+          `);
+          reject(getAbortError(signal as AbortSignal));
+        };
+        const pendingRequest: PendingExtraction = {
+          requestId,
           resolve,
           reject,
           timeoutId,
           bookFormat: classificationFormat,
+          signal,
+          abortHandler,
         };
         pendingRequests.current.push(pendingRequest);
+        signal?.addEventListener("abort", abortHandler, { once: true });
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
@@ -151,6 +207,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           clearTimeout(timeoutId);
           const index = pendingRequests.current.indexOf(pendingRequest);
           if (index >= 0) pendingRequests.current.splice(index, 1);
+          signal?.removeEventListener("abort", abortHandler);
           reject(toBookExtractionError(error, classificationFormat));
         }
       });

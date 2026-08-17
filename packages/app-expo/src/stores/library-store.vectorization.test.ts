@@ -110,4 +110,24 @@ describe("library store strict vectorization updates", () => {
     expect(mocks.debouncedSave).not.toHaveBeenCalled();
     unsubscribe();
   });
+
+  it("clears visible and cached indexed state when the durable cleanup write rejects", async () => {
+    useLibraryStore.getState().setBooks([{ ...book, isVectorized: true, vectorizeProgress: 1 }]);
+    mocks.updateBook.mockRejectedValue(new Error("database write failed"));
+
+    await expect(useLibraryStore.getState().resetBookVectorizationState("book-1")).rejects.toThrow(
+      "database write failed",
+    );
+
+    expect(useLibraryStore.getState().books[0]).toMatchObject({
+      isVectorized: false,
+      vectorizeProgress: 0,
+    });
+    expect(mocks.debouncedSave).toHaveBeenCalledWith(
+      "library-books",
+      expect.arrayContaining([
+        expect.objectContaining({ id: "book-1", isVectorized: false, vectorizeProgress: 0 }),
+      ]),
+    );
+  });
 });

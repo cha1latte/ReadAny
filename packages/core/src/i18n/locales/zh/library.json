@@ -196,6 +196,10 @@
     "vec_indexing": "入库中...",
     "vec_processing": "处理中...",
     "vec_queued": "排队中",
+    "vec_cancel": "取消",
+    "vec_cancelQueued": "取消排队中的向量化",
+    "vec_cancelling": "正在取消…",
+    "vec_cancelled": "已取消",
     "manageTags": "管理标签",
     "remote": "需下载",
     "downloading": "下载中"

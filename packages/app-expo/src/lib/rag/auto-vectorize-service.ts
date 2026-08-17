@@ -1,7 +1,7 @@
 import type { ChapterData } from "@readany/core/rag";
 import type { Book } from "@readany/core/types";
 import type { BookExtractionErrorCategory } from "./extractor-error";
-import { runVectorizeQueueJob } from "./vectorize-queue-job";
+import { runVectorizeQueueJob, throwIfQueueJobAborted } from "./vectorize-queue-job";
 
 export type AutoVectorizeCallback = (
   bookId: string,
@@ -14,6 +14,7 @@ interface ExtractorRef {
     mimeType?: string,
     bookFormat?: Book["format"],
     fileName?: string,
+    signal?: AbortSignal,
   ) => Promise<ChapterData[]>;
 }
 
@@ -66,16 +67,29 @@ async function processQueue() {
 
       await runVectorizeQueueJob<number>({
         format: book.format,
-        extract: async () => {
+        extract: async (signal) => {
+          throwIfQueueJobAborted(signal);
           if (!extractorRef) throw new Error("Extractor WebView not ready");
-          return extractorRef.extractChapters(base64Data, mimeType, book.format, book.filePath);
+          return extractorRef.extractChapters(
+            base64Data,
+            mimeType,
+            book.format,
+            book.filePath,
+            signal,
+          );
         },
-        vectorize: async (chapters, onProgress) => {
-          await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
-            const pct =
-              progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
-            onProgress?.(pct);
-          });
+        vectorize: async (chapters, onProgress, signal) => {
+          await triggerVectorizeBook(
+            book.id,
+            book.filePath,
+            chapters,
+            (progress) => {
+              const pct =
+                progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
+              onProgress?.(pct);
+            },
+            signal,
+          );
         },
         cleanup: () => resetBookVectorization(book.id),
         onEvent: (event) => {
@@ -85,6 +99,8 @@ async function processQueue() {
             callback?.(book.id, { status: "vectorizing", progress: event.progress ?? 0 });
           } else if (event.status === "completed") {
             callback?.(book.id, { status: "completed", progress: 1 });
+          } else if (event.status === "cancelled") {
+            callback?.(book.id, { status: "cancelled", progress: 0 });
           } else {
             console.error(`[AutoVectorize] Failed for ${book.meta.title}:`, event.error);
             if (event.cleanupError) {

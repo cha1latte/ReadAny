@@ -54,6 +54,7 @@ interface BookCardProps {
   onShowDetails?: (book: Book) => void;
   onManageTags?: (book: Book) => void;
   onVectorize?: (book: Book) => void;
+  onCancelVectorize?: (bookId: string) => void;
   isVectorizing?: boolean;
   isQueued?: boolean;
   vectorProgress?: { status: string; processedChunks: number; totalChunks: number } | null;
@@ -72,6 +73,7 @@ export const BookCard = memo(function BookCard({
   onShowDetails,
   onManageTags,
   onVectorize,
+  onCancelVectorize,
   isVectorizing,
   isQueued,
   vectorProgress,
@@ -288,30 +290,58 @@ export const BookCard = memo(function BookCard({
 
           {/* Vectorization progress overlay */}
           {isVectorizing && (
-            <View style={s.vecOverlay}>
-              <AnimatedLoader />
+            <TouchableOpacity
+              style={s.vecOverlay}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t("home.vec_cancel", "Cancel vectorization")}
+              disabled={vectorProgress?.status === "cancelling"}
+              onPress={(event) => {
+                event.stopPropagation();
+                onCancelVectorize?.(book.id);
+              }}
+            >
+              {vectorProgress?.status !== "cancelled" && <AnimatedLoader />}
               <Text style={s.vecOverlayText}>
-                {vectorProgress?.status === "chunking"
-                  ? `${vecPct}%`
-                  : vectorProgress?.status === "embedding"
-                    ? `${vecPct}%`
-                    : vectorProgress?.status === "indexing"
-                      ? t("home.vec_indexing")
-                      : vectorProgress?.status === "completed"
-                        ? "✓"
-                        : vectorProgress?.status === "error"
-                          ? "✗"
-                          : t("home.vec_processing")}
+                {vectorProgress?.status === "cancelling"
+                  ? t("home.vec_cancelling", "Cancelling…")
+                  : vectorProgress?.status === "cancelled"
+                    ? t("home.vec_cancelled", "Cancelled")
+                    : vectorProgress?.status === "chunking"
+                      ? `${vecPct}%`
+                      : vectorProgress?.status === "embedding"
+                        ? `${vecPct}%`
+                        : vectorProgress?.status === "indexing"
+                          ? t("home.vec_indexing")
+                          : vectorProgress?.status === "completed"
+                            ? "✓"
+                            : vectorProgress?.status === "error"
+                              ? "✗"
+                              : t("home.vec_processing")}
               </Text>
-            </View>
+              {vectorProgress?.status !== "cancelling" &&
+                vectorProgress?.status !== "cancelled" && (
+                  <Text style={s.vecOverlayText}>{t("home.vec_cancel", "Cancel")}</Text>
+                )}
+            </TouchableOpacity>
           )}
 
           {/* Queued overlay */}
           {isQueued && !isVectorizing && (
-            <View style={s.queuedOverlay}>
+            <TouchableOpacity
+              style={s.queuedOverlay}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t("home.vec_cancelQueued", "Cancel queued vectorization")}
+              onPress={(event) => {
+                event.stopPropagation();
+                onCancelVectorize?.(book.id);
+              }}
+            >
               <ClockIcon size={20} color="#fff" />
               <Text style={s.queuedOverlayText}>{t("home.vec_queued", "排队中")}</Text>
-            </View>
+              <Text style={s.queuedOverlayText}>{t("home.vec_cancel", "Cancel")}</Text>
+            </TouchableOpacity>
           )}
 
           {/* Remote status overlay (on-demand download) */}

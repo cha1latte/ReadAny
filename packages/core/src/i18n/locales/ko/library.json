@@ -182,6 +182,10 @@
     "vec_indexing": "인덱싱 중...",
     "vec_processing": "처리 중...",
     "vec_queued": "대기 중",
+    "vec_cancel": "취소",
+    "vec_cancelQueued": "대기 중인 벡터화 취소",
+    "vec_cancelling": "취소 중…",
+    "vec_cancelled": "취소됨",
     "manageTags": "태그 관리",
     "remote": "다운로드 필요",
     "downloading": "다운로드 중"

@@ -233,9 +233,8 @@ export function LibraryScreen() {
     onSuccess: () => {},
   });
 
-  const { vectorQueue, vectorizingBookId, vectorProgress, handleVectorize } = useVectorizationQueue(
-    { extractorRef, nav },
-  );
+  const { vectorQueue, vectorizingBookId, vectorProgress, handleVectorize, cancelVectorize } =
+    useVectorizationQueue({ extractorRef, nav });
 
   const openSearch = useCallback(() => {
     setShowSearch(true);
@@ -768,6 +767,7 @@ export function LibraryScreen() {
             onShowDetails={handleShowDetails}
             onManageTags={handleManageTags}
             onVectorize={handleVectorize}
+            onCancelVectorize={cancelVectorize}
             isVectorizing={vectorizingBookId === item.book.id}
             isQueued={vectorQueue.some((b) => b.id === item.book.id)}
             vectorProgress={vectorizingBookId === item.book.id ? vectorProgress : null}
@@ -788,6 +788,7 @@ export function LibraryScreen() {
       handleShowDetails,
       handleOpen,
       handleVectorize,
+      cancelVectorize,
       removeBook,
       s.gridItem,
       selectedBookIds,

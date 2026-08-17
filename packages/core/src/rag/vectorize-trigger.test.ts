@@ -239,4 +239,80 @@ describe("failed vectorization cleanup", () => {
       chunksCount: 1,
     });
   });
+
+  it("cancels after a partial chunk write and removes every searchable residue", async () => {
+    const controller = new AbortController();
+    const chapters = Array.from({ length: 51 }, (_, index) => ({
+      index,
+      title: `Chapter ${index}`,
+      content: "content",
+    }));
+    databaseMocks.insertChunks.mockImplementationOnce(async () => {
+      controller.abort();
+    });
+
+    await expect(
+      triggerVectorizeBook(
+        "book-1",
+        chapters,
+        {
+          vectorModelEnabled: true,
+          vectorModelMode: "remote",
+          selectedBuiltinModelId: null,
+          remoteModel: {
+            url: "https://example.com/v1/embeddings",
+            apiKey: "test",
+            modelId: "test-model",
+          },
+        },
+        { onBookUpdate: vi.fn() },
+        undefined,
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(databaseMocks.insertChunks).toHaveBeenCalledOnce();
+    expect(databaseMocks.deleteChunks).toHaveBeenCalledTimes(2);
+    expect(databaseMocks.deleteVectorIndexProvenance).toHaveBeenCalledTimes(2);
+    expect(vectorDatabaseMocks.deleteByBookId).toHaveBeenCalledOnce();
+    expect(databaseMocks.setVectorIndexProvenance).not.toHaveBeenCalled();
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+  });
+
+  it("stops between embedding batches when cancelled", async () => {
+    const controller = new AbortController();
+    remoteEmbeddingMocks.requestRemoteEmbeddingBatch.mockImplementationOnce(async () => {
+      controller.abort();
+      return { ok: true, embeddings: Array.from({ length: 8 }, () => [0.1, 0.2]) };
+    });
+
+    await expect(
+      triggerVectorizeBook(
+        "book-1",
+        Array.from({ length: 9 }, (_, index) => ({
+          index,
+          title: `Chapter ${index}`,
+          content: "content",
+        })),
+        {
+          vectorModelEnabled: true,
+          vectorModelMode: "remote",
+          selectedBuiltinModelId: null,
+          remoteModel: {
+            url: "https://example.com/v1/embeddings",
+            apiKey: "test",
+            modelId: "test-model",
+          },
+        },
+        { onBookUpdate: vi.fn() },
+        undefined,
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(remoteEmbeddingMocks.requestRemoteEmbeddingBatch).toHaveBeenCalledOnce();
+    expect(databaseMocks.insertChunks).not.toHaveBeenCalled();
+    expect(databaseMocks.setVectorIndexProvenance).not.toHaveBeenCalled();
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+  });
 });

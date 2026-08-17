@@ -182,6 +182,10 @@
     "vec_indexing": "Indexando...",
     "vec_processing": "Procesando...",
     "vec_queued": "En cola",
+    "vec_cancel": "Cancelar",
+    "vec_cancelQueued": "Cancelar vectorización en cola",
+    "vec_cancelling": "Cancelando…",
+    "vec_cancelled": "Cancelado",
     "manageTags": "Administrar etiquetas",
     "remote": "Requiere descarga",
     "downloading": "Descargando"

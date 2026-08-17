@@ -212,6 +212,7 @@
     let bookTextMetricsTimer = null;
     let bookmarkPullGestureActive = false;
     let pullBookmarkResetTimer = null;
+    const cancelledExtractionRequests = new Set();
     let refreshAnnotationsTimer = null;
     let activeFootnoteTipKey = null;
     let bookmarkPullStateMeta = {
@@ -1368,6 +1369,9 @@
         case 'extractBookChapters':
           await handleExtractBookChapters(msg);
           break;
+        case 'cancelExtraction':
+          if (msg.requestId) cancelledExtractionRequests.add(msg.requestId);
+          break;
         case 'getChapterParagraphs':
           handleGetChapterParagraphs();
           break;
@@ -1443,12 +1447,13 @@
       }
 
       try {
+        throwIfExtractionCancelled(msg.requestId);
         let hasSignalledLoaded = false;
         const markLoaded = () => {
           if (loading) loading.classList.add('hidden');
           if (!hasSignalledLoaded) {
             hasSignalledLoaded = true;
-            postToRN('loaded', {});
+            postToRN('loaded', { requestId: msg.requestId });
           }
         };
 
@@ -1557,6 +1562,7 @@
         }
 
         const book = (file && file.sections) ? file : await makeBook(file);
+        throwIfExtractionCancelled(msg.requestId);
         currentBook = book;
         attachBookTransformHandler(book);
 
@@ -1797,7 +1803,8 @@
         console.error('[WebView] Error in openBook:', err);
         const message = `${String(err)}${msg?.uri ? ` (${msg.uri})` : ''}`;
         loading.innerHTML = '<div class="error-text">' + escapeHtml(message) + '</div>';
-        postToRN('error', { message });
+        postToRN('error', { message, requestId: msg.requestId });
+        cancelledExtractionRequests.delete(msg.requestId);
       }
     }
 
@@ -4271,7 +4278,9 @@ a { color: ${primary} !important; }
     }
 
     async function handleExtractBookChapters(msg) {
+      const requestId = msg.requestId;
       try {
+        throwIfExtractionCancelled(requestId);
         if (isPDFBookMessage(msg)) {
           if (typeof window._extractPDFChapters !== 'function') {
             throw new Error('PDF extraction is not available in this reader build');
@@ -4291,6 +4300,7 @@ a { color: ${primary} !important; }
               postToRN('debug', { message: `[PDFExtract] page ${JSON.stringify(detail)}` });
             }
           });
+          throwIfExtractionCancelled(requestId);
 
           postToRN('debug', {
             message: `[PDFExtract] done ${JSON.stringify({
@@ -4300,25 +4310,36 @@ a { color: ${primary} !important; }
             })}`
           });
 
-          postToRN('chaptersExtracted', { chapters });
+          postToRN('chaptersExtracted', { requestId, chapters });
           return;
         }
 
         currentBook = await makeBook(await createBookFileFromMessage(msg));
-        await handleExtractChapters();
+        throwIfExtractionCancelled(requestId);
+        await handleExtractChapters(requestId);
       } catch (err) {
         console.error('[WebView] Error extracting book chapters:', err);
-        postToRN('chaptersExtracted', { error: String(err) });
+        postToRN('chaptersExtracted', { requestId, error: String(err) });
+      } finally {
+        cancelledExtractionRequests.delete(requestId);
       }
     }
 
-    async function handleExtractChapters() {
+    function throwIfExtractionCancelled(requestId) {
+      if (!requestId || !cancelledExtractionRequests.has(requestId)) return;
+      const error = new Error('Vectorization cancelled');
+      error.name = 'AbortError';
+      throw error;
+    }
+
+    async function handleExtractChapters(requestId) {
       if (!currentBook) {
-        postToRN('chaptersExtracted', { error: 'No book loaded' });
+        postToRN('chaptersExtracted', { requestId, error: 'No book loaded' });
         return;
       }
 
       try {
+        throwIfExtractionCancelled(requestId);
         const sections = currentBook.sections || [];
         const toc = currentBook.toc || [];
 
@@ -4345,6 +4366,7 @@ a { color: ${primary} !important; }
         let skippedNoCreateDocument = 0;
 
         for (let i = 0; i < sections.length; i++) {
+          throwIfExtractionCancelled(requestId);
           const section = sections[i];
           if (!section.createDocument) {
             skippedNoCreateDocument += 1;
@@ -4353,6 +4375,7 @@ a { color: ${primary} !important; }
 
           try {
             const doc = await section.createDocument();
+            throwIfExtractionCancelled(requestId);
             if (!doc.body) continue;
 
             const title = tocMap.get(i) || tocMap.get(section.href || "") || `Section ${i + 1}`;
@@ -4386,10 +4409,12 @@ a { color: ${primary} !important; }
           skippedNoCreateDocument
         });
 
-        postToRN('chaptersExtracted', { chapters });
+        postToRN('chaptersExtracted', { requestId, chapters });
       } catch (err) {
         console.error('[WebView] Error extracting chapters:', err);
-        postToRN('chaptersExtracted', { error: String(err) });
+        postToRN('chaptersExtracted', { requestId, error: String(err) });
+      } finally {
+        cancelledExtractionRequests.delete(requestId);
       }
     }
 

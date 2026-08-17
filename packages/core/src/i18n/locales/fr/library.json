@@ -182,6 +182,10 @@
     "vec_indexing": "Indexation...",
     "vec_processing": "Traitement...",
     "vec_queued": "En file d'attente",
+    "vec_cancel": "Annuler",
+    "vec_cancelQueued": "Annuler la vectorisation en attente",
+    "vec_cancelling": "Annulation…",
+    "vec_cancelled": "Annulée",
     "manageTags": "Gérer les tags",
     "remote": "Téléchargement requis",
     "downloading": "Téléchargement"

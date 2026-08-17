@@ -15,6 +15,7 @@ export type { VectorizeStatusCallback };
 export async function resetBookVectorization(bookId: string): Promise<void> {
   await coreResetBookVectorization(bookId, {
     onBookUpdate: useLibraryStore.getState().updateBookStrict,
+    onBookReset: useLibraryStore.getState().resetBookVectorizationState,
   });
 }
 
@@ -23,6 +24,7 @@ export async function triggerVectorizeBook(
   _filePath: string,
   chapters: ChapterData[],
   onProgress?: VectorizeStatusCallback,
+  signal?: AbortSignal,
 ): Promise<void> {
   const vmState = useVectorModelStore.getState();
 
@@ -45,8 +47,9 @@ export async function triggerVectorizeBook(
   // 2. Build callbacks for state updates
   const callbacks = {
     onBookUpdate: useLibraryStore.getState().updateBookStrict,
+    onBookReset: useLibraryStore.getState().resetBookVectorizationState,
   };
 
   // 3. Delegate to core vectorization pipeline which does the chunking & embedding
-  await coreTriggerVectorizeBook(bookId, chapters, config, callbacks, onProgress);
+  await coreTriggerVectorizeBook(bookId, chapters, config, callbacks, onProgress, signal);
 }

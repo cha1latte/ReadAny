@@ -77,6 +77,7 @@ export interface LibraryState {
   removeBook: (bookId: string, options?: RemoveBookOptions) => Promise<void>;
   updateBook: (bookId: string, updates: Partial<Book>) => Promise<void>;
   updateBookStrict: (bookId: string, updates: Partial<Book>) => Promise<void>;
+  resetBookVectorizationState: (bookId: string) => Promise<void>;
   setFilter: (filter: Partial<LibraryFilter>) => void;
   setViewMode: (mode: LibraryViewMode) => void;
   setSortField: (field: SortField) => void;
@@ -838,6 +839,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           : state.allTags,
     }));
     debouncedSave("library-books", get().books);
+  },
+
+  resetBookVectorizationState: async (bookId) => {
+    const reset = { isVectorized: false, vectorizeProgress: 0 } as const;
+    let persistenceError: unknown;
+    try {
+      await persistBookUpdate(bookId, reset);
+    } catch (error) {
+      persistenceError = error;
+    }
+    set((state) => ({
+      books: state.books.map((book) => (book.id === bookId ? { ...book, ...reset } : book)),
+    }));
+    debouncedSave("library-books", get().books);
+    if (persistenceError) throw persistenceError;
   },
 
   setFilter: (filter) => set((state) => ({ filter: { ...state.filter, ...filter } })),

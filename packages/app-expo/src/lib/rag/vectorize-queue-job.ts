@@ -9,6 +9,7 @@ export type VectorizeQueueJobEvent<Progress> =
   | { status: "extracting" }
   | { status: "vectorizing"; progress?: Progress }
   | { status: "completed" }
+  | { status: "cancelled" }
   | {
       status: "error";
       error: unknown;
@@ -18,14 +19,39 @@ export type VectorizeQueueJobEvent<Progress> =
 
 export type VectorizeQueueJobResult =
   | { ok: true }
-  | { ok: false; error: unknown; cleanupError?: unknown };
+  | { ok: false; error: unknown; cancelled?: boolean; cleanupError?: unknown };
 
 interface VectorizeQueueJobOptions<Progress> {
   format?: string;
-  extract: () => Promise<ChapterData[]>;
-  vectorize: (chapters: ChapterData[], onProgress?: (progress: Progress) => void) => Promise<void>;
+  signal?: AbortSignal;
+  extract: (signal: AbortSignal) => Promise<ChapterData[]>;
+  vectorize: (
+    chapters: ChapterData[],
+    onProgress: ((progress: Progress) => void) | undefined,
+    signal: AbortSignal,
+  ) => Promise<void>;
   cleanup: () => Promise<void>;
   onEvent: (event: VectorizeQueueJobEvent<Progress>) => void;
+}
+
+function createFallbackSignal(): AbortSignal {
+  return new AbortController().signal;
+}
+
+export function throwIfQueueJobAborted(signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  const reason = signal.reason;
+  if (reason instanceof Error) {
+    if (reason.name !== "AbortError") reason.name = "AbortError";
+    throw reason;
+  }
+  const error = new Error("Vectorization cancelled");
+  error.name = "AbortError";
+  throw error;
+}
+
+function isAbortFailure(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted || (error instanceof Error && error.name === "AbortError");
 }
 
 function isCompletedProgress(progress: unknown): boolean {
@@ -41,25 +67,34 @@ export async function runVectorizeQueueJob<Progress>(
   options: VectorizeQueueJobOptions<Progress>,
 ): Promise<VectorizeQueueJobResult> {
   let phase: "extracting" | "vectorizing" = "extracting";
+  const signal = options.signal ?? createFallbackSignal();
   options.onEvent({ status: "extracting" });
 
   try {
-    const chapters = await options.extract();
+    throwIfQueueJobAborted(signal);
+    const chapters = await options.extract(signal);
+    throwIfQueueJobAborted(signal);
     if (!chapters.length) {
       throw toBookExtractionError(new Error("No chapters extracted from book"), options.format);
     }
 
     phase = "vectorizing";
     options.onEvent({ status: "vectorizing" });
-    await options.vectorize(chapters, (progress) => {
-      if (!isCompletedProgress(progress)) {
-        options.onEvent({ status: "vectorizing", progress });
-      }
-    });
+    await options.vectorize(
+      chapters,
+      (progress) => {
+        if (!isCompletedProgress(progress)) {
+          options.onEvent({ status: "vectorizing", progress });
+        }
+      },
+      signal,
+    );
+    throwIfQueueJobAborted(signal);
 
     options.onEvent({ status: "completed" });
     return { ok: true };
   } catch (error) {
+    const cancelled = isAbortFailure(error, signal);
     const failure = phase === "extracting" ? toBookExtractionError(error, options.format) : error;
     let cleanupError: unknown;
     try {
@@ -68,14 +103,18 @@ export async function runVectorizeQueueJob<Progress>(
       cleanupError = errorDuringCleanup;
     }
 
-    options.onEvent({
-      status: "error",
-      error: failure,
-      errorCategory: failure instanceof BookExtractionError ? failure.category : undefined,
-      cleanupError,
-    });
+    if (cancelled) {
+      options.onEvent({ status: "cancelled" });
+    } else {
+      options.onEvent({
+        status: "error",
+        error: failure,
+        errorCategory: failure instanceof BookExtractionError ? failure.category : undefined,
+        cleanupError,
+      });
+    }
     return cleanupError
-      ? { ok: false, error: failure, cleanupError }
-      : { ok: false, error: failure };
+      ? { ok: false, error: failure, cancelled, cleanupError }
+      : { ok: false, error: failure, cancelled };
   }
 }

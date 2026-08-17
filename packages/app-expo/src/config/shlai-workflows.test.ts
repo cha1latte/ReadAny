@@ -6,6 +6,8 @@ import { parse } from "yaml";
 const root = resolve(import.meta.dirname, "../../../..");
 const readWorkflow = (name: string) =>
   readFileSync(resolve(root, ".github/workflows", name), "utf8").replaceAll("\r\n", "\n");
+const readShlaiDoc = (name: string) =>
+  readFileSync(resolve(root, "docs/readany-shlai", name), "utf8").replaceAll("\r\n", "\n");
 
 type WorkflowStep = {
   name?: string;
@@ -1463,6 +1465,27 @@ const unsafeReleaseMutations = [
 ] as const;
 
 describe("ReadAny Shlai workflows", () => {
+  it("documents the shared Shlai phone update channel", () => {
+    const source = readShlaiDoc("phone-updates.md");
+    for (const requiredText of [
+      "io.github.cha1latte.readanyshlai.preview",
+      "https://github.com/cha1latte/ReadAny/releases",
+      "shlai-preview-v",
+      "ReadAny-Shlai-Preview.apk",
+      "ReadAny-Shlai-Preview.apk.sha256",
+      'sha256sum --check "ReadAny-Shlai-Preview.apk.sha256"',
+      "Android always requires a person to confirm Install",
+      "Only a successful build from `cha1latte/ReadAny:main` publishes",
+      "Never use a pull-request artifact as Decidetto's permanent installation",
+      "Do not uninstall the app before updating",
+      "public preview signing certificate",
+      "higher Android `versionCode`",
+      "Decidetto",
+    ]) {
+      expect(source).toContain(requiredText);
+    }
+  });
+
   it("pins every third-party action in Shlai workflows", () => {
     for (const name of [
       "shlai-pr.yml",

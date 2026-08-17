@@ -109,16 +109,49 @@ export function createOpdsCoverCache({
   load,
   maxEntries,
   maxBytes,
+  maxConcurrentLoads = 4,
 }: {
   load(url: string, signal: AbortSignal): Promise<OpdsCoverValue>;
   maxEntries: number;
   maxBytes: number;
+  maxConcurrentLoads?: number;
 }) {
   const entries = new Map<string, CacheEntry>();
   const inFlight = new Map<string, InFlightEntry>();
   let sourceBytes = 0;
   let clock = 0;
   let generation = 0;
+  let activeLoads = 0;
+  const queuedLoads: Array<() => void> = [];
+
+  const runQueuedLoads = () => {
+    const limit = Math.max(1, maxConcurrentLoads);
+    while (activeLoads < limit) {
+      const start = queuedLoads.shift();
+      if (!start) return;
+      activeLoads += 1;
+      start();
+    }
+  };
+
+  const scheduleLoad = (url: string, signal: AbortSignal): Promise<OpdsCoverValue> =>
+    new Promise((resolve, reject) => {
+      queuedLoads.push(() => {
+        if (signal.aborted) {
+          activeLoads -= 1;
+          reject(new Error("cancelled"));
+          runQueuedLoads();
+          return;
+        }
+        void load(url, signal)
+          .then(resolve, reject)
+          .finally(() => {
+            activeLoads -= 1;
+            runQueuedLoads();
+          });
+      });
+      runQueuedLoads();
+    });
 
   const evict = () => {
     while (entries.size > maxEntries || sourceBytes > maxBytes) {
@@ -157,7 +190,7 @@ export function createOpdsCoverCache({
       let pending = inFlight.get(url);
       if (!pending) {
         const controller = new AbortController();
-        const promise = load(url, controller.signal).finally(() => {
+        const promise = scheduleLoad(url, controller.signal).finally(() => {
           if (inFlight.get(url)?.promise === promise) inFlight.delete(url);
         });
         pending = { controller, promise, waiters: 0 };
@@ -177,10 +210,19 @@ export function createOpdsCoverCache({
         if (acquisitionGeneration !== generation) throw new Error("cancelled");
         let entry = entries.get(url);
         if (!entry && value.byteLength <= maxBytes && maxEntries > 0) {
-          entry = { ...value, references: 0, lastUsed: ++clock };
-          entries.set(url, entry);
-          sourceBytes += value.byteLength;
-          evict();
+          while (entries.size >= maxEntries || sourceBytes + value.byteLength > maxBytes) {
+            const candidate = [...entries.entries()]
+              .filter(([, cached]) => cached.references === 0)
+              .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
+            if (!candidate) break;
+            entries.delete(candidate[0]);
+            sourceBytes -= candidate[1].byteLength;
+          }
+          if (entries.size < maxEntries && sourceBytes + value.byteLength <= maxBytes) {
+            entry = { ...value, references: 0, lastUsed: ++clock };
+            entries.set(url, entry);
+            sourceBytes += value.byteLength;
+          }
         }
         return entry ? lease(entry) : { uri: value.uri, release() {} };
       } finally {

@@ -45,7 +45,7 @@ describe("sanitizeOpdsDescription", () => {
         `<a href="${href}" title="removed">Book</a>`,
         "https://catalog.test/root/feed",
       ),
-    ).toBe(`<a href="${expected}">Book</a>`);
+    ).toBe(`<a href="${expected}" target="_blank" rel="noopener noreferrer">Book</a>`);
   });
 
   it.each([
@@ -81,7 +81,7 @@ describe("sanitizeOpdsDescription", () => {
       expect(ALLOWED_ELEMENTS.has(element.localName)).toBe(true);
       for (const attribute of Array.from(element.attributes)) {
         expect(element.localName).toBe("a");
-        expect(attribute.name).toBe("href");
+        expect(["href", "target", "rel"]).toContain(attribute.name);
       }
       const href = element.getAttribute("href");
       if (href) expect(["http:", "https:"]).toContain(new URL(href).protocol);

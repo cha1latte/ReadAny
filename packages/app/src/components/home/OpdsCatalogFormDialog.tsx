@@ -117,7 +117,10 @@ export function OpdsCatalogFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-32px)] w-[min(92vw,620px)] max-w-none overflow-y-auto">
+      <DialogContent
+        closeLabel={t("library.opds.close")}
+        className="max-h-[calc(100vh-32px)] w-[min(92vw,620px)] max-w-none overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>
             {catalog ? t("library.opds.form.editTitle") : t("library.opds.form.addTitle")}
@@ -206,6 +209,8 @@ export function OpdsCatalogFormDialog({
                   autoComplete="new-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
+                  showPasswordLabel={t("library.opds.showPassword")}
+                  hidePasswordLabel={t("library.opds.hidePassword")}
                   placeholder={
                     catalog && hasPassword ? t("library.opds.form.passwordUnchanged") : undefined
                   }

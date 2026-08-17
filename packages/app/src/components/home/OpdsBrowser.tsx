@@ -17,10 +17,14 @@ import {
   type OpdsErrorCode,
   type OpdsFeed,
   type OpdsPublication,
+  createInitialOpdsViewState,
+  createOpdsBackController,
   createOpdsCoverCache,
+  getOpdsReadySnapshot,
   listSupportedAcquisitions,
+  opdsViewReducer,
   readOpdsCover,
-  sanitizeOpdsDescription,
+  selectOpdsFeed,
 } from "@readany/core";
 import {
   ArrowLeft,
@@ -41,10 +45,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { OpdsDescription } from "./OpdsDescription";
+import { createOpdsDesktopDownloadController } from "./opds-desktop-download-controller";
+import { windowOpdsFeedPublications } from "./opds-desktop-feed-window";
 import { createOpdsDesktopRequestController } from "./opds-desktop-request-controller";
 import { useOpdsDownload } from "./useOpdsDownload";
 
@@ -58,18 +66,6 @@ interface OpdsBrowserProps {
 }
 
 type LoadMode = "replace" | "push" | "back" | "refresh";
-
-interface ReadySnapshot {
-  feed: OpdsFeed;
-  currentUrl: string;
-  history: string[];
-}
-
-type ContentState =
-  | { status: "idle" }
-  | ({ status: "loading"; refreshing: boolean } & Partial<ReadySnapshot>)
-  | ({ status: "ready"; refreshing: boolean } & ReadySnapshot)
-  | ({ status: "error"; error: OpdsErrorCode } & Partial<ReadySnapshot>);
 
 type DownloadState =
   | { status: "idle" }
@@ -91,6 +87,7 @@ type Operation = (
 const MAX_COVER_BYTES = 4 * 1024 * 1024;
 const MAX_COVER_CACHE_BYTES = 8 * 1024 * 1024;
 const MAX_COVER_CACHE_ENTRIES = 12;
+const INITIAL_PUBLICATION_WINDOW = 18;
 
 function errorCode(error: unknown, fallback: OpdsErrorCode = "unreachable"): OpdsErrorCode {
   return error instanceof OpdsError ? error.code : fallback;
@@ -149,27 +146,38 @@ export function OpdsBrowser({
   registerBackHandler,
 }: OpdsBrowserProps) {
   const { t } = useTranslation();
-  const [content, setContent] = useState<ContentState>({ status: "idle" });
+  const [viewState, dispatch] = useReducer(opdsViewReducer, undefined, createInitialOpdsViewState);
+  const content = viewState.content;
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string>();
   const [formatChoice, setFormatChoice] = useState<FormatChoice>();
   const [downloadState, setDownloadState] = useState<DownloadState>({ status: "idle" });
+  const [publicationLimit, setPublicationLimit] = useState(INITIAL_PUBLICATION_WINDOW);
   const [lastDownload, setLastDownload] = useState<{
     publication: OpdsPublication;
     acquisition: OpdsAcquisition;
   }>();
   const mounted = useRef(true);
-  const snapshot = useRef<ReadySnapshot | undefined>(undefined);
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const requestSequence = useRef(0);
   const operations = useRef(new Map<string, Operation>());
   const lastOperation = useRef<{ key: string; mode: LoadMode; execute: Operation } | undefined>(
     undefined,
   );
-  const cancelledDownload = useRef(false);
   const { download, cancel, progress } = useOpdsDownload();
   const catalogOrigin = new URL(catalog.url).origin;
   const requestController = useMemo(
     () =>
       createOpdsDesktopRequestController({
+        prepare: () => store.getCredentials(catalog.id),
+      }),
+    [catalog.id, store],
+  );
+  const downloadController = useMemo(
+    () =>
+      createOpdsDesktopDownloadController({
         prepare: () => store.getCredentials(catalog.id),
       }),
     [catalog.id, store],
@@ -194,27 +202,16 @@ export function OpdsBrowser({
     async (key: string, mode: LoadMode, execute: Operation) => {
       operations.current.set(key, execute);
       lastOperation.current = { key, mode, execute };
-      const previous = snapshot.current;
-      setContent(
-        mode === "refresh" && previous
-          ? { ...previous, status: "loading", refreshing: true }
-          : { ...(previous ?? {}), status: "loading", refreshing: false },
-      );
+      const requestId = ++requestSequence.current;
+      dispatch({ type: "loadStarted", requestId, url: key, mode });
       try {
         const feed = await requestController.run(execute);
         if (!feed || !mounted.current) return;
-        let history: string[] = [];
-        if (previous) {
-          if (mode === "push") history = [...previous.history, previous.currentUrl];
-          else if (mode === "back") history = previous.history.slice(0, -1);
-          else history = previous.history;
-        }
-        const next = { feed, currentUrl: key, history };
-        snapshot.current = next;
-        setContent({ ...next, status: "ready", refreshing: false });
+        if (mode !== "refresh") setPublicationLimit(INITIAL_PUBLICATION_WINDOW);
+        dispatch({ type: "loadSucceeded", requestId, feed });
       } catch (error) {
         if (!mounted.current) return;
-        setContent({ ...(previous ?? {}), status: "error", error: errorCode(error) });
+        dispatch({ type: "loadFailed", requestId, error: errorCode(error) });
       }
     },
     [requestController],
@@ -231,39 +228,45 @@ export function OpdsBrowser({
 
   useEffect(() => {
     mounted.current = true;
+    headingRef.current?.focus();
     openUrl(catalog.url, "replace");
     return () => {
       mounted.current = false;
-      requestController.cancel();
+      requestController.dispose();
       coverCache.clear();
-      cancel();
+      if (downloadController.dispose()) cancel();
     };
-  }, [cancel, catalog.url, coverCache, openUrl, requestController]);
+  }, [cancel, catalog.url, coverCache, downloadController, openUrl, requestController]);
 
   const handleBack = useCallback((): boolean => {
-    const current = snapshot.current;
-    if (content.status === "loading" && current) {
-      requestController.cancel();
-      setContent({ ...current, status: "ready", refreshing: false });
-      return true;
-    }
-    const target = current?.history[current.history.length - 1];
-    if (!target) {
-      onBack();
-      return false;
-    }
-    const operation = operations.current.get(target);
-    if (operation) void startOperation(target, "back", operation);
-    else openUrl(target, "back");
-    return true;
-  }, [content.status, onBack, openUrl, requestController, startOperation]);
+    let exited = false;
+    createOpdsBackController({
+      getState: () => viewStateRef.current,
+      cancelRequest: requestController.cancel,
+      dispatch,
+      startBack: (target) => {
+        const operation = operations.current.get(target);
+        if (operation) void startOperation(target, "back", operation);
+        else openUrl(target, "back");
+      },
+      exit: () => {
+        exited = true;
+        onBack();
+      },
+    }).handleHeaderBack();
+    return !exited;
+  }, [onBack, openUrl, requestController.cancel, startOperation]);
 
   useEffect(() => {
     registerBackHandler(handleBack);
     return () => registerBackHandler(undefined);
   }, [handleBack, registerBackHandler]);
 
-  const feed = "feed" in content ? content.feed : undefined;
+  const feed = selectOpdsFeed(viewState);
+  const windowedFeed = useMemo(
+    () => (feed ? windowOpdsFeedPublications(feed, publicationLimit) : undefined),
+    [feed, publicationLimit],
+  );
 
   const runSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -277,7 +280,7 @@ export function OpdsBrowser({
   };
 
   const refresh = () => {
-    const current = snapshot.current;
+    const current = getOpdsReadySnapshot(content);
     if (!current) return;
     const operation = operations.current.get(current.currentUrl);
     if (operation) void startOperation(current.currentUrl, "refresh", operation);
@@ -285,27 +288,41 @@ export function OpdsBrowser({
 
   const retry = () => {
     const operation = lastOperation.current;
-    if (operation) void startOperation(operation.key, operation.mode, operation.execute);
+    if (!operation || content.status !== "error") return;
+    const requestId = ++requestSequence.current;
+    dispatch({ type: "retryStarted", requestId });
+    void requestController
+      .run(operation.execute)
+      .then((feed) => {
+        if (feed && mounted.current) {
+          if (operation.mode !== "refresh") setPublicationLimit(INITIAL_PUBLICATION_WINDOW);
+          dispatch({ type: "loadSucceeded", requestId, feed });
+        }
+      })
+      .catch((error) => {
+        if (mounted.current) dispatch({ type: "loadFailed", requestId, error: errorCode(error) });
+      });
   };
 
   const runDownload = useCallback(
     async (publication: OpdsPublication, acquisition: OpdsAcquisition) => {
       setLastDownload({ publication, acquisition });
-      cancelledDownload.current = false;
       setDownloadState({ status: "downloading", title: publication.title });
       try {
-        const credentials = await store.getCredentials(catalog.id);
-        const result = await download({
-          publication,
-          acquisition,
-          catalogOrigin,
-          credentials,
-          onImportStart: () => {
-            if (mounted.current)
-              setDownloadState({ status: "importing", title: publication.title });
-          },
-        });
-        if (mounted.current) {
+        const result = await downloadController.run(async (credentials, ownership) =>
+          download({
+            publication,
+            acquisition,
+            catalogOrigin,
+            credentials,
+            onImportStart: () => {
+              ownership.markImportStarted();
+              if (mounted.current)
+                setDownloadState({ status: "importing", title: publication.title });
+            },
+          }),
+        );
+        if (result && mounted.current) {
           setDownloadState({
             status: "success",
             title: publication.title,
@@ -313,7 +330,7 @@ export function OpdsBrowser({
           });
         }
       } catch (error) {
-        if (!mounted.current || cancelledDownload.current) return;
+        if (!mounted.current || errorCode(error) === "download-in-progress") return;
         setDownloadState({
           status: "error",
           title: publication.title,
@@ -321,7 +338,7 @@ export function OpdsBrowser({
         });
       }
     },
-    [catalog.id, catalogOrigin, download, store],
+    [catalogOrigin, download, downloadController],
   );
 
   const chooseDownload = (publication: OpdsPublication) => {
@@ -332,7 +349,7 @@ export function OpdsBrowser({
 
   const cancelDownload = () => {
     if (downloadState.status !== "downloading") return;
-    cancelledDownload.current = true;
+    if (!downloadController.cancel()) return;
     cancel();
     setDownloadState({ status: "idle" });
   };
@@ -341,9 +358,7 @@ export function OpdsBrowser({
     const key = `${prefix}:${publication.id ?? publication.title}`;
     const isExpanded = expanded === key;
     const formats = listSupportedAcquisitions(publication);
-    const description = publication.description
-      ? sanitizeOpdsDescription(publication.description)
-      : undefined;
+    const description = publication.description;
     return (
       <article key={key} className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <button
@@ -376,10 +391,9 @@ export function OpdsBrowser({
         {isExpanded ? (
           <div className="border-t bg-muted/15 px-4 py-4">
             {description ? (
-              <div
-                className="select-text space-y-2 text-sm leading-6 text-muted-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_li]:ml-5 [&_li]:list-disc"
-                // biome-ignore lint/security/noDangerouslySetInnerHtml: Shared OPDS parsing applies the strict description allowlist before creating this view model.
-                dangerouslySetInnerHTML={{ __html: description }}
+              <OpdsDescription
+                description={description}
+                documentUrl={getOpdsReadySnapshot(content)?.currentUrl ?? catalog.url}
               />
             ) : null}
             {publication.subjects.length ? (
@@ -438,7 +452,11 @@ export function OpdsBrowser({
             <div className="truncate text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
               {catalog.name}
             </div>
-            <h2 className="truncate font-serif text-xl font-semibold tracking-tight">
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="truncate font-serif text-xl font-semibold tracking-tight focus:outline-none"
+            >
               {feed?.title ?? t("library.opds.catalog")}
             </h2>
           </div>
@@ -446,11 +464,15 @@ export function OpdsBrowser({
             variant="ghost"
             size="icon"
             onClick={refresh}
-            disabled={!feed || content.status === "loading"}
+            disabled={
+              !feed ||
+              content.status === "loading" ||
+              (content.status === "ready" && content.refreshing)
+            }
             aria-label={t("library.opds.refresh")}
           >
             <RefreshCw
-              className={`size-4 ${content.status === "loading" && feed ? "animate-spin" : ""}`}
+              className={`size-4 ${content.status === "loading" || (content.status === "ready" && content.refreshing) ? "animate-spin" : ""}`}
             />
           </Button>
         </div>
@@ -513,8 +535,14 @@ export function OpdsBrowser({
 
         {feed ? (
           <div
-            className={content.status === "loading" ? "opacity-60" : ""}
-            aria-busy={content.status === "loading"}
+            className={
+              content.status === "loading" || (content.status === "ready" && content.refreshing)
+                ? "opacity-60"
+                : ""
+            }
+            aria-busy={
+              content.status === "loading" || (content.status === "ready" && content.refreshing)
+            }
           >
             {feed.subtitle ? (
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{feed.subtitle}</p>
@@ -558,18 +586,18 @@ export function OpdsBrowser({
               </section>
             ))}
 
-            {feed.publications.length ? (
+            {windowedFeed?.publications.length ? (
               <section>
                 <SectionTitle>{t("library.opds.books")}</SectionTitle>
                 <div className="grid gap-3 lg:grid-cols-2">
-                  {feed.publications.map((publication) =>
+                  {windowedFeed.publications.map((publication) =>
                     renderPublication(publication, "publication"),
                   )}
                 </div>
               </section>
             ) : null}
 
-            {feed.groups.map((group, groupIndex) => (
+            {windowedFeed?.groups.map((group, groupIndex) => (
               <section key={`${group.title}:${groupIndex}`}>
                 <SectionTitle>{group.title}</SectionTitle>
                 {group.navigation.length ? (
@@ -593,6 +621,19 @@ export function OpdsBrowser({
                 </div>
               </section>
             ))}
+
+            {windowedFeed?.hasMore ? (
+              <div className="mt-5 flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setPublicationLimit((current) => current + INITIAL_PUBLICATION_WINDOW)
+                  }
+                >
+                  {t("library.opds.showMore")}
+                </Button>
+              </div>
+            ) : null}
 
             {!feed.navigation.length && !feed.publications.length && !feed.groups.length ? (
               <div className="flex min-h-52 flex-col items-center justify-center text-center">
@@ -711,7 +752,7 @@ export function OpdsBrowser({
       ) : null}
 
       <Dialog open={!!formatChoice} onOpenChange={(open) => !open && setFormatChoice(undefined)}>
-        <DialogContent className="max-w-md">
+        <DialogContent closeLabel={t("library.opds.close")} className="max-w-md">
           <DialogHeader>
             <DialogTitle>{t("library.opds.chooseFormat")}</DialogTitle>
             <DialogDescription>{formatChoice?.publication.title}</DialogDescription>

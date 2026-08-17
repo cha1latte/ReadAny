@@ -172,7 +172,7 @@ describe("parseOpdsDocument", () => {
       published: "2025-01-02",
       subjects: ["Mystery", "Adventure"],
       description:
-        '<p>Read <strong>this</strong>. <a href="https://catalog.test/root/chapters/1">Chapter</a> <a href="https://catalog.test/about">About</a> <a href="https://catalog.test/root/feed.json#details">Details</a> <a>Bad</a></p>',
+        '<p>Read <strong>this</strong>. <a href="https://catalog.test/root/chapters/1" target="_blank" rel="noopener noreferrer">Chapter</a> <a href="https://catalog.test/about" target="_blank" rel="noopener noreferrer">About</a> <a href="https://catalog.test/root/feed.json#details" target="_blank" rel="noopener noreferrer">Details</a> <a>Bad</a></p>',
       images: [expect.objectContaining({ url: "https://catalog.test/root/images/cover.png" })],
       acquisitions: [
         expect.objectContaining({

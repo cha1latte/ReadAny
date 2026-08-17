@@ -114,7 +114,11 @@ export function sanitizeOpdsDescription(input: string, documentUrl?: string): st
 
     if (name === "a") {
       const href = getSafeHref(token.slice(token.indexOf(name) + name.length), documentUrl);
-      output.push(href ? `<a href="${escapeAttribute(href)}">` : "<a>");
+      output.push(
+        href
+          ? `<a href="${escapeAttribute(href)}" target="_blank" rel="noopener noreferrer">`
+          : "<a>",
+      );
     } else {
       output.push(`<${name}>`);
     }

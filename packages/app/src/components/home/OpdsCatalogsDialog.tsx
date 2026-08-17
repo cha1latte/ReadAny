@@ -44,6 +44,9 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const backHandler = useRef<(() => boolean) | undefined>(undefined);
+  const dialogOrigin = useRef<HTMLElement | undefined>(undefined);
+  const returnFocusCatalogId = useRef<string | undefined>(undefined);
+  const returnFocusElement = useRef<HTMLButtonElement | undefined>(undefined);
 
   const syncCatalogs = useCallback(() => {
     const next = store.listCatalogs({ includeHidden: true });
@@ -80,6 +83,12 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
     };
   }, [open, syncCatalogs, t]);
 
+  useEffect(() => {
+    if (open && !selected && returnFocusCatalogId.current) {
+      requestAnimationFrame(() => returnFocusElement.current?.focus());
+    }
+  }, [open, selected]);
+
   const mutate = async (catalogId: string, operation: () => Promise<unknown>) => {
     setBusyId(catalogId);
     setError(undefined);
@@ -107,6 +116,18 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
+          closeLabel={t("library.opds.close")}
+          onOpenAutoFocus={() => {
+            if (document.activeElement instanceof HTMLElement) {
+              dialogOrigin.current = document.activeElement;
+            }
+          }}
+          onCloseAutoFocus={(event) => {
+            const origin = dialogOrigin.current;
+            if (!origin?.isConnected) return;
+            event.preventDefault();
+            origin.focus();
+          }}
           className="flex h-[min(88vh,860px)] max-h-[calc(100vh-24px)] w-[min(1080px,calc(100vw-24px))] max-w-none flex-col gap-0 overflow-hidden p-0"
           onEscapeKeyDown={(event) => {
             if (!selected) return;
@@ -115,21 +136,27 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
           }}
         >
           {selected ? (
-            <OpdsBrowser
-              key={`${selected.id}:${selected.url}`}
-              catalog={selected}
-              store={store}
-              client={client}
-              onBack={() => setSelected(undefined)}
-              onEditCredentials={() => {
-                if (selected.builtIn) return;
-                setEditing(selected);
-                setFormOpen(true);
-              }}
-              registerBackHandler={(handler) => {
-                backHandler.current = handler;
-              }}
-            />
+            <>
+              <DialogTitle className="sr-only">{selected.name}</DialogTitle>
+              <DialogDescription className="sr-only">
+                {t("library.opds.catalogsSubtitle")}
+              </DialogDescription>
+              <OpdsBrowser
+                key={`${selected.id}:${selected.url}`}
+                catalog={selected}
+                store={store}
+                client={client}
+                onBack={() => setSelected(undefined)}
+                onEditCredentials={() => {
+                  if (selected.builtIn) return;
+                  setEditing(selected);
+                  setFormOpen(true);
+                }}
+                registerBackHandler={(handler) => {
+                  backHandler.current = handler;
+                }}
+              />
+            </>
           ) : (
             <>
               <DialogHeader className="border-b px-5 py-5 pr-14 sm:px-7">
@@ -200,10 +227,19 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
                               className={`overflow-hidden rounded-2xl border bg-card shadow-sm ${!catalog.enabled ? "opacity-60" : ""}`}
                             >
                               <button
+                                ref={(element) => {
+                                  if (returnFocusCatalogId.current === catalog.id && element) {
+                                    returnFocusElement.current = element;
+                                  }
+                                }}
                                 type="button"
                                 className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed"
                                 disabled={!catalog.enabled || busy}
-                                onClick={() => setSelected(catalog)}
+                                onClick={(event) => {
+                                  returnFocusCatalogId.current = catalog.id;
+                                  returnFocusElement.current = event.currentTarget;
+                                  setSelected(catalog);
+                                }}
                                 aria-label={t("library.opds.browseCatalog", { name: catalog.name })}
                               >
                                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/8 text-primary">
@@ -362,7 +398,7 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
       />
 
       <Dialog open={!!deleting} onOpenChange={(next) => !next && setDeleting(undefined)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent closeLabel={t("library.opds.close")} className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("library.opds.deleteTitle")}</DialogTitle>
             <DialogDescription>{t("library.opds.deleteDescription")}</DialogDescription>

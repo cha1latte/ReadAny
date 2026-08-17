@@ -88,6 +88,8 @@ export {
 export { parseOpdsDocument } from "./opds/opds-parser";
 export { classifyOpdsUrl } from "./opds/opds-security";
 export { createOpdsRuntime } from "./opds/opds-runtime";
+export * from "./opds/opds-view-state";
+export { createOpdsBackController } from "./opds/opds-back-controller";
 export {
   createOpdsCoverCache,
   readOpdsCover,

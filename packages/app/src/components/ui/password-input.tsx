@@ -2,10 +2,17 @@ import { cn } from "@readany/core/utils";
 import { Eye, EyeOff } from "lucide-react";
 import { type InputHTMLAttributes, useState } from "react";
 
+interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
+}
+
 export function PasswordInput({
   className,
+  showPasswordLabel = "Show password",
+  hidePasswordLabel = "Hide password",
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+}: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -20,9 +27,9 @@ export function PasswordInput({
       />
       <button
         type="button"
-        tabIndex={-1}
         onClick={() => setVisible(!visible)}
-        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        aria-label={visible ? hidePasswordLabel : showPasswordLabel}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>

@@ -243,6 +243,25 @@ describe("mobile OPDS download adapter", () => {
     expect(deps.platform.deleteFile).toHaveBeenCalledOnce();
   });
 
+  it("announces the noncancellable import boundary synchronously before touching the store", async () => {
+    const order: string[] = [];
+    const deps = dependencies({
+      importBooks: vi.fn(async () => {
+        order.push("import");
+        return { imported: [{ id: "book-id" }], skippedDuplicates: [], failures: [] };
+      }),
+    });
+    const run = createOpdsDownloadAdapter(deps as never);
+
+    await run({
+      publication,
+      catalogOrigin: "https://catalog.test",
+      onImportStart: () => order.push("boundary"),
+    });
+
+    expect(order).toEqual(["boundary", "import"]);
+  });
+
   it("reports a cleanup-only failure without turning a successful managed import into failure", async () => {
     const onCleanupError = vi.fn();
     const deps = dependencies({ onCleanupError });

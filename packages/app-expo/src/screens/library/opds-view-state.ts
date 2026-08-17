@@ -29,6 +29,7 @@ export type OpdsContentState =
     })
   | {
       readonly status: "error";
+      readonly failedRequestId: number;
       readonly error: OpdsErrorCode;
       readonly failedRequest: OpdsPendingRequest;
       readonly previous?: OpdsReadySnapshot;
@@ -48,6 +49,11 @@ export type OpdsDownloadState =
       readonly requestId: number;
       readonly publicationTitle: string;
       readonly importedCount: number;
+    }
+  | {
+      readonly status: "importing";
+      readonly requestId: number;
+      readonly publicationTitle: string;
     }
   | {
       readonly status: "error";
@@ -79,6 +85,7 @@ export type OpdsViewAction =
       readonly error: OpdsErrorCode;
     }
   | { readonly type: "retryStarted"; readonly requestId: number }
+  | { readonly type: "loadCancelled"; readonly requestId: number }
   | {
       readonly type: "downloadStarted";
       readonly requestId: number;
@@ -95,6 +102,7 @@ export type OpdsViewAction =
       readonly requestId: number;
       readonly importedCount: number;
     }
+  | { readonly type: "downloadImporting"; readonly requestId: number }
   | {
       readonly type: "downloadFailed";
       readonly requestId: number;
@@ -208,11 +216,22 @@ export function opdsViewReducer(state: OpdsViewState, action: OpdsViewAction): O
         ...state,
         content: {
           status: "error",
+          failedRequestId: action.requestId,
           error: action.error,
           failedRequest: pending,
           ...(previous ? { previous } : {}),
         },
       };
+    }
+    case "loadCancelled": {
+      const requestMatches =
+        activeRequestId(state.content) === action.requestId ||
+        (state.content.status === "error" && state.content.failedRequestId === action.requestId);
+      if (!requestMatches) return state;
+      const previous = readySnapshot(state.content);
+      return previous
+        ? { ...state, content: { status: "ready", ...previous, refreshing: false } }
+        : { ...state, content: { status: "idle" } };
     }
     case "downloadStarted":
       if (state.download.status === "downloading") return state;
@@ -241,9 +260,24 @@ export function opdsViewReducer(state: OpdsViewState, action: OpdsViewAction): O
           total: Math.max(0, action.total),
         },
       };
-    case "downloadSucceeded":
+    case "downloadImporting":
       if (
         state.download.status !== "downloading" ||
+        state.download.requestId !== action.requestId
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        download: {
+          status: "importing",
+          requestId: action.requestId,
+          publicationTitle: state.download.publicationTitle,
+        },
+      };
+    case "downloadSucceeded":
+      if (
+        (state.download.status !== "downloading" && state.download.status !== "importing") ||
         state.download.requestId !== action.requestId
       ) {
         return state;
@@ -259,7 +293,7 @@ export function opdsViewReducer(state: OpdsViewState, action: OpdsViewAction): O
       };
     case "downloadFailed":
       if (
-        state.download.status !== "downloading" ||
+        (state.download.status !== "downloading" && state.download.status !== "importing") ||
         state.download.requestId !== action.requestId
       ) {
         return state;

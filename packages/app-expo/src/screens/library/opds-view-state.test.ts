@@ -206,6 +206,12 @@ describe("OPDS mobile view state", () => {
     });
     expect(state.download).toMatchObject({ status: "downloading", loaded: 40, total: 100 });
 
+    state = opdsViewReducer(state, { type: "downloadImporting", requestId: 7 });
+    expect(state.download).toMatchObject({ status: "importing", publicationTitle: "A Book" });
+    expect(opdsViewReducer(state, { type: "downloadCancelled", requestId: 7 }).download).toEqual(
+      state.download,
+    );
+
     state = opdsViewReducer(state, {
       type: "downloadSucceeded",
       requestId: 7,
@@ -259,6 +265,32 @@ describe("OPDS mobile view state", () => {
     });
 
     expect(stale).toBe(latest);
+  });
+
+  it("restores the previous ready feed when an in-flight or failed push is cancelled", () => {
+    const ready = readyState();
+    const pushing = opdsViewReducer(ready, {
+      type: "loadStarted",
+      requestId: 2,
+      url: "https://catalog.test/child",
+      mode: "push",
+    });
+    const restoredInFlight = opdsViewReducer(pushing, { type: "loadCancelled", requestId: 2 });
+    expect(restoredInFlight.content).toMatchObject({
+      status: "ready",
+      currentUrl: "https://catalog.test/root",
+    });
+
+    const failed = opdsViewReducer(pushing, {
+      type: "loadFailed",
+      requestId: 2,
+      error: "unreachable",
+    });
+    const restoredFailed = opdsViewReducer(failed, { type: "loadCancelled", requestId: 2 });
+    expect(restoredFailed.content).toMatchObject({
+      status: "ready",
+      currentUrl: "https://catalog.test/root",
+    });
   });
 
   it("creates serializable route params containing only the catalog id", () => {

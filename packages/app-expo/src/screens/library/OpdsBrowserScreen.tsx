@@ -14,7 +14,6 @@ import { fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/t
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   type OpdsAcquisition,
-  type OpdsAssetResponse,
   type OpdsCredentials,
   OpdsError,
   type OpdsErrorCode,
@@ -26,24 +25,32 @@ import {
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  FlatList,
   Image,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  findNodeHandle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { createOpdsBackController } from "./opds-back-controller";
+import { createOpdsCoverCache, readOpdsCover } from "./opds-cover-cache";
+import {
+  createOpdsDownloadController,
+  getOpdsDownloadAccessibility,
+} from "./opds-download-controller";
+import { type OpdsFeedRow, createOpdsFeedRows } from "./opds-feed-rows";
 import { opdsMobileRuntime } from "./opds-mobile-runtime";
 import {
   type OpdsLoadMode,
   canSearchOpds,
   createInitialOpdsViewState,
-  getOpdsPagination,
   opdsViewReducer,
   selectOpdsFeed,
   shouldEditOpdsCredentials,
@@ -64,39 +71,8 @@ interface FormatChoice {
 }
 
 const MAX_COVER_BYTES = 4 * 1024 * 1024;
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let output = "";
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index] ?? 0;
-    const second = bytes[index + 1];
-    const third = bytes[index + 2];
-    const value = (first << 16) | ((second ?? 0) << 8) | (third ?? 0);
-    output += alphabet[(value >> 18) & 63];
-    output += alphabet[(value >> 12) & 63];
-    output += second === undefined ? "=" : alphabet[(value >> 6) & 63];
-    output += third === undefined ? "=" : alphabet[value & 63];
-  }
-  return output;
-}
-
-async function assetDataUri(response: OpdsAssetResponse, signal: AbortSignal): Promise<string> {
-  const advertisedLength = Number(response.headers.get("Content-Length"));
-  if (Number.isFinite(advertisedLength) && advertisedLength > MAX_COVER_BYTES) {
-    await response.cancel();
-    throw new Error("cover-too-large");
-  }
-  const contentType = response.headers.get("Content-Type")?.split(";", 1)[0]?.trim();
-  if (!contentType?.startsWith("image/")) {
-    await response.cancel();
-    throw new Error("not-an-image");
-  }
-  if (signal.aborted) throw new Error("cancelled");
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (signal.aborted || bytes.byteLength > MAX_COVER_BYTES) throw new Error("cover-too-large");
-  return `data:${contentType};base64,${bytesToBase64(bytes)}`;
-}
+const MAX_COVER_CACHE_BYTES = 8 * 1024 * 1024;
+const MAX_COVER_CACHE_ENTRIES = 12;
 
 function plainDescription(description: string | undefined): string | undefined {
   if (!description) return undefined;
@@ -129,11 +105,11 @@ function getContentSnapshot(state: ReturnType<typeof createInitialOpdsViewState>
 
 function AuthenticatedCover({
   publication,
-  load,
+  cache,
   style,
 }: {
   publication: OpdsPublication;
-  load: (url: string, signal: AbortSignal) => Promise<string>;
+  cache: ReturnType<typeof createOpdsCoverCache>;
   style: object;
 }) {
   const [uri, setUri] = useState<string>();
@@ -143,13 +119,20 @@ function AuthenticatedCover({
     setUri(undefined);
     if (!imageUrl) return;
     const controller = new AbortController();
-    void load(imageUrl, controller.signal)
-      .then((nextUri) => {
-        if (!controller.signal.aborted) setUri(nextUri);
+    let release: (() => void) | undefined;
+    void cache
+      .acquire(imageUrl, controller.signal)
+      .then((lease) => {
+        release = lease.release;
+        if (!controller.signal.aborted) setUri(lease.uri);
+        else lease.release();
       })
       .catch(() => {});
-    return () => controller.abort();
-  }, [imageUrl, load]);
+    return () => {
+      controller.abort();
+      release?.();
+    };
+  }, [cache, imageUrl]);
 
   return uri ? <Image source={{ uri }} style={style} resizeMode="cover" /> : null;
 }
@@ -158,6 +141,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const colors = useColors();
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const catalogId = route.params.catalogId;
   const store = useMemo(() => opdsMobileRuntime.getCatalogStore(), []);
   const client = useMemo(() => opdsMobileRuntime.getClient(), []);
@@ -167,19 +151,20 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
   const [query, setQuery] = useState("");
   const [expandedPublication, setExpandedPublication] = useState<string>();
   const [formatChoice, setFormatChoice] = useState<FormatChoice>();
+  const formatHeadingRef = useRef<View>(null);
   const requestSequence = useRef(0);
   const mounted = useRef(true);
   const lifecycleGeneration = useRef(0);
   const requestController = useRef<AbortController | undefined>(undefined);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const operations = useRef(new Map<string, BrowserOperation>());
   const lastOperation = useRef<BrowserOperation | undefined>(undefined);
-  const activeDownloadId = useRef<number | undefined>(undefined);
   const lastDownload = useRef<
     { publication: OpdsPublication; acquisition: OpdsAcquisition } | undefined
   >(undefined);
-  const { download, cancel, progress } = useOpdsDownload();
+  const { download } = useOpdsDownload();
   const feed = selectOpdsFeed(state);
-  const pagination = getOpdsPagination(state);
 
   const executeOperation = useCallback(
     async (operation: BrowserOperation, requestId: number) => {
@@ -257,67 +242,81 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
       mounted.current = false;
       if (lifecycleGeneration.current === generation) lifecycleGeneration.current += 1;
       requestController.current?.abort();
-      cancel();
     };
-  }, [cancel, initializeCatalog]);
+  }, [initializeCatalog]);
+
+  const feedScope = getContentSnapshot(state)?.currentUrl ?? catalogUrl;
+  const coverCache = useMemo(() => {
+    const cacheScope = feedScope;
+    return createOpdsCoverCache({
+      maxEntries: MAX_COVER_CACHE_ENTRIES,
+      maxBytes: MAX_COVER_CACHE_BYTES,
+      load: async (url, signal) => {
+        // Capturing the feed scope makes navigation create a fresh cache and release the old feed.
+        void cacheScope;
+        const credentials = await store.getCredentials(catalogId);
+        if (signal.aborted) throw new Error("cancelled");
+        const response = await client.fetchAsset(
+          url,
+          new URL(catalogUrl).origin,
+          credentials,
+          signal,
+        );
+        if (signal.aborted) {
+          await response.cancel("cancelled");
+          throw new Error("cancelled");
+        }
+        return readOpdsCover(response, signal, MAX_COVER_BYTES);
+      },
+    });
+  }, [catalogId, catalogUrl, client, feedScope, store]);
+  useEffect(() => () => coverCache.clear(), [coverCache]);
+
+  const downloadController = useMemo(
+    () =>
+      createOpdsDownloadController<OpdsCredentials | undefined>({
+        onEvent: (event) => {
+          if (mounted.current) dispatch(event);
+        },
+      }),
+    [],
+  );
+  useEffect(() => () => void downloadController.cancel(), [downloadController]);
 
   useEffect(() => {
-    const requestId = activeDownloadId.current;
-    if (!requestId || !progress) return;
-    dispatch({
-      type: "downloadProgress",
-      requestId,
-      loaded: progress.loaded,
-      total: progress.total,
-    });
-  }, [progress]);
-
-  const loadCover = useCallback(
-    async (url: string, signal: AbortSignal) => {
-      const credentials = await store.getCredentials(catalogId);
-      const origin = new URL(catalogUrl).origin;
-      const response = await client.fetchAsset(url, origin, credentials, signal);
-      return assetDataUri(response, signal);
-    },
-    [catalogId, catalogUrl, client, store],
-  );
+    if (!formatChoice) return;
+    const focusTimer = setTimeout(() => {
+      const node = findNodeHandle(formatHeadingRef.current);
+      if (node) AccessibilityInfo.setAccessibilityFocus(node);
+    }, 100);
+    return () => clearTimeout(focusTimer);
+  }, [formatChoice]);
 
   const runDownload = useCallback(
     async (publication: OpdsPublication, acquisition: OpdsAcquisition) => {
-      if (activeDownloadId.current !== undefined) return;
-      const requestId = ++requestSequence.current;
-      activeDownloadId.current = requestId;
       lastDownload.current = { publication, acquisition };
-      dispatch({
-        type: "downloadStarted",
-        requestId,
-        publicationTitle: publication.title,
-      });
       try {
-        const credentials = await store.getCredentials(catalogId);
-        if (!mounted.current) return;
-        const result = await download({
-          publication,
-          acquisition,
-          catalogOrigin: new URL(catalogUrl).origin,
-          credentials,
+        await downloadController.start({
+          publicationTitle: publication.title,
+          prepare: () => store.getCredentials(catalogId),
+          execute: async ({ credentials, signal, onProgress, onImportStart }) => {
+            const result = await download({
+              publication,
+              acquisition,
+              catalogOrigin: new URL(catalogUrl).origin,
+              credentials,
+              signal,
+              onProgress: (progress) => onProgress(progress.loaded, progress.total),
+              onImportStart,
+            });
+            return { importedCount: result.importResult.imported.length };
+          },
         });
-        if (mounted.current) {
-          dispatch({
-            type: "downloadSucceeded",
-            requestId,
-            importedCount: result.importResult.imported.length,
-          });
-        }
-      } catch (error) {
-        if (mounted.current) {
-          dispatch({ type: "downloadFailed", requestId, error: toErrorCode(error) });
-        }
-      } finally {
-        if (activeDownloadId.current === requestId) activeDownloadId.current = undefined;
+      } catch {
+        // The controller owns the stable, sanitized error state.
       }
     },
-    [catalogId, catalogUrl, download, store],
+    [catalogId, catalogUrl, download, downloadController, store],
   );
 
   const chooseDownload = (publication: OpdsPublication) => {
@@ -342,17 +341,25 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
     });
   };
 
-  const handleBack = () => {
-    const snapshot = getContentSnapshot(state);
-    const target = snapshot?.history.at(-1);
-    if (!target) {
-      navigation.goBack();
-      return;
-    }
-    const operation = operations.current.get(target);
-    if (operation) startOperation({ ...operation, mode: "back" });
-    else openUrl(target, "back");
-  };
+  const backController = useMemo(
+    () =>
+      createOpdsBackController({
+        getState: () => stateRef.current,
+        cancelRequest: () => requestController.current?.abort(),
+        dispatch,
+        startBack: (target) => {
+          const operation = operations.current.get(target);
+          if (operation) startOperation({ ...operation, mode: "back" });
+          else openUrl(target, "back");
+        },
+        exit: navigation.goBack,
+      }),
+    [navigation.goBack, openUrl, startOperation],
+  );
+  useEffect(
+    () => navigation.addListener("beforeRemove", backController.handleBeforeRemove),
+    [backController, navigation],
+  );
 
   const handleRefresh = () => {
     const snapshot = getContentSnapshot(state);
@@ -373,10 +380,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
   };
 
   const cancelDownload = () => {
-    const requestId = activeDownloadId.current;
-    cancel();
-    if (requestId) dispatch({ type: "downloadCancelled", requestId });
-    activeDownloadId.current = undefined;
+    downloadController.cancel();
   };
 
   const retryDownload = () => {
@@ -473,6 +477,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           paddingBottom: 130,
           gap: 16,
         },
+        listRow: { marginBottom: 10 },
         feedIntro: { paddingHorizontal: 2 },
         feedTitle: {
           fontSize: fontSize.lg,
@@ -679,9 +684,10 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
         },
         overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
         picker: {
+          maxHeight: "88%",
           paddingHorizontal: 20,
           paddingTop: 12,
-          paddingBottom: 28,
+          paddingBottom: Math.max(20, insets.bottom + 12),
           borderTopLeftRadius: 26,
           borderTopRightRadius: 26,
           backgroundColor: colors.background,
@@ -718,8 +724,10 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           color: colors.foreground,
           textTransform: "uppercase",
         },
+        formatList: { flexGrow: 0 },
+        formatListContent: { gap: 10 },
       }),
-    [colors, layout.centeredContentWidth, layout.horizontalPadding],
+    [colors, insets.bottom, layout.centeredContentWidth, layout.horizontalPadding],
   );
 
   const renderPublication = (publication: OpdsPublication, keyPrefix = "publication") => {
@@ -741,7 +749,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
         >
           <View style={s.cover}>
             <BookOpenIcon size={21} color={colors.mutedForeground} />
-            <AuthenticatedCover publication={publication} load={loadCover} style={s.coverImage} />
+            <AuthenticatedCover publication={publication} cache={coverCache} style={s.coverImage} />
           </View>
           <View style={s.publicationCopy}>
             <Text style={s.publicationTitle}>{publication.title}</Text>
@@ -775,8 +783,15 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 style={s.downloadButton}
                 onPress={() => chooseDownload(publication)}
-                disabled={state.download.status === "downloading"}
+                disabled={
+                  state.download.status === "downloading" || state.download.status === "importing"
+                }
                 accessibilityRole="button"
+                accessibilityState={{
+                  disabled:
+                    state.download.status === "downloading" ||
+                    state.download.status === "importing",
+                }}
                 accessibilityLabel={t("library.opds.downloadTitle", {
                   defaultValue: "Download {{title}}",
                   title: publication.title,
@@ -806,6 +821,88 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
   const contentError = state.content.status === "error" ? state.content.error : undefined;
   const initialLoading =
     state.content.status === "idle" || (state.content.status === "loading" && !feed);
+  const feedRows = useMemo(() => (feed ? createOpdsFeedRows(feed) : []), [feed]);
+  const downloadAccessibility = getOpdsDownloadAccessibility(state.download);
+
+  const renderFeedRow = ({ item }: { item: OpdsFeedRow }) => {
+    if (item.kind === "intro") {
+      return (
+        <View style={[s.feedIntro, s.listRow]}>
+          <Text style={s.feedTitle}>{item.feed.title}</Text>
+          {item.feed.subtitle ? <Text style={s.feedSubtitle}>{item.feed.subtitle}</Text> : null}
+        </View>
+      );
+    }
+    if (item.kind === "section") {
+      const title =
+        item.title === "collections"
+          ? t("library.opds.collections", { defaultValue: "Collections" })
+          : item.title === "books"
+            ? t("library.opds.books", { defaultValue: "Books" })
+            : item.title;
+      return <Text style={[s.sectionTitle, s.listRow]}>{title}</Text>;
+    }
+    if (item.kind === "link") {
+      return (
+        <TouchableOpacity
+          style={[s.linkCard, s.listRow]}
+          onPress={() => openUrl(item.url, "push")}
+          accessibilityRole="button"
+          accessibilityLabel={item.title}
+        >
+          {item.icon ? <GlobeIcon size={18} color={colors.primary} /> : null}
+          <Text style={s.linkText}>{item.title}</Text>
+          <ChevronRightIcon size={17} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      );
+    }
+    if (item.kind === "publication") {
+      return <View style={s.listRow}>{renderPublication(item.publication, item.keyPrefix)}</View>;
+    }
+    if (item.kind === "empty") {
+      return (
+        <View style={s.centerState}>
+          <BookOpenIcon size={30} color={colors.mutedForeground} />
+          <Text style={s.centerTitle}>
+            {t("library.opds.empty", { defaultValue: "Nothing on this shelf yet" })}
+          </Text>
+          <Text style={s.centerText}>
+            {t("library.opds.emptyHint", {
+              defaultValue: "Try another collection or go back one level.",
+            })}
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[s.pagination, s.listRow]}>
+        {item.previousUrl ? (
+          <TouchableOpacity
+            style={s.pageButton}
+            onPress={() => openUrl(item.previousUrl as string, "push")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: false }}
+            accessibilityLabel={t("common.previous", { defaultValue: "Previous" })}
+          >
+            <ChevronLeftIcon size={17} color={colors.foreground} />
+            <Text style={s.pageText}>{t("common.previous", { defaultValue: "Previous" })}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {item.nextUrl ? (
+          <TouchableOpacity
+            style={s.pageButton}
+            onPress={() => openUrl(item.nextUrl as string, "push")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: false }}
+            accessibilityLabel={t("common.next", { defaultValue: "Next" })}
+          >
+            <Text style={s.pageText}>{t("common.next", { defaultValue: "Next" })}</Text>
+            <ChevronRightIcon size={17} color={colors.foreground} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={s.container}>
@@ -814,8 +911,9 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           <View style={s.headerRow}>
             <TouchableOpacity
               style={s.iconButton}
-              onPress={handleBack}
+              onPress={backController.handleHeaderBack}
               accessibilityRole="button"
+              accessibilityState={{ disabled: false }}
               accessibilityLabel={t("common.back", { defaultValue: "Back" })}
             >
               <ChevronLeftIcon size={20} color={colors.foreground} />
@@ -868,6 +966,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 onPress={handleSearch}
                 disabled={!query.trim()}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !query.trim() }}
                 accessibilityLabel={t("common.search", { defaultValue: "Search" })}
               >
                 <ChevronRightIcon
@@ -900,13 +999,24 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           </Text>
           <Text style={s.centerText}>{errorMessage(contentError)}</Text>
           <View style={s.errorActions}>
-            <TouchableOpacity style={s.smallButton} onPress={handleRetry}>
+            <TouchableOpacity
+              style={s.smallButton}
+              onPress={handleRetry}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: false }}
+              accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
+            >
               <Text style={s.smallButtonText}>{t("common.retry", { defaultValue: "Retry" })}</Text>
             </TouchableOpacity>
             {shouldEditOpdsCredentials(state) ? (
               <TouchableOpacity
                 style={s.smallButton}
                 onPress={() => navigation.navigate("OpdsCatalogs", { editCatalogId: catalogId })}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: false }}
+                accessibilityLabel={t("library.opds.editCredentials", {
+                  defaultValue: "Edit credentials",
+                })}
               >
                 <Text style={s.smallButtonText}>
                   {t("library.opds.editCredentials", { defaultValue: "Edit credentials" })}
@@ -916,151 +1026,62 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
           </View>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-          {feed ? (
-            <View style={s.feedIntro}>
-              <Text style={s.feedTitle}>{feed.title}</Text>
-              {feed.subtitle ? <Text style={s.feedSubtitle}>{feed.subtitle}</Text> : null}
-            </View>
-          ) : null}
-
-          {contentError ? (
-            <View style={s.errorBox} accessibilityRole="alert">
-              <Text style={s.errorText}>{errorMessage(contentError)}</Text>
-              <View style={s.errorActions}>
-                <TouchableOpacity style={s.smallButton} onPress={handleRetry}>
-                  <Text style={s.smallButtonText}>
-                    {t("common.retry", { defaultValue: "Retry" })}
-                  </Text>
-                </TouchableOpacity>
-                {shouldEditOpdsCredentials(state) ? (
+        <FlatList
+          data={feedRows}
+          keyExtractor={(item) => item.key}
+          renderItem={renderFeedRow}
+          contentContainerStyle={s.scrollContent}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews
+          ListHeaderComponent={
+            contentError ? (
+              <View style={[s.errorBox, s.listRow]} accessibilityRole="alert">
+                <Text style={s.errorText}>{errorMessage(contentError)}</Text>
+                <View style={s.errorActions}>
                   <TouchableOpacity
                     style={s.smallButton}
-                    onPress={() =>
-                      navigation.navigate("OpdsCatalogs", { editCatalogId: catalogId })
-                    }
+                    onPress={handleRetry}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
                   >
                     <Text style={s.smallButtonText}>
-                      {t("library.opds.editCredentials", { defaultValue: "Edit credentials" })}
+                      {t("common.retry", { defaultValue: "Retry" })}
                     </Text>
                   </TouchableOpacity>
-                ) : null}
+                  {shouldEditOpdsCredentials(state) ? (
+                    <TouchableOpacity
+                      style={s.smallButton}
+                      onPress={() =>
+                        navigation.navigate("OpdsCatalogs", { editCatalogId: catalogId })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={t("library.opds.editCredentials", {
+                        defaultValue: "Edit credentials",
+                      })}
+                    >
+                      <Text style={s.smallButtonText}>
+                        {t("library.opds.editCredentials", { defaultValue: "Edit credentials" })}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ) : null}
-
-          {feed?.navigation.length ? (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>
-                {t("library.opds.collections", { defaultValue: "Collections" })}
-              </Text>
-              {feed.navigation.map((item) => (
-                <TouchableOpacity
-                  key={`${item.title}:${item.url}`}
-                  style={s.linkCard}
-                  onPress={() => openUrl(item.url, "push")}
-                >
-                  <GlobeIcon size={18} color={colors.primary} />
-                  <Text style={s.linkText}>{item.title}</Text>
-                  <ChevronRightIcon size={17} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-
-          {feed?.facets.map((facet) => (
-            <View key={facet.title} style={s.section}>
-              <Text style={s.sectionTitle}>{facet.title}</Text>
-              {facet.links.map((link) => (
-                <TouchableOpacity
-                  key={`${link.title ?? link.url}:${link.url}`}
-                  style={s.linkCard}
-                  onPress={() => openUrl(link.url, "push")}
-                >
-                  <Text style={s.linkText}>{link.title ?? link.url}</Text>
-                  <ChevronRightIcon size={17} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
-
-          {feed?.publications.length ? (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>
-                {t("library.opds.books", { defaultValue: "Books" })}
-              </Text>
-              {feed.publications.map((publication) => renderPublication(publication))}
-            </View>
-          ) : null}
-
-          {feed?.groups.map((group, groupIndex) => (
-            <View key={`${group.title}:${groupIndex}`} style={s.section}>
-              <Text style={s.sectionTitle}>{group.title}</Text>
-              {group.navigation.map((item) => (
-                <TouchableOpacity
-                  key={`${item.title}:${item.url}`}
-                  style={s.linkCard}
-                  onPress={() => openUrl(item.url, "push")}
-                >
-                  <Text style={s.linkText}>{item.title}</Text>
-                  <ChevronRightIcon size={17} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              ))}
-              {group.publications.map((publication) =>
-                renderPublication(publication, `group-${groupIndex}`),
-              )}
-            </View>
-          ))}
-
-          {feed &&
-          feed.navigation.length === 0 &&
-          feed.publications.length === 0 &&
-          feed.groups.length === 0 ? (
-            <View style={s.centerState}>
-              <BookOpenIcon size={30} color={colors.mutedForeground} />
-              <Text style={s.centerTitle}>
-                {t("library.opds.empty", { defaultValue: "Nothing on this shelf yet" })}
-              </Text>
-              <Text style={s.centerText}>
-                {t("library.opds.emptyHint", {
-                  defaultValue: "Try another collection or go back one level.",
-                })}
-              </Text>
-            </View>
-          ) : null}
-
-          {pagination.previousUrl || pagination.nextUrl ? (
-            <View style={s.pagination}>
-              {pagination.previousUrl ? (
-                <TouchableOpacity
-                  style={s.pageButton}
-                  onPress={() => openUrl(pagination.previousUrl as string, "push")}
-                >
-                  <ChevronLeftIcon size={17} color={colors.foreground} />
-                  <Text style={s.pageText}>
-                    {t("common.previous", { defaultValue: "Previous" })}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {pagination.nextUrl ? (
-                <TouchableOpacity
-                  style={s.pageButton}
-                  onPress={() => openUrl(pagination.nextUrl as string, "push")}
-                >
-                  <Text style={s.pageText}>{t("common.next", { defaultValue: "Next" })}</Text>
-                  <ChevronRightIcon size={17} color={colors.foreground} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-        </ScrollView>
+            ) : null
+          }
+        />
       )}
 
       {state.download.status !== "idle" ? (
         <View style={s.downloadPanel}>
-          <View style={s.downloadInner}>
+          <View
+            style={s.downloadInner}
+            accessibilityRole={state.download.status === "error" ? "alert" : undefined}
+          >
             <View style={s.downloadRow}>
-              {state.download.status === "downloading" ? (
+              {state.download.status === "downloading" || state.download.status === "importing" ? (
                 <Loader2Icon size={20} color={colors.primary} />
               ) : state.download.status === "success" ? (
                 <BookOpenIcon size={20} color={colors.emerald} />
@@ -1071,7 +1092,10 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                 <Text style={s.downloadTitle} numberOfLines={1}>
                   {state.download.publicationTitle}
                 </Text>
-                <Text style={s.downloadMeta}>
+                <Text
+                  style={s.downloadMeta}
+                  accessibilityLiveRegion={downloadAccessibility.liveRegion}
+                >
                   {state.download.status === "downloading"
                     ? t("library.opds.downloading", {
                         defaultValue:
@@ -1081,45 +1105,77 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
                             ? Math.round((state.download.loaded / state.download.total) * 100)
                             : 0,
                       })
-                    : state.download.status === "success"
-                      ? state.download.importedCount > 0
-                        ? t("library.opds.imported", { defaultValue: "Imported to your library" })
-                        : t("library.opds.alreadyImported", {
-                            defaultValue: "This book is already in your library",
-                          })
-                      : errorMessage(state.download.error)}
+                    : state.download.status === "importing"
+                      ? t("library.opds.importing", { defaultValue: "Adding to your libraryâ€¦" })
+                      : state.download.status === "success"
+                        ? state.download.importedCount > 0
+                          ? t("library.opds.imported", { defaultValue: "Imported to your library" })
+                          : t("library.opds.alreadyImported", {
+                              defaultValue: "This book is already in your library",
+                            })
+                        : errorMessage(state.download.error)}
                 </Text>
               </View>
               {state.download.status === "downloading" ? (
-                <TouchableOpacity style={s.smallButton} onPress={cancelDownload}>
+                <TouchableOpacity
+                  style={s.smallButton}
+                  onPress={cancelDownload}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: false }}
+                  accessibilityLabel={t("common.cancel", { defaultValue: "Cancel" })}
+                >
                   <Text style={s.smallButtonText}>
                     {t("common.cancel", { defaultValue: "Cancel" })}
                   </Text>
                 </TouchableOpacity>
               ) : state.download.status === "error" && lastDownload.current ? (
-                <TouchableOpacity style={s.smallButton} onPress={retryDownload}>
+                <TouchableOpacity
+                  style={s.smallButton}
+                  onPress={retryDownload}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: false }}
+                  accessibilityLabel={t("common.retry", { defaultValue: "Retry" })}
+                >
                   <Text style={s.smallButtonText}>
                     {t("common.retry", { defaultValue: "Retry" })}
                   </Text>
                 </TouchableOpacity>
-              ) : (
+              ) : state.download.status === "success" ? (
                 <TouchableOpacity
                   style={s.smallButton}
                   onPress={() => dispatch({ type: "downloadReset" })}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: false }}
+                  accessibilityLabel={t("common.done", { defaultValue: "Done" })}
                 >
                   <Text style={s.smallButtonText}>
                     {t("common.done", { defaultValue: "Done" })}
                   </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
-            {state.download.status === "downloading" ? (
-              <View style={s.progressTrack}>
+            {state.download.status === "downloading" || state.download.status === "importing" ? (
+              <View
+                style={s.progressTrack}
+                accessibilityRole="progressbar"
+                accessibilityValue={
+                  state.download.status === "downloading" && state.download.total > 0
+                    ? downloadAccessibility.value
+                    : {
+                        text:
+                          state.download.status === "importing"
+                            ? t("library.opds.importing", {
+                                defaultValue: "Adding to your libraryâ€¦",
+                              })
+                            : t("library.opds.downloading", { defaultValue: "Downloadingâ€¦" }),
+                      }
+                }
+              >
                 <View
                   style={[
                     s.progressFill,
                     {
-                      width: `${state.download.total > 0 ? Math.min(100, (state.download.loaded / state.download.total) * 100) : 8}%`,
+                      width: `${state.download.status === "downloading" && state.download.total > 0 ? Math.min(100, (state.download.loaded / state.download.total) * 100) : 8}%`,
                     },
                   ]}
                 />
@@ -1136,34 +1192,47 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
         onRequestClose={() => setFormatChoice(undefined)}
       >
         <Pressable style={s.overlay} onPress={() => setFormatChoice(undefined)}>
-          <Pressable style={s.picker} onPress={(event) => event.stopPropagation()}>
+          <Pressable
+            style={s.picker}
+            onPress={(event) => event.stopPropagation()}
+            accessibilityViewIsModal
+          >
             <View style={s.pickerHandle} />
-            <Text style={s.pickerTitle}>
-              {t("library.opds.chooseFormat", { defaultValue: "Choose format" })}
-            </Text>
+            <View ref={formatHeadingRef} accessible accessibilityRole="header">
+              <Text style={s.pickerTitle}>
+                {t("library.opds.chooseFormat", { defaultValue: "Choose format" })}
+              </Text>
+            </View>
             <Text style={s.pickerSubtitle} numberOfLines={2}>
               {formatChoice?.publication.title}
             </Text>
-            {formatChoice?.acquisitions.map((acquisition) => (
-              <TouchableOpacity
-                key={`${acquisition.format}:${acquisition.url}`}
-                style={s.formatButton}
-                onPress={() => {
-                  const publication = formatChoice.publication;
-                  setFormatChoice(undefined);
-                  void runDownload(publication, acquisition);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t("library.opds.downloadFormat", {
-                  defaultValue: "Download {{format}}",
-                  format: acquisition.format.toUpperCase(),
-                })}
-              >
-                <BookOpenIcon size={19} color={colors.primary} />
-                <Text style={s.formatText}>{acquisition.format}</Text>
-                <ChevronRightIcon size={17} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            ))}
+            <FlatList
+              style={s.formatList}
+              contentContainerStyle={s.formatListContent}
+              data={formatChoice?.acquisitions ?? []}
+              keyExtractor={(acquisition) => `${acquisition.format}:${acquisition.url}`}
+              initialNumToRender={8}
+              renderItem={({ item: acquisition }) => (
+                <TouchableOpacity
+                  style={s.formatButton}
+                  onPress={() => {
+                    const publication = formatChoice?.publication;
+                    setFormatChoice(undefined);
+                    if (publication) void runDownload(publication, acquisition);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: false }}
+                  accessibilityLabel={t("library.opds.downloadFormat", {
+                    defaultValue: "Download {{format}}",
+                    format: acquisition.format.toUpperCase(),
+                  })}
+                >
+                  <BookOpenIcon size={19} color={colors.primary} />
+                  <Text style={s.formatText}>{acquisition.format}</Text>
+                  <ChevronRightIcon size={17} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            />
           </Pressable>
         </Pressable>
       </Modal>

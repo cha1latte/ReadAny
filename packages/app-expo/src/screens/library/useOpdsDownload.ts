@@ -6,14 +6,13 @@ import {
   type OpdsDownloadProgress,
   OpdsError,
   type OpdsPublication,
-  createExclusiveOpdsDownloadRunner,
   downloadOpdsAcquisition,
   listSupportedAcquisitions,
   toBookMeta,
 } from "@readany/core";
 import { type IPlatformService, getPlatformService } from "@readany/core/services";
 import { generateId } from "@readany/core/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback } from "react";
 import { type MobileImportFile, useLibraryStore } from "../../stores/library-store";
 
 type OpdsDownloadPlatform = Pick<
@@ -28,6 +27,7 @@ export interface OpdsDownloadRequest {
   credentials?: OpdsCredentials;
   signal?: AbortSignal;
   onProgress?: (progress: OpdsDownloadProgress) => void;
+  onImportStart?: () => void;
 }
 
 export interface OpdsImportDownloadResult {
@@ -114,6 +114,8 @@ export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDepen
         platform: dependencies.platform,
         destinationPath: temporaryPath,
       });
+      if (request.signal?.aborted) throw new OpdsError("cancelled");
+      request.onImportStart?.();
       try {
         importResult = await dependencies.importBooks(
           [
@@ -152,67 +154,21 @@ export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDepen
 
 export function useOpdsDownload() {
   const importBooks = useLibraryStore((state) => state.importBooks);
-  const [progress, setProgress] = useState<OpdsDownloadProgress | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const lifecycleRef = useRef<ReturnType<typeof createOpdsDownloadUnmountGuard> | undefined>(
-    undefined,
-  );
-  const runner = useMemo(
-    () =>
-      createExclusiveOpdsDownloadRunner<
-        OpdsDownloadRequest & {
-          signal: AbortSignal;
-          onProgress: (progress: OpdsDownloadProgress) => void;
+  const download = useCallback(
+    async (request: OpdsDownloadRequest) => {
+      const platform = getPlatformService();
+      return createOpdsDownloadAdapter({
+        platform,
+        client: new OpdsClient(platform),
+        importBooks,
+        getTempDirectory: async () => (await import("expo-file-system")).Paths.cache.uri,
+        onCleanupError: () => {
+          console.warn("[OPDS] Temporary download cleanup failed.");
         },
-        OpdsImportDownloadResult,
-        OpdsDownloadProgress
-      >(
-        async (
-          request: OpdsDownloadRequest & {
-            signal: AbortSignal;
-            onProgress: (progress: OpdsDownloadProgress) => void;
-          },
-        ) => {
-          const platform = getPlatformService();
-          const adapter = createOpdsDownloadAdapter({
-            platform,
-            client: new OpdsClient(platform),
-            importBooks,
-            getTempDirectory: async () => (await import("expo-file-system")).Paths.cache.uri,
-            onCleanupError: () => {
-              console.warn("[OPDS] Temporary download cleanup failed.");
-            },
-          });
-          return adapter({
-            ...request,
-          });
-        },
-        {
-          onStart: () => {
-            lifecycleRef.current?.runIfMounted(() => {
-              setIsDownloading(true);
-              setProgress(null);
-            });
-          },
-          onProgress: (nextProgress) => {
-            lifecycleRef.current?.runIfMounted(() => setProgress(nextProgress));
-          },
-          onFinish: () => {
-            lifecycleRef.current?.runIfMounted(() => setIsDownloading(false));
-          },
-        },
-      ),
+      })(request);
+    },
     [importBooks],
   );
 
-  useEffect(() => {
-    const lifecycle = createOpdsDownloadUnmountGuard(runner.cancel);
-    lifecycleRef.current = lifecycle;
-    return () => {
-      lifecycle.dispose();
-      if (lifecycleRef.current === lifecycle) lifecycleRef.current = undefined;
-    };
-  }, [runner]);
-
-  return { download: runner.download, cancel: runner.cancel, progress, isDownloading };
+  return { download };
 }

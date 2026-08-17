@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseOpdsDocument } from "./opds-parser";
 
@@ -29,8 +33,12 @@ const ATOM = `<?xml version="1.0"?>
 </feed>`;
 
 const OPDS2 = JSON.stringify({
-  metadata: { title: "OPDS 2 Catalog", subtitle: "New books" },
+  metadata: {
+    title: { fr: "Catalogue OPDS 2", en: "OPDS 2 Catalog" },
+    subtitle: { fr: "Nouveaux livres", en: "New books" },
+  },
   links: [
+    { rel: "self", href: "feed.json", type: "application/opds+json" },
     { rel: "next", href: "pages/2.json", type: "application/opds+json" },
     { rel: ["previous"], href: "../previous.json", type: "application/opds+json" },
     {
@@ -46,13 +54,13 @@ const OPDS2 = JSON.stringify({
     {
       metadata: {
         identifier: "urn:isbn:9780000000002",
-        title: "Second Book",
-        author: [{ name: "First Author" }, "Second Author"],
-        publisher: "Other Press",
+        title: { ja: "第二の本", en: "Second Book" },
+        author: [{ name: { fr: "Premier auteur", en: "First Author" } }, "Second Author"],
+        publisher: [{ name: { fr: "Autre presse", en: "Other Press" } }, "Fallback Press"],
         language: "fr",
         published: "2025-01-02",
         description:
-          '<p>Read <strong>this</strong>. <a href="chapters/1">Chapter</a><iframe src="https://evil.test"></iframe></p>',
+          '<p>Read <strong>this</strong>. <a href="chapters/1">Chapter</a> <a href="/about">About</a> <a href="#details">Details</a> <a href="javascript:steal()">Bad</a><iframe src="https://evil.test"></iframe></p>',
         subject: [{ name: "Mystery" }, "Adventure"],
       },
       images: [{ rel: "cover", href: "images/cover.png", type: "image/png" }],
@@ -67,14 +75,13 @@ const OPDS2 = JSON.stringify({
   ],
   groups: [
     {
-      metadata: { title: "Featured" },
+      metadata: { title: { ja: "特集", fr: "En vedette" } },
       navigation: [{ title: "Editors' picks", href: "groups/editors.json" }],
-      publications: [],
     },
   ],
   facets: [
     {
-      metadata: { title: "Language" },
+      metadata: { title: { zh: "语言", fr: "Langue" } },
       links: [{ rel: "self", href: "facets/fr.json", title: "French" }],
     },
   ],
@@ -164,7 +171,8 @@ describe("parseOpdsDocument", () => {
       identifier: "urn:isbn:9780000000002",
       published: "2025-01-02",
       subjects: ["Mystery", "Adventure"],
-      description: '<p>Read <strong>this</strong>. <a href="chapters/1">Chapter</a></p>',
+      description:
+        '<p>Read <strong>this</strong>. <a href="https://catalog.test/root/chapters/1">Chapter</a> <a href="https://catalog.test/about">About</a> <a href="https://catalog.test/root/feed.json#details">Details</a> <a>Bad</a></p>',
       images: [expect.objectContaining({ url: "https://catalog.test/root/images/cover.png" })],
       acquisitions: [
         expect.objectContaining({
@@ -174,13 +182,13 @@ describe("parseOpdsDocument", () => {
       ],
     });
     expect(feed.groups[0]).toMatchObject({
-      title: "Featured",
+      title: "En vedette",
       navigation: [
         { title: "Editors' picks", url: "https://catalog.test/root/groups/editors.json" },
       ],
     });
     expect(feed.facets[0]).toEqual({
-      title: "Language",
+      title: "Langue",
       links: [
         {
           rel: ["self"],
@@ -194,6 +202,7 @@ describe("parseOpdsDocument", () => {
   it("maps supported acquisition extensions and retains unknown formats", () => {
     const body = JSON.stringify({
       metadata: { title: "Formats" },
+      links: [{ rel: "self", href: "feed.json", type: "application/opds+json" }],
       publications: [
         {
           metadata: { title: "Format Book" },
@@ -235,9 +244,166 @@ describe("parseOpdsDocument", () => {
     );
   });
 
-  it("does not resolve external XML entities", () => {
-    const body = `<?xml version="1.0"?>
-<!DOCTYPE feed [<!ENTITY xxe SYSTEM "file:///definitely-not-real/XXE_SECRET">]>
+  it.each([
+    [
+      "missing self link",
+      {
+        metadata: { title: "Catalog" },
+        navigation: [{ title: "Books", href: "books" }],
+      },
+    ],
+    [
+      "missing catalog collection",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+      },
+    ],
+    [
+      "blank catalog collection",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        publications: [],
+      },
+    ],
+    [
+      "group with both collection roles",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        groups: [
+          {
+            metadata: { title: "Mixed" },
+            navigation: [{ title: "Books", href: "books" }],
+            publications: [{ metadata: { title: "Book" } }],
+          },
+        ],
+      },
+    ],
+    [
+      "group without a collection role",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        groups: [{ metadata: { title: "Empty" } }],
+      },
+    ],
+    [
+      "group without a title",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        groups: [{ metadata: {}, navigation: [{ title: "Books", href: "books" }] }],
+      },
+    ],
+    [
+      "group with an invalid navigation link",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        groups: [{ metadata: { title: "Broken" }, navigation: [{ title: "Books" }] }],
+      },
+    ],
+    [
+      "facet without a title",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        navigation: [{ title: "Books", href: "books" }],
+        facets: [{ metadata: {}, links: [{ href: "fiction" }] }],
+      },
+    ],
+    [
+      "facet without links",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        navigation: [{ title: "Books", href: "books" }],
+        facets: [{ metadata: { title: "Genre" } }],
+      },
+    ],
+    [
+      "facet with an invalid link",
+      {
+        metadata: { title: "Catalog" },
+        links: [{ rel: "self", href: "feed.json" }],
+        navigation: [{ title: "Books", href: "books" }],
+        facets: [{ metadata: { title: "Genre" }, links: [{ title: "Fiction" }] }],
+      },
+    ],
+  ])("rejects an OPDS 2 feed with %s", (_name, value) => {
+    expect(() =>
+      parseOpdsDocument(
+        JSON.stringify(value),
+        "application/opds+json",
+        "https://catalog.test/feed.json",
+      ),
+    ).toThrow("Invalid OPDS 2 catalog");
+  });
+
+  it("rejects a feed in an unrelated XML namespace", () => {
+    expect(() =>
+      parseOpdsDocument(
+        '<feed xmlns="urn:not-atom"><title>Not Atom</title></feed>',
+        "application/atom+xml",
+        "https://catalog.test/feed.xml",
+      ),
+    ).toThrow("Invalid OPDS XML document");
+  });
+
+  it("keeps compatibility with namespace-less Atom feeds", () => {
+    const feed = parseOpdsDocument(
+      '<feed><title>Legacy Catalog</title><entry><title>Books</title><link href="books.xml" type="application/atom+xml;profile=opds-catalog" /></entry></feed>',
+      "application/atom+xml",
+      "https://catalog.test/feed.xml",
+    );
+
+    expect(feed).toMatchObject({
+      title: "Legacy Catalog",
+      navigation: [{ title: "Books", url: "https://catalog.test/books.xml" }],
+    });
+  });
+
+  it("rejects Atom-shaped children in an unrelated namespace", () => {
+    const body = `<feed><title>Catalog</title><entry><wrong:title xmlns:wrong="urn:not-atom">Not Atom</wrong:title><link href="books.xml" type="application/atom+xml;profile=opds-catalog" /></entry></feed>`;
+
+    expect(() =>
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml"),
+    ).toThrow("Invalid OPDS XML document");
+  });
+
+  it("preserves distinct Atom IDs when grouped entries share an acquisition URL", () => {
+    const body = `<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Grouped catalog</title>
+  <entry>
+    <id>urn:book:first</id><title>First</title>
+    <link rel="http://opds-spec.org/group" href="#featured" title="Featured" />
+    <link rel="http://opds-spec.org/acquisition" href="same.epub" type="application/epub+zip" />
+  </entry>
+  <entry>
+    <id>urn:book:second</id><title>Second</title>
+    <link rel="http://opds-spec.org/group" href="#featured" title="Featured" />
+    <link rel="http://opds-spec.org/acquisition" href="same.epub" type="application/epub+zip" />
+  </entry>
+</feed>`;
+
+    const feed = parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed");
+    expect(feed.groups[0]?.publications.map(({ id }) => id)).toEqual([
+      "urn:book:first",
+      "urn:book:second",
+    ]);
+  });
+
+  it("does not read a real local file through an external XML entity", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "readany-opds-xxe-"));
+    const marker = `READANY_XXE_MARKER_${Date.now()}`;
+    const markerPath = join(directory, "marker.txt");
+    await writeFile(markerPath, marker, "utf8");
+
+    try {
+      const body = `<?xml version="1.0"?>
+<!DOCTYPE feed [<!ENTITY xxe SYSTEM "${pathToFileURL(markerPath).href}">]>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
   <title>Safe catalog</title>
   <entry>
@@ -247,8 +413,27 @@ describe("parseOpdsDocument", () => {
   </entry>
 </feed>`;
 
+      const feed = parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed");
+      expect(JSON.stringify(feed)).not.toContain(marker);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not expand internal XML entities", () => {
+    const body = `<?xml version="1.0"?>
+<!DOCTYPE feed [<!ENTITY internal "INTERNAL_ENTITY_MARKER">]>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Safe catalog</title>
+  <entry>
+    <title>Safe book</title>
+    <content type="text">&internal;</content>
+    <link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" />
+  </entry>
+</feed>`;
+
     const feed = parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed");
-    expect(feed.publications[0]?.description ?? "").not.toContain("XXE_SECRET");
+    expect(JSON.stringify(feed)).not.toContain("INTERNAL_ENTITY_MARKER");
   });
 
   it("sanitizes an Atom XHTML description without losing safe markup", () => {

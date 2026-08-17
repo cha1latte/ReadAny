@@ -13,6 +13,7 @@ import type {
 } from "./opds-types";
 
 const ACQUISITION_REL = "http://opds-spec.org/acquisition";
+const ATOM_NAMESPACE = "http://www.w3.org/2005/Atom";
 const IMAGE_RELS = new Set([
   "cover",
   "thumbnail",
@@ -61,6 +62,35 @@ function optionalString(value: unknown): string | undefined {
 function requiredString(value: unknown): string {
   if (typeof value !== "string") throw new Error("Invalid OPDS 2 catalog");
   return value;
+}
+
+function isLocalizableString(value: unknown): boolean {
+  if (typeof value === "string") return value.length > 0;
+  if (!isRecord(value)) return false;
+  const entries = Object.entries(value);
+  return (
+    entries.length > 0 &&
+    entries.every(
+      ([language, text]) => language.length > 0 && typeof text === "string" && text.length > 0,
+    )
+  );
+}
+
+function localizableString(value: unknown): string | undefined {
+  if (typeof value === "string") return value || undefined;
+  if (!isLocalizableString(value) || !isRecord(value)) return undefined;
+  const entries = Object.entries(value).sort(([left], [right]) => {
+    if (left.toLowerCase() === "en") return -1;
+    if (right.toLowerCase() === "en") return 1;
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+  return entries[0]?.[1] as string | undefined;
+}
+
+function requiredLocalizableString(value: unknown): string {
+  const normalized = localizableString(value);
+  if (!normalized) throw new Error("Invalid OPDS 2 catalog");
+  return normalized;
 }
 
 function normalizeRel(value: unknown): string[] {
@@ -117,7 +147,7 @@ function normalizeNames(value: unknown): string[] {
   return values.flatMap((item) => {
     if (typeof item === "string") return item ? [item] : [];
     if (!isRecord(item)) return [];
-    const name = optionalString(item.name);
+    const name = localizableString(item.name);
     return name ? [name] : [];
   });
 }
@@ -135,19 +165,19 @@ function normalizeSubjects(value: unknown): string[] {
     if (typeof item === "string") return item ? [item] : [];
     if (!isRecord(item)) return [];
     const name =
-      optionalString(item.name) ?? optionalString(item.label) ?? optionalString(item.code);
+      localizableString(item.name) ?? optionalString(item.label) ?? optionalString(item.code);
     return name ? [name] : [];
   });
 }
 
-function getDescription(metadata: UnknownRecord): string | undefined {
+function getDescription(metadata: UnknownRecord, documentUrl: string): string | undefined {
   const description = optionalString(metadata.description);
-  if (description) return sanitizeOpdsDescription(description);
+  if (description) return sanitizeOpdsDescription(description, documentUrl);
 
   const content = metadata[SYMBOL.CONTENT];
   if (!isRecord(content)) return undefined;
   const value = optionalString(content.value);
-  return value ? sanitizeOpdsDescription(value) : undefined;
+  return value ? sanitizeOpdsDescription(value, documentUrl) : undefined;
 }
 
 function getBookFormat(type: string | undefined, url: string): BookFormat | null {
@@ -170,14 +200,10 @@ function mapAcquisition(value: unknown, documentUrl: string): OpdsAcquisition | 
   return { ...link, format: getBookFormat(link.type, link.url) };
 }
 
-function mapPublication(
-  value: unknown,
-  documentUrl: string,
-  atomIds?: ReadonlyMap<string, string>,
-): OpdsPublication {
+function mapPublication(value: unknown, documentUrl: string): OpdsPublication {
   if (!isRecord(value)) throw new Error("Invalid OPDS 2 catalog");
   const metadata = getMetadata(value);
-  const title = requiredString(metadata.title);
+  const title = requiredLocalizableString(metadata.title);
   const rawLinks = asRecords(value.links);
   const acquisitions = rawLinks.flatMap((item) => {
     const acquisition = mapAcquisition(item, documentUrl);
@@ -191,11 +217,6 @@ function mapPublication(
     return image ? [image] : [];
   });
 
-  const rawAcquisitionHref = rawLinks.find((item) =>
-    normalizeRel(item.rel).some((rel) => rel.startsWith(ACQUISITION_REL)),
-  )?.href;
-  const atomId =
-    typeof rawAcquisitionHref === "string" ? atomIds?.get(rawAcquisitionHref) : undefined;
   const identifier = optionalString(metadata.identifier);
   const publication: OpdsPublication = {
     title,
@@ -204,11 +225,11 @@ function mapPublication(
     images,
     acquisitions,
   };
-  const id = atomId ?? optionalString(value.id) ?? identifier;
-  const publisher = firstString(metadata.publisher);
+  const id = optionalString(value.id) ?? identifier;
+  const publisher = normalizeNames(metadata.publisher)[0];
   const language = firstString(metadata.language);
   const published = optionalString(metadata.published);
-  const description = getDescription(metadata);
+  const description = getDescription(metadata, documentUrl);
   if (id) publication.id = id;
   if (publisher) publication.publisher = publisher;
   if (language) publication.language = language;
@@ -248,14 +269,10 @@ function mapSearch(links: UnknownRecord[], documentUrl: string): OpdsSearchDescr
   return undefined;
 }
 
-function mapFeed(
-  value: unknown,
-  documentUrl: string,
-  atomIds?: ReadonlyMap<string, string>,
-): OpdsFeed {
+function mapFeed(value: unknown, documentUrl: string): OpdsFeed {
   if (!isRecord(value)) throw new Error("Invalid OPDS 2 catalog");
   const metadata = getMetadata(value);
-  const title = requiredString(metadata.title);
+  const title = requiredLocalizableString(metadata.title);
   const links = asRecords(value.links);
   const next = findLink(links, "next");
   const previous = findLink(links, "previous");
@@ -269,18 +286,18 @@ function mapFeed(
       url: resolveUrl(requiredString(item.href), documentUrl),
     })),
     publications: asRecords(value.publications).map((publication) =>
-      mapPublication(publication, documentUrl, atomIds),
+      mapPublication(publication, documentUrl),
     ),
-    groups: asRecords(value.groups).map((group) => mapFeed(group, documentUrl, atomIds)),
+    groups: asRecords(value.groups).map((group) => mapFeed(group, documentUrl)),
     facets: asRecords(value.facets).map((facet) => ({
-      title: requiredString(getMetadata(facet).title),
+      title: requiredLocalizableString(getMetadata(facet).title),
       links: asRecords(facet.links).flatMap((item) => {
         const link = mapLink(item, documentUrl);
         return link ? [link] : [];
       }),
     })),
   };
-  const subtitle = optionalString(metadata.subtitle);
+  const subtitle = localizableString(metadata.subtitle);
   const search = mapSearch(links, documentUrl);
   if (subtitle) feed.subtitle = subtitle;
   if (nextHref) feed.nextUrl = resolveUrl(nextHref, documentUrl);
@@ -310,36 +327,79 @@ function validateLink(value: unknown): void {
   }
 }
 
-function validateFeed(value: unknown): asserts value is UnknownRecord {
-  if (!isRecord(value) || !isRecord(value.metadata) || typeof value.metadata.title !== "string") {
-    throw new Error("Invalid OPDS 2 catalog");
-  }
-  for (const name of ["links", "navigation", "publications", "groups", "facets"]) {
-    validateArrayProperty(value, name);
-  }
-  for (const link of getArrayProperty(value, "links")) validateLink(link);
+function validateNavigation(value: UnknownRecord): void {
   for (const item of getArrayProperty(value, "navigation")) {
     validateLink(item);
     if (!isRecord(item) || typeof item.title !== "string")
       throw new Error("Invalid OPDS 2 catalog");
   }
+}
+
+function validatePublication(value: unknown): void {
+  if (!isRecord(value) || !isRecord(value.metadata) || !isLocalizableString(value.metadata.title)) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+  for (const link of getArrayProperty(value, "links")) validateLink(link);
+  for (const image of getArrayProperty(value, "images")) validateLink(image);
+}
+
+function validateGroup(value: unknown): void {
+  if (!isRecord(value) || !isRecord(value.metadata) || !isLocalizableString(value.metadata.title)) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+  if ("groups" in value || "facets" in value) throw new Error("Invalid OPDS 2 catalog");
+  for (const link of getArrayProperty(value, "links")) validateLink(link);
+
+  const hasNavigation = "navigation" in value;
+  const hasPublications = "publications" in value;
+  if (hasNavigation === hasPublications) throw new Error("Invalid OPDS 2 catalog");
+  if (hasNavigation) {
+    validateNavigation(value);
+    if (getArrayProperty(value, "navigation").length === 0)
+      throw new Error("Invalid OPDS 2 catalog");
+  } else {
+    const publications = getArrayProperty(value, "publications");
+    if (publications.length === 0) throw new Error("Invalid OPDS 2 catalog");
+    for (const publication of publications) validatePublication(publication);
+  }
+}
+
+function validateFeed(value: unknown): asserts value is UnknownRecord {
+  if (!isRecord(value) || !isRecord(value.metadata) || !isLocalizableString(value.metadata.title)) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+  for (const name of ["links", "navigation", "publications", "groups", "facets"]) {
+    validateArrayProperty(value, name);
+  }
+  const links = getArrayProperty(value, "links");
+  for (const link of links) validateLink(link);
+  if (!links.some((link) => isRecord(link) && normalizeRel(link.rel).includes("self"))) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+
+  const navigation = getArrayProperty(value, "navigation");
+  const publications = getArrayProperty(value, "publications");
+  const groups = getArrayProperty(value, "groups");
+  if (navigation.length + publications.length + groups.length === 0) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+
+  validateNavigation(value);
   for (const publication of getArrayProperty(value, "publications")) {
+    validatePublication(publication);
+  }
+  for (const group of groups) validateGroup(group);
+  for (const facet of getArrayProperty(value, "facets")) {
     if (
-      !isRecord(publication) ||
-      !isRecord(publication.metadata) ||
-      typeof publication.metadata.title !== "string"
+      !isRecord(facet) ||
+      !isRecord(facet.metadata) ||
+      !isLocalizableString(facet.metadata.title)
     ) {
       throw new Error("Invalid OPDS 2 catalog");
     }
-    for (const link of getArrayProperty(publication, "links")) validateLink(link);
-    for (const image of getArrayProperty(publication, "images")) validateLink(image);
-  }
-  for (const group of getArrayProperty(value, "groups")) validateFeed(group);
-  for (const facet of getArrayProperty(value, "facets")) {
-    if (!isRecord(facet) || !isRecord(facet.metadata) || typeof facet.metadata.title !== "string") {
-      throw new Error("Invalid OPDS 2 catalog");
-    }
-    for (const link of getArrayProperty(facet, "links")) validateLink(link);
+    const facetLinks = getArrayProperty(facet, "links");
+    if (facetLinks.length === 0) throw new Error("Invalid OPDS 2 catalog");
+    for (const link of facetLinks) validateLink(link);
   }
 }
 
@@ -352,24 +412,51 @@ function getElementChildren(node: Node): Element[] {
   return Array.from(node.childNodes).filter((child): child is Element => child.nodeType === 1);
 }
 
-function getAtomIds(document: Document): Map<string, string> {
-  const result = new Map<string, string>();
-  const entries = Array.from(
-    document.getElementsByTagNameNS("http://www.w3.org/2005/Atom", "entry"),
-  );
-  for (const entry of entries) {
-    const children = getElementChildren(entry);
-    const id = children.find((child) => child.localName === "id")?.textContent;
-    if (!id) continue;
-    for (const link of children.filter((child) => child.localName === "link")) {
-      const rel = link.getAttribute("rel") ?? "";
-      const href = link.getAttribute("href");
-      if (href && rel.split(/\s+/).some((item) => item.startsWith(ACQUISITION_REL))) {
-        result.set(href, id);
-      }
-    }
+function hasOnlyNamespaceLessAtomStructure(root: Element): boolean {
+  const feedElements = new Set([
+    "id",
+    "title",
+    "updated",
+    "author",
+    "link",
+    "category",
+    "contributor",
+    "generator",
+    "icon",
+    "logo",
+    "rights",
+    "subtitle",
+    "entry",
+  ]);
+  const entryElements = new Set([
+    "id",
+    "title",
+    "updated",
+    "author",
+    "link",
+    "category",
+    "content",
+    "contributor",
+    "published",
+    "rights",
+    "source",
+    "summary",
+  ]);
+  const feedChildren = getElementChildren(root);
+  if (
+    feedChildren.some(
+      (child) => feedElements.has(child.localName) && (child.namespaceURI || null) !== null,
+    )
+  ) {
+    return false;
   }
-  return result;
+  return feedChildren
+    .filter((child) => child.localName === "entry" && (child.namespaceURI || null) === null)
+    .every((entry) =>
+      getElementChildren(entry).every(
+        (child) => !entryElements.has(child.localName) || (child.namespaceURI || null) === null,
+      ),
+    );
 }
 
 function parseXml(body: string, documentUrl: string): OpdsFeed {
@@ -381,13 +468,23 @@ function parseXml(body: string, documentUrl: string): OpdsFeed {
       fatalError: (message) => errors.push(message),
     },
   }).parseFromString(removeDoctypeAndEntityReferences(body), "application/xml");
-  if (errors.length > 0 || document.documentElement.localName !== "feed") {
+  const root = document.documentElement;
+  const rootNamespace = root.namespaceURI || null;
+  const namespaceIsSupported = rootNamespace === null || rootNamespace === ATOM_NAMESPACE;
+  const namespaceLessChildrenAreCompatible =
+    rootNamespace !== null || hasOnlyNamespaceLessAtomStructure(root);
+  if (
+    errors.length > 0 ||
+    root.localName !== "feed" ||
+    !namespaceIsSupported ||
+    !namespaceLessChildrenAreCompatible
+  ) {
     throw new Error("Invalid OPDS XML document");
   }
 
   try {
     const normalized = getFeed(document as unknown as Document);
-    return mapFeed(normalized, documentUrl, getAtomIds(document as unknown as Document));
+    return mapFeed(normalized, documentUrl);
   } catch (error) {
     if (error instanceof Error && error.message === "Invalid OPDS XML document") throw error;
     throw new Error("Invalid OPDS XML document");

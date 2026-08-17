@@ -44,7 +44,7 @@ function escapeAttribute(value: string): string {
   return escapeText(value).replace(/"/g, "&quot;");
 }
 
-function getSafeHref(attributeSource: string): string | undefined {
+function getSafeHref(attributeSource: string, documentUrl?: string): string | undefined {
   const match = attributeSource.match(/(?:^|\s)href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
   const href = decodeEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
   const hasControlCharacter = Array.from(href).some((character) => {
@@ -55,15 +55,20 @@ function getSafeHref(attributeSource: string): string | undefined {
     return undefined;
   }
 
-  const scheme = href.match(/^([a-z][a-z\d+.-]*):/i)?.[1]?.toLowerCase();
-  if (scheme && scheme !== "http" && scheme !== "https") return undefined;
-  return href;
+  try {
+    const resolved = new URL(href, documentUrl);
+    return resolved.protocol === "http:" || resolved.protocol === "https:"
+      ? resolved.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
  * Sanitizes an untrusted OPDS HTML fragment without attaching it to a browser DOM.
  */
-export function sanitizeOpdsDescription(input: string): string {
+export function sanitizeOpdsDescription(input: string, documentUrl?: string): string {
   const tokens = input.match(/<!--[\s\S]*?-->|<\/?[A-Za-z][^>]*>|[^<]+|</g) ?? [];
   const output: string[] = [];
   const allowedStack: string[] = [];
@@ -108,7 +113,7 @@ export function sanitizeOpdsDescription(input: string): string {
     }
 
     if (name === "a") {
-      const href = getSafeHref(token.slice(token.indexOf(name) + name.length));
+      const href = getSafeHref(token.slice(token.indexOf(name) + name.length), documentUrl);
       output.push(href ? `<a href="${escapeAttribute(href)}">` : "<a>");
     } else {
       output.push(`<${name}>`);

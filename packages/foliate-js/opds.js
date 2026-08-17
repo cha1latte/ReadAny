@@ -150,6 +150,7 @@ export const getPublication = (entry) => {
   const links = children.filter(filter("link")).map(getLink);
   const linksByRel = groupByArray(links, (link) => link.rel);
   return {
+    id: children.find(filter("id"))?.textContent,
     metadata: {
       title: children.find(filter("title"))?.textContent ?? "",
       author: children.filter(filter("author")).map(getPerson),

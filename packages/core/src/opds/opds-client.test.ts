@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchOptions } from "../services/platform";
-import { OpdsClient, type OpdsCredentials, type OpdsError } from "./opds-client";
+import {
+  type OpdsAssetResponse,
+  OpdsClient,
+  type OpdsCredentials,
+  type OpdsError,
+} from "./opds-client";
 
 const ATOM = `<?xml version="1.0"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
@@ -64,6 +69,22 @@ function transportResponse(response: Response) {
   const onDispose = vi.fn();
   Object.assign(response, { cancelTransport, onDispose });
   return { response, cancelTransport, onDispose };
+}
+
+function scheduleCancelAfterReadNext(asset: OpdsAssetResponse): void {
+  const managed = asset as unknown as {
+    readNext(
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+    ): Promise<ReadableStreamReadResult<Uint8Array>>;
+  };
+  const readNext = managed.readNext.bind(managed);
+  managed.readNext = async (reader) => {
+    const result = await readNext(reader);
+    queueMicrotask(() => {
+      void asset.cancel();
+    });
+    return result;
+  };
 }
 
 function stalledBodyResponse(contentType = "application/atom+xml") {
@@ -464,6 +485,39 @@ describe("OpdsClient catalog requests", () => {
 });
 
 describe("OpdsClient assets", () => {
+  it.each([
+    ["EOF", { done: true as const, value: undefined }],
+    ["a chunk", { done: false as const, value: Uint8Array.of(7, 8, 9) }],
+  ])(
+    "rejects when cancellation lands after readNext fulfills with %s but before pull continues",
+    async (_label, outcome) => {
+      const nativeReader = {
+        read: vi.fn(async () => outcome),
+        cancel: vi.fn(async () => {}),
+      };
+      const source = response("unused", { headers: {} });
+      Object.defineProperty(source, "body", {
+        value: { getReader: () => nativeReader },
+      });
+      const transport = transportResponse(source);
+      const platform = fakePlatform(() => transport.response);
+      const asset = await new OpdsClient(platform).fetchAsset(
+        "https://catalog.test/book.epub",
+        "https://catalog.test",
+      );
+      scheduleCancelAfterReadNext(asset);
+      const reader = asset.body?.getReader();
+      if (!reader) throw new Error("Expected a managed asset body");
+
+      await expectOpdsError(reader.read(), "cancelled");
+      await asset.cancel();
+
+      expect(nativeReader.cancel).toHaveBeenCalledOnce();
+      expect(transport.cancelTransport).toHaveBeenCalledOnce();
+      expect(transport.onDispose).toHaveBeenCalledOnce();
+    },
+  );
+
   it("returns exact binary bytes and metadata without constructing an ambient Response", async () => {
     const bytes = Uint8Array.of(0, 255, 16, 128, 42);
     const source = new Response(bytes, { headers: { "Content-Type": "image/jpeg" } });

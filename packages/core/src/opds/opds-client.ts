@@ -346,7 +346,9 @@ class ManagedAssetResponse implements OpdsAssetResponse {
         pull: async (controller) => {
           this.used = true;
           try {
-            const { done, value } = await this.readNext(reader);
+            const result = await this.readNext(reader);
+            this.throwIfCancelled();
+            const { done, value } = result;
             if (done) {
               controller.close();
               this.finishNormally();
@@ -411,7 +413,9 @@ class ManagedAssetResponse implements OpdsAssetResponse {
     let total = 0;
     try {
       for (;;) {
-        const { done, value } = await reader.read();
+        const result = await reader.read();
+        this.throwIfCancelled();
+        const { done, value } = result;
         if (done) break;
         chunks.push(value);
         total += value.byteLength;

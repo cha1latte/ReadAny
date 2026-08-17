@@ -34,6 +34,8 @@ const SUPPORTED_FORMATS = new Set<BookFormat>([
 ]);
 
 const DIRECT_ACQUISITION_REL = "http://opds-spec.org/acquisition";
+/** Hard safety ceiling for the whole-file platform write fallback. */
+export const OPDS_MAX_ACQUISITION_BYTES = 256 * 1024 * 1024;
 
 export interface SupportedOpdsAcquisition extends OpdsAcquisition {
   format: BookFormat;
@@ -55,6 +57,8 @@ export interface DownloadOpdsAcquisitionInput {
   destinationPath: string;
   signal?: AbortSignal;
   onProgress?: (progress: OpdsDownloadProgress) => void;
+  /** Optional stricter caller limit; never raises the global safety ceiling. */
+  maxBytes?: number;
 }
 
 export interface DownloadOpdsAcquisitionResult {
@@ -62,6 +66,47 @@ export interface DownloadOpdsAcquisitionResult {
   destinationPath: string;
   suggestedFileName: string;
   bytesWritten: number;
+}
+
+export function createExclusiveOpdsDownloadRunner<
+  TInput extends { signal: AbortSignal; onProgress: (progress: TProgress) => void },
+  TResult,
+  TProgress,
+>(
+  execute: (input: TInput) => Promise<TResult>,
+  callbacks: {
+    onStart?: () => void;
+    onProgress?: (progress: TProgress) => void;
+    onFinish?: () => void;
+  } = {},
+) {
+  let activeController: AbortController | undefined;
+  return {
+    async download(request: Omit<TInput, "signal" | "onProgress">): Promise<TResult> {
+      if (activeController) throw new OpdsError("download-in-progress");
+      const controller = new AbortController();
+      activeController = controller;
+      callbacks.onStart?.();
+      try {
+        return await execute({
+          ...request,
+          signal: controller.signal,
+          onProgress: (progress: TProgress) => callbacks.onProgress?.(progress),
+        } as TInput);
+      } finally {
+        if (activeController === controller) {
+          activeController = undefined;
+          callbacks.onFinish?.();
+        }
+      }
+    },
+    cancel(): void {
+      activeController?.abort();
+    },
+    isActive(): boolean {
+      return activeController !== undefined;
+    },
+  };
 }
 
 function mediaType(type: string | undefined): string {
@@ -108,7 +153,7 @@ export function sanitizeOpdsFileName(title: string, format: BookFormat): string 
     .replace(/^[ .-]+|[ .]+$/g, "")
     .slice(0, 120)
     .replace(/[ .]+$/g, "");
-  const safeBase = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base) ? `_${base}` : base;
+  const safeBase = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(base) ? `_${base}` : base;
   return `${safeBase || "book"}.${format}`;
 }
 
@@ -180,7 +225,8 @@ function mapDownloadError(error: unknown): OpdsError {
       error.code === "insecure-url" ||
       error.code === "unauthorized" ||
       error.code === "unsupported-auth" ||
-      error.code === "unsupported-acquisition"
+      error.code === "unsupported-acquisition" ||
+      error.code === "asset-too-large"
     ) {
       return error;
     }
@@ -192,14 +238,20 @@ async function readAsset(
   response: OpdsAssetResponse,
   signal: AbortSignal | undefined,
   onProgress: ((progress: OpdsDownloadProgress) => void) | undefined,
+  maxBytes: number,
 ): Promise<Uint8Array> {
   const total = parseContentLength(response);
+  if (total > maxBytes) {
+    await response.cancel().catch(() => {});
+    throw new OpdsError("asset-too-large");
+  }
   let loaded = 0;
   onProgress?.({ loaded, total });
   throwIfCancelled(signal);
 
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) throw new OpdsError("asset-too-large");
     throwIfCancelled(signal);
     loaded = bytes.byteLength;
     onProgress?.({ loaded: total > 0 ? Math.min(loaded, total) : loaded, total });
@@ -208,13 +260,24 @@ async function readAsset(
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
+  let preallocated = total > 0 ? new Uint8Array(total) : undefined;
   try {
     for (;;) {
       throwIfCancelled(signal);
       const { done, value } = await reader.read();
       throwIfCancelled(signal);
       if (done) break;
-      chunks.push(value);
+      if (loaded + value.byteLength > maxBytes) throw new OpdsError("asset-too-large");
+      if (preallocated) {
+        if (loaded + value.byteLength > preallocated.byteLength) {
+          chunks.push(preallocated.subarray(0, loaded), value);
+          preallocated = undefined;
+        } else {
+          preallocated.set(value, loaded);
+        }
+      } else {
+        chunks.push(value);
+      }
       loaded += value.byteLength;
       onProgress?.({ loaded: total > 0 ? Math.min(loaded, total) : loaded, total });
     }
@@ -223,6 +286,11 @@ async function readAsset(
     throw error;
   } finally {
     reader.releaseLock();
+  }
+
+  if (preallocated) {
+    if (loaded === preallocated.byteLength) return preallocated;
+    chunks.push(preallocated.subarray(0, loaded));
   }
 
   const bytes = new Uint8Array(loaded);
@@ -249,7 +317,12 @@ export async function downloadOpdsAcquisition(
       input.credentials,
       input.signal,
     );
-    const bytes = await readAsset(response, input.signal, input.onProgress);
+    const requestedMax = input.maxBytes;
+    const maxBytes =
+      requestedMax !== undefined && Number.isSafeInteger(requestedMax) && requestedMax > 0
+        ? Math.min(requestedMax, OPDS_MAX_ACQUISITION_BYTES)
+        : OPDS_MAX_ACQUISITION_BYTES;
+    const bytes = await readAsset(response, input.signal, input.onProgress, maxBytes);
     throwIfCancelled(input.signal);
     await input.platform.writeFile(input.destinationPath, bytes);
     throwIfCancelled(input.signal);

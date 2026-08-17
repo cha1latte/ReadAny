@@ -78,4 +78,6 @@ export type OpdsErrorCode =
   | "too-large"
   | "unsupported-acquisition"
   | "download-failed"
+  | "asset-too-large"
+  | "download-in-progress"
   | "import-failed";

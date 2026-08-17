@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IPlatformService } from "../services/platform";
-import { downloadOpdsAcquisition, listSupportedAcquisitions, toBookMeta } from "./opds-acquisition";
+import {
+  OPDS_MAX_ACQUISITION_BYTES,
+  createExclusiveOpdsDownloadRunner,
+  downloadOpdsAcquisition,
+  listSupportedAcquisitions,
+  toBookMeta,
+} from "./opds-acquisition";
 import { OpdsClient, OpdsError } from "./opds-client";
 import type { OpdsAcquisition, OpdsCredentials, OpdsPublication } from "./opds-types";
 
@@ -109,6 +115,15 @@ describe("listSupportedAcquisitions", () => {
     input.title = "CON";
 
     expect(listSupportedAcquisitions(input)[0]?.suggestedFileName).toBe("_CON.epub");
+  });
+
+  it("protects a reserved Windows device stem before a suffix", () => {
+    const input = publication([
+      acquisition("https://catalog.test/book.epub", "application/epub+zip"),
+    ]);
+    input.title = "CON.txt";
+
+    expect(listSupportedAcquisitions(input)[0]?.suggestedFileName).toBe("_CON.txt.epub");
   });
 });
 
@@ -370,5 +385,89 @@ describe("downloadOpdsAcquisition", () => {
       expect(error).toMatchObject({ code: "download-failed" });
       expect(String(error)).not.toContain(secret);
     }
+  });
+
+  it("rejects an oversized advertised asset before reading and cancels its transport", async () => {
+    const response = streamResponse([new Uint8Array([1])], {
+      "Content-Length": String(OPDS_MAX_ACQUISITION_BYTES + 1),
+    }) as Response & { cancel: ReturnType<typeof vi.fn> };
+    response.cancel = vi.fn(async () => undefined);
+    const client = { fetchAsset: vi.fn(async () => response) };
+    const platform = fakePlatform(vi.fn());
+
+    await expect(
+      downloadOpdsAcquisition({
+        publication: publication([
+          acquisition("https://catalog.test/book.epub", "application/epub+zip"),
+        ]),
+        client,
+        platform,
+        catalogOrigin: "https://catalog.test",
+        destinationPath: "/cache/book.epub",
+      }),
+    ).rejects.toMatchObject({ code: "asset-too-large" });
+    expect(response.cancel).toHaveBeenCalledOnce();
+    expect(platform.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("bounds a missing or dishonest content length by cumulative bytes", async () => {
+    const response = streamResponse([
+      new Uint8Array([1, 2, 3]),
+      new Uint8Array([4, 5, 6]),
+    ]) as Response & { cancel: ReturnType<typeof vi.fn> };
+    response.cancel = vi.fn(async () => undefined);
+    const platform = fakePlatform(vi.fn());
+
+    await expect(
+      downloadOpdsAcquisition({
+        publication: publication([
+          acquisition("https://catalog.test/book.epub", "application/epub+zip"),
+        ]),
+        client: { fetchAsset: vi.fn(async () => response) },
+        platform,
+        catalogOrigin: "https://catalog.test",
+        destinationPath: "/cache/book.epub",
+        maxBytes: 5,
+      }),
+    ).rejects.toMatchObject({ code: "asset-too-large" });
+    expect(response.cancel).toHaveBeenCalledOnce();
+    expect(platform.writeFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("createExclusiveOpdsDownloadRunner", () => {
+  it("rejects overlap, keeps cancellation on the first operation, and permits a later retry", async () => {
+    let started = 0;
+    const execute = vi.fn(
+      (input: { value: number; signal: AbortSignal; onProgress: (value: number) => void }) =>
+        new Promise<number>((resolve, reject) => {
+          started += 1;
+          input.onProgress(input.value);
+          if (input.value === 2) {
+            resolve(input.value);
+            return;
+          }
+          input.signal.addEventListener("abort", () => reject(new OpdsError("cancelled")), {
+            once: true,
+          });
+        }),
+    );
+    const progress: number[] = [];
+    const runner = createExclusiveOpdsDownloadRunner(execute, {
+      onProgress: (value) => progress.push(value),
+    });
+
+    const first = runner.download({ value: 1 });
+    await expect(runner.download({ value: 99 })).rejects.toMatchObject({
+      code: "download-in-progress",
+    });
+    expect(runner.isActive()).toBe(true);
+    runner.cancel();
+    await expect(first).rejects.toMatchObject({ code: "cancelled" });
+    await expect(runner.download({ value: 2 })).resolves.toBe(2);
+
+    expect(started).toBe(2);
+    expect(progress).toEqual([1, 2]);
+    expect(runner.isActive()).toBe(false);
   });
 });

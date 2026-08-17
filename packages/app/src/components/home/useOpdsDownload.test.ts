@@ -46,7 +46,7 @@ function dependencies() {
       ),
     },
     importBooks: vi.fn(
-      async (_files: DesktopImportFile[]) =>
+      async (_files: DesktopImportFile[], _options?: { transactional?: boolean }) =>
         ({
           imported: [{ id: "desktop-book" }],
           skippedDuplicates: [],
@@ -70,9 +70,11 @@ describe("desktop OPDS download adapter", () => {
     });
 
     const [[files]] = deps.importBooks.mock.calls;
+    expect(deps.importBooks.mock.calls[0]?.[1]).toEqual({ transactional: true });
     expect(files).toEqual([
       {
         path: expect.stringMatching(/^C:\\Temp\\readany-opds-import\\opds-.*\.pdf$/),
+        name: "Desktop Book.pdf",
         metadata: {
           title: "Desktop Book",
           author: "Author",
@@ -85,6 +87,20 @@ describe("desktop OPDS download adapter", () => {
     if (typeof importedFile === "string") throw new Error("Expected desktop import context");
     expect(importedFile.metadata).not.toHaveProperty("tags");
     expect(deps.platform.deleteFile).toHaveBeenCalledExactlyOnceWith(importedFile.path);
+  });
+
+  it("maps temporary setup failure to download-failed without cleanup", async () => {
+    const deps = dependencies();
+    deps.platform.mkdir.mockRejectedValueOnce(new Error("C:\\private\\backend detail"));
+    const run = createOpdsDownloadAdapter(deps as never);
+
+    const error = await run({ publication, catalogOrigin: "https://catalog.test" }).catch(
+      (value: unknown) => value,
+    );
+
+    expect(error).toMatchObject({ code: "download-failed" });
+    expect(String(error)).not.toContain("private");
+    expect(deps.platform.deleteFile).not.toHaveBeenCalled();
   });
 
   it("cleans exactly once when the desktop store throws and returns a stable error", async () => {

@@ -6,12 +6,14 @@ import {
   type OpdsDownloadProgress,
   OpdsError,
   type OpdsPublication,
+  createExclusiveOpdsDownloadRunner,
   downloadOpdsAcquisition,
   listSupportedAcquisitions,
   toBookMeta,
 } from "@readany/core";
 import { type IPlatformService, getPlatformService } from "@readany/core/services";
-import { useCallback, useRef, useState } from "react";
+import { generateId } from "@readany/core/utils";
+import { useMemo, useState } from "react";
 import type { DesktopImportFile } from "../../lib/book/imported-book-meta";
 import { useLibraryStore } from "../../stores/library-store";
 
@@ -37,7 +39,10 @@ export interface OpdsImportDownloadResult {
 export interface OpdsDownloadAdapterDependencies {
   platform: OpdsDownloadPlatform;
   client: Pick<OpdsClient, "fetchAsset">;
-  importBooks(files: DesktopImportFile[]): Promise<ImportBooksResult>;
+  importBooks(
+    files: DesktopImportFile[],
+    options?: { transactional?: boolean },
+  ): Promise<ImportBooksResult>;
   getTempDirectory(): Promise<string>;
   createId?(): string;
   onCleanupError?(cleanupError: unknown, primaryError: unknown): void;
@@ -47,7 +52,7 @@ let temporaryFileSequence = 0;
 
 function nextTemporaryName(format: string, createId?: () => string): string {
   temporaryFileSequence += 1;
-  const id = createId?.() ?? crypto.randomUUID();
+  const id = createId?.() ?? generateId();
   return `opds-${Date.now()}-${temporaryFileSequence}-${id}.${format}`;
 }
 
@@ -70,19 +75,24 @@ function selectedFormat(request: OpdsDownloadRequest) {
 export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDependencies) {
   return async (request: OpdsDownloadRequest): Promise<OpdsImportDownloadResult> => {
     const choice = selectedFormat(request);
-    const tempRoot = await dependencies.getTempDirectory();
-    const workspace = await dependencies.platform.joinPath(tempRoot, "readany-opds-import");
-    await dependencies.platform.mkdir(workspace);
-    const temporaryPath = await dependencies.platform.joinPath(
-      workspace,
-      nextTemporaryName(choice.format, dependencies.createId),
-    );
+    let temporaryPath: string;
+    try {
+      const tempRoot = await dependencies.getTempDirectory();
+      const workspace = await dependencies.platform.joinPath(tempRoot, "readany-opds-import");
+      await dependencies.platform.mkdir(workspace);
+      temporaryPath = await dependencies.platform.joinPath(
+        workspace,
+        nextTemporaryName(choice.format, dependencies.createId),
+      );
+    } catch {
+      throw new OpdsError("download-failed");
+    }
 
     let primaryError: unknown;
     let importResult: ImportBooksResult | undefined;
     let cleanupFailed = false;
     try {
-      await downloadOpdsAcquisition({
+      const downloaded = await downloadOpdsAcquisition({
         ...request,
         acquisition: request.acquisition,
         client: dependencies.client,
@@ -90,9 +100,16 @@ export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDepen
         destinationPath: temporaryPath,
       });
       try {
-        importResult = await dependencies.importBooks([
-          { path: temporaryPath, metadata: toBookMeta(request.publication) },
-        ]);
+        importResult = await dependencies.importBooks(
+          [
+            {
+              path: temporaryPath,
+              name: downloaded.suggestedFileName,
+              metadata: toBookMeta(request.publication),
+            },
+          ],
+          { transactional: true },
+        );
       } catch {
         throw new OpdsError("import-failed");
       }
@@ -104,7 +121,11 @@ export function createOpdsDownloadAdapter(dependencies: OpdsDownloadAdapterDepen
         await dependencies.platform.deleteFile(temporaryPath);
       } catch (cleanupError) {
         cleanupFailed = true;
-        dependencies.onCleanupError?.(cleanupError, primaryError);
+        try {
+          dependencies.onCleanupError?.(cleanupError, primaryError);
+        } catch {
+          // Cleanup reporting is best effort and must never replace the operation result.
+        }
       }
     }
 
@@ -118,38 +139,47 @@ export function useOpdsDownload() {
   const importBooks = useLibraryStore((state) => state.importBooks);
   const [progress, setProgress] = useState<OpdsDownloadProgress | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
-
-  const download = useCallback(
-    async (request: Omit<OpdsDownloadRequest, "signal" | "onProgress">) => {
-      const platform = getPlatformService();
-      const controller = new AbortController();
-      controllerRef.current = controller;
-      setIsDownloading(true);
-      setProgress(null);
-      try {
-        const adapter = createOpdsDownloadAdapter({
-          platform,
-          client: new OpdsClient(platform),
-          importBooks,
-          getTempDirectory: async () => (await import("@tauri-apps/api/path")).tempDir(),
-          onCleanupError: () => {
-            console.warn("[OPDS] Temporary download cleanup failed.");
+  const runner = useMemo(
+    () =>
+      createExclusiveOpdsDownloadRunner<
+        OpdsDownloadRequest & {
+          signal: AbortSignal;
+          onProgress: (progress: OpdsDownloadProgress) => void;
+        },
+        OpdsImportDownloadResult,
+        OpdsDownloadProgress
+      >(
+        async (
+          request: OpdsDownloadRequest & {
+            signal: AbortSignal;
+            onProgress: (progress: OpdsDownloadProgress) => void;
           },
-        });
-        return await adapter({
-          ...request,
-          signal: controller.signal,
+        ) => {
+          const platform = getPlatformService();
+          const adapter = createOpdsDownloadAdapter({
+            platform,
+            client: new OpdsClient(platform),
+            importBooks,
+            getTempDirectory: async () => (await import("@tauri-apps/api/path")).tempDir(),
+            onCleanupError: () => {
+              console.warn("[OPDS] Temporary download cleanup failed.");
+            },
+          });
+          return adapter({
+            ...request,
+          });
+        },
+        {
+          onStart: () => {
+            setIsDownloading(true);
+            setProgress(null);
+          },
           onProgress: setProgress,
-        });
-      } finally {
-        if (controllerRef.current === controller) controllerRef.current = null;
-        setIsDownloading(false);
-      }
-    },
+          onFinish: () => setIsDownloading(false),
+        },
+      ),
     [importBooks],
   );
 
-  const cancel = useCallback(() => controllerRef.current?.abort(), []);
-  return { download, cancel, progress, isDownloading };
+  return { download: runner.download, cancel: runner.cancel, progress, isDownloading };
 }

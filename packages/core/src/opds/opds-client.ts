@@ -36,6 +36,8 @@ const ERROR_MESSAGES: Record<OpdsErrorCode, string> = {
   "too-large": "The catalog response is too large.",
   "unsupported-acquisition": "The selected book format is not supported.",
   "download-failed": "The book could not be downloaded.",
+  "asset-too-large": "The book is too large to download safely.",
+  "download-in-progress": "Another catalog download is already in progress.",
   "import-failed": "The downloaded book could not be imported.",
 };
 

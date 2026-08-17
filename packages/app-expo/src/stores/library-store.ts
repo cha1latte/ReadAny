@@ -66,6 +66,10 @@ export interface MobileImportFile {
   metadata?: Partial<BookMeta>;
 }
 
+export interface ImportBooksOptions {
+  transactional?: boolean;
+}
+
 function keepActiveGroupId(activeGroupId: string, groups: BookGroup[]): string {
   if (!activeGroupId) return "";
   return groups.some((group) => group.id === activeGroupId) ? activeGroupId : "";
@@ -95,7 +99,10 @@ export interface LibraryState {
   setViewMode: (mode: LibraryViewMode) => void;
   setSortField: (field: SortField) => void;
   setSortOrder: (order: SortOrder) => void;
-  importBooks: (files: MobileImportFile[]) => Promise<ImportBooksResult>;
+  importBooks: (
+    files: MobileImportFile[],
+    options?: ImportBooksOptions,
+  ) => Promise<ImportBooksResult>;
   inspectDeletedBookCandidate: (
     bookId: string,
     file: { uri: string; name?: string },
@@ -164,10 +171,10 @@ const MOBILE_IMPORT_METADATA_MAX_BYTES = 32 * 1024 * 1024;
 
 async function getMobileFileStat(path: string): Promise<{ size: number; md5?: string }> {
   const LegacyFileSystem = await import("expo-file-system/legacy");
-  const info = await LegacyFileSystem.getInfoAsync(path);
+  const info = await LegacyFileSystem.getInfoAsync(path, { md5: true });
   return {
     size: info.exists && !info.isDirectory ? (info.size ?? 0) : 0,
-    md5: undefined,
+    md5: info.exists && !info.isDirectory ? info.md5 : undefined,
   };
 }
 
@@ -307,11 +314,12 @@ async function copyBookToAppData(
   ext: string,
   srcPath: string,
   sourceBytes?: Uint8Array,
-): Promise<{ relativePath: string; absPath: string }> {
+): Promise<{ relativePath: string; absPath: string; created: boolean }> {
   const platform = getPlatformService();
   await ensureAppSubDir("books");
   const relativePath = `books/${bookId}.${ext}`;
   const absPath = await resolveAppPath(relativePath);
+  let created = !(await platform.exists(absPath));
 
   if (sourceBytes) {
     // If bytes are already in memory (e.g. from hash calculation), just write them
@@ -322,11 +330,12 @@ async function copyBookToAppData(
     const srcFile = new ExpoFS.File(srcPath);
     const destFile = new ExpoFS.File(absPath);
     if (destFile.exists) {
+      created = false;
       destFile.delete();
     }
     srcFile.copy(destFile);
   }
-  return { relativePath, absPath };
+  return { relativePath, absPath, created };
 }
 
 async function persistBookUpdate(bookId: string, updates: Partial<Book>): Promise<void> {
@@ -830,7 +839,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   setSortField: (field) => set((state) => ({ filter: { ...state.filter, sortField: field } })),
   setSortOrder: (order) => set((state) => ({ filter: { ...state.filter, sortOrder: order } })),
 
-  importBooks: async (files) => {
+  importBooks: async (files, options = {}) => {
     set({ isImporting: true });
     const result = createEmptyImportBooksResult();
     const duplicateIndex = createImportDuplicateIndex(get().books);
@@ -838,6 +847,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       await db.initDatabase();
       for (const fileInfo of files) {
         const filePath = fileInfo.uri;
+        const createdManagedPaths = new Set<string>();
         const originalName = fileInfo.name
           ? decodeURIComponent(fileInfo.name)
           : decodeURIComponent(filePath.split("/").pop() || "book");
@@ -881,6 +891,41 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             deletedMatch?.meta,
             fileInfo.metadata,
           );
+          const persistImport = async (book: Book): Promise<void> => {
+            const restoreUpdates = {
+              filePath: book.filePath,
+              format: book.format,
+              meta: book.meta,
+              deletedAt: undefined,
+              progress: book.progress,
+              currentCfi: book.currentCfi,
+              isVectorized: false,
+              vectorizeProgress: 0,
+              tags: book.tags,
+              fileHash: book.fileHash,
+              syncStatus: "local" as const,
+              lastOpenedAt: Date.now(),
+            };
+
+            if (options.transactional) {
+              if (deletedMatch) {
+                await db.updateBook(book.id, restoreUpdates);
+              } else {
+                await db.insertBook(book);
+              }
+              set((state) => ({ books: [...state.books, book] }));
+              debouncedSave("library-books", get().books);
+              return;
+            }
+
+            if (deletedMatch) {
+              set((state) => ({ books: [...state.books, book] }));
+              await db.updateBook(book.id, restoreUpdates);
+              debouncedSave("library-books", get().books);
+            } else {
+              await get().addBook(book);
+            }
+          };
 
           console.log(
             `[importBooks] Importing: name=${fileName}, format=${format}, uri=${filePath}`,
@@ -936,6 +981,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               await ensureAppSubDir("books");
               const relativePath = `books/${bookId}.epub`;
               const absPath = await resolveAppPath(relativePath);
+              if (!(await platform.exists(absPath))) createdManagedPaths.add(absPath);
               await platform.writeFile(absPath, conversion.epubBytes);
 
               // TXT-converted EPUBs have no cover, and title is already known from converter.
@@ -964,26 +1010,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 lastOpenedAt: deletedMatch?.lastOpenedAt ?? Date.now(),
               };
 
-              if (deletedMatch) {
-                set((state) => ({ books: [...state.books, book] }));
-                await db.updateBook(book.id, {
-                  filePath: book.filePath,
-                  format: book.format,
-                  meta: book.meta,
-                  deletedAt: undefined,
-                  progress: book.progress,
-                  currentCfi: book.currentCfi,
-                  isVectorized: false,
-                  vectorizeProgress: 0,
-                  tags: book.tags,
-                  fileHash: book.fileHash,
-                  syncStatus: "local",
-                  lastOpenedAt: Date.now(),
-                });
-                debouncedSave("library-books", get().books);
-              } else {
-                await get().addBook(book);
-              }
+              await persistImport(book);
               result.imported.push(book);
               if (fileHash) {
                 duplicateIndex.byHash.set(fileHash, book);
@@ -1047,6 +1074,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               await ensureAppSubDir("books");
               const relativePath = `books/${bookId}.epub`;
               const absPath = await resolveAppPath(relativePath);
+              if (!(await platform.exists(absPath))) createdManagedPaths.add(absPath);
               await platform.writeFile(absPath, conversion.epubBytes);
 
               let coverUrl = deletedMatch?.meta.coverUrl;
@@ -1057,6 +1085,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               ) {
                 try {
                   coverUrl = await saveCoverBytesToAppData(bookId, conversion.coverBytes);
+                  if (!deletedMatch?.meta.coverUrl) {
+                    createdManagedPaths.add(await resolveAppPath(coverUrl));
+                  }
                 } catch (coverErr) {
                   console.warn(`[importBooks] Failed to save UMD cover for ${fileName}:`, coverErr);
                 }
@@ -1086,26 +1117,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 lastOpenedAt: deletedMatch?.lastOpenedAt ?? Date.now(),
               };
 
-              if (deletedMatch) {
-                set((state) => ({ books: [...state.books, book] }));
-                await db.updateBook(book.id, {
-                  filePath: book.filePath,
-                  format: book.format,
-                  meta: book.meta,
-                  deletedAt: undefined,
-                  progress: book.progress,
-                  currentCfi: book.currentCfi,
-                  isVectorized: false,
-                  vectorizeProgress: 0,
-                  tags: book.tags,
-                  fileHash: book.fileHash,
-                  syncStatus: "local",
-                  lastOpenedAt: Date.now(),
-                });
-                debouncedSave("library-books", get().books);
-              } else {
-                await get().addBook(book);
-              }
+              await persistImport(book);
               result.imported.push(book);
               if (fileHash) {
                 duplicateIndex.byHash.set(fileHash, book);
@@ -1136,7 +1148,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             }
           }
 
-          const { relativePath } = await copyBookToAppData(bookId, ext || "epub", filePath);
+          const copiedBook = await copyBookToAppData(bookId, ext || "epub", filePath);
+          const { relativePath } = copiedBook;
+          if (copiedBook.created) createdManagedPaths.add(copiedBook.absPath);
           console.log(`[importBooks] File copied. relativePath: ${relativePath}`);
 
           // Extract metadata and cover from book content.
@@ -1162,6 +1176,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                   meta.coverBytes,
                   meta.coverMimeType,
                 );
+                if (!deletedMatch?.meta.coverUrl) {
+                  createdManagedPaths.add(await resolveAppPath(coverUrl));
+                }
                 console.log(`[importBooks] Saving cover to: ${coverUrl}`);
                 console.log(`[importBooks] Cover saved. coverUrl=${coverUrl}`);
               } catch (coverErr) {
@@ -1199,26 +1216,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             updatedAt: Date.now(),
             lastOpenedAt: deletedMatch?.lastOpenedAt ?? Date.now(),
           };
-          if (deletedMatch) {
-            set((state) => ({ books: [...state.books, book] }));
-            await db.updateBook(book.id, {
-              filePath: book.filePath,
-              format: book.format,
-              meta: book.meta,
-              deletedAt: undefined,
-              progress: book.progress,
-              currentCfi: book.currentCfi,
-              isVectorized: false,
-              vectorizeProgress: 0,
-              tags: book.tags,
-              fileHash: book.fileHash,
-              syncStatus: "local",
-              lastOpenedAt: Date.now(),
-            });
-            debouncedSave("library-books", get().books);
-          } else {
-            await get().addBook(book);
-          }
+          await persistImport(book);
           result.imported.push(book);
           if (fileHash) {
             duplicateIndex.byHash.set(fileHash, book);
@@ -1262,6 +1260,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             );
           }
         } catch (err) {
+          if (options.transactional) {
+            const platform = getPlatformService();
+            for (const path of createdManagedPaths) {
+              await platform.deleteFile(path).catch(() => undefined);
+            }
+          }
           console.error(`Failed to import ${fileInfo.uri}:`, err);
           result.failures.push({
             name: originalName,

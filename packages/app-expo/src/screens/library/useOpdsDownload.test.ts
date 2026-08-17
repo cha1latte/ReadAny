@@ -47,7 +47,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     joinPath: vi.fn(async (...parts: string[]) => parts.join("/")),
   };
   const importBooks = vi.fn(
-    async (_files: MobileImportFile[]) =>
+    async (_files: MobileImportFile[], _options?: { transactional?: boolean }) =>
       ({
         imported: [{ id: "book-id" }],
         skippedDuplicates: [],
@@ -81,6 +81,7 @@ describe("mobile OPDS download adapter", () => {
     });
 
     expect(deps.importBooks).toHaveBeenCalledOnce();
+    expect(deps.importBooks.mock.calls[0]?.[1]).toEqual({ transactional: true });
     const [[files]] = deps.importBooks.mock.calls;
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({
@@ -98,6 +99,48 @@ describe("mobile OPDS download adapter", () => {
     expect(deps.platform.deleteFile).toHaveBeenCalledExactlyOnceWith(files[0].uri);
     expect(result.cleanupFailed).toBe(false);
   });
+
+  it("uses the React Native-safe ID path without a createId test override", async () => {
+    const originalCrypto = globalThis.crypto;
+    vi.stubGlobal("crypto", {
+      getRandomValues(bytes: Uint8Array) {
+        bytes.fill(7);
+        return bytes;
+      },
+    });
+    const deps = dependencies();
+    const { createId: _createId, ...productionDeps } = deps;
+    const run = createOpdsDownloadAdapter(productionDeps as never);
+
+    await expect(
+      run({ publication, catalogOrigin: "https://catalog.test" }),
+    ).resolves.toBeDefined();
+    expect(deps.platform.writeFile.mock.calls[0]?.[0]).toContain(
+      "07070707-0707-4707-8707-070707070707",
+    );
+    vi.stubGlobal("crypto", originalCrypto);
+  });
+
+  it.each(["getTempDirectory", "joinPath", "mkdir"] as const)(
+    "maps %s setup failures without trying cleanup before a path exists",
+    async (operation) => {
+      const deps = dependencies();
+      if (operation === "getTempDirectory") {
+        deps.getTempDirectory.mockRejectedValueOnce(new Error("C:/private/temp detail"));
+      } else {
+        deps.platform[operation].mockRejectedValueOnce(new Error("C:/private/temp detail"));
+      }
+      const run = createOpdsDownloadAdapter(deps as never);
+
+      const error = await run({ publication, catalogOrigin: "https://catalog.test" }).catch(
+        (value: unknown) => value,
+      );
+
+      expect(error).toMatchObject({ code: "download-failed" });
+      expect(String(error)).not.toContain("private");
+      expect(deps.platform.deleteFile).not.toHaveBeenCalled();
+    },
+  );
 
   it("maps store failures to import-failed and preserves that error when cleanup also fails", async () => {
     const onCleanupError = vi.fn();
@@ -121,6 +164,25 @@ describe("mobile OPDS download adapter", () => {
     expect(String(error)).not.toContain("database secret detail");
     expect(deps.platform.deleteFile).toHaveBeenCalledOnce();
     expect(onCleanupError).toHaveBeenCalledWith(expect.any(Error), error);
+  });
+
+  it("never lets a throwing cleanup reporter mask the primary error", async () => {
+    const deps = dependencies({
+      importBooks: vi.fn(async () => {
+        throw new Error("database detail");
+      }),
+      onCleanupError: vi.fn(() => {
+        throw new Error("reporter detail");
+      }),
+    });
+    deps.platform.deleteFile.mockRejectedValueOnce(new Error("cleanup detail"));
+    const run = createOpdsDownloadAdapter(deps as never);
+
+    await expect(run({ publication, catalogOrigin: "https://catalog.test" })).rejects.toMatchObject(
+      {
+        code: "import-failed",
+      },
+    );
   });
 
   it("cleans once on cancellation before import", async () => {

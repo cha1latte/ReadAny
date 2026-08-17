@@ -74,6 +74,8 @@ export {
 } from "./opds/opds-catalog-store";
 export { OpdsClient, OpdsError, type OpdsAssetResponse } from "./opds/opds-client";
 export {
+  OPDS_MAX_ACQUISITION_BYTES,
+  createExclusiveOpdsDownloadRunner,
   downloadOpdsAcquisition,
   listSupportedAcquisitions,
   sanitizeOpdsFileName,

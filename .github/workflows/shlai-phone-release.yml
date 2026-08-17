@@ -1,0 +1,194 @@
+name: Shlai Phone Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shlai-phone-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @readany/core test
+      - run: pnpm --filter @readany/app-expo test
+      - run: pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
+      - name: Check changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BASE_SHA="${{ github.event.before }}"
+          else
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css')
+          if (( ${#FILES[@]} > 0 )); then
+            pnpm exec biome check --no-errors-on-unmatched "${FILES[@]}"
+          fi
+          git diff --check "$BASE_SHA" HEAD
+
+  metadata:
+    name: Derive release metadata
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-22.04
+    outputs:
+      upstream_version: ${{ steps.release.outputs.upstream_version }}
+      revision: ${{ steps.release.outputs.revision }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      version_code: ${{ steps.release.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.18.0
+      - name: Derive next preview release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          UPSTREAM_VERSION="$(node -p "require('./packages/app-expo/package.json').version")"
+          printf 'upstream_version=%s\n' "$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp > "$RUNNER_TEMP/releases.json"
+          node packages/app-expo/scripts/shlai-preview-release.js derive \
+            --version "$UPSTREAM_VERSION" \
+            --releases "$RUNNER_TEMP/releases.json" \
+            --baseline-version-code 1 >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build verified preview APK
+    if: github.ref == 'refs/heads/main'
+    needs: metadata
+    runs-on: ubuntu-22.04
+    env:
+      APP_VARIANT: preview
+      SHLAI_UPSTREAM_VERSION: ${{ needs.metadata.outputs.upstream_version }}
+      SHLAI_REVISION: ${{ needs.metadata.outputs.revision }}
+      SHLAI_VERSION_CODE: ${{ needs.metadata.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.18.0
+          cache: pnpm
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - name: Install Android build tools 36.0.0
+        run: sdkmanager "build-tools;36.0.0"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @readany/app-expo run build:reader
+      - run: node packages/app-expo/scripts/configure-standalone-autolinking.js packages/app-expo/package.json
+      - run: pnpm --filter @readany/app-expo exec expo prebuild --platform android --clean --no-install
+      - name: Build preview APK
+        working-directory: packages/app-expo/android
+        run: ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" assembleRelease -PreactNativeArchitectures=arm64-v8a
+      - name: Verify and stage preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="ReadAny-Shlai-Preview.apk"
+          cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          AAPT2="$BUILD_TOOLS/aapt2"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          test -x "$AAPT2"
+          test -x "$APKSIGNER"
+          PACKAGE="$("$AAPT2" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          VERSION_CODE="$("$AAPT2" dump badging "$APK" | sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p")"
+          test "$PACKAGE" = "io.github.cha1latte.readanyshlai.preview"
+          test "$VERSION_CODE" = "$SHLAI_VERSION_CODE"
+          mapfile -t DIGESTS < <("$APKSIGNER" verify --verbose --print-certs "$APK" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p' | tr '[:upper:]' '[:lower:]')
+          test "${#DIGESTS[@]}" -eq 1
+          test "${DIGESTS[0]}" = "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
+          sha256sum "ReadAny-Shlai-Preview.apk" > "ReadAny-Shlai-Preview.apk.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shlai-phone-release-${{ github.sha }}
+          path: |
+            ReadAny-Shlai-Preview.apk
+            ReadAny-Shlai-Preview.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish preview prerelease
+    if: github.ref == 'refs/heads/main'
+    needs: [metadata, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.metadata.outputs.tag }}
+      VERSION: ${{ needs.metadata.outputs.version }}
+      SHLAI_VERSION_CODE: ${{ needs.metadata.outputs.version_code }}
+    steps:
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - name: Install Android build tools 36.0.0
+        run: sdkmanager "build-tools;36.0.0"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shlai-phone-release-${{ github.sha }}
+          path: .
+      - name: Verify and publish preview prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          APK="ReadAny-Shlai-Preview.apk"
+          CHECKSUM="ReadAny-Shlai-Preview.apk.sha256"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          AAPT2="$BUILD_TOOLS/aapt2"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          test -f "$APK"
+          test -f "$CHECKSUM"
+          PACKAGE="$("$AAPT2" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          VERSION_CODE="$("$AAPT2" dump badging "$APK" | sed -n "s/^package:.*versionCode='\([^']*\)'.*/\1/p")"
+          test "$PACKAGE" = "io.github.cha1latte.readanyshlai.preview"
+          test "$VERSION_CODE" = "$SHLAI_VERSION_CODE"
+          mapfile -t DIGESTS < <("$APKSIGNER" verify --verbose --print-certs "$APK" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p' | tr '[:upper:]' '[:lower:]')
+          test "${#DIGESTS[@]}" -eq 1
+          test "${DIGESTS[0]}" = "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
+          sha256sum --check "ReadAny-Shlai-Preview.apk.sha256"
+          EXACT_TAG_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq "[.[] | select(.ref == \"refs/tags/$TAG\")] | length")"
+          test "$EXACT_TAG_COUNT" = "0"
+          NOTES="$(printf 'Unofficial ReadAny Shlai Preview Android release. Source: %s/%s/tree/%s\n\nAndroid versionCode: %s' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$SHLAI_VERSION_CODE")"
+          gh release create "$TAG" \
+            ReadAny-Shlai-Preview.apk \
+            ReadAny-Shlai-Preview.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "ReadAny Shlai Preview $VERSION" \
+            --notes "$NOTES" \
+            --prerelease

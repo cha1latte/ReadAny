@@ -119,7 +119,7 @@ Run:
 $env:TZ='UTC'
 pnpm --filter @readany/core test -- metadata mobi opds
 pnpm --filter @readany/app-expo test -- imported-book-meta mobi opds shlai-app-config
-pnpm --filter @readany/app-desktop test -- metadata mobi opds
+pnpm --dir packages/app exec vitest run src
 pnpm --filter @readany/app-expo run build:reader
 git diff --exit-code -- packages/app-expo/assets/reader/reader.html
 ```
@@ -128,10 +128,10 @@ Expected: all focused suites pass and rebuilding the reader produces no uncommit
 
 - [ ] **Step 5: Commit any deterministic merge-resolution adjustment**
 
-If Step 4 required a source adjustment, it must be confined to the known configuration owner and its regression test:
+If Step 4 required an integration adjustment, it must be confined to the known configuration owner/test or the OPDS library-store harness that now imports MOBI capability:
 
 ```powershell
-git add packages/app-expo/app.config.js packages/app-expo/src/config/shlai-app-config.test.ts
+git add packages/app-expo/app.config.js packages/app-expo/src/config/shlai-app-config.test.ts packages/app-expo/src/stores/library-store.opds.test.ts docs/superpowers/plans/2026-08-17-shlai-phone-update-channel.md
 git commit -m "fix: preserve Shlai integration contracts"
 ```
 
@@ -646,9 +646,9 @@ pnpm install --frozen-lockfile
 $env:TZ='UTC'
 pnpm --filter @readany/core test
 pnpm --filter @readany/app-expo test
-pnpm --filter @readany/app-desktop test
+pnpm --dir packages/app exec vitest run src
 pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
-pnpm --filter @readany/app-desktop build
+pnpm --filter app build
 pnpm --filter @readany/app-expo run build:reader
 git diff --exit-code -- packages/app-expo/assets/reader/reader.html
 ```

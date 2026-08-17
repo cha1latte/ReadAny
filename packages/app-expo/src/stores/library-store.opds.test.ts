@@ -69,6 +69,9 @@ vi.mock("@/lib/book/metadata-extractor", () => ({
   extractBookMetadataFromFile: vi.fn(),
 }));
 vi.mock("@/lib/rag/auto-vectorize-service", () => ({ queueBook: vi.fn() }));
+vi.mock("@/lib/rag/mobile-vectorize-capability", () => ({
+  getMobileVectorizeCapability: () => ({ supported: true, mimeType: "application/epub+zip" }),
+}));
 vi.mock("@readany/core/db/database", () => mocks.db);
 vi.mock("@readany/core/db/write-retry", () => ({
   runWithDbRetry: (operation: () => Promise<unknown>) => operation(),

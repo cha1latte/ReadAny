@@ -158,7 +158,9 @@
     "extractionFailedTitle": "No se pudo leer el libro",
     "extractionFailedDesc": "ReadAny no pudo extraer texto legible de este libro. Prueba a descargar o exportar una copia nueva sin DRM.",
     "vectorizationFailedTitle": "No se pudo vectorizar el libro",
-    "vectorizationFailedDesc": "ReadAny no pudo terminar de vectorizar este libro. Comprueba la configuración del modelo vectorial e inténtalo de nuevo."
+    "vectorizationFailedDesc": "ReadAny no pudo terminar de vectorizar este libro. Comprueba la configuración del modelo vectorial e inténtalo de nuevo.",
+    "cleanupFailedTitle": "No se pudo limpiar por completo la indexación",
+    "cleanupFailedDesc": "El libro sigue marcado como no indexado, pero no se pudieron eliminar algunos datos parciales de búsqueda. Vuelve a indexarlo y reinicia la aplicación si aún aparece en la búsqueda."
   },
   "home": {
     "library": "Biblioteca",

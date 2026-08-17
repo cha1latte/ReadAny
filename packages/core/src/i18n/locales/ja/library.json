@@ -158,7 +158,9 @@
     "extractionFailedTitle": "書籍を読み取れませんでした",
     "extractionFailedDesc": "この書籍から読み取り可能なテキストを抽出できませんでした。DRM フリーの新しいコピーをダウンロードまたは書き出してください。",
     "vectorizationFailedTitle": "書籍をベクトル化できませんでした",
-    "vectorizationFailedDesc": "この書籍のベクトル化を完了できませんでした。ベクトルモデルの設定を確認して、もう一度お試しください。"
+    "vectorizationFailedDesc": "この書籍のベクトル化を完了できませんでした。ベクトルモデルの設定を確認して、もう一度お試しください。",
+    "cleanupFailedTitle": "インデックスを完全に削除できませんでした",
+    "cleanupFailedDesc": "書籍は未インデックスとして表示されますが、一部の検索データを削除できませんでした。再度インデックスを作成し、検索に残る場合はアプリを再起動してください。"
   },
   "home": {
     "library": "ライブラリ",

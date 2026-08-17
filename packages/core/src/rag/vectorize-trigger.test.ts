@@ -36,6 +36,7 @@ vi.mock("./vector-db", () => ({
 vi.mock("../utils/event-bus", () => ({ eventBus: eventBusMocks }));
 
 import {
+  VectorizationCleanupError,
   canStoreInSharedVectorDB,
   resetBookVectorization,
   triggerVectorizeBook,
@@ -314,5 +315,48 @@ describe("failed vectorization cleanup", () => {
     expect(databaseMocks.insertChunks).not.toHaveBeenCalled();
     expect(databaseMocks.setVectorIndexProvenance).not.toHaveBeenCalled();
     expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+  });
+
+  it("publishes error instead of cancelled when partial-index cleanup rejects", async () => {
+    const controller = new AbortController();
+    const progressStatuses: string[] = [];
+    const onBookReset = vi.fn();
+    databaseMocks.deleteChunks
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("failed to delete partial chunks"));
+    databaseMocks.insertChunks.mockImplementationOnce(async () => {
+      controller.abort();
+    });
+
+    const vectorization = triggerVectorizeBook(
+      "book-1",
+      [{ index: 0, title: "Chapter", content: "content" }],
+      {
+        vectorModelEnabled: true,
+        vectorModelMode: "remote",
+        selectedBuiltinModelId: null,
+        remoteModel: {
+          url: "https://example.com/v1/embeddings",
+          apiKey: "test",
+          modelId: "test-model",
+        },
+      },
+      { onBookUpdate: vi.fn(), onBookReset },
+      (progress) => progressStatuses.push(progress.status),
+      controller.signal,
+    );
+
+    await expect(vectorization).rejects.toBeInstanceOf(VectorizationCleanupError);
+    expect(progressStatuses.at(-1)).toBe("error");
+    expect(onBookReset).toHaveBeenCalledWith("book-1", {
+      isVectorized: false,
+      vectorizeProgress: 0,
+    });
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:cancelled", expect.anything());
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+    expect(eventBusMocks.emit).toHaveBeenCalledWith("vectorize:error", {
+      bookId: "book-1",
+      error: expect.stringContaining("failed to delete partial chunks"),
+    });
   });
 });

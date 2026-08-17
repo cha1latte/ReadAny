@@ -158,7 +158,9 @@
     "extractionFailedTitle": "책을 읽을 수 없음",
     "extractionFailedDesc": "이 책에서 읽을 수 있는 텍스트를 추출하지 못했습니다. DRM이 없는 새 사본을 다운로드하거나 내보낸 뒤 다시 시도하세요.",
     "vectorizationFailedTitle": "책을 벡터화할 수 없음",
-    "vectorizationFailedDesc": "이 책의 벡터화를 완료하지 못했습니다. 벡터 모델 설정을 확인하고 다시 시도하세요."
+    "vectorizationFailedDesc": "이 책의 벡터화를 완료하지 못했습니다. 벡터 모델 설정을 확인하고 다시 시도하세요.",
+    "cleanupFailedTitle": "인덱싱을 완전히 정리하지 못함",
+    "cleanupFailedDesc": "책은 인덱싱되지 않은 상태로 표시되지만 일부 검색 데이터를 제거하지 못했습니다. 다시 인덱싱하고 검색에 계속 나타나면 앱을 다시 시작하세요."
   },
   "home": {
     "library": "서재",

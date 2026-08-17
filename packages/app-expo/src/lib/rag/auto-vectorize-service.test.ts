@@ -1,3 +1,4 @@
+import { VectorizationCleanupError } from "@readany/core/rag";
 import type { Book } from "@readany/core/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -57,7 +58,8 @@ describe("automatic vectorization failure lifecycle", () => {
   });
 
   it("publishes the failure and releases the queue if cleanup itself rejects", async () => {
-    vectorizeMocks.resetBookVectorization.mockRejectedValueOnce(new Error("cleanup failed"));
+    const cleanupError = new Error("cleanup failed");
+    vectorizeMocks.resetBookVectorization.mockRejectedValueOnce(cleanupError);
     setExtractorRef({
       extractChapters: vi.fn().mockRejectedValue(new Error("loader failed")),
     });
@@ -70,8 +72,37 @@ describe("automatic vectorization failure lifecycle", () => {
       expect(callback).toHaveBeenCalledWith("book-1", {
         status: "error",
         progress: 0,
+        error: expect.anything(),
         errorCategory: "unknown",
+        cleanupError,
       });
+      expect(isProcessing()).toBe(false);
+    });
+  });
+
+  it("surfaces core cleanup failure instead of discarding it", async () => {
+    const cleanupError = new Error("partial vectors remain");
+    setExtractorRef({
+      extractChapters: vi.fn().mockResolvedValue([{ index: 0, title: "Chapter", content: "text" }]),
+    });
+    vectorizeMocks.triggerVectorizeBook.mockRejectedValueOnce(
+      new VectorizationCleanupError(new Error("cancelled"), cleanupError),
+    );
+    const callback = vi.fn();
+    setCallback(callback);
+
+    await queueBook(book, "base64", "application/x-mobipocket-ebook");
+
+    await vi.waitFor(() => {
+      expect(callback).toHaveBeenCalledWith(
+        "book-1",
+        expect.objectContaining({
+          status: "error",
+          error: expect.any(VectorizationCleanupError),
+          cleanupError,
+        }),
+      );
+      expect(vectorizeMocks.resetBookVectorization).not.toHaveBeenCalled();
       expect(isProcessing()).toBe(false);
     });
   });

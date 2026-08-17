@@ -1,4 +1,5 @@
 import { CheckIcon, ClockIcon, Loader2Icon, MoreVerticalIcon } from "@/components/ui/Icon";
+import { isVectorizationCancellable } from "@/lib/rag/vectorization-cancel-state";
 import { useColors } from "@/styles/theme";
 import { getPlatformService } from "@readany/core/services";
 /**
@@ -126,6 +127,10 @@ export const BookCard = memo(function BookCard({
       ? Math.round((vectorProgress.processedChunks / vectorProgress.totalChunks) * 100)
       : 0
     : 0;
+  const canCancelVectorization = isVectorizationCancellable(
+    Boolean(isVectorizing),
+    vectorProgress?.status,
+  );
 
   const measureAnchor = useCallback(async () => {
     const measureNode = (node: View | null, fallbackToBottomRight = false) =>
@@ -289,13 +294,12 @@ export const BookCard = memo(function BookCard({
           )}
 
           {/* Vectorization progress overlay */}
-          {isVectorizing && (
+          {isVectorizing && canCancelVectorization && (
             <TouchableOpacity
               style={s.vecOverlay}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={t("home.vec_cancel", "Cancel vectorization")}
-              disabled={vectorProgress?.status === "cancelling"}
               onPress={(event) => {
                 event.stopPropagation();
                 onCancelVectorize?.(book.id);
@@ -324,6 +328,22 @@ export const BookCard = memo(function BookCard({
                   <Text style={s.vecOverlayText}>{t("home.vec_cancel", "Cancel")}</Text>
                 )}
             </TouchableOpacity>
+          )}
+          {isVectorizing && !canCancelVectorization && (
+            <View style={s.vecOverlay}>
+              {vectorProgress?.status !== "cancelled" && <AnimatedLoader />}
+              <Text style={s.vecOverlayText}>
+                {vectorProgress?.status === "cancelling"
+                  ? t("home.vec_cancelling", "Cancelling…")
+                  : vectorProgress?.status === "cancelled"
+                    ? t("home.vec_cancelled", "Cancelled")
+                    : vectorProgress?.status === "completed"
+                      ? "✓"
+                      : vectorProgress?.status === "error"
+                        ? "✕"
+                        : t("home.vec_processing")}
+              </Text>
+            </View>
           )}
 
           {/* Queued overlay */}

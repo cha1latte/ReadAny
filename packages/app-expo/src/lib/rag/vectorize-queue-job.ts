@@ -1,4 +1,4 @@
-import type { ChapterData } from "@readany/core/rag";
+import { type ChapterData, VectorizationCleanupError } from "@readany/core/rag";
 import {
   BookExtractionError,
   type BookExtractionErrorCategory,
@@ -54,12 +54,14 @@ function isAbortFailure(error: unknown, signal: AbortSignal): boolean {
   return signal.aborted || (error instanceof Error && error.name === "AbortError");
 }
 
-function isCompletedProgress(progress: unknown): boolean {
+function isTerminalProgress(progress: unknown): boolean {
   return (
     typeof progress === "object" &&
     progress !== null &&
     "status" in progress &&
-    progress.status === "completed"
+    (progress.status === "completed" ||
+      progress.status === "error" ||
+      progress.status === "cancelled")
   );
 }
 
@@ -83,7 +85,7 @@ export async function runVectorizeQueueJob<Progress>(
     await options.vectorize(
       chapters,
       (progress) => {
-        if (!isCompletedProgress(progress)) {
+        if (!isTerminalProgress(progress)) {
           options.onEvent({ status: "vectorizing", progress });
         }
       },
@@ -94,14 +96,16 @@ export async function runVectorizeQueueJob<Progress>(
     options.onEvent({ status: "completed" });
     return { ok: true };
   } catch (error) {
-    const cancelled = isAbortFailure(error, signal);
     const failure = phase === "extracting" ? toBookExtractionError(error, options.format) : error;
-    let cleanupError: unknown;
-    try {
-      await options.cleanup();
-    } catch (errorDuringCleanup) {
-      cleanupError = errorDuringCleanup;
+    let cleanupError = error instanceof VectorizationCleanupError ? error.cleanupError : undefined;
+    if (phase === "extracting") {
+      try {
+        await options.cleanup();
+      } catch (errorDuringCleanup) {
+        cleanupError = errorDuringCleanup;
+      }
     }
+    const cancelled = !cleanupError && isAbortFailure(error, signal);
 
     if (cancelled) {
       options.onEvent({ status: "cancelled" });

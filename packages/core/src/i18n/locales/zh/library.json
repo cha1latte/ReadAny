@@ -171,7 +171,9 @@
     "extractionFailedTitle": "无法读取书籍",
     "extractionFailedDesc": "ReadAny 无法从此书中提取可读文本。请重新下载或导出一份不含 DRM 的副本。",
     "vectorizationFailedTitle": "无法向量化书籍",
-    "vectorizationFailedDesc": "ReadAny 无法完成此书的向量化。请检查向量模型设置后重试。"
+    "vectorizationFailedDesc": "ReadAny 无法完成此书的向量化。请检查向量模型设置后重试。",
+    "cleanupFailedTitle": "无法完全清理索引",
+    "cleanupFailedDesc": "本书仍会显示为未索引，但部分搜索数据无法删除。请重新建立索引；如果搜索中仍出现本书，请重启应用。"
   },
   "home": {
     "library": "书库",

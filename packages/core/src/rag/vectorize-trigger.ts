@@ -77,6 +77,20 @@ export function isVectorizationAbort(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+export class VectorizationCleanupError extends Error {
+  readonly operationError: unknown;
+  readonly cleanupError: unknown;
+
+  constructor(operationError: unknown, cleanupError: unknown) {
+    const cleanupMessage =
+      cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    super(`Vectorization stopped, but partial index cleanup failed: ${cleanupMessage}`);
+    this.name = "VectorizationCleanupError";
+    this.operationError = operationError;
+    this.cleanupError = cleanupError;
+  }
+}
+
 /** sqlite-vec currently owns one global vector dimension. */
 export function canStoreInSharedVectorDB(
   stats: { totalVectors: number; dimension: number },
@@ -323,10 +337,20 @@ export async function triggerVectorizeBook(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    let cleanupError: unknown;
     try {
       await resetBookVectorization(bookId, callbacks);
-    } catch (cleanupError) {
-      console.error(`[Vectorize] Failed to clean up partial index for ${bookId}:`, cleanupError);
+    } catch (errorDuringCleanup) {
+      cleanupError = errorDuringCleanup;
+    }
+
+    if (cleanupError) {
+      const failure = new VectorizationCleanupError(err, cleanupError);
+      progress.status = "error";
+      progress.error = failure.message;
+      onProgress?.(progress);
+      eventBus.emit("vectorize:error", { bookId, error: failure.message });
+      throw failure;
     }
 
     const cancelled = isVectorizationAbort(err);

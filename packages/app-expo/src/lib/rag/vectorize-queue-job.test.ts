@@ -1,3 +1,4 @@
+import { VectorizationCleanupError } from "@readany/core/rag";
 import { describe, expect, it, vi } from "vitest";
 import { MOBI } from "../../../../foliate-js/mobi.js";
 import { BookExtractionError } from "./extractor-error";
@@ -119,7 +120,8 @@ describe("runVectorizeQueueJob", () => {
       format: "mobi",
       signal: controller.signal,
       extract: async () => [{ index: 0, title: "Chapter", content: "text", segments: [] }],
-      vectorize: async (_chapters, _onProgress, signal) => {
+      vectorize: async (_chapters, onProgress, signal) => {
+        onProgress?.({ status: "cancelled" });
         controller.abort();
         signal.throwIfAborted();
       },
@@ -128,8 +130,32 @@ describe("runVectorizeQueueJob", () => {
     });
 
     expect(result).toMatchObject({ ok: false, cancelled: true });
-    expect(cleanup).toHaveBeenCalledOnce();
+    expect(cleanup).not.toHaveBeenCalled();
     expect(statuses).toEqual(["extracting", "vectorizing", "cancelled"]);
+    expect(statuses).not.toContain("completed");
+  });
+
+  it("publishes an error when core cancellation cleanup rejects", async () => {
+    const statuses: string[] = [];
+    const controller = new AbortController();
+    const cleanup = vi.fn();
+    const cleanupError = new Error("failed to delete partial chunks");
+
+    const result = await runVectorizeQueueJob({
+      signal: controller.signal,
+      extract: async () => [{ index: 0, title: "Chapter", content: "text", segments: [] }],
+      vectorize: async () => {
+        controller.abort();
+        throw new VectorizationCleanupError(controller.signal.reason, cleanupError);
+      },
+      cleanup,
+      onEvent: (event) => statuses.push(event.status),
+    });
+
+    expect(result).toMatchObject({ ok: false, cancelled: false, cleanupError });
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(statuses).toEqual(["extracting", "vectorizing", "error"]);
+    expect(statuses).not.toContain("cancelled");
     expect(statuses).not.toContain("completed");
   });
 
@@ -156,7 +182,7 @@ describe("runVectorizeQueueJob", () => {
     expect(order).toEqual(["extracting", "cleanup", "error"]);
   });
 
-  it("cleans up a final state-write rejection without publishing completion", async () => {
+  it("does not double-clean a final state-write rejection or publish completion", async () => {
     const statuses: string[] = [];
     const cleanup = vi.fn().mockResolvedValue(undefined);
 
@@ -172,7 +198,7 @@ describe("runVectorizeQueueJob", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(cleanup).toHaveBeenCalledOnce();
+    expect(cleanup).not.toHaveBeenCalled();
     expect(statuses).toEqual(["extracting", "vectorizing", "error"]);
     expect(statuses).not.toContain("completed");
   });

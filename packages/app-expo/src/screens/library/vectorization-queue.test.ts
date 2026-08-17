@@ -26,4 +26,27 @@ describe("VectorizationQueue", () => {
     queue.finish("active");
     expect(queue.activeBookId).toBeNull();
   });
+
+  it.each(["completed", "error", "cancelled"])(
+    "ignores a late cancel tap while %s is being presented",
+    () => {
+      const queue = new VectorizationQueue<{ id: string }>();
+      queue.enqueue({ id: "active" });
+      const active = queue.startNext();
+      queue.markTerminal("active");
+
+      expect(queue.cancel("active")).toBe("not-cancellable");
+      expect(active?.signal.aborted).toBe(false);
+      expect(queue.activeBookId).toBe("active");
+    },
+  );
+
+  it("makes a second tap inert after cancellation begins", () => {
+    const queue = new VectorizationQueue<{ id: string }>();
+    queue.enqueue({ id: "active" });
+    queue.startNext();
+
+    expect(queue.cancel("active")).toBe("active");
+    expect(queue.cancel("active")).toBe("not-cancellable");
+  });
 });

@@ -19,6 +19,8 @@ const VECTORIZE_ERROR_KEYS = [
   "extractionFailedDesc",
   "vectorizationFailedTitle",
   "vectorizationFailedDesc",
+  "cleanupFailedTitle",
+  "cleanupFailedDesc",
 ] as const;
 
 describe("library vectorization error translations", () => {

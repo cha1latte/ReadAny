@@ -34,7 +34,7 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
     async (book: Book, signal: AbortSignal) => {
       setVectorizingBookId(book.id);
       setVectorizingBookTitle(book.meta.title);
-      const result = await runVectorizeQueueJob<VectorizeProgress>({
+      return runVectorizeQueueJob<VectorizeProgress>({
         format: book.format,
         signal,
         extract: async (jobSignal) => {
@@ -103,7 +103,15 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
               totalChunks: 0,
             });
 
-            if (event.errorCategory) {
+            if (event.cleanupError) {
+              Alert.alert(
+                t("vectorize.cleanupFailedTitle", "Couldn't fully clean up indexing"),
+                t(
+                  "vectorize.cleanupFailedDesc",
+                  "The book remains marked not indexed, but some partial search data could not be removed. Retry indexing, then restart the app if this book still appears in search.",
+                ),
+              );
+            } else if (event.errorCategory) {
               const keys = getBookExtractionErrorMessageKeys(event.errorCategory);
               Alert.alert(t(keys.title), t(keys.description));
             } else {
@@ -115,10 +123,6 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
           }
         },
       });
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, result.ok ? 800 : result.cancelled ? 500 : 1500),
-      );
     },
     [extractorRef, t],
   );
@@ -133,8 +137,13 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
         if (!nextJob) break;
         setVectorQueue(queueRef.current.snapshot());
         try {
-          await processOneBook(nextJob.book, nextJob.signal);
+          const result = await processOneBook(nextJob.book, nextJob.signal);
+          queueRef.current.markTerminal(nextJob.book.id);
+          await new Promise((resolve) =>
+            setTimeout(resolve, result.ok ? 800 : result.cancelled ? 500 : 1500),
+          );
         } finally {
+          queueRef.current.markTerminal(nextJob.book.id);
           queueRef.current.finish(nextJob.book.id);
         }
       }

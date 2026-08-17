@@ -5,7 +5,13 @@ import { runVectorizeQueueJob, throwIfQueueJobAborted } from "./vectorize-queue-
 
 export type AutoVectorizeCallback = (
   bookId: string,
-  progress: { status: string; progress: number; errorCategory?: BookExtractionErrorCategory },
+  progress: {
+    status: string;
+    progress: number;
+    error?: unknown;
+    errorCategory?: BookExtractionErrorCategory;
+    cleanupError?: unknown;
+  },
 ) => void;
 
 interface ExtractorRef {
@@ -112,7 +118,9 @@ async function processQueue() {
             callback?.(book.id, {
               status: "error",
               progress: 0,
+              error: event.error,
               errorCategory: event.errorCategory,
+              cleanupError: event.cleanupError,
             });
           }
         },

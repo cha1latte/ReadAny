@@ -29,6 +29,14 @@ export interface FetchOptions extends RequestInit {
   onDownloadProgress?: (loaded: number, total: number) => void;
 }
 
+/** A platform response may expose transport cleanup separately from its body stream. */
+export interface PlatformFetchResponse extends Response {
+  /** Abort the native request backing this response, even when its body stream was already cancelled. */
+  cancelTransport?: () => void;
+  /** Release signal listeners and other transport bookkeeping after normal body completion. */
+  onDispose?: () => void;
+}
+
 export interface FileTransferOptions {
   headers?: Record<string, string>;
   allowInsecure?: boolean;
@@ -90,7 +98,7 @@ export interface IPlatformService {
   loadDatabase(path: string): Promise<IDatabase>;
 
   // ---- Network (for scenarios requiring custom headers) ----
-  fetch(url: string, options?: FetchOptions): Promise<Response>;
+  fetch(url: string, options?: FetchOptions): Promise<PlatformFetchResponse>;
   downloadFile?(url: string, filePath: string, options?: FileTransferOptions): Promise<void>;
   uploadFile?(url: string, filePath: string, options?: FileTransferOptions): Promise<void>;
   createWebSocket(url: string, options?: WebSocketOptions): Promise<IWebSocket>;

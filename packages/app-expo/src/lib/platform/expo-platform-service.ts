@@ -17,6 +17,7 @@ import type {
   IDatabase,
   IPlatformService,
   IWebSocket,
+  PlatformFetchResponse,
   WebSocketOptions,
 } from "@readany/core/services";
 import * as Clipboard from "expo-clipboard";
@@ -282,12 +283,30 @@ export class ExpoPlatformService implements IPlatformService {
 
   // ---- Network ----
 
-  async fetch(url: string, options?: FetchOptions): Promise<Response> {
+  async fetch(url: string, options?: FetchOptions): Promise<PlatformFetchResponse> {
     const { allowInsecure, timeoutMs, responseType, onDownloadProgress, ...fetchOptions } =
       options ?? {};
     const effectiveUrl = allowInsecure ? url.replace(/^https:\/\//i, "http://") : url;
     if (fetchOptions.redirect === "manual") {
       const { fetch: expoFetch } = await import("expo/fetch");
+      const transportController = new AbortController();
+      const sourceSignal = fetchOptions.signal;
+      const onSourceAbort = () => transportController.abort(sourceSignal?.reason);
+      if (sourceSignal?.aborted) {
+        onSourceAbort();
+      } else {
+        sourceSignal?.addEventListener("abort", onSourceAbort, { once: true });
+      }
+      let disposed = false;
+      const onDispose = () => {
+        if (disposed) return;
+        disposed = true;
+        sourceSignal?.removeEventListener("abort", onSourceAbort);
+      };
+      const cancelTransport = () => {
+        transportController.abort();
+        onDispose();
+      };
       const expoOptions: FetchRequestInit = {
         body: fetchOptions.body ?? undefined,
         credentials: fetchOptions.credentials,
@@ -298,10 +317,20 @@ export class ExpoPlatformService implements IPlatformService {
         mode: fetchOptions.mode,
         redirect: fetchOptions.redirect,
         referrer: fetchOptions.referrer,
-        signal: fetchOptions.signal ?? undefined,
+        signal: transportController.signal,
         window: fetchOptions.window,
       };
-      return expoFetch(effectiveUrl, expoOptions);
+      try {
+        const response = (await expoFetch(effectiveUrl, expoOptions)) as PlatformFetchResponse;
+        Object.defineProperties(response, {
+          cancelTransport: { value: cancelTransport },
+          onDispose: { value: onDispose },
+        });
+        return response;
+      } catch (error) {
+        onDispose();
+        throw error;
+      }
     }
     const method = fetchOptions?.method?.toUpperCase() || "GET";
 

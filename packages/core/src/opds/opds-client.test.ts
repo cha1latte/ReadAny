@@ -59,6 +59,13 @@ function authorization(call: FetchCall): string | null {
   return new Headers(call.options?.headers).get("Authorization");
 }
 
+function transportResponse(response: Response) {
+  const cancelTransport = vi.fn();
+  const onDispose = vi.fn();
+  Object.assign(response, { cancelTransport, onDispose });
+  return { response, cancelTransport, onDispose };
+}
+
 function stalledBodyResponse(contentType = "application/atom+xml") {
   let startReading: (() => void) | undefined;
   let cancelled = false;
@@ -112,10 +119,12 @@ describe("OpdsClient catalog requests", () => {
   });
 
   it("uses manual redirects and strips Authorization after a cross-origin redirect", async () => {
+    const redirect = transportResponse(
+      response("", { status: 302, headers: { Location: "https://cdn.test/feed.xml" } }),
+    );
+    const destination = transportResponse(response(ATOM));
     const platform = fakePlatform((url) =>
-      url === "https://catalog.test/feed.xml"
-        ? response("", { status: 302, headers: { Location: "https://cdn.test/feed.xml" } })
-        : response(ATOM),
+      url === "https://catalog.test/feed.xml" ? redirect.response : destination.response,
     );
 
     await new OpdsClient(platform).open("https://catalog.test/feed.xml", credentials);
@@ -127,6 +136,10 @@ describe("OpdsClient catalog requests", () => {
     expect(authorization(platform.calls[0] as FetchCall)).not.toBeNull();
     expect(authorization(platform.calls[1] as FetchCall)).toBeNull();
     expect(platform.calls.every((call) => call.options?.redirect === "manual")).toBe(true);
+    expect(redirect.cancelTransport).toHaveBeenCalledOnce();
+    expect(redirect.onDispose).toHaveBeenCalledOnce();
+    expect(destination.cancelTransport).not.toHaveBeenCalled();
+    expect(destination.onDispose).toHaveBeenCalledOnce();
   });
 
   it("rejects HTTPS-to-HTTP redirect downgrades before making the target request", async () => {
@@ -189,14 +202,17 @@ describe("OpdsClient catalog requests", () => {
   });
 
   it("maps unsupported authentication challenges separately", async () => {
-    const platform = fakePlatform(() =>
+    const unauthorized = transportResponse(
       response("", { status: 401, headers: { "WWW-Authenticate": 'Digest realm="Books"' } }),
     );
+    const platform = fakePlatform(() => unauthorized.response);
 
     await expectOpdsError(
       new OpdsClient(platform).open("https://catalog.test/feed.xml", credentials),
       "unsupported-auth",
     );
+    expect(unauthorized.cancelTransport).toHaveBeenCalledOnce();
+    expect(unauthorized.onDispose).toHaveBeenCalledOnce();
   });
 
   it("passes the 15 second timeout through the platform and maps timeout failures", async () => {
@@ -319,13 +335,16 @@ describe("OpdsClient catalog requests", () => {
         headers: { "Content-Type": "application/atom+xml", "Content-Length": "5242881" },
       },
     );
-    const platform = fakePlatform(() => oversized);
+    const transport = transportResponse(oversized);
+    const platform = fakePlatform(() => transport.response);
 
     await expectOpdsError(
       new OpdsClient(platform).open("https://catalog.test/feed.xml"),
       "too-large",
     );
     expect(cancelled).toBe(true);
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
   });
 
   it("rejects oversized decoded catalog text", async () => {
@@ -364,7 +383,8 @@ describe("OpdsClient catalog requests", () => {
         throw new Error("text fallback used");
       },
     });
-    const platform = fakePlatform(() => oversized);
+    const transport = transportResponse(oversized);
+    const platform = fakePlatform(() => transport.response);
 
     await expectOpdsError(
       new OpdsClient(platform).open("https://catalog.test/feed.xml"),
@@ -372,6 +392,8 @@ describe("OpdsClient catalog requests", () => {
     );
     expect(reads).toBe(2);
     expect(cancelled).toBe(true);
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
   });
 
   it("rejects unsupported content types even when the body looks like OPDS", async () => {
@@ -395,13 +417,16 @@ describe("OpdsClient catalog requests", () => {
       }),
       { headers: { "Content-Type": "text/html" } },
     );
-    const platform = fakePlatform(() => invalid);
+    const transport = transportResponse(invalid);
+    const platform = fakePlatform(() => transport.response);
 
     await expectOpdsError(
       new OpdsClient(platform).open("https://catalog.test/feed.xml"),
       "invalid-catalog",
     );
     expect(cancelled).toBe(true);
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
   });
 
   it("maps malformed supported content to invalid-catalog", async () => {
@@ -438,6 +463,41 @@ describe("OpdsClient catalog requests", () => {
 });
 
 describe("OpdsClient assets", () => {
+  it("preserves the final response identity metadata", async () => {
+    const source = response("asset", { headers: { "Content-Type": "image/jpeg" } });
+    Object.defineProperties(source, {
+      url: { value: "https://cdn.test/final-cover.jpg" },
+      redirected: { value: true },
+      type: { value: "cors" },
+    });
+    const platform = fakePlatform(() => source);
+
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://cdn.test/final-cover.jpg",
+      "https://catalog.test",
+    );
+
+    expect(asset.url).toBe("https://cdn.test/final-cover.jpg");
+    expect(asset.redirected).toBe(true);
+    expect(asset.type).toBe("cors");
+    expect(asset.status).toBe(source.status);
+    expect(asset.headers.get("Content-Type")).toBe("image/jpeg");
+  });
+
+  it("aborts the asset transport when its returned body is cancelled", async () => {
+    const transport = transportResponse(response("asset", { headers: {} }));
+    const platform = fakePlatform(() => transport.response);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    await asset.body?.cancel();
+
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
+  });
+
   it("rejects mismatched credential and catalog origins without sending a request", async () => {
     const platform = fakePlatform(() => response("asset", { headers: {} }));
 

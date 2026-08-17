@@ -36,6 +36,12 @@ function header(init: RequestInit | undefined, name: string): string | null {
   return new Headers(init?.headers).get(name);
 }
 
+function signalForCall(index = 0): AbortSignal {
+  const signal = (expoFetch.mock.calls[index]?.[1] as RequestInit | undefined)?.signal;
+  if (!signal) throw new Error(`Missing signal for Expo fetch call ${index}`);
+  return signal;
+}
+
 describe("ExpoPlatformService standards fetch contract", () => {
   beforeEach(() => {
     expoFetch.mockReset();
@@ -69,7 +75,8 @@ describe("ExpoPlatformService standards fetch contract", () => {
     const [url, init] = expoFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://catalog.test/feed.xml");
     expect(init.redirect).toBe("manual");
-    expect(init.signal).toBe(controller.signal);
+    expect(init.signal).not.toBe(controller.signal);
+    expect(init.signal?.aborted).toBe(false);
     expect(header(init, "Accept")).toBe("application/atom+xml");
     expect(header(init, "Authorization")).toBe("Basic test-token");
     expect(result.status).toBe(302);
@@ -79,16 +86,20 @@ describe("ExpoPlatformService standards fetch contract", () => {
   });
 
   it("lets core inspect each Expo redirect and strips auth across origins", async () => {
-    expoFetch.mockImplementation(async (url: string) =>
-      url === "https://catalog.test/feed.xml"
-        ? new Response(null, {
-            status: 302,
-            headers: { Location: "https://cdn.test/feed.xml" },
-          })
-        : new Response(ATOM, {
-            headers: { "Content-Type": "application/atom+xml" },
-          }),
-    );
+    expoFetch.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url === "https://catalog.test/feed.xml") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "https://cdn.test/feed.xml" },
+        });
+      }
+      expect(signalForCall(0).aborted).toBe(true);
+      expect(init.signal).not.toBe(signalForCall(0));
+      expect(init.signal?.aborted).toBe(false);
+      return new Response(ATOM, {
+        headers: { "Content-Type": "application/atom+xml" },
+      });
+    });
 
     await new OpdsClient(new ExpoPlatformService()).open(
       "https://catalog.test/feed.xml",
@@ -99,6 +110,25 @@ describe("ExpoPlatformService standards fetch contract", () => {
     expect(header(expoFetch.mock.calls[0]?.[1], "Authorization")).not.toBeNull();
     expect(header(expoFetch.mock.calls[1]?.[1], "Authorization")).toBeNull();
     expect(expoFetch.mock.calls.every(([, init]) => init.redirect === "manual")).toBe(true);
+    expect(signalForCall(0).aborted).toBe(true);
+    expect(signalForCall(1).aborted).toBe(false);
+  });
+
+  it("aborts the Expo transport when Content-Length rejects a catalog before reading", async () => {
+    expoFetch.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: {
+          "Content-Type": "application/atom+xml",
+          "Content-Length": "5242881",
+        },
+      }),
+    );
+
+    await expect(
+      new OpdsClient(new ExpoPlatformService()).open("https://catalog.test/feed.xml"),
+    ).rejects.toMatchObject({ code: "too-large" });
+
+    expect(signalForCall().aborted).toBe(true);
   });
 
   it("lets core reject HTTPS downgrades and public HTTP targets before Expo follows", async () => {
@@ -126,6 +156,7 @@ describe("ExpoPlatformService standards fetch contract", () => {
     await expect(
       new OpdsClient(new ExpoPlatformService()).open("https://catalog.test/feed.xml"),
     ).rejects.toMatchObject({ code: "unsupported-auth" });
+    expect(signalForCall().aborted).toBe(true);
   });
 
   it("forwards AbortSignal to expo/fetch", async () => {
@@ -174,5 +205,41 @@ describe("ExpoPlatformService standards fetch contract", () => {
     ).rejects.toMatchObject({ code: "too-large" });
     expect(pulls).toBeLessThanOrEqual(3);
     expect(cancelled).toBe(true);
+    expect(signalForCall().aborted).toBe(true);
+  });
+
+  it("aborts the Expo transport when streaming the response body fails", async () => {
+    expoFetch.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.error(new Error("native stream failed"));
+          },
+        }),
+        { headers: { "Content-Type": "application/atom+xml" } },
+      ),
+    );
+
+    await expect(
+      new OpdsClient(new ExpoPlatformService()).open("https://catalog.test/feed.xml"),
+    ).rejects.toMatchObject({ code: "unreachable" });
+
+    expect(signalForCall().aborted).toBe(true);
+  });
+
+  it("aborts the Expo transport when a returned asset body is cancelled", async () => {
+    expoFetch.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: { "Content-Type": "application/epub+zip" },
+      }),
+    );
+    const asset = await new OpdsClient(new ExpoPlatformService()).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    await asset.body?.cancel();
+
+    expect(signalForCall().aborted).toBe(true);
   });
 });

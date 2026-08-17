@@ -1,6 +1,6 @@
 import { DOMParser } from "@xmldom/xmldom";
 import { getOpenSearch, getSearch } from "foliate-js/opds.js";
-import type { FetchOptions, IPlatformService } from "../services/platform";
+import type { FetchOptions, IPlatformService, PlatformFetchResponse } from "../services/platform";
 import { parseOpdsDocument } from "./opds-parser";
 import { classifyOpdsUrl } from "./opds-security";
 import type { OpdsCredentials, OpdsErrorCode, OpdsFeed, OpdsSearchDescriptor } from "./opds-types";
@@ -24,6 +24,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 5;
 const MAX_CATALOG_BYTES = 5 * 1024 * 1024;
+const disposedTransports = new WeakSet<PlatformFetchResponse>();
 
 const ERROR_MESSAGES: Record<OpdsErrorCode, string> = {
   unauthorized: "Catalog authentication failed.",
@@ -41,7 +42,7 @@ interface SearchDocument {
 }
 
 interface RequestResult {
-  response: Response;
+  response: PlatformFetchResponse;
   finalUrl: string;
 }
 
@@ -199,7 +200,7 @@ function runPlatformFetch(
   url: string,
   options: FetchOptions,
   lifecycle: RequestLifecycle,
-): Promise<Response> {
+): Promise<PlatformFetchResponse> {
   try {
     return lifecycle.race(
       Promise.resolve(platform.fetch(url, { ...options, signal: lifecycle.signal })),
@@ -215,12 +216,33 @@ function cancelResponseBody(response: Response): void {
   }
 }
 
-async function readLimitedText(response: Response, lifecycle: RequestLifecycle): Promise<string> {
+function abortResponseTransport(response: PlatformFetchResponse): void {
+  if (disposedTransports.has(response)) return;
+  disposedTransports.add(response);
+  response.cancelTransport?.();
+  response.onDispose?.();
+}
+
+function discardResponse(response: PlatformFetchResponse): void {
+  cancelResponseBody(response);
+  abortResponseTransport(response);
+}
+
+function disposeResponse(response: PlatformFetchResponse): void {
+  if (disposedTransports.has(response)) return;
+  disposedTransports.add(response);
+  response.onDispose?.();
+}
+
+async function readLimitedText(
+  response: PlatformFetchResponse,
+  lifecycle: RequestLifecycle,
+): Promise<string> {
   const contentLength = response.headers.get("Content-Length");
   if (contentLength) {
     const parsedLength = Number(contentLength);
     if (Number.isFinite(parsedLength) && parsedLength > MAX_CATALOG_BYTES) {
-      cancelResponseBody(response);
+      discardResponse(response);
       throw new OpdsError("too-large");
     }
   }
@@ -236,19 +258,16 @@ async function readLimitedText(response: Response, lifecycle: RequestLifecycle):
         if (done) break;
         received += value.byteLength;
         if (received > MAX_CATALOG_BYTES) {
-          try {
-            await reader.cancel();
-          } catch {
-            // The bounded read has already failed safely; cancellation is best effort.
-          }
           throw new OpdsError("too-large");
         }
         chunks.push(decoder.decode(value, { stream: true }));
       }
       chunks.push(decoder.decode());
+      disposeResponse(response);
       return chunks.join("");
     } catch (error) {
       void reader.cancel().catch(() => {});
+      abortResponseTransport(response);
       throw lifecycle.mapError(error);
     }
   }
@@ -257,16 +276,20 @@ async function readLimitedText(response: Response, lifecycle: RequestLifecycle):
   try {
     body = await lifecycle.race(response.text());
   } catch (error) {
+    discardResponse(response);
     throw lifecycle.mapError(error);
   }
   if (new TextEncoder().encode(body).byteLength > MAX_CATALOG_BYTES) {
+    discardResponse(response);
     throw new OpdsError("too-large");
   }
+  disposeResponse(response);
   return body;
 }
 
-function wrapAssetResponse(response: Response, lifecycle: RequestLifecycle): Response {
+function wrapAssetResponse(response: PlatformFetchResponse, lifecycle: RequestLifecycle): Response {
   if (!response.body) {
+    disposeResponse(response);
     lifecycle.dispose();
     return response;
   }
@@ -278,12 +301,14 @@ function wrapAssetResponse(response: Response, lifecycle: RequestLifecycle): Res
         const { done, value } = await lifecycle.race(reader.read());
         if (done) {
           controller.close();
+          disposeResponse(response);
           lifecycle.dispose();
           return;
         }
         controller.enqueue(value);
       } catch (error) {
         void reader.cancel().catch(() => {});
+        abortResponseTransport(response);
         lifecycle.dispose();
         controller.error(lifecycle.mapError(error));
       }
@@ -292,15 +317,22 @@ function wrapAssetResponse(response: Response, lifecycle: RequestLifecycle): Res
       try {
         await reader.cancel(reason);
       } finally {
+        abortResponseTransport(response);
         lifecycle.dispose();
       }
     },
   });
-  return new Response(body, {
+  const wrapped = new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers: response.headers,
   });
+  Object.defineProperties(wrapped, {
+    url: { value: response.url },
+    redirected: { value: response.redirected },
+    type: { value: response.type },
+  });
+  return wrapped;
 }
 
 function getMediaType(response: Response): string {
@@ -394,17 +426,17 @@ export class OpdsClient {
 
       const authenticationError = authError(response);
       if (authenticationError) {
-        cancelResponseBody(response);
+        discardResponse(response);
         throw authenticationError;
       }
       if (!REDIRECT_STATUSES.has(response.status)) {
         if (!response.ok) {
-          cancelResponseBody(response);
+          discardResponse(response);
           throw new OpdsError("unreachable");
         }
         return { response, finalUrl: current.href };
       }
-      cancelResponseBody(response);
+      discardResponse(response);
       if (redirects >= MAX_REDIRECTS) throw new OpdsError("invalid-catalog");
 
       const location = response.headers.get("Location");
@@ -437,7 +469,7 @@ export class OpdsClient {
       );
       const contentType = getMediaType(response);
       if (!CATALOG_MEDIA_TYPES.has(contentType)) {
-        cancelResponseBody(response);
+        discardResponse(response);
         throw new OpdsError("invalid-catalog");
       }
       const body = await readLimitedText(response, lifecycle);
@@ -476,7 +508,7 @@ export class OpdsClient {
         lifecycle,
       );
       if (!OPENSEARCH_MEDIA_TYPES.has(getMediaType(response))) {
-        cancelResponseBody(response);
+        discardResponse(response);
         throw new OpdsError("invalid-catalog");
       }
       const search = parseOpenSearch(await readLimitedText(response, lifecycle));

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createExtractorCommand, resolveExtractorFormat } from "./extractor-format";
+import {
+  createExtractorCommand,
+  createExtractorRequest,
+  resolveExtractorFormat,
+} from "./extractor-format";
 
 describe("resolveExtractorFormat", () => {
   it.each(["epub", "pdf", "txt", "umd", "mobi", "azw", "azw3"])(
@@ -77,5 +81,17 @@ describe("createExtractorCommand", () => {
     ],
   ])("dispatches from resolved format for %#", (input, expected) => {
     expect(createExtractorCommand({ base64BookData: "data", ...input })).toMatchObject(expected);
+  });
+});
+
+describe("createExtractorRequest", () => {
+  it.each([
+    [{ mimeType: "application/octet-stream", fileName: "inferred.mobi" }, "mobi"],
+    [{ mimeType: "application/vnd.amazon.ebook" }, "azw3"],
+  ])("preserves the resolved %s format for error classification", (input, expected) => {
+    const request = createExtractorRequest({ base64BookData: "data", ...input });
+
+    expect(request.command.bookFormat).toBe(expected);
+    expect(request.classificationFormat).toBe(expected);
   });
 });

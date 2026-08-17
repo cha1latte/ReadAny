@@ -6,8 +6,10 @@ export type BookExtractionErrorCategory =
 
 const MOBI_FAMILY = new Set(["mobi", "azw", "azw3"]);
 const PROTECTION_EVIDENCE = /\b(?:encrypt(?:ed|ion)?|drm|protected)\b/i;
-const MALFORMED_EVIDENCE =
+const GENERIC_MALFORMED_EVIDENCE =
   /\b(?:truncat(?:ed|ion)|invalid\s+(?:(?:pdb|mobi)\s+)?record(?:\s+(?:offset|structure|header|index))?|record\s+(?:offset|structure|header|index))\b/i;
+const MOBI_PARSER_MALFORMED_EVIDENCE =
+  /^(?:Invalid (?:HUFF|CDIC|INDX) record|Invalid TAGX section|Invalid EXTH header|Missing MOBI header|Missing FDST record|Record index out of bounds|Offset is outside (?:the )?bounds of (?:the )?DataView)$/i;
 const UNSUPPORTED_FORMAT_EVIDENCE = /\bunsupported\s+(?:book\s+)?format\b/i;
 
 const MESSAGE_KEYS: Record<BookExtractionErrorCategory, { title: string; description: string }> = {
@@ -34,13 +36,22 @@ export function classifyBookExtractionError(
   format: string | undefined,
 ): BookExtractionErrorCategory {
   const message = error instanceof Error ? error.message : String(error);
+  const parserMessage = message.replace(/^(?:Error|RangeError):\s*/i, "");
   const normalizedFormat = format?.trim().toLowerCase();
 
-  if (normalizedFormat && MOBI_FAMILY.has(normalizedFormat) && PROTECTION_EVIDENCE.test(message)) {
+  if (
+    normalizedFormat &&
+    MOBI_FAMILY.has(normalizedFormat) &&
+    PROTECTION_EVIDENCE.test(parserMessage)
+  ) {
     return "drm-protected";
   }
-  if (MALFORMED_EVIDENCE.test(message)) return "malformed";
-  if (UNSUPPORTED_FORMAT_EVIDENCE.test(message)) return "unsupported-format";
+  if (
+    GENERIC_MALFORMED_EVIDENCE.test(parserMessage) ||
+    MOBI_PARSER_MALFORMED_EVIDENCE.test(parserMessage)
+  )
+    return "malformed";
+  if (UNSUPPORTED_FORMAT_EVIDENCE.test(parserMessage)) return "unsupported-format";
   return "unknown";
 }
 

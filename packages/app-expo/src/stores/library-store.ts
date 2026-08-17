@@ -76,6 +76,7 @@ export interface LibraryState {
   addBook: (book: Book) => Promise<void>;
   removeBook: (bookId: string, options?: RemoveBookOptions) => Promise<void>;
   updateBook: (bookId: string, updates: Partial<Book>) => Promise<void>;
+  updateBookStrict: (bookId: string, updates: Partial<Book>) => Promise<void>;
   setFilter: (filter: Partial<LibraryFilter>) => void;
   setViewMode: (mode: LibraryViewMode) => void;
   setSortField: (field: SortField) => void;
@@ -825,6 +826,18 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     await persistBookUpdate(bookId, updates).catch((err) =>
       console.error("Failed to update book in database:", err),
     );
+  },
+
+  updateBookStrict: async (bookId, updates) => {
+    set((state) => ({
+      books: state.books.map((b) => (b.id === bookId ? { ...b, ...updates } : b)),
+      allTags:
+        updates.tags !== undefined
+          ? Array.from(new Set([...state.allTags, ...updates.tags])).sort()
+          : state.allTags,
+    }));
+    debouncedSave("library-books", get().books);
+    await persistBookUpdate(bookId, updates);
   },
 
   setFilter: (filter) => set((state) => ({ filter: { ...state.filter, ...filter } })),

@@ -1,11 +1,8 @@
 import type { ExtractorRef } from "@/components/rag/ExtractorWebView";
 import { inspectMobileBookForVectorize } from "@/lib/rag/auto-vectorize-book";
-import {
-  BookExtractionError,
-  getBookExtractionErrorMessageKeys,
-  toBookExtractionError,
-} from "@/lib/rag/extractor-error";
+import { getBookExtractionErrorMessageKeys } from "@/lib/rag/extractor-error";
 import { MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION } from "@/lib/rag/mobile-vectorize-capability";
+import { runVectorizeQueueJob } from "@/lib/rag/vectorize-queue-job";
 import { resetBookVectorization, triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useVectorModelStore } from "@/stores/vector-model-store";
@@ -36,79 +33,78 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
     async (book: Book) => {
       setVectorizingBookId(book.id);
       setVectorizingBookTitle(book.meta.title);
-      setVectorProgress({
-        bookId: book.id,
-        status: "chunking",
-        processedChunks: 0,
-        totalChunks: 0,
+      const result = await runVectorizeQueueJob<VectorizeProgress>({
+        format: book.format,
+        extract: async () => {
+          if (!extractorRef.current) throw new Error("Extractor WebView not ready");
+
+          const info = await inspectMobileBookForVectorize(book);
+          if (!info.canVectorize || !info.mimeType) {
+            throw new Error(`Book cannot be vectorized on mobile: ${info.reason ?? "unknown"}`);
+          }
+
+          const base64 = await FileSystem.readAsStringAsync(info.absPath, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          return extractorRef.current.extractChapters(
+            base64,
+            info.mimeType,
+            book.format,
+            info.absPath,
+          );
+        },
+        vectorize: (chapters, onProgress) =>
+          triggerVectorizeBook(book.id, book.filePath, chapters, onProgress),
+        cleanup: () => resetBookVectorization(book.id),
+        onEvent: (event) => {
+          if (event.status === "extracting") {
+            setVectorProgress({
+              bookId: book.id,
+              status: "chunking",
+              processedChunks: 0,
+              totalChunks: 0,
+            });
+          } else if (event.status === "vectorizing") {
+            if (event.progress) setVectorProgress({ ...event.progress });
+          } else if (event.status === "completed") {
+            setVectorProgress({
+              bookId: book.id,
+              status: "completed",
+              processedChunks: 1,
+              totalChunks: 1,
+            });
+          } else {
+            console.error(
+              `[useVectorizationQueue] Vectorization failed for "${book.meta.title}":`,
+              event.error,
+            );
+            if (event.cleanupError) {
+              console.error(
+                `[useVectorizationQueue] Failed to clean up "${book.meta.title}":`,
+                event.cleanupError,
+              );
+            }
+            setVectorProgress({
+              bookId: book.id,
+              status: "error",
+              processedChunks: 0,
+              totalChunks: 0,
+            });
+
+            if (event.errorCategory) {
+              const keys = getBookExtractionErrorMessageKeys(event.errorCategory);
+              Alert.alert(t(keys.title), t(keys.description));
+            } else {
+              Alert.alert(
+                t("vectorize.vectorizationFailedTitle"),
+                t("vectorize.vectorizationFailedDesc"),
+              );
+            }
+          }
+        },
       });
 
-      try {
-        if (!extractorRef.current) {
-          throw toBookExtractionError(new Error("Extractor WebView not ready"), book.format);
-        }
-
-        const info = await inspectMobileBookForVectorize(book);
-        if (!info.canVectorize || !info.mimeType) {
-          throw new Error(`Book cannot be vectorized on mobile: ${info.reason ?? "unknown"}`);
-        }
-
-        const base64 = await FileSystem.readAsStringAsync(info.absPath, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const chapters = await extractorRef.current.extractChapters(
-          base64,
-          info.mimeType,
-          book.format,
-          info.absPath,
-        );
-        if (!chapters || chapters.length === 0) {
-          throw toBookExtractionError(new Error("No chapters extracted from book"), book.format);
-        }
-
-        await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
-          setVectorProgress({ ...progress });
-        });
-
-        setVectorProgress({
-          bookId: book.id,
-          status: "completed",
-          processedChunks: 1,
-          totalChunks: 1,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      } catch (err) {
-        console.error(
-          `[useVectorizationQueue] Vectorization failed for "${book.meta.title}":`,
-          err,
-        );
-        try {
-          await resetBookVectorization(book.id);
-        } catch (cleanupError) {
-          console.error(
-            `[useVectorizationQueue] Failed to clean up "${book.meta.title}":`,
-            cleanupError,
-          );
-        }
-        setVectorProgress({
-          bookId: book.id,
-          status: "error",
-          processedChunks: 0,
-          totalChunks: 0,
-        });
-
-        if (err instanceof BookExtractionError) {
-          const keys = getBookExtractionErrorMessageKeys(err.category);
-          Alert.alert(t(keys.title), t(keys.description));
-        } else {
-          Alert.alert(
-            t("vectorize.vectorizationFailedTitle"),
-            t("vectorize.vectorizationFailedDesc"),
-          );
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      }
+      await new Promise((resolve) => setTimeout(resolve, result.ok ? 800 : 1500));
     },
     [extractorRef, t],
   );

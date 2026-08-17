@@ -1,10 +1,7 @@
 import type { ChapterData } from "@readany/core/rag";
 import type { Book } from "@readany/core/types";
-import {
-  BookExtractionError,
-  type BookExtractionErrorCategory,
-  toBookExtractionError,
-} from "./extractor-error";
+import type { BookExtractionErrorCategory } from "./extractor-error";
+import { runVectorizeQueueJob } from "./vectorize-queue-job";
 
 export type AutoVectorizeCallback = (
   bookId: string,
@@ -67,45 +64,43 @@ async function processQueue() {
 
       const { book, base64Data, mimeType } = item;
 
-      try {
-        callback?.(book.id, { status: "extracting", progress: 0 });
-
-        if (!extractorRef) {
-          throw toBookExtractionError(new Error("Extractor WebView not ready"), book.format);
-        }
-
-        const chapters = await extractorRef.extractChapters(
-          base64Data,
-          mimeType,
-          book.format,
-          book.filePath,
-        );
-        if (!chapters || chapters.length === 0) {
-          throw toBookExtractionError(new Error("No chapters extracted from book"), book.format);
-        }
-
-        callback?.(book.id, { status: "vectorizing", progress: 0 });
-
-        await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
-          const pct =
-            progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
-          callback?.(book.id, { status: "vectorizing", progress: pct });
-        });
-
-        callback?.(book.id, { status: "completed", progress: 1 });
-      } catch (err) {
-        console.error(`[AutoVectorize] Failed for ${book.meta.title}:`, err);
-        try {
-          await resetBookVectorization(book.id);
-        } catch (cleanupError) {
-          console.error(`[AutoVectorize] Failed to clean up ${book.meta.title}:`, cleanupError);
-        }
-        callback?.(book.id, {
-          status: "error",
-          progress: 0,
-          errorCategory: err instanceof BookExtractionError ? err.category : undefined,
-        });
-      }
+      await runVectorizeQueueJob<number>({
+        format: book.format,
+        extract: async () => {
+          if (!extractorRef) throw new Error("Extractor WebView not ready");
+          return extractorRef.extractChapters(base64Data, mimeType, book.format, book.filePath);
+        },
+        vectorize: async (chapters, onProgress) => {
+          await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
+            const pct =
+              progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
+            onProgress?.(pct);
+          });
+        },
+        cleanup: () => resetBookVectorization(book.id),
+        onEvent: (event) => {
+          if (event.status === "extracting") {
+            callback?.(book.id, { status: "extracting", progress: 0 });
+          } else if (event.status === "vectorizing") {
+            callback?.(book.id, { status: "vectorizing", progress: event.progress ?? 0 });
+          } else if (event.status === "completed") {
+            callback?.(book.id, { status: "completed", progress: 1 });
+          } else {
+            console.error(`[AutoVectorize] Failed for ${book.meta.title}:`, event.error);
+            if (event.cleanupError) {
+              console.error(
+                `[AutoVectorize] Failed to clean up ${book.meta.title}:`,
+                event.cleanupError,
+              );
+            }
+            callback?.(book.id, {
+              status: "error",
+              progress: 0,
+              errorCategory: event.errorCategory,
+            });
+          }
+        },
+      });
     }
   } finally {
     processing = false;

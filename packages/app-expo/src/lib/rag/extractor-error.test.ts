@@ -27,6 +27,15 @@ describe("classifyBookExtractionError", () => {
     "truncated MOBI header",
     "invalid record structure",
     "record offset is outside the file",
+    "Invalid HUFF record",
+    "Invalid CDIC record",
+    "Invalid INDX record",
+    "Invalid TAGX section",
+    "Invalid EXTH header",
+    "Missing MOBI header",
+    "Missing FDST record",
+    "Record index out of bounds",
+    "Offset is outside the bounds of the DataView",
   ])("classifies malformed structure evidence: %s", (message) => {
     expect(classifyBookExtractionError(new Error(message), "mobi")).toBe("malformed");
   });

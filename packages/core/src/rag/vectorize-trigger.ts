@@ -266,14 +266,14 @@ export async function triggerVectorizeBook(
     // Invalidate search cache so next query picks up new embeddings
     invalidateChunkCache(bookId);
 
-    // Phase 4: Update state
-    progress.status = "completed";
-    onProgress?.(progress);
-
+    // Phase 4: Persist the final state before publishing completion.
     await callbacks.onBookUpdate(bookId, {
       isVectorized: true,
       vectorizeProgress: 1,
     });
+
+    progress.status = "completed";
+    onProgress?.(progress);
     eventBus.emit("vectorize:completed", {
       bookId,
       chunksCount: allChunks.length,

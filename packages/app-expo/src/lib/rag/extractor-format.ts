@@ -82,3 +82,11 @@ export function createExtractorCommand(input: {
     fileName: getExtractorFileName(input.mimeType, resolvedFormat, input.fileName),
   };
 }
+
+export function createExtractorRequest(input: Parameters<typeof createExtractorCommand>[0]) {
+  const command = createExtractorCommand(input);
+  return {
+    command,
+    classificationFormat: command.bookFormat ?? undefined,
+  };
+}

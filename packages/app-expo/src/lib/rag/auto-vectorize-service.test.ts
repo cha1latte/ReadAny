@@ -1,6 +1,5 @@
 import type { Book } from "@readany/core/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BookExtractionError } from "./extractor-error";
 
 const vectorizeMocks = vi.hoisted(() => ({
   resetBookVectorization: vi.fn(),
@@ -38,9 +37,7 @@ describe("automatic vectorization failure lifecycle", () => {
       events.push("cleanup");
     });
     setExtractorRef({
-      extractChapters: vi
-        .fn()
-        .mockRejectedValue(new BookExtractionError("Encrypted MOBI records", "mobi")),
+      extractChapters: vi.fn().mockRejectedValue(new Error("Encrypted MOBI records")),
     });
 
     const errorPublished = new Promise<void>((resolve) => {
@@ -62,7 +59,7 @@ describe("automatic vectorization failure lifecycle", () => {
   it("publishes the failure and releases the queue if cleanup itself rejects", async () => {
     vectorizeMocks.resetBookVectorization.mockRejectedValueOnce(new Error("cleanup failed"));
     setExtractorRef({
-      extractChapters: vi.fn().mockRejectedValue(new BookExtractionError("loader failed", "mobi")),
+      extractChapters: vi.fn().mockRejectedValue(new Error("loader failed")),
     });
     const callback = vi.fn();
     setCallback(callback);

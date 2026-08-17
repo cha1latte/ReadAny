@@ -22,6 +22,10 @@ const chunkerMocks = vi.hoisted(() => ({
   chunkContent: vi.fn(),
 }));
 
+const eventBusMocks = vi.hoisted(() => ({
+  emit: vi.fn(),
+}));
+
 vi.mock("../db/database", () => databaseMocks);
 vi.mock("./chunker", () => chunkerMocks);
 vi.mock("./remote-embedding", () => remoteEmbeddingMocks);
@@ -29,6 +33,7 @@ vi.mock("./vector-db", () => ({
   getVectorDB: () => vectorDatabaseMocks,
   hasVectorDB: () => true,
 }));
+vi.mock("../utils/event-bus", () => ({ eventBus: eventBusMocks }));
 
 import {
   canStoreInSharedVectorDB,
@@ -153,5 +158,85 @@ describe("failed vectorization cleanup", () => {
 
     releaseUpdate?.();
     await cleanup;
+  });
+
+  it("does not publish completion when the final vectorized-state write rejects", async () => {
+    const progressStatuses: string[] = [];
+
+    await expect(
+      triggerVectorizeBook(
+        "book-1",
+        [{ index: 0, title: "Chapter", content: "content" }],
+        {
+          vectorModelEnabled: true,
+          vectorModelMode: "remote",
+          selectedBuiltinModelId: null,
+          remoteModel: {
+            url: "https://example.com/v1/embeddings",
+            apiKey: "test",
+            modelId: "test-model",
+          },
+        },
+        {
+          onBookUpdate: async (_bookId, update) => {
+            if (update.isVectorized) throw new Error("final state write failed");
+          },
+        },
+        (progress) => progressStatuses.push(progress.status),
+      ),
+    ).rejects.toThrow("final state write failed");
+
+    expect(progressStatuses).not.toContain("completed");
+    expect(progressStatuses.at(-1)).toBe("error");
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+    expect(eventBusMocks.emit).toHaveBeenCalledWith("vectorize:error", {
+      bookId: "book-1",
+      error: "final state write failed",
+    });
+    expect(databaseMocks.deleteChunks).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for the final vectorized-state write before publishing completion", async () => {
+    let releaseFinalWrite: (() => void) | undefined;
+    const finalWriteReleased = new Promise<void>((resolve) => {
+      releaseFinalWrite = resolve;
+    });
+    const progressStatuses: string[] = [];
+
+    const vectorization = triggerVectorizeBook(
+      "book-1",
+      [{ index: 0, title: "Chapter", content: "content" }],
+      {
+        vectorModelEnabled: true,
+        vectorModelMode: "remote",
+        selectedBuiltinModelId: null,
+        remoteModel: {
+          url: "https://example.com/v1/embeddings",
+          apiKey: "test",
+          modelId: "test-model",
+        },
+      },
+      {
+        onBookUpdate: async (_bookId, update) => {
+          if (update.isVectorized) await finalWriteReleased;
+        },
+      },
+      (progress) => progressStatuses.push(progress.status),
+    );
+
+    await vi.waitFor(() => {
+      expect(databaseMocks.setVectorIndexProvenance).toHaveBeenCalledOnce();
+    });
+    expect(progressStatuses).not.toContain("completed");
+    expect(eventBusMocks.emit).not.toHaveBeenCalledWith("vectorize:completed", expect.anything());
+
+    releaseFinalWrite?.();
+    await vectorization;
+
+    expect(progressStatuses.at(-1)).toBe("completed");
+    expect(eventBusMocks.emit).toHaveBeenCalledWith("vectorize:completed", {
+      bookId: "book-1",
+      chunksCount: 1,
+    });
   });
 });

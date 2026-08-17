@@ -5,7 +5,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { toBookExtractionError } from "../../lib/rag/extractor-error";
-import { createExtractorCommand } from "../../lib/rag/extractor-format";
+import { createExtractorRequest } from "../../lib/rag/extractor-format";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
 const EXTRACTION_TIMEOUT_MS = 45_000;
@@ -108,41 +108,50 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       bookFormat?: Book["format"],
       fileName?: string,
     ) => {
+      const { command, classificationFormat } = createExtractorRequest({
+        base64BookData,
+        mimeType,
+        bookFormat,
+        fileName,
+      });
       return new Promise<ChapterData[]>((resolve, reject) => {
         if (!ready || !webViewRef.current) {
           return reject(
-            toBookExtractionError(new Error("Extractor WebView not ready"), bookFormat),
+            toBookExtractionError(new Error("Extractor WebView not ready"), classificationFormat),
           );
         }
 
         const timeoutId = setTimeout(() => {
           const index = pendingRequests.current.findIndex((pending) => pending.reject === reject);
           if (index >= 0) pendingRequests.current.splice(index, 1);
-          reject(toBookExtractionError(new Error("Timed out extracting book content"), bookFormat));
+          reject(
+            toBookExtractionError(
+              new Error("Timed out extracting book content"),
+              classificationFormat,
+            ),
+          );
         }, EXTRACTION_TIMEOUT_MS);
 
-        const pendingRequest = { resolve, reject, timeoutId, bookFormat };
+        const pendingRequest = {
+          resolve,
+          reject,
+          timeoutId,
+          bookFormat: classificationFormat,
+        };
         pendingRequests.current.push(pendingRequest);
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
-        const cmd = createExtractorCommand({
-          base64BookData,
-          mimeType,
-          bookFormat,
-          fileName,
-        });
-
         try {
           webViewRef.current.injectJavaScript(`
-            window.postMessage(${JSON.stringify(JSON.stringify(cmd))}, "*");
+            window.postMessage(${JSON.stringify(JSON.stringify(command))}, "*");
             true;
           `);
         } catch (error) {
           clearTimeout(timeoutId);
           const index = pendingRequests.current.indexOf(pendingRequest);
           if (index >= 0) pendingRequests.current.splice(index, 1);
-          reject(toBookExtractionError(error, bookFormat));
+          reject(toBookExtractionError(error, classificationFormat));
         }
       });
     },

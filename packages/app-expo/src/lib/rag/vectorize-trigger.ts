@@ -14,7 +14,7 @@ export type { VectorizeStatusCallback };
 
 export async function resetBookVectorization(bookId: string): Promise<void> {
   await coreResetBookVectorization(bookId, {
-    onBookUpdate: useLibraryStore.getState().updateBook,
+    onBookUpdate: useLibraryStore.getState().updateBookStrict,
   });
 }
 
@@ -44,7 +44,7 @@ export async function triggerVectorizeBook(
 
   // 2. Build callbacks for state updates
   const callbacks = {
-    onBookUpdate: useLibraryStore.getState().updateBook,
+    onBookUpdate: useLibraryStore.getState().updateBookStrict,
   };
 
   // 3. Delegate to core vectorization pipeline which does the chunking & embedding

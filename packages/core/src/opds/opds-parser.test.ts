@@ -233,6 +233,114 @@ describe("parseOpdsDocument", () => {
     ).toEqual(["azw3", "azw3", null, null]);
   });
 
+  it.each(["acquisition", "borrow", "buy", "download", "preview", "subscribe"])(
+    "recognizes the OPDS 2 %s acquisition relation",
+    (rel) => {
+      const body = JSON.stringify({
+        metadata: { title: "Relations" },
+        links: [{ rel: "self", href: "feed.json" }],
+        publications: [
+          {
+            metadata: { title: `${rel} Book` },
+            links: [{ rel, href: `books/${rel}.epub`, type: "application/epub+zip" }],
+          },
+        ],
+      });
+
+      expect(
+        parseOpdsDocument(body, "application/opds+json", "https://catalog.test/root/feed.json")
+          .publications[0]?.acquisitions,
+      ).toEqual([
+        expect.objectContaining({
+          url: `https://catalog.test/root/books/${rel}.epub`,
+          format: "epub",
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    "http://opds-spec.org/acquisition",
+    "http://opds-spec.org/acquisition/borrow",
+    "http://opds-spec.org/acquisition/open-access",
+  ])("recognizes the OPDS 1 acquisition relation %s in OPDS 2", (rel) => {
+    const body = JSON.stringify({
+      metadata: { title: "Legacy Relations" },
+      links: [{ rel: "self", href: "feed.json" }],
+      publications: [
+        {
+          metadata: { title: "Legacy Book" },
+          links: [{ rel, href: "books/legacy.pdf", type: "application/pdf" }],
+        },
+      ],
+    });
+
+    expect(
+      parseOpdsDocument(body, "application/opds+json", "https://catalog.test/root/feed.json")
+        .publications[0]?.acquisitions,
+    ).toEqual([
+      expect.objectContaining({
+        url: "https://catalog.test/root/books/legacy.pdf",
+        format: "pdf",
+      }),
+    ]);
+  });
+
+  it("rejects a title-only OPDS 2 publication", () => {
+    const body = JSON.stringify({
+      metadata: { title: "Catalog" },
+      links: [{ rel: "self", href: "feed.json" }],
+      publications: [{ metadata: { title: "No way to read me" } }],
+    });
+
+    expect(() =>
+      parseOpdsDocument(body, "application/opds+json", "https://catalog.test/feed.json"),
+    ).toThrow("Invalid OPDS 2 catalog");
+  });
+
+  it("accepts and maps a publication with a valid reading order", () => {
+    const body = JSON.stringify({
+      metadata: { title: "Web Publications" },
+      links: [{ rel: "self", href: "feed.json" }],
+      publications: [
+        {
+          metadata: { title: "Web Book" },
+          readingOrder: [{ href: "chapters/1.html", type: "text/html", title: "Chapter One" }],
+        },
+      ],
+    });
+
+    expect(
+      parseOpdsDocument(body, "application/opds+json", "https://catalog.test/root/feed.json")
+        .publications[0]?.readingOrder,
+    ).toEqual([
+      {
+        rel: [],
+        url: "https://catalog.test/root/chapters/1.html",
+        type: "text/html",
+        title: "Chapter One",
+      },
+    ]);
+  });
+
+  it.each([
+    ["a non-array reading order", { href: "chapter.html" }],
+    ["an empty reading order", []],
+    ["a reading-order item without an href", [{ type: "text/html" }]],
+    ["a reading-order item with a non-string href", [{ href: 7, type: "text/html" }]],
+    ["a reading-order item with a non-string type", [{ href: "chapter.html", type: 7 }]],
+  ])("rejects a publication with %s", (_name, readingOrder) => {
+    const body = JSON.stringify({
+      metadata: { title: "Web Publications" },
+      links: [{ rel: "self", href: "feed.json" }],
+      publications: [{ metadata: { title: "Broken Web Book" }, readingOrder }],
+    });
+
+    expect(() =>
+      parseOpdsDocument(body, "application/opds+json", "https://catalog.test/feed.json"),
+    ).toThrow("Invalid OPDS 2 catalog");
+  });
+
   it.each([
     ["application/opds+json", "{", "Invalid OPDS JSON document"],
     ["application/opds+json", JSON.stringify({ metadata: {} }), "Invalid OPDS 2 catalog"],

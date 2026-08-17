@@ -23,6 +23,7 @@ export interface OpdsPublication {
   subjects: string[];
   images: OpdsLink[];
   acquisitions: OpdsAcquisition[];
+  readingOrder: OpdsLink[];
 }
 
 export interface OpdsNavigationItem {

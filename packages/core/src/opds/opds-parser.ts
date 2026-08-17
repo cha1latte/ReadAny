@@ -13,6 +13,14 @@ import type {
 } from "./opds-types";
 
 const ACQUISITION_REL = "http://opds-spec.org/acquisition";
+const ACQUISITION_RELS = new Set([
+  "acquisition",
+  "borrow",
+  "buy",
+  "download",
+  "preview",
+  "subscribe",
+]);
 const ATOM_NAMESPACE = "http://www.w3.org/2005/Atom";
 const IMAGE_RELS = new Set([
   "cover",
@@ -97,6 +105,16 @@ function normalizeRel(value: unknown): string[] {
   if (typeof value === "string") return value.trim().split(/\s+/).filter(Boolean);
   if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
   return [];
+}
+
+function isAcquisitionRelation(rel: string): boolean {
+  return (
+    ACQUISITION_RELS.has(rel) || rel === ACQUISITION_REL || rel.startsWith(`${ACQUISITION_REL}/`)
+  );
+}
+
+function isAcquisitionLink(value: unknown): value is UnknownRecord {
+  return isRecord(value) && normalizeRel(value.rel).some(isAcquisitionRelation);
 }
 
 function resolveUrl(href: string, documentUrl: string, templated = false): string {
@@ -196,7 +214,7 @@ function getBookFormat(type: string | undefined, url: string): BookFormat | null
 
 function mapAcquisition(value: unknown, documentUrl: string): OpdsAcquisition | undefined {
   const link = mapLink(value, documentUrl);
-  if (!link || !link.rel.some((rel) => rel.startsWith(ACQUISITION_REL))) return undefined;
+  if (!link || !isAcquisitionLink(value)) return undefined;
   return { ...link, format: getBookFormat(link.type, link.url) };
 }
 
@@ -216,6 +234,10 @@ function mapPublication(value: unknown, documentUrl: string): OpdsPublication {
     const image = mapLink(item, documentUrl);
     return image ? [image] : [];
   });
+  const readingOrder = asRecords(value.readingOrder).flatMap((item) => {
+    const link = mapLink(item, documentUrl);
+    return link ? [link] : [];
+  });
 
   const identifier = optionalString(metadata.identifier);
   const publication: OpdsPublication = {
@@ -224,6 +246,7 @@ function mapPublication(value: unknown, documentUrl: string): OpdsPublication {
     subjects: normalizeSubjects(metadata.subject),
     images,
     acquisitions,
+    readingOrder,
   };
   const id = optionalString(value.id) ?? identifier;
   const publisher = normalizeNames(metadata.publisher)[0];
@@ -317,7 +340,15 @@ function getArrayProperty(value: UnknownRecord, name: string): unknown[] {
 }
 
 function validateLink(value: unknown): void {
-  if (!isRecord(value) || typeof value.href !== "string") throw new Error("Invalid OPDS 2 catalog");
+  if (!isRecord(value) || typeof value.href !== "string" || value.href.length === 0) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+  if ("type" in value && typeof value.type !== "string") {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
+  if ("title" in value && typeof value.title !== "string") {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
   if (
     "rel" in value &&
     typeof value.rel !== "string" &&
@@ -339,8 +370,14 @@ function validatePublication(value: unknown): void {
   if (!isRecord(value) || !isRecord(value.metadata) || !isLocalizableString(value.metadata.title)) {
     throw new Error("Invalid OPDS 2 catalog");
   }
-  for (const link of getArrayProperty(value, "links")) validateLink(link);
+  const links = getArrayProperty(value, "links");
+  for (const link of links) validateLink(link);
   for (const image of getArrayProperty(value, "images")) validateLink(image);
+  const readingOrder = getArrayProperty(value, "readingOrder");
+  for (const link of readingOrder) validateLink(link);
+  if (!links.some(isAcquisitionLink) && readingOrder.length === 0) {
+    throw new Error("Invalid OPDS 2 catalog");
+  }
 }
 
 function validateGroup(value: unknown): void {

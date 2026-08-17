@@ -27,6 +27,8 @@ const PALMDOC_HEADER = {
   encryption: [12, 2, "uint"],
 };
 
+const ENCRYPTED_MOBI_ERROR = "Encrypted MOBI records are not supported";
+
 const MOBI_HEADER = {
   magic: [16, 4, "string"],
   length: [20, 4, "uint"],
@@ -308,8 +310,8 @@ const getStruct = (def, buffer) =>
 const getDecoder = (x) => new TextDecoder(MOBI_ENCODING[x]);
 
 const getVarLen = (byteArray, i = 0) => {
-  let value = 0,
-    length = 0;
+  let value = 0;
+  let length = 0;
   for (const byte of byteArray.subarray(i, i + 4)) {
     value = (value << 7) | ((byte & 0b111_1111) >>> 0);
     length++;
@@ -331,13 +333,19 @@ const getVarLenFromEnd = (byteArray) => {
 
 const countBitsSet = (x) => {
   let count = 0;
-  for (; x > 0; x = x >> 1) if ((x & 1) === 1) count++;
+  for (let remaining = x; remaining > 0; remaining >>= 1) {
+    if ((remaining & 1) === 1) count++;
+  }
   return count;
 };
 
 const countUnsetEnd = (x) => {
   let count = 0;
-  while ((x & 1) === 0) (x = x >> 1), count++;
+  let remaining = x;
+  while ((remaining & 1) === 0) {
+    remaining >>= 1;
+    count++;
+  }
   return count;
 };
 
@@ -347,10 +355,11 @@ const decompressPalmDOC = (array) => {
     const byte = array[i];
     if (byte === 0)
       output.push(0); // uncompressed literal, just copy it
-    else if (byte <= 8)
+    else if (byte <= 8) {
       // copy next 1-8 bytes
-      for (const x of array.subarray(i + 1, (i += byte) + 1)) output.push(x);
-    else if (byte <= 0b0111_1111)
+      for (const x of array.subarray(i + 1, i + byte + 1)) output.push(x);
+      i += byte;
+    } else if (byte <= 0b0111_1111)
       output.push(byte); // uncompressed literal
     else if (byte <= 0b1011_1111) {
       // 1st and 2nd bits are 10, meaning this is a length-distance pair
@@ -424,7 +433,8 @@ const huffcdic = async (mobi, loadRecord) => {
         while (bits >>> (32 - codeLength) < table2[codeLength][0]) codeLength += 1;
         value = table2[codeLength][1];
       }
-      if ((i += codeLength) > bitLength) break;
+      i += codeLength;
+      if (i > bitLength) break;
 
       const code = value - (bits >>> (32 - codeLength));
       let [result, decompressed] = dictionary[code];
@@ -583,7 +593,7 @@ const getFont = async (buf, unzlib) => {
     const bytes = keyLength === 16 ? 1024 : 1040;
     const key = new Uint8Array(buf.slice(keyStart, keyStart + keyLength));
     const length = Math.min(bytes, array.length);
-    for (var i = 0; i < length; i++) array[i] = array[i] ^ key[i % key.length];
+    for (let i = 0; i < length; i++) array[i] = array[i] ^ key[i % key.length];
   }
   // decompress font
   if (flags & 1)
@@ -641,6 +651,7 @@ export class MOBI extends PDB {
     await super.open(file);
     // TODO: if (this.pdb.type === 'TEXt')
     this.headers = this.#getHeaders(await super.loadRecord(0));
+    if (this.headers.palmdoc.encryption !== 0) throw new Error(ENCRYPTED_MOBI_ERROR);
     this.#resourceStart = this.headers.mobi.resourceStart;
     let isKF8 = this.headers.mobi.version >= 8;
     if (!isKF8) {
@@ -649,9 +660,11 @@ export class MOBI extends PDB {
         try {
           // it's a "combo" MOBI/KF8 file; try to open the KF8 part
           this.headers = this.#getHeaders(await super.loadRecord(boundary));
+          if (this.headers.palmdoc.encryption !== 0) throw new Error(ENCRYPTED_MOBI_ERROR);
           this.#start = boundary;
           isKF8 = true;
         } catch (e) {
+          if (e instanceof Error && e.message === ENCRYPTED_MOBI_ERROR) throw e;
           console.warn(e);
           console.warn("Failed to open KF8; falling back to MOBI");
         }
@@ -698,15 +711,16 @@ export class MOBI extends PDB {
     const multibyte = trailingFlags & 1;
     const numTrailingEntries = countBitsSet(trailingFlags >>> 1);
     this.#removeTrailingEntries = (array) => {
+      let remaining = array;
       for (let i = 0; i < numTrailingEntries; i++) {
-        const length = getVarLenFromEnd(array);
-        array = array.subarray(0, -length);
+        const length = getVarLenFromEnd(remaining);
+        remaining = remaining.subarray(0, -length);
       }
       if (multibyte) {
-        const length = (array[array.length - 1] & 0b11) + 1;
-        array = array.subarray(0, -length);
+        const length = (remaining[remaining.length - 1] & 0b11) + 1;
+        remaining = remaining.subarray(0, -length);
       }
-      return array;
+      return remaining;
     };
   }
   decode(...args) {
@@ -773,14 +787,15 @@ const fileposRegex = /<[^<>]+filepos=['"]{0,1}(\d+)[^<>]*>/gi;
 
 const getIndent = (el) => {
   let x = 0;
-  while (el) {
-    const parent = el.parentElement;
+  let current = el;
+  while (current) {
+    const parent = current.parentElement;
     if (parent) {
       const tag = parent.tagName.toLowerCase();
       if (tag === "p") x += 1.5;
       else if (tag === "blockquote") x += 2;
     }
-    el = parent;
+    current = parent;
   }
   return x;
 };
@@ -1049,7 +1064,10 @@ const getFragmentSelector = (str) => {
 // replace asynchronously and sequentially
 const replaceSeries = async (str, regex, f) => {
   const matches = [];
-  str.replace(regex, (...args) => (matches.push(args), null));
+  str.replace(regex, (...args) => {
+    matches.push(args);
+    return null;
+  });
   const results = [];
   for (const args of matches) results.push(await f(...args));
   return str.replace(regex, () => results.shift());
@@ -1122,8 +1140,8 @@ class KF8 {
 
     this.#sections = skelTable.reduce((arr, skel) => {
       const last = arr[arr.length - 1];
-      const fragStart = last?.fragEnd ?? 0,
-        fragEnd = fragStart + skel.numFrag;
+      const fragStart = last?.fragEnd ?? 0;
+      const fragEnd = fragStart + skel.numFrag;
       const frags = fragTable.slice(fragStart, fragEnd);
       const length = skel.length + frags.map((f) => f.length).reduce((a, b) => a + b);
       const totalLength = (last?.totalLength ?? 0) + length;

@@ -5,7 +5,9 @@ import { parse } from "yaml";
 
 const root = resolve(import.meta.dirname, "../../../..");
 const readWorkflow = (name: string) =>
-  readFileSync(resolve(root, ".github/workflows", name), "utf8");
+  readFileSync(resolve(root, ".github/workflows", name), "utf8").replaceAll("\r\n", "\n");
+const readShlaiDoc = (name: string) =>
+  readFileSync(resolve(root, "docs/readany-shlai", name), "utf8").replaceAll("\r\n", "\n");
 
 type WorkflowStep = {
   name?: string;
@@ -27,9 +29,201 @@ type WorkflowJob = {
   permissions?: unknown;
   environment?: unknown;
   env?: Record<string, unknown>;
+  outputs?: Record<string, unknown>;
   uses?: string;
   steps?: WorkflowStep[];
 };
+
+const expectPhoneReleaseWorkflowContract = (source: string) => {
+  const workflow = parse(source, { version: "1.2" }) as Workflow;
+  expect(workflow.on).toEqual({
+    push: { branches: ["main"] },
+    workflow_dispatch: null,
+  });
+  expect(workflow.permissions).toEqual({ contents: "read" });
+  expect(workflow.concurrency).toEqual({
+    group: "shlai-phone-release",
+    "cancel-in-progress": false,
+  });
+
+  const jobs = workflow.jobs ?? {};
+  expect(Object.keys(jobs)).toEqual(["validate", "metadata", "build", "verify", "publish"]);
+  expect(jobs.metadata?.needs).toBe("validate");
+  expect(jobs.build?.needs).toBe("metadata");
+  expect(jobs.verify?.needs).toEqual(["metadata", "build"]);
+  expect(jobs.publish?.needs).toEqual(["metadata", "verify"]);
+  for (const job of Object.values(jobs)) {
+    expect(job.if).toContain("github.ref == 'refs/heads/main'");
+    expect(job.if).toContain("github.repository == 'cha1latte/ReadAny'");
+    expect(job.uses).toBeUndefined();
+    expect(job.environment).toBeUndefined();
+  }
+  expect(jobs.publish?.permissions).toEqual({ actions: "read", contents: "write" });
+  expect(jobs.validate?.permissions).toBeUndefined();
+  expect(jobs.metadata?.permissions).toBeUndefined();
+  expect(jobs.build?.permissions).toBeUndefined();
+  expect(jobs.verify?.permissions).toBeUndefined();
+  expect(jobs.build?.env).toEqual({
+    APP_VARIANT: "preview",
+    SHLAI_UPSTREAM_VERSION: "${{ needs.metadata.outputs.upstream_version }}",
+    SHLAI_REVISION: "${{ needs.metadata.outputs.revision }}",
+    SHLAI_VERSION_CODE: "${{ needs.metadata.outputs.version_code }}",
+  });
+
+  expect(hasParsedKey(workflow, "secrets")).toBe(false);
+  const allSteps = Object.values(jobs).flatMap((job) => job.steps ?? []);
+  const setupNodeSteps = allSteps.filter((step) => step.uses?.startsWith("actions/setup-node@"));
+  expect(setupNodeSteps).toHaveLength(3);
+  expect(setupNodeSteps.every((step) => step.with?.["node-version"] === "24.15.0")).toBe(true);
+  const actions = allSteps
+    .map((step) => step.uses)
+    .filter((action): action is string => typeof action === "string");
+  expect(actions.length).toBeGreaterThan(0);
+  expect(actions.every((action) => /^[\w-]+\/[\w-]+@[a-f0-9]{40}$/.test(action))).toBe(true);
+
+  const metadataCommands = (jobs.metadata?.steps ?? [])
+    .map((step) => step.run)
+    .filter((run): run is string => typeof run === "string")
+    .join("\n");
+  expect(metadataCommands).toContain("releases?per_page=100");
+  expect(metadataCommands).toContain("--paginate");
+  expect(metadataCommands).toContain("--slurp");
+  expect(metadataCommands).toContain("shlai-preview-release.js derive");
+  expect(metadataCommands).toContain("--baseline-version-code 1");
+  expect(metadataCommands).toContain('test "$GITHUB_REPOSITORY" = "cha1latte/ReadAny"');
+
+  const validateCommands = (jobs.validate?.steps ?? [])
+    .map((step) => step.run)
+    .filter((run): run is string => typeof run === "string")
+    .join("\n");
+  expect(validateCommands).toContain("pnpm --dir packages/app exec vitest run src");
+  expect(validateCommands).toContain("pnpm --filter app build");
+  expect(validateCommands).toContain("pnpm --filter @readany/app-expo run build:reader");
+  expect(validateCommands).toContain(
+    "git diff --exit-code -- packages/app-expo/assets/reader/reader.html",
+  );
+
+  const buildCommands = (jobs.build?.steps ?? [])
+    .map((step) => step.run)
+    .filter((run): run is string => typeof run === "string")
+    .join("\n");
+  expect(buildCommands).toContain(configureStandaloneAutolinkingCommand);
+  expect(buildCommands).toContain("expo prebuild --platform android --clean --no-install");
+  expect(buildCommands).toContain("assembleRelease -PreactNativeArchitectures=arm64-v8a");
+  expect(buildCommands).toContain('PACKAGE="$("$AAPT2" dump badging "$APK"');
+  expect(buildCommands).toContain('test "$PACKAGE" = "io.github.cha1latte.readanyshlai.preview"');
+  expect(buildCommands).toContain('test "$VERSION_CODE" = "$SHLAI_VERSION_CODE"');
+  expect(buildCommands).toContain(
+    "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  );
+  expect(buildCommands).toContain('test "${#DIGESTS[@]}" -eq 1');
+  expect(buildCommands).toContain('sha256sum "ReadAny-Shlai-Preview.apk"');
+
+  const verifyCommands = (jobs.verify?.steps ?? [])
+    .map((step) => step.run)
+    .filter((run): run is string => typeof run === "string")
+    .join("\n");
+  expect(verifyCommands).toContain('test "$PACKAGE" = "io.github.cha1latte.readanyshlai.preview"');
+  expect(verifyCommands).toContain('test "$VERSION_CODE" = "$SHLAI_VERSION_CODE"');
+  expect(verifyCommands).toContain(
+    "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  );
+  expect(verifyCommands).toContain('sha256sum --check "$CHECKSUM"');
+  expect(verifyCommands).toContain("apk_sha256=%s\\n");
+
+  const publishCommands = (jobs.publish?.steps ?? [])
+    .map((step) => step.run)
+    .filter((run): run is string => typeof run === "string")
+    .join("\n");
+  expect(publishCommands).toContain('test "$GITHUB_REF" = "refs/heads/main"');
+  expect(publishCommands).toContain('test "$GITHUB_REPOSITORY" = "cha1latte/ReadAny"');
+  expect(publishCommands).toContain('gh run download "$GITHUB_RUN_ID"');
+  expect(publishCommands).toContain('test "$APK_SHA256" = "$EXPECTED_APK_SHA256"');
+  expect(publishCommands).toContain('gh release create "$TAG"');
+  expect(publishCommands).toContain('--target "$GITHUB_SHA"');
+  expect(publishCommands).toContain("--prerelease");
+  expect(publishCommands).toContain("Android versionCode: %s");
+  expect(publishCommands).toContain("ReadAny-Shlai-Preview.apk.sha256");
+  expect(publishCommands).toContain('sha256sum --check "$CHECKSUM"');
+  expect(publishCommands).toContain("git/matching-refs/tags/$TAG");
+  expect(publishCommands).not.toContain("aapt2");
+  expect(publishCommands).not.toContain("apksigner");
+  expect(jobs.publish?.steps?.every((step) => step.uses === undefined)).toBe(true);
+
+  const tokenSteps = allSteps.filter((step) => step.env && "GH_TOKEN" in step.env);
+  expect(tokenSteps).toHaveLength(2);
+  expect(tokenSteps.every((step) => step.env?.GH_TOKEN === "${{ github.token }}")).toBe(true);
+};
+
+const unsafePhoneReleaseMutations = [
+  ["main branch", (source: string) => source.replace("branches: [main]", "branches: [develop]")],
+  [
+    "main guard",
+    (source: string) =>
+      source.replaceAll(
+        "if: github.repository == 'cha1latte/ReadAny' && github.ref == 'refs/heads/main'",
+        "if: always()",
+      ),
+  ],
+  [
+    "repository assertion",
+    (source: string) =>
+      source.replaceAll('test "$GITHUB_REPOSITORY" = "cha1latte/ReadAny"', "true"),
+  ],
+  [
+    "serialization",
+    (source: string) => source.replace("cancel-in-progress: false", "cancel-in-progress: true"),
+  ],
+  [
+    "Node runtime",
+    (source: string) => source.replaceAll("node-version: 24.15.0", "node-version: 20.18.0"),
+  ],
+  ["pagination", (source: string) => source.replace(" --paginate", "")],
+  ["prerelease flag", (source: string) => source.replace("      --prerelease", "")],
+  [
+    "package assertion",
+    (source: string) =>
+      source.replaceAll(
+        'test "$PACKAGE" = "io.github.cha1latte.readanyshlai.preview"',
+        'test -n "$PACKAGE"',
+      ),
+  ],
+  [
+    "version-code assertion",
+    (source: string) =>
+      source.replaceAll('test "$VERSION_CODE" = "$SHLAI_VERSION_CODE"', 'test -n "$VERSION_CODE"'),
+  ],
+  [
+    "certificate digest",
+    (source: string) =>
+      source.replaceAll(
+        "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+      ),
+  ],
+  ["checksum asset", (source: string) => source.replaceAll(".apk.sha256", ".apk.txt")],
+  [
+    "exact APK name",
+    (source: string) => source.replaceAll("ReadAny-Shlai-Preview.apk", "preview.apk"),
+  ],
+  [
+    "job dependency",
+    (source: string) => source.replace("needs: [metadata, verify]", "needs: metadata"),
+  ],
+  [
+    "write-token action",
+    (source: string) =>
+      source.replace(
+        "    steps:\n      - name: Verify and publish preview prerelease",
+        "    steps:\n      - uses: attacker/publish@main\n      - name: Verify and publish preview prerelease",
+      ),
+  ],
+  [
+    "artifact digest binding",
+    (source: string) =>
+      source.replace('test "$APK_SHA256" = "$EXPECTED_APK_SHA256"', 'test -n "$APK_SHA256"'),
+  ],
+] as const;
 
 type Workflow = {
   name?: string;
@@ -1333,8 +1527,34 @@ const unsafeReleaseMutations = [
 ] as const;
 
 describe("ReadAny Shlai workflows", () => {
+  it("documents the shared Shlai phone update channel", () => {
+    const source = readShlaiDoc("phone-updates.md");
+    for (const requiredText of [
+      "io.github.cha1latte.readanyshlai.preview",
+      "https://github.com/cha1latte/ReadAny/releases",
+      "shlai-preview-v",
+      "ReadAny-Shlai-Preview.apk",
+      "ReadAny-Shlai-Preview.apk.sha256",
+      'sha256sum --check "ReadAny-Shlai-Preview.apk.sha256"',
+      "Android always requires a person to confirm Install",
+      "Only a successful build from `cha1latte/ReadAny:main` publishes",
+      "Never use a pull-request artifact as Decidetto's permanent installation",
+      "Do not uninstall the app before updating",
+      "public preview signing certificate",
+      "higher Android `versionCode`",
+      "Decidetto",
+    ]) {
+      expect(source).toContain(requiredText);
+    }
+  });
+
   it("pins every third-party action in Shlai workflows", () => {
-    for (const name of ["shlai-pr.yml", "shlai-release.yml", "shlai-upstream-sync.yml"]) {
+    for (const name of [
+      "shlai-pr.yml",
+      "shlai-release.yml",
+      "shlai-upstream-sync.yml",
+      "shlai-phone-release.yml",
+    ]) {
       const source = readWorkflow(name);
       const workflow = parse(source, { version: "1.2" }) as Workflow;
       const uses = Object.values(workflow.jobs ?? {}).flatMap((job) =>
@@ -1379,6 +1599,17 @@ describe("ReadAny Shlai workflows", () => {
 
   it("builds secret-free preview APKs after validation", () => {
     expectPreviewWorkflowContract(readWorkflow("shlai-pr.yml"));
+  });
+
+  it("publishes verified Shlai phone updates from main", () => {
+    expectPhoneReleaseWorkflowContract(readWorkflow("shlai-phone-release.yml"));
+  });
+
+  it.each(unsafePhoneReleaseMutations)("rejects unsafe phone release %s mutation", (_, mutate) => {
+    const source = readWorkflow("shlai-phone-release.yml");
+    const mutatedSource = mutate(source);
+    expect(mutatedSource).not.toBe(source);
+    expect(() => expectPhoneReleaseWorkflowContract(mutatedSource)).toThrow();
   });
 
   it.each(unsafeMutations)("rejects unsafe $name mutation", ({ mutate }) => {

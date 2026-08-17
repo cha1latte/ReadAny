@@ -40,7 +40,7 @@ git push -u origin feature/reader-font-size
 gh pr create --repo cha1latte/ReadAny --base main --head <friend-login>:feature/reader-font-size --fill
 ```
 
-Wait for `Validate` and `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. Merging a pull request does not publish a stable phone update.
+Wait for `Validate` and `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. Merging into `main` publishes the next shared preview phone update after a second successful validation/build; it does not publish a stable-production release. See [phone-updates.md](phone-updates.md).
 
 ## Workflow approvals
 
@@ -53,6 +53,8 @@ Every pull request to `main` runs the secret-free **Shlai Pull Request** workflo
 The GitHub workflows and the variant-aware EAS post-install hook temporarily add package-level Expo autolinking exclusions for `expo-dev-client`, `expo-dev-launcher`, and their menu modules before native generation. This keeps development-client builds untouched while preventing every supported preview and stable Android APK from opening a blank launcher screen. Android release builds also use a bounded 4 GB Gradle heap so R8 can finish on hosted runners.
 
 The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so it can be installed alongside official ReadAny and stable ReadAny Shlai without changing either app's data.
+
+Pull-request APKs are temporary review artifacts. Celia and Decidetto use the permanent prerelease channel documented in [phone-updates.md](phone-updates.md); a successful merge to `main` creates the next verified update for both phones.
 
 ## No secrets in development or previews
 

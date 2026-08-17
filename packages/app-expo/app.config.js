@@ -3,6 +3,7 @@ const { getShlaiVersionConfig } = require("./scripts/shlai-version");
 
 const variant = getAppVariantConfig();
 const release = getShlaiVersionConfig();
+const isPreview = variant.key === "preview";
 
 module.exports = {
   expo: {
@@ -42,6 +43,7 @@ module.exports = {
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        ...(isPreview ? ["android.permission.REQUEST_INSTALL_PACKAGES"] : []),
       ],
     },
     plugins: [
@@ -72,6 +74,7 @@ module.exports = {
           },
         },
       ],
+      "./plugins/withGradleMemory",
       "expo-font",
       [
         "expo-image-picker",
@@ -82,8 +85,8 @@ module.exports = {
       "expo-secure-store",
       "expo-sqlite",
       "expo-asset",
-      "onnxruntime-react-native",
       "./plugins/withOnnxruntimePackage",
+      "onnxruntime-react-native",
       "./plugins/withVolumeKeyPaging",
       [
         "expo-camera",
@@ -98,9 +101,13 @@ module.exports = {
       shlaiRevision: release.revision,
       upstreamRepository: "codedogQBY/ReadAny",
       forkRepository: "cha1latte/ReadAny",
-      releaseApiUrl: "https://api.github.com/repos/cha1latte/ReadAny/releases/latest",
-      releaseTagPrefix: "shlai-v",
-      releaseAssetName: "ReadAny-Shlai.apk",
+      releaseApiUrl: isPreview
+        ? "https://api.github.com/repos/cha1latte/ReadAny/releases?per_page=100"
+        : "https://api.github.com/repos/cha1latte/ReadAny/releases/latest",
+      releaseTagPrefix: isPreview ? "shlai-preview-v" : "shlai-v",
+      releaseMode: isPreview ? "canonical-prerelease-list" : "single",
+      releaseAssetName: isPreview ? "ReadAny-Shlai-Preview.apk" : "ReadAny-Shlai.apk",
+      ...(isPreview ? { releaseChecksumAssetName: "ReadAny-Shlai-Preview.apk.sha256" } : {}),
     },
   },
 };

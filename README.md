@@ -3,6 +3,8 @@
 > [cha1latte/ReadAny](https://github.com/cha1latte/ReadAny). The official project is
 > [codedogQBY/ReadAny](https://github.com/codedogQBY/ReadAny). Shlai Android releases use a
 > separate package and do not replace the official app.
+>
+> Shlai Preview users: see the [phone install and update guide](docs/readany-shlai/phone-updates.md).
 
 <p align="center">
   <img src="packages/app/public/logo.svg" alt="ReadAny Logo" width="120" height="120">

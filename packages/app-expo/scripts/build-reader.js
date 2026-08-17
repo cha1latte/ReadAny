@@ -13,6 +13,7 @@ const ASSETS_DIR = path.resolve(__dirname, "../assets/reader");
 const TEMPLATE = path.resolve(ASSETS_DIR, "reader.template.html");
 const OUTPUT = path.resolve(ASSETS_DIR, "reader.html");
 const JUSTIFIED_TEXT = path.resolve(ASSETS_DIR, "justified-text.js");
+const EXTRACTION_SESSIONS = path.resolve(__dirname, "../src/lib/rag/reader-extraction-sessions.ts");
 
 async function buildReader() {
   // Create a temporary entry point
@@ -23,6 +24,7 @@ async function buildReader() {
     import { configure, ZipReader, BlobReader, TextWriter, BlobWriter } from "${FOLIATE_DIR.replace(/\\/g, "/")}/vendor/zip.js";
     import { EPUB } from "${FOLIATE_DIR.replace(/\\/g, "/")}/epub.js";
     import { extractPDFChapters, makePDFFromURL } from "${FOLIATE_DIR.replace(/\\/g, "/")}/pdf.js";
+    import { ReaderExtractionSessions } from "${EXTRACTION_SESSIONS.replace(/\\/g, "/")}";
 
     window.makeBook = makeBook;
     window.Overlayer = Overlayer;
@@ -33,6 +35,7 @@ async function buildReader() {
     window._EPUB = EPUB;
     window._makePDFFromURL = makePDFFromURL;
     window._extractPDFChapters = extractPDFChapters;
+    window.ReaderExtractionSessions = ReaderExtractionSessions;
 
     if (!customElements.get('foliate-view')) {
       customElements.define('foliate-view', View);

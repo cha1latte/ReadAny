@@ -1,4 +1,3 @@
-import { getShlaiReleaseConfig } from "@/lib/shlai-release";
 import i18n from "@readany/core/i18n";
 /**
  * ExpoPlatformService — IPlatformService implementation for Expo / React Native.
@@ -18,9 +17,9 @@ import type {
   IDatabase,
   IPlatformService,
   IWebSocket,
+  PlatformFetchResponse,
   WebSocketOptions,
 } from "@readany/core/services";
-import { compareVersions, releaseTagToVersion } from "@readany/core/update/update-checker";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
@@ -29,6 +28,7 @@ import * as LegacyFS from "expo-file-system/legacy";
 import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
+import type { FetchRequestInit } from "expo/fetch";
 
 /** Simple KV storage keys tracking (SecureStore doesn't have getAllKeys) */
 const KV_KEYS_INDEX = "__readany_kv_keys__";
@@ -283,10 +283,55 @@ export class ExpoPlatformService implements IPlatformService {
 
   // ---- Network ----
 
-  async fetch(url: string, options?: FetchOptions): Promise<Response> {
+  async fetch(url: string, options?: FetchOptions): Promise<PlatformFetchResponse> {
     const { allowInsecure, timeoutMs, responseType, onDownloadProgress, ...fetchOptions } =
       options ?? {};
     const effectiveUrl = allowInsecure ? url.replace(/^https:\/\//i, "http://") : url;
+    if (fetchOptions.redirect === "manual") {
+      const { fetch: expoFetch } = await import("expo/fetch");
+      const transportController = new AbortController();
+      const sourceSignal = fetchOptions.signal;
+      const onSourceAbort = () => transportController.abort(sourceSignal?.reason);
+      if (sourceSignal?.aborted) {
+        onSourceAbort();
+      } else {
+        sourceSignal?.addEventListener("abort", onSourceAbort, { once: true });
+      }
+      let disposed = false;
+      const onDispose = () => {
+        if (disposed) return;
+        disposed = true;
+        sourceSignal?.removeEventListener("abort", onSourceAbort);
+      };
+      const cancelTransport = () => {
+        transportController.abort();
+        onDispose();
+      };
+      const expoOptions: FetchRequestInit = {
+        body: fetchOptions.body ?? undefined,
+        credentials: fetchOptions.credentials,
+        headers: fetchOptions.headers,
+        integrity: fetchOptions.integrity,
+        keepalive: fetchOptions.keepalive,
+        method: fetchOptions.method,
+        mode: fetchOptions.mode,
+        redirect: fetchOptions.redirect,
+        referrer: fetchOptions.referrer,
+        signal: transportController.signal,
+        window: fetchOptions.window,
+      };
+      try {
+        const response = (await expoFetch(effectiveUrl, expoOptions)) as PlatformFetchResponse;
+        Object.defineProperties(response, {
+          cancelTransport: { value: cancelTransport },
+          onDispose: { value: onDispose },
+        });
+        return response;
+      } catch (error) {
+        onDispose();
+        throw error;
+      }
+    }
     const method = fetchOptions?.method?.toUpperCase() || "GET";
 
     // Always use XHR for WebDAV to handle large binary files properly
@@ -596,43 +641,18 @@ export class ExpoPlatformService implements IPlatformService {
     return Constants.expoConfig?.version ?? "1.0.0";
   }
 
-  // ---- Update (GitHub releases) ----
+  // ---- Secret Storage (direct Expo SecureStore boundary; not indexed as general KV) ----
 
-  async checkUpdate() {
-    try {
-      const { apiUrl, assetName, tagPrefix } = getShlaiReleaseConfig();
-      const response = await fetch(apiUrl);
-      if (!response.ok) return null;
-
-      const release = await response.json();
-      const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
-      if (!latestVersion) return null;
-      const currentVersion = await this.getAppVersion();
-
-      if (compareVersions(latestVersion, currentVersion) > 0) {
-        const apkAsset = Array.isArray(release.assets)
-          ? release.assets.find((a: { name: string }) => a.name === assetName)
-          : undefined;
-        if (apkAsset) {
-          return {
-            version: latestVersion,
-            notes: release.body || undefined,
-            date: release.published_at || undefined,
-            downloadUrl: apkAsset.browser_download_url,
-          };
-        }
-      }
-      return null;
-    } catch (e) {
-      console.error("[Updater] Check failed:", e);
-      return null;
-    }
+  async secretGetItem(key: string): Promise<string | null> {
+    return SecureStore.getItemAsync(key);
   }
 
-  async installUpdate(downloadUrl?: string) {
-    if (!downloadUrl) return;
-    const { Linking } = await import("react-native");
-    await Linking.openURL(downloadUrl);
+  async secretSetItem(key: string, value: string): Promise<void> {
+    await SecureStore.setItemAsync(key, value);
+  }
+
+  async secretRemoveItem(key: string): Promise<void> {
+    await SecureStore.deleteItemAsync(key);
   }
 
   // ---- KV Storage (backed by expo-secure-store) ----

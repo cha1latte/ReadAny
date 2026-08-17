@@ -6,6 +6,16 @@ const mocks = vi.hoisted(() => ({
   debouncedSave: vi.fn(),
 }));
 
+vi.mock("@/lib/book/cover-storage", () => ({
+  getCoverFileExtension: vi.fn(),
+  saveCoverBytesToAppData: vi.fn(),
+}));
+
+vi.mock("@/lib/book/imported-book-meta", () => ({
+  buildImportedBookMeta: vi.fn(),
+  shouldPersistEmbeddedCover: vi.fn(),
+}));
+
 vi.mock("@/lib/book/metadata-extractor", () => ({
   createRangeReadableFile: vi.fn(),
   extractBookMetadata: vi.fn(),

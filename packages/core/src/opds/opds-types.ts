@@ -61,3 +61,18 @@ export interface OpdsFeed {
   previousUrl?: string;
   search?: OpdsSearchDescriptor;
 }
+
+export interface OpdsCredentials {
+  username: string;
+  password: string;
+  catalogOrigin: string;
+}
+
+export type OpdsErrorCode =
+  | "unauthorized"
+  | "unsupported-auth"
+  | "insecure-url"
+  | "unreachable"
+  | "invalid-catalog"
+  | "cancelled"
+  | "too-large";

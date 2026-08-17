@@ -6,4 +6,9 @@ declare module "foliate-js/opds.js" {
 
   export function getFeed(document: Document): unknown;
   export function getOpenSearch(document: Document): unknown;
+  export function getSearch(link: {
+    href: string;
+    title?: string;
+    type?: string;
+  }): Promise<unknown>;
 }

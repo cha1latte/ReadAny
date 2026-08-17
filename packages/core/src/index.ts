@@ -60,10 +60,14 @@ export type {
 export type { ImportBooksResult, ImportDuplicateIndex } from "./import/import-dedupe";
 
 // OPDS catalogs
+export { OpdsClient, OpdsError } from "./opds/opds-client";
 export { parseOpdsDocument } from "./opds/opds-parser";
+export { classifyOpdsUrl } from "./opds/opds-security";
 export { sanitizeOpdsDescription } from "./opds/opds-sanitize";
 export type {
   OpdsAcquisition,
+  OpdsCredentials,
+  OpdsErrorCode,
   OpdsFacet,
   OpdsFeed,
   OpdsLink,
@@ -89,4 +93,8 @@ export type {
 export { readEpubChapterFromBookFile, readEpubChapterFromDraft } from "./epub/chapter";
 export type { EpubChapterReadResult } from "./epub/chapter";
 export { searchKnowledge } from "./knowledge/search";
-export type { KnowledgeSearchHit, KnowledgeSearchResult, KnowledgeSearchSource } from "./knowledge/search";
+export type {
+  KnowledgeSearchHit,
+  KnowledgeSearchResult,
+  KnowledgeSearchSource,
+} from "./knowledge/search";

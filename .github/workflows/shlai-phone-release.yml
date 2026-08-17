@@ -155,6 +155,10 @@ jobs:
     outputs:
       apk_sha256: ${{ steps.verify.outputs.apk_sha256 }}
     steps:
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: 17
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       - name: Install Android build tools 36.0.0
         run: sdkmanager "build-tools;36.0.0"

@@ -130,6 +130,19 @@ const expectPhoneReleaseWorkflowContract = (source: string) => {
   );
   expect(verifyCommands).toContain('sha256sum --check "$CHECKSUM"');
   expect(verifyCommands).toContain("apk_sha256=%s\\n");
+  const verifySteps = jobs.verify?.steps ?? [];
+  const verifyJavaIndex = verifySteps.findIndex((step) =>
+    step.uses?.startsWith("actions/setup-java@"),
+  );
+  const verifyAndroidIndex = verifySteps.findIndex((step) =>
+    step.uses?.startsWith("android-actions/setup-android@"),
+  );
+  expect(verifyJavaIndex).toBeGreaterThanOrEqual(0);
+  expect(verifyJavaIndex).toBeLessThan(verifyAndroidIndex);
+  expect(verifySteps[verifyJavaIndex]?.with).toEqual({
+    distribution: "temurin",
+    "java-version": 17,
+  });
 
   const publishCommands = (jobs.publish?.steps ?? [])
     .map((step) => step.run)

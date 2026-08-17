@@ -43,6 +43,7 @@ module.exports = {
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        ...(isPreview ? ["android.permission.REQUEST_INSTALL_PACKAGES"] : []),
       ],
     },
     plugins: [

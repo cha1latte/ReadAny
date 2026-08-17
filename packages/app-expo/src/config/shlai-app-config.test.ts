@@ -32,6 +32,7 @@ const loadExpoConfig = (variant: "development" | "preview" | "production") => {
   return JSON.parse(output) as {
     plugins: Array<string | [string, Record<string, unknown>]>;
     extra: Record<string, unknown>;
+    android: { permissions: string[] };
   };
 };
 
@@ -170,6 +171,12 @@ describe("ReadAny Shlai app configuration", () => {
       releaseMode: "single",
       releaseAssetName: "ReadAny-Shlai.apk",
     });
+  });
+
+  it("allows standalone Android builds to hand verified APKs to the installer", () => {
+    expect(loadExpoConfig("preview").android.permissions).toContain(
+      "android.permission.REQUEST_INSTALL_PACKAGES",
+    );
   });
 
   it("derives the release tag, display version, and Android build number", () => {

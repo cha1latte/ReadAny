@@ -51,7 +51,12 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        const chapters = await extractorRef.current.extractChapters(base64, info.mimeType);
+        const chapters = await extractorRef.current.extractChapters(
+          base64,
+          info.mimeType,
+          book.format,
+          info.absPath,
+        );
         if (!chapters || chapters.length === 0) {
           throw new Error("No chapters extracted from book");
         }

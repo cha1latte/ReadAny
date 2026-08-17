@@ -294,6 +294,8 @@ export function LibraryScreen() {
         return extractorRef.current.extractChapters(
           bytesToBase64(bytes),
           mimeTypes[String(book.format || "").toLowerCase()] || "application/epub+zip",
+          book.format,
+          filePath,
         );
       },
     });

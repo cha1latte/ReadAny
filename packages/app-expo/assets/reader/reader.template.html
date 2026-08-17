@@ -1385,9 +1385,54 @@
     }
 
     // ─── Book loading ───
+    const SUPPORTED_BOOK_FORMATS = new Set(['epub', 'pdf', 'txt', 'umd', 'mobi', 'azw', 'azw3']);
+    const BOOK_MIME_TYPES = {
+      epub: 'application/epub+zip',
+      pdf: 'application/pdf',
+      txt: 'text/plain',
+      umd: 'application/epub+zip',
+      mobi: 'application/x-mobipocket-ebook',
+      azw: 'application/vnd.amazon.ebook',
+      azw3: 'application/vnd.amazon.ebook',
+    };
+    const BOOK_FORMATS_BY_MIME = {
+      'application/epub+zip': 'epub',
+      'application/pdf': 'pdf',
+      'text/plain': 'txt',
+      'application/x-mobipocket-ebook': 'mobi',
+      'application/vnd.amazon.ebook': 'azw3',
+    };
+
+    function resolveBookFormat(msg) {
+      const storedFormat = String(msg.bookFormat || '').trim().toLowerCase();
+      if (SUPPORTED_BOOK_FORMATS.has(storedFormat)) return storedFormat;
+
+      const cleanFileName = String(msg.fileName || '').split(/[?#]/, 1)[0];
+      const extension = cleanFileName.split('.').pop().toLowerCase();
+      if (SUPPORTED_BOOK_FORMATS.has(extension)) return extension;
+
+      const mimeType = String(msg.mimeType || '').split(';', 1)[0].trim().toLowerCase();
+      return BOOK_FORMATS_BY_MIME[mimeType] || null;
+    }
+
+    function getBookFileName(msg) {
+      const format = resolveBookFormat(msg);
+      const cleanFileName = String(msg.fileName || '').split(/[?#]/, 1)[0].split(/[\\/]/).pop();
+      if (!format) return cleanFileName || 'book.epub';
+      const baseName = cleanFileName?.replace(/\.[^.]*$/, '') || 'book';
+      return `${baseName}.${format}`;
+    }
+
+    function getBookMimeType(msg, fallback) {
+      const format = resolveBookFormat(msg);
+      return BOOK_MIME_TYPES[format] || msg.mimeType || fallback || 'application/octet-stream';
+    }
+
     async function openBook(msg) {
       const container = document.getElementById('reader-container');
       const loading = document.getElementById('loading');
+      const fileName = getBookFileName(msg);
+      const mimeType = getBookMimeType(msg);
       currentBookIsPdf = isPDFBookMessage(msg);
       pdfPageLightCache = {};
       pdfDocIndexMap = new WeakMap();
@@ -1412,22 +1457,22 @@
           const binary = atob(msg.base64);
           const bytes = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          file = new File([bytes], msg.fileName || 'book.epub', {
-            type: msg.mimeType || 'application/epub+zip'
+          file = new File([bytes], fileName, {
+            type: mimeType
           });
         } else if (msg.uri) {
           postToRN('debug', {
             message: `[ReaderFetch] open ${JSON.stringify({
               uri: msg.uri,
-              fileName: msg.fileName || '',
-              mimeType: msg.mimeType || ''
+              fileName,
+              mimeType
             })}`
           });
 
           // Try Range-based lazy loading for ZIP-based formats (EPUB, CBZ, FBZ)
           // This avoids loading the entire file into memory — only reads
           // the ZIP central directory (~few KB) then fetches entries on demand.
-          const isZipFormat = /\.(epub|cbz|fb2\.zip|fbz)$/i.test(msg.fileName || '');
+          const isZipFormat = /\.(epub|cbz|fb2\.zip|fbz)$/i.test(fileName);
           let lazyBook = null;
 
           if (isZipFormat) {
@@ -1480,14 +1525,14 @@
 
           // Try Range-based lazy loading for PDF
           // pdf.js natively supports Range requests via url + disableAutoFetch
-          if (!lazyBook && /\.pdf$/i.test(msg.fileName || '')) {
+          if (!lazyBook && /\.pdf$/i.test(fileName)) {
             try {
               const headRes = await fetch(msg.uri, { method: 'HEAD' });
               const acceptRanges = headRes.headers.get('Accept-Ranges');
               const contentLength = parseInt(headRes.headers.get('Content-Length'), 10);
 
               if (acceptRanges === 'bytes' && contentLength > 0 && window._makePDFFromURL) {
-                lazyBook = await window._makePDFFromURL(msg.uri, msg.fileName || 'book.pdf');
+                lazyBook = await window._makePDFFromURL(msg.uri, fileName);
               }
             } catch (pdfLazyErr) {
               console.warn('[Reader] PDF lazy loading failed, falling back to full fetch:', pdfLazyErr);
@@ -1500,8 +1545,8 @@
             const isLocalFileStatus = res.status === 0 && /^file:\/\//i.test(msg.uri);
             if (!res.ok && !isLocalFileStatus) throw new Error(`Failed to fetch: ${res.status}`);
             const blob = await res.blob();
-            file = new File([blob], msg.fileName || 'book.epub', {
-              type: msg.mimeType || blob.type || 'application/octet-stream'
+            file = new File([blob], fileName, {
+              type: getBookMimeType(msg, blob.type)
             });
           } else {
             // Skip makeBook below — we already have the book object
@@ -4199,8 +4244,7 @@ a { color: ${primary} !important; }
 
     // ─── Chapter Extraction for Vectorization ───
     function isPDFBookMessage(msg) {
-      const mimeType = (msg.mimeType || '').split(';')[0].trim().toLowerCase();
-      return mimeType === 'application/pdf' || /\.pdf$/i.test(msg.fileName || '');
+      return resolveBookFormat(msg) === 'pdf';
     }
 
     async function createBookFileFromMessage(msg) {
@@ -4208,8 +4252,8 @@ a { color: ${primary} !important; }
         const binary = atob(msg.base64);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return new File([bytes], msg.fileName || 'book.epub', {
-          type: msg.mimeType || 'application/epub+zip'
+        return new File([bytes], getBookFileName(msg), {
+          type: getBookMimeType(msg)
         });
       }
 
@@ -4218,8 +4262,8 @@ a { color: ${primary} !important; }
         const isLocalFileStatus = res.status === 0 && /^file:\/\//i.test(msg.uri);
         if (!res.ok && !isLocalFileStatus) throw new Error(`Failed to fetch: ${res.status}`);
         const blob = await res.blob();
-        return new File([blob], msg.fileName || 'book.epub', {
-          type: msg.mimeType || blob.type || 'application/octet-stream'
+        return new File([blob], getBookFileName(msg), {
+          type: getBookMimeType(msg, blob.type)
         });
       }
 

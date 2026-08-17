@@ -1,8 +1,10 @@
 import type { ChapterData } from "@readany/core/rag";
+import type { Book } from "@readany/core/types";
 import { Asset } from "expo-asset";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { resolveExtractorFormat } from "../../lib/rag/extractor-format";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
 const EXTRACTION_TIMEOUT_MS = 45_000;
@@ -18,7 +20,18 @@ const EXTRACTOR_EXTENSIONS_BY_MIME: Record<string, string> = {
   "text/plain": "txt",
 };
 
-function getExtractorFileName(mimeType: string) {
+function getExtractorFileName(
+  mimeType: string,
+  bookFormat: Book["format"] | null,
+  fileName?: string,
+) {
+  const cleanFileName = fileName?.split(/[?#]/, 1)[0]?.split(/[\\/]/).pop();
+  if (bookFormat) {
+    const baseName = cleanFileName?.replace(/\.[^.]*$/, "") || "book";
+    return `${baseName}.${bookFormat}`;
+  }
+  if (cleanFileName) return cleanFileName;
+
   const normalized = mimeType.split(";")[0]?.trim().toLowerCase() || "application/epub+zip";
   return `book.${EXTRACTOR_EXTENSIONS_BY_MIME[normalized] || "epub"}`;
 }
@@ -28,7 +41,12 @@ function isPDFMimeType(mimeType: string) {
 }
 
 export interface ExtractorRef {
-  extractChapters: (base64BookData: string, mimeType?: string) => Promise<ChapterData[]>;
+  extractChapters: (
+    base64BookData: string,
+    mimeType?: string,
+    bookFormat?: Book["format"],
+    fileName?: string,
+  ) => Promise<ChapterData[]>;
 }
 
 interface PendingExtraction {
@@ -111,7 +129,12 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
   }, []);
 
   useImperativeHandle(ref, () => ({
-    extractChapters: (base64BookData: string, mimeType = "application/epub+zip") => {
+    extractChapters: (
+      base64BookData: string,
+      mimeType = "application/epub+zip",
+      bookFormat?: Book["format"],
+      fileName?: string,
+    ) => {
       return new Promise<ChapterData[]>((resolve, reject) => {
         if (!ready || !webViewRef.current) {
           return reject(new Error("Extractor WebView not ready"));
@@ -127,11 +150,16 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
+        const resolvedFormat = resolveExtractorFormat({ bookFormat, mimeType, fileName });
         const cmd = {
-          type: isPDFMimeType(mimeType) ? "extractBookChapters" : "openBook",
+          type:
+            resolvedFormat === "pdf" || isPDFMimeType(mimeType)
+              ? "extractBookChapters"
+              : "openBook",
           base64: base64BookData,
           mimeType,
-          fileName: getExtractorFileName(mimeType),
+          bookFormat: resolvedFormat,
+          fileName: getExtractorFileName(mimeType, resolvedFormat, fileName),
         };
 
         webViewRef.current.injectJavaScript(`

@@ -89,6 +89,7 @@ export interface ViewSettings {
   fixedLayoutZoom?: number; // relative zoom multiplier for PDF/CBZ fixed layouts
   pageMargin: number; // px
   paragraphSpacing: number;
+  justifyBodyText?: boolean; // default true: justify eligible reflowable EPUB body paragraphs
 }
 
 export interface ReadSettings extends ViewSettings {

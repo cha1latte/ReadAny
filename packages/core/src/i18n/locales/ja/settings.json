@@ -46,6 +46,7 @@
     "system": "システム",
     "light": "ライト",
     "dark": "ダーク",
+    "oled": "OLEDブラック",
     "sepia": "セピア",
     "autoSave": "自動保存間隔",
     "autoSaveDesc": "読書進捗を保存する頻度",

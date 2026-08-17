@@ -99,7 +99,7 @@ export default function App() {
         // Vectorization and Reader Agent queries use separate core paths.
         // Synchronize the query-side service immediately and after settings
         // hydration/changes so remote semantic search works on mobile too.
-          unsubscribeRagSearch = await subscribeRagSearchConfiguration();
+        unsubscribeRagSearch = await subscribeRagSearchConfiguration();
 
         console.log("[App] bootstrap: register sync adapter");
         setSyncAdapter(new MobileSyncAdapter());
@@ -262,7 +262,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const { colors, isDark, mode } = useTheme();
+  const { colors, isDark } = useTheme();
   const loadBooks = useLibraryStore((s) => s.loadBooks);
   useUpdateChecker();
   useAutoSync(loadBooks);
@@ -287,7 +287,7 @@ function AppInner() {
       <KeyboardProvider>
         <SafeAreaProvider>
           <NavigationContainer theme={navTheme} ref={navigationRef}>
-            <StatusBar style={mode === "dark" ? "light" : "dark"} />
+            <StatusBar style={isDark ? "light" : "dark"} />
             <RootNavigator />
           </NavigationContainer>
           <UpdateDialog />

@@ -13,6 +13,7 @@ const ASSETS_DIR = path.resolve(__dirname, "../assets/reader");
 const TEMPLATE = path.resolve(ASSETS_DIR, "reader.template.html");
 const OUTPUT = path.resolve(ASSETS_DIR, "reader.html");
 const EXTRACTION_SESSIONS = path.resolve(__dirname, "../src/lib/rag/reader-extraction-sessions.ts");
+const JUSTIFIED_TEXT = path.resolve(ASSETS_DIR, "justified-text.js");
 
 async function buildReader() {
   // Create a temporary entry point
@@ -61,13 +62,24 @@ async function buildReader() {
 
     const bundledJS = result.outputFiles[0].text;
 
-    // Read the template HTML (never modified)
+    // Read the template HTML and reader-side helper sources (never modified)
     const template = fs.readFileSync(TEMPLATE, "utf-8");
+    const justifiedText = fs.readFileSync(JUSTIFIED_TEXT, "utf-8");
+
+    const JUSTIFIED_TEXT_MARKER = "<!-- __READANY_JUSTIFIED_TEXT_INSERT_POINT_6c18f4d2__ -->";
+    const justifiedTextParts = template.split(JUSTIFIED_TEXT_MARKER);
+    if (justifiedTextParts.length !== 2) {
+      throw new Error("Reader template must contain exactly one justified-text marker");
+    }
+    const templateWithJustifiedText = `${justifiedTextParts[0]}<script>\n${justifiedText}\n</script>${justifiedTextParts[1]}`;
 
     // Replace the placeholder with the bundled code
     // Use split/join instead of replace to avoid $ replacement patterns in JS bundle
     const MARKER = "<!-- __READANY_FOLIATE_BUNDLE_INSERT_POINT_7f3a9b2e__ -->";
-    const parts = template.split(MARKER);
+    const parts = templateWithJustifiedText.split(MARKER);
+    if (parts.length !== 2) {
+      throw new Error("Reader template must contain exactly one Foliate bundle marker");
+    }
     const html = `${parts[0]}<script>\n${bundledJS}\n</script>${parts.slice(1).join(MARKER)}`;
 
     // Write to output file (separate from template)

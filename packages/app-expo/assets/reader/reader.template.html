@@ -161,6 +161,8 @@
     </div>
   </div>
 
+  <!-- __READANY_JUSTIFIED_TEXT_INSERT_POINT_6c18f4d2__ -->
+
   <script>
     // ═══════════════════════════════════════════════════════════════
     // ReadAny WebView Reader Bridge
@@ -201,6 +203,7 @@
     let currentFontSize = 16;
     let currentLineHeight = 1.6;
     let currentParagraphSpacing = 8;
+    let currentJustifyBodyText = true;
     let currentFontTheme = 'default';
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
@@ -1868,6 +1871,9 @@
     function applySettings(settings) {
       if (!view || !view.renderer) return;
       const renderer = view.renderer;
+      if (settings.justifyBodyText !== undefined) {
+        currentJustifyBodyText = settings.justifyBodyText !== false;
+      }
       // PDF pages are fixed-layout canvases. Reader font, line-height, custom
       // font and paragraph-spacing rules would move the transparent text layer
       // away from the canvas and render a second, misaligned copy of the text.
@@ -1911,7 +1917,7 @@
           settings.paginatedLayout === 'single' ? 'single' : 'double';
       }
 
-      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined
+      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined || settings.justifyBodyText !== undefined
           || settings.customFontFamily !== undefined || settings.customFontFaceCSS !== undefined || settings.useBookFonts !== undefined) {
         const fontThemes = {
           default: { cjk: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', serif: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif' },
@@ -2026,6 +2032,7 @@
         }
         syncReaderOverrideStylesForAllDocs(themedStyles);
         syncCustomFontStylesForAllDocs(currentCustomFontFaceCSS);
+        syncJustifiedTextForAllDocs();
       }
 
       if (settings.pageMargin != null) {
@@ -2186,6 +2193,19 @@
       }
     }
 
+    function syncJustifiedTextForAllDocs() {
+      const fixedLayout = Boolean(view?.isFixedLayout);
+      for (const content of getRendererContents()) {
+        if (!content?.doc) continue;
+        const unsupportedLayout = fixedLayout || isVerticalDoc(content.doc);
+        globalThis.ReadAnyJustifiedText?.apply(
+          content.doc,
+          currentJustifyBodyText,
+          unsupportedLayout,
+        );
+      }
+    }
+
     function injectCustomFontFace(css) {
       syncCustomFontStylesForDoc(document, css);
       syncCustomFontStylesForAllDocs(css);
@@ -2198,8 +2218,11 @@
       const primary = colors.primary || '#3b82f6';
 
       currentThemeColors = { bg, fg, muted, primary };
-      if (themeMode === 'dark' || themeMode === 'sepia') currentThemeMode = themeMode;
-      else currentThemeMode = 'light';
+      if (themeMode === 'dark' || themeMode === 'oled' || themeMode === 'sepia') {
+        currentThemeMode = themeMode;
+      } else {
+        currentThemeMode = 'light';
+      }
 
       document.documentElement.style.setProperty('--bg', bg);
       document.documentElement.style.setProperty('--fg', fg);
@@ -2234,6 +2257,8 @@
       // Mobile dark theme uses #1c1c1e. Mapping white with invert(0.89)
       // produces approximately #1c1c1c, avoiding a visible page/shell seam.
       dark: 'invert(0.89)',
+      // OLED maps white PDF paper to true black while preserving the dark-page smart skip.
+      oled: 'invert(1)',
       // Numerically tuned (invert->sepia->contrast->brightness) so a white PDF
       // page maps almost exactly to the sepia background #f0e6d2 (rgb 240,230,210).
       sepia: 'invert(0.245) sepia(0.286) contrast(1.328) brightness(1.005)',
@@ -2342,10 +2367,6 @@ html, body {
   background-color: ${bg} !important;
   color: ${fg} !important;
 }
-p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label, a {
-  color: inherit !important;
-}
-a { color: ${primary} !important; }
 ::selection { background: rgba(59, 130, 246, 0.3) !important; }
 /* __end_theme_colors__ */`;
       return themeBlock + '\n' + cleaned;
@@ -2478,6 +2499,31 @@ a { color: ${primary} !important; }
       return childStyle.writingMode === 'vertical-rl' || childStyle.writingMode === 'vertical-lr';
     }
 
+    function getColorLuminance(color) {
+      const match = color && color.match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);
+      if (!match) return 1;
+      const channels = match.slice(1, 4).map((value) => Number(value) / 255);
+      return channels.reduce((sum, channel) => sum + channel, 0) / channels.length;
+    }
+
+    // EPUBs often hard-code black/dark-gray body text. In dark mode, only
+    // brighten simple text leaves with transparent backgrounds; preserve
+    // links, code, media, and nested/colorful markup authored by the book.
+    function compensateDarkText(doc, foreground, background) {
+      const darkTheme = getColorLuminance(background) < 0.35;
+      const candidates = doc.querySelectorAll('p, div, span, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label');
+      for (const element of candidates) {
+        element.style.removeProperty('--readany-dark-text-color');
+        if (!darkTheme || /^(a|code|pre|kbd|samp)$/i.test(element.tagName)) continue;
+        if (!Array.from(element.childNodes).some((node) => node.nodeType === 3 && node.nodeValue.trim())) continue;
+        const computed = doc.defaultView.getComputedStyle(element);
+        if (computed.backgroundColor !== 'rgba(0, 0, 0, 0)' && computed.backgroundColor !== 'transparent') continue;
+        if (getColorLuminance(computed.color) >= 0.22) continue;
+        element.style.setProperty('--readany-dark-text-color', foreground);
+        element.style.setProperty('color', 'var(--readany-dark-text-color)', 'important');
+      }
+    }
+
     function applyDocStyles(doc) {
       if (currentBookIsPdf) {
         const styleId = '__readany_pdf_styles__';
@@ -2495,6 +2541,11 @@ a { color: ${primary} !important; }
       }
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
+      globalThis.ReadAnyJustifiedText?.apply(
+        doc,
+        currentJustifyBodyText,
+        verticalDoc || Boolean(view?.isFixedLayout),
+      );
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.webkitUserDrag = 'none';
@@ -2510,12 +2561,11 @@ a { color: ${primary} !important; }
           -webkit-user-drag: none !important;
           touch-action: manipulation !important;
         }
-        p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label { color: inherit !important; }
-        a { color: ${primary} !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
         ${verticalDoc ? getVerticalWritingCompatibilityStyles() : ''}
       `;
       doc.head.appendChild(style);
+      compensateDarkText(doc, fg, bg);
       if (lastRendererStyles) {
         const themedStyles = injectThemeIntoStyles(
           lastRendererStyles,

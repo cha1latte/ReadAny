@@ -140,6 +140,40 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
               </TouchableOpacity>
             </View>
           </View>
+          {/* Body Text Justification */}
+          <View style={s.settingRow}>
+            <View style={s.settingLabelBlock}>
+              <Text style={s.settingLabel}>
+                {t("reader.justifyBodyText", "Justify body text")}
+              </Text>
+              <Text style={s.settingHint}>
+                {t(
+                  "reader.justifyBodyTextDesc",
+                  "Align ordinary prose to both page edges",
+                )}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                s.settingToggleBtn,
+                readSettings.justifyBodyText !== false && s.settingToggleBtnActive,
+              ]}
+              onPress={() =>
+                onUpdateSetting("justifyBodyText", readSettings.justifyBodyText === false)
+              }
+            >
+              <Text
+                style={[
+                  s.settingToggleText,
+                  readSettings.justifyBodyText !== false && s.settingToggleTextActive,
+                ]}
+              >
+                {readSettings.justifyBodyText !== false
+                  ? t("settings.enabled")
+                  : t("settings.disabled")}
+              </Text>
+            </TouchableOpacity>
+          </View>
           {/* Page Margin */}
           <View style={s.settingRow}>
             <Text style={s.settingLabel}>{t("reader.pageMargin", "页边距")}</Text>

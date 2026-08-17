@@ -129,6 +129,30 @@ function normalizeCustomCatalog(value: unknown): CustomCatalogDefinition | undef
   };
 }
 
+function assertCatalogInputShape(
+  value: unknown,
+  options: { requireDefinition: boolean },
+): asserts value is OpdsCatalogInput | OpdsCatalogUpdate {
+  if (!isRecord(value)) throw new Error("Catalog input is invalid");
+  if (
+    (options.requireDefinition &&
+      (typeof value.name !== "string" ||
+        typeof value.url !== "string" ||
+        (value.auth !== "anonymous" && value.auth !== "basic"))) ||
+    (!options.requireDefinition && value.name !== undefined && typeof value.name !== "string") ||
+    (!options.requireDefinition && value.url !== undefined && typeof value.url !== "string") ||
+    (!options.requireDefinition &&
+      value.auth !== undefined &&
+      value.auth !== "anonymous" &&
+      value.auth !== "basic") ||
+    (value.enabled !== undefined && typeof value.enabled !== "boolean") ||
+    (value.username !== undefined && typeof value.username !== "string") ||
+    (value.password !== undefined && typeof value.password !== "string")
+  ) {
+    throw new Error("Catalog input is invalid");
+  }
+}
+
 export function opdsCatalogSecretKey(catalogId: string): string {
   if (!CUSTOM_ID_PATTERN.test(catalogId)) {
     throw new Error("Invalid custom catalog id");
@@ -137,10 +161,12 @@ export function opdsCatalogSecretKey(catalogId: string): string {
 }
 
 export class OpdsCatalogStore {
-  private readonly customCatalogs = new Map<string, CustomCatalogDefinition>();
-  private readonly hiddenBuiltInIds = new Set<string>();
+  private customCatalogs = new Map<string, CustomCatalogDefinition>();
+  private hiddenBuiltInIds = new Set<string>();
   private readonly sessionPasswords = new Map<string, string>();
   private readonly passwordStorage = new Map<string, Exclude<OpdsPasswordStorage, "none">>();
+  private readonly blockedPersistentPasswords = new Set<string>();
+  private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly storage: OpdsCatalogStorage,
@@ -148,41 +174,46 @@ export class OpdsCatalogStore {
   ) {}
 
   async load(): Promise<void> {
-    this.customCatalogs.clear();
-    this.hiddenBuiltInIds.clear();
+    return this.enqueueMutation(() => this.loadInternal());
+  }
 
-    let raw: string | null;
-    try {
-      raw = await this.storage.kvGetItem(OPDS_CATALOG_STORAGE_KEY);
-    } catch {
+  private async loadInternal(): Promise<void> {
+    const raw = await this.storage.kvGetItem(OPDS_CATALOG_STORAGE_KEY);
+    if (!raw) {
+      this.replaceState(new Map(), new Set(), { clearPasswords: true });
       return;
     }
-    if (!raw) return;
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return;
+      throw new Error("Catalog storage is invalid");
     }
-    if (!isRecord(parsed) || parsed.version !== 1) return;
+    if (!isRecord(parsed) || parsed.version !== 1) {
+      throw new Error("Catalog storage is invalid");
+    }
+
+    const nextCustomCatalogs = new Map<string, CustomCatalogDefinition>();
+    const nextHiddenBuiltInIds = new Set<string>();
 
     if (Array.isArray(parsed.hiddenBuiltInIds)) {
       for (const id of parsed.hiddenBuiltInIds) {
-        if (typeof id === "string" && builtInIds.has(id)) this.hiddenBuiltInIds.add(id);
+        if (typeof id === "string" && builtInIds.has(id)) nextHiddenBuiltInIds.add(id);
       }
     }
 
     if (Array.isArray(parsed.customCatalogs)) {
       for (const value of parsed.customCatalogs) {
         const catalog = normalizeCustomCatalog(value);
-        if (catalog && !this.customCatalogs.has(catalog.id)) {
-          this.customCatalogs.set(catalog.id, catalog);
+        if (catalog && !nextCustomCatalogs.has(catalog.id)) {
+          nextCustomCatalogs.set(catalog.id, catalog);
         }
       }
     }
     // Rewrite the validated projection so unknown or malicious fields do not remain in general KV.
-    await this.persist().catch(() => undefined);
+    await this.persistState(nextCustomCatalogs, nextHiddenBuiltInIds);
+    this.replaceState(nextCustomCatalogs, nextHiddenBuiltInIds, { clearPasswords: true });
   }
 
   listCatalogs(options: { includeHidden?: boolean } = {}): OpdsCatalog[] {
@@ -203,41 +234,85 @@ export class OpdsCatalogStore {
   }
 
   async addCatalog(input: OpdsCatalogInput): Promise<OpdsCatalog> {
-    const id = this.createId();
-    if (!CUSTOM_ID_PATTERN.test(id) || builtInIds.has(id) || this.customCatalogs.has(id)) {
-      throw new Error("Could not generate a unique catalog id");
+    assertCatalogInputShape(input, { requireDefinition: true });
+    if (input.auth === "anonymous" && input.password !== undefined) {
+      throw new Error("Anonymous catalogs cannot have a password");
     }
-    const catalog = this.catalogFromInput(id, input);
-    this.customCatalogs.set(id, catalog);
-    await this.persist();
-    if (input.password) await this.storePassword(id, input.password);
-    return this.toCustomCatalog(catalog);
+    return this.enqueueMutation(async () => {
+      const id = this.createId();
+      if (!CUSTOM_ID_PATTERN.test(id) || builtInIds.has(id) || this.customCatalogs.has(id)) {
+        throw new Error("Could not generate a unique catalog id");
+      }
+      const catalog = this.catalogFromInput(id, input);
+      const nextCatalogs = new Map(this.customCatalogs).set(id, catalog);
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+      if (input.password) await this.storePassword(id, input.password);
+      this.customCatalogs = nextCatalogs;
+      return this.toCustomCatalog(catalog);
+    });
   }
 
   async updateCatalog(id: string, update: OpdsCatalogUpdate): Promise<OpdsCatalog> {
-    if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be edited");
-    const current = this.customCatalogs.get(id);
-    if (!current) throw new Error("Catalog not found");
+    assertCatalogInputShape(update, { requireDefinition: false });
+    return this.enqueueMutation(async () => {
+      if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be edited");
+      const current = this.customCatalogs.get(id);
+      if (!current) throw new Error("Catalog not found");
 
-    const next = this.catalogFromInput(id, {
-      name: update.name ?? current.name,
-      url: update.url ?? current.url,
-      enabled: update.enabled ?? current.enabled,
-      auth: update.auth ?? current.auth,
-      username: update.username ?? current.username,
+      const next = this.catalogFromInput(id, {
+        name: update.name ?? current.name,
+        url: update.url ?? current.url,
+        enabled: update.enabled ?? current.enabled,
+        auth: update.auth ?? current.auth,
+        username: update.username ?? current.username,
+      });
+      if (next.auth === "anonymous" && update.password !== undefined) {
+        throw new Error("Anonymous catalogs cannot have a password");
+      }
+      const credentialChanged =
+        next.url !== current.url ||
+        next.auth !== current.auth ||
+        next.username !== current.username ||
+        update.password !== undefined;
+      const previousPersistentPassword = credentialChanged
+        ? await this.readPersistentPassword(id)
+        : undefined;
+      const previousCatalogs = this.customCatalogs;
+      const nextCatalogs = new Map(previousCatalogs).set(id, next);
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+
+      if (credentialChanged) {
+        try {
+          await this.removePersistentPassword(id);
+        } catch (error) {
+          await this.compensateSecretMutationFailure(
+            id,
+            previousPersistentPassword,
+            previousCatalogs,
+            this.hiddenBuiltInIds,
+            error,
+            "Catalog update",
+            () => {
+              this.customCatalogs = nextCatalogs;
+              this.clearPasswordState(id);
+              if (next.auth === "basic" && update.password) {
+                this.sessionPasswords.set(id, update.password);
+                this.passwordStorage.set(id, "session-only");
+              } else {
+                this.blockedPersistentPasswords.add(id);
+              }
+            },
+          );
+        }
+        this.clearPasswordState(id);
+        if (next.auth === "basic" && update.password) {
+          await this.storePassword(id, update.password);
+        }
+      }
+
+      this.customCatalogs = nextCatalogs;
+      return this.toCustomCatalog(next);
     });
-    const identityChanged =
-      next.url !== current.url || next.auth !== current.auth || next.username !== current.username;
-    if (identityChanged || update.password !== undefined) {
-      await this.removePassword(id);
-    }
-
-    this.customCatalogs.set(id, next);
-    await this.persist();
-    if (next.auth === "basic" && update.password) {
-      await this.storePassword(id, update.password);
-    }
-    return this.toCustomCatalog(next);
   }
 
   async setCatalogEnabled(id: string, enabled: boolean): Promise<OpdsCatalog> {
@@ -245,24 +320,53 @@ export class OpdsCatalogStore {
   }
 
   async removeCatalog(id: string): Promise<boolean> {
-    if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be deleted");
-    if (!this.customCatalogs.has(id)) return false;
-    await this.removePassword(id);
-    this.customCatalogs.delete(id);
-    await this.persist();
-    return true;
+    return this.enqueueMutation(async () => {
+      if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be deleted");
+      if (!this.customCatalogs.has(id)) return false;
+      const previousPersistentPassword = await this.readPersistentPassword(id);
+      const previousCatalogs = this.customCatalogs;
+      const nextCatalogs = new Map(previousCatalogs);
+      nextCatalogs.delete(id);
+      await this.persistState(nextCatalogs, this.hiddenBuiltInIds);
+      try {
+        await this.removePersistentPassword(id);
+      } catch (error) {
+        await this.compensateSecretMutationFailure(
+          id,
+          previousPersistentPassword,
+          previousCatalogs,
+          this.hiddenBuiltInIds,
+          error,
+          "Catalog removal",
+          () => {
+            this.customCatalogs = nextCatalogs;
+            this.clearPasswordState(id);
+          },
+        );
+      }
+      this.clearPasswordState(id);
+      this.customCatalogs = nextCatalogs;
+      return true;
+    });
   }
 
   async hideBuiltIn(id: string): Promise<void> {
-    this.requireBuiltIn(id);
-    this.hiddenBuiltInIds.add(id);
-    await this.persist();
+    return this.enqueueMutation(async () => {
+      this.requireBuiltIn(id);
+      const nextHiddenBuiltInIds = new Set(this.hiddenBuiltInIds).add(id);
+      await this.persistState(this.customCatalogs, nextHiddenBuiltInIds);
+      this.hiddenBuiltInIds = nextHiddenBuiltInIds;
+    });
   }
 
   async restoreBuiltIn(id: string): Promise<void> {
-    this.requireBuiltIn(id);
-    this.hiddenBuiltInIds.delete(id);
-    await this.persist();
+    return this.enqueueMutation(async () => {
+      this.requireBuiltIn(id);
+      const nextHiddenBuiltInIds = new Set(this.hiddenBuiltInIds);
+      nextHiddenBuiltInIds.delete(id);
+      await this.persistState(this.customCatalogs, nextHiddenBuiltInIds);
+      this.hiddenBuiltInIds = nextHiddenBuiltInIds;
+    });
   }
 
   async getCredentials(id: string): Promise<OpdsCredentials | undefined> {
@@ -271,9 +375,18 @@ export class OpdsCatalogStore {
 
     let password = this.sessionPasswords.get(id);
     const { secretGetItem, secretSetItem, secretRemoveItem } = this.storage;
-    if (!password && secretGetItem && secretSetItem && secretRemoveItem) {
+    if (
+      !password &&
+      !this.blockedPersistentPasswords.has(id) &&
+      secretGetItem &&
+      secretSetItem &&
+      secretRemoveItem
+    ) {
       try {
         password = (await secretGetItem(opdsCatalogSecretKey(id))) ?? undefined;
+        if (this.customCatalogs.get(id) !== catalog || this.blockedPersistentPasswords.has(id)) {
+          return undefined;
+        }
         if (password) this.passwordStorage.set(id, "persistent");
       } catch {
         password = undefined;
@@ -315,6 +428,7 @@ export class OpdsCatalogStore {
         await secretSetItem(opdsCatalogSecretKey(id), password);
         this.sessionPasswords.delete(id);
         this.passwordStorage.set(id, "persistent");
+        this.blockedPersistentPasswords.delete(id);
         return;
       } catch {
         // A secret backend failure intentionally degrades to an explicit in-memory session secret.
@@ -322,23 +436,104 @@ export class OpdsCatalogStore {
     }
     this.sessionPasswords.set(id, password);
     this.passwordStorage.set(id, "session-only");
+    this.blockedPersistentPasswords.delete(id);
   }
 
-  private async removePassword(id: string): Promise<void> {
+  private async removePersistentPassword(id: string): Promise<void> {
     if (this.storage.secretRemoveItem) {
       await this.storage.secretRemoveItem(opdsCatalogSecretKey(id));
     }
-    this.sessionPasswords.delete(id);
-    this.passwordStorage.delete(id);
   }
 
-  private async persist(): Promise<void> {
+  private async readPersistentPassword(id: string): Promise<string | null | undefined> {
+    const { secretGetItem, secretSetItem, secretRemoveItem } = this.storage;
+    if (
+      this.blockedPersistentPasswords.has(id) ||
+      !secretGetItem ||
+      !secretSetItem ||
+      !secretRemoveItem
+    ) {
+      return undefined;
+    }
+    return secretGetItem(opdsCatalogSecretKey(id));
+  }
+
+  private clearPasswordState(id: string): void {
+    this.sessionPasswords.delete(id);
+    this.passwordStorage.delete(id);
+    this.blockedPersistentPasswords.delete(id);
+  }
+
+  private async compensateSecretMutationFailure(
+    id: string,
+    previousPersistentPassword: string | null | undefined,
+    customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
+    hiddenBuiltInIds: ReadonlySet<string>,
+    originalError: unknown,
+    operation: string,
+    onRollbackFailure: () => void,
+  ): Promise<never> {
+    let compensationFailed = false;
+    if (previousPersistentPassword !== undefined && previousPersistentPassword !== null) {
+      try {
+        await this.storage.secretSetItem?.(opdsCatalogSecretKey(id), previousPersistentPassword);
+      } catch {
+        compensationFailed = true;
+      }
+    }
+    try {
+      await this.persistState(customCatalogs, hiddenBuiltInIds);
+    } catch {
+      try {
+        await this.storage.secretRemoveItem?.(opdsCatalogSecretKey(id));
+      } catch {
+        // The fixed compound error below reports that neither cross-store recovery path completed.
+      }
+      onRollbackFailure();
+      throw new Error(`${operation} failed and rollback failed`);
+    }
+    if (compensationFailed) {
+      this.sessionPasswords.set(id, previousPersistentPassword ?? "");
+      this.passwordStorage.set(id, "session-only");
+      this.blockedPersistentPasswords.add(id);
+      throw new Error(`${operation} failed and secret compensation failed`);
+    }
+    throw originalError;
+  }
+
+  private async persistState(
+    customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
+    hiddenBuiltInIds: ReadonlySet<string>,
+  ): Promise<void> {
     const value: PersistedCatalogsV1 = {
       version: 1,
-      customCatalogs: Array.from(this.customCatalogs.values(), (catalog) => ({ ...catalog })),
-      hiddenBuiltInIds: Array.from(this.hiddenBuiltInIds),
+      customCatalogs: Array.from(customCatalogs.values(), (catalog) => ({ ...catalog })),
+      hiddenBuiltInIds: Array.from(hiddenBuiltInIds),
     };
     await this.storage.kvSetItem(OPDS_CATALOG_STORAGE_KEY, JSON.stringify(value));
+  }
+
+  private replaceState(
+    customCatalogs: ReadonlyMap<string, CustomCatalogDefinition>,
+    hiddenBuiltInIds: ReadonlySet<string>,
+    options: { clearPasswords: boolean },
+  ): void {
+    this.customCatalogs = new Map(customCatalogs);
+    this.hiddenBuiltInIds = new Set(hiddenBuiltInIds);
+    if (options.clearPasswords) {
+      this.sessionPasswords.clear();
+      this.passwordStorage.clear();
+      this.blockedPersistentPasswords.clear();
+    }
+  }
+
+  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation);
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private requireBuiltIn(id: string): void {

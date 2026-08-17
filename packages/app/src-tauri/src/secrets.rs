@@ -128,4 +128,13 @@ mod tests {
     fn removing_a_missing_entry_is_idempotent() {
         assert_eq!(map_remove_result(Err(keyring::Error::NoEntry)), Ok(()));
     }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn selected_desktop_backend_persists_until_delete() {
+        assert!(matches!(
+            keyring::default::default_credential_builder().persistence(),
+            keyring::credential::CredentialPersistence::UntilDelete
+        ));
+    }
 }

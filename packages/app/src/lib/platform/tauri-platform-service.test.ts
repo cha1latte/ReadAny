@@ -114,6 +114,8 @@ describe("TauriPlatformService manual redirect contract", () => {
 });
 
 describe("TauriPlatformService secret contract", () => {
+  const secretKey = "opds.catalog.11111111-1111-4111-8111-111111111111.password";
+
   beforeEach(() => {
     tauriInvoke.mockReset();
   });
@@ -124,16 +126,14 @@ describe("TauriPlatformService secret contract", () => {
     vi.stubGlobal("localStorage", { setItem: localStorageSet });
     const service = new TauriPlatformService();
 
-    await expect(service.secretGetItem("opds.catalog.one.password")).resolves.toBe(
-      "stored-password",
-    );
-    await service.secretSetItem("opds.catalog.one.password", "new-password");
-    await service.secretRemoveItem("opds.catalog.one.password");
+    await expect(service.secretGetItem(secretKey)).resolves.toBe("stored-password");
+    await service.secretSetItem(secretKey, "new-password");
+    await service.secretRemoveItem(secretKey);
 
     expect(tauriInvoke.mock.calls).toEqual([
-      ["secret_get", { key: "opds.catalog.one.password" }],
-      ["secret_set", { key: "opds.catalog.one.password", value: "new-password" }],
-      ["secret_remove", { key: "opds.catalog.one.password" }],
+      ["secret_get", { key: secretKey }],
+      ["secret_set", { key: secretKey, value: "new-password" }],
+      ["secret_remove", { key: secretKey }],
     ]);
     expect(localStorageSet).not.toHaveBeenCalled();
     vi.unstubAllGlobals();

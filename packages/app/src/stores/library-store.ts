@@ -1,4 +1,4 @@
-import { saveCoverToAppData } from "@/lib/book/cover-storage";
+import { getCoverFileExtension, saveCoverToAppData } from "@/lib/book/cover-storage";
 import {
   type DesktopImportFile,
   type FoliateDocumentMetadata,
@@ -278,6 +278,45 @@ async function resolveAppPath(relativePath: string): Promise<string> {
   return resolveDesktopDataPath(relativePath);
 }
 
+async function getDesktopManagedDestination(
+  directory: "books" | "covers",
+  bookId: string,
+  extension: string,
+  avoidExisting: boolean,
+): Promise<{ relativePath: string; destPath: string; storageId: string; created: boolean }> {
+  const { exists } = await import("@tauri-apps/plugin-fs");
+  let storageId = bookId;
+  let relativePath = `${directory}/${storageId}.${extension}`;
+  let destPath = await resolveAppPath(relativePath);
+  let pathExists = await exists(destPath);
+
+  while (avoidExisting && pathExists) {
+    storageId = `${bookId}-${crypto.randomUUID()}`;
+    relativePath = `${directory}/${storageId}.${extension}`;
+    destPath = await resolveAppPath(relativePath);
+    pathExists = await exists(destPath);
+  }
+
+  return { relativePath, destPath, storageId, created: !pathExists };
+}
+
+async function saveImportedDesktopCover(input: {
+  bookId: string;
+  cover: Blob;
+  avoidExisting: boolean;
+  createdManagedPaths: Set<string>;
+}): Promise<string> {
+  const extension = await getCoverFileExtension(input.cover);
+  const destination = await getDesktopManagedDestination(
+    "covers",
+    input.bookId,
+    extension,
+    input.avoidExisting,
+  );
+  if (destination.created) input.createdManagedPaths.add(destination.destPath);
+  return saveCoverToAppData(destination.storageId, input.cover);
+}
+
 /**
  * Resolve a book or cover path to a displayable asset:// URL.
  * Handles both legacy absolute/asset:// paths and new relative paths.
@@ -298,7 +337,8 @@ async function copyBookToAppData(
   bookId: string,
   ext: string,
   srcPath: string,
-): Promise<{ relativePath: string; destPath: string }> {
+  avoidExisting = false,
+): Promise<{ relativePath: string; destPath: string; created: boolean }> {
   const { copyFile, mkdir } = await import("@tauri-apps/plugin-fs");
   const { join } = await import("@tauri-apps/api/path");
 
@@ -310,10 +350,10 @@ async function copyBookToAppData(
     /* exists */
   }
 
-  const relativePath = `books/${bookId}.${ext}`;
-  const destPath = await join(libraryRoot, relativePath);
+  const destination = await getDesktopManagedDestination("books", bookId, ext, avoidExisting);
+  const { relativePath, destPath, created } = destination;
   await copyFile(srcPath, destPath);
-  return { relativePath, destPath };
+  return { relativePath, destPath, created };
 }
 
 export async function repairMissingCovers(): Promise<number> {
@@ -373,6 +413,10 @@ function keepActiveGroupId(activeGroupId: string, groups: BookGroup[]): string {
   return groups.some((group) => group.id === activeGroupId) ? activeGroupId : "";
 }
 
+export interface ImportBooksOptions {
+  transactional?: boolean;
+}
+
 export interface LibraryState {
   books: Book[];
   groups: BookGroup[];
@@ -403,7 +447,10 @@ export interface LibraryState {
   setViewMode: (mode: LibraryViewMode) => void;
   setSortField: (field: SortField) => void;
   setSortOrder: (order: SortOrder) => void;
-  importBooks: (files: DesktopImportFile[]) => Promise<ImportBooksResult>;
+  importBooks: (
+    files: DesktopImportFile[],
+    options?: ImportBooksOptions,
+  ) => Promise<ImportBooksResult>;
   inspectDeletedBookCandidate: (
     bookId: string,
     filePath: string,
@@ -917,7 +964,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   setSortOrder: (order) => set((state) => ({ filter: { ...state.filter, sortOrder: order } })),
 
-  importBooks: async (files) => {
+  importBooks: async (files, options = {}) => {
     set({ isImporting: true });
     const result = createEmptyImportBooksResult();
     const duplicateIndex = createImportDuplicateIndex(get().books);
@@ -929,8 +976,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         const fileInfo = normalizeDesktopImportFile(fileInput);
         const filePath = fileInfo.path;
         const fileName = decodeURIComponent(
-          filePath.replace(/\\/g, "/").split("/").pop() || "book",
+          fileInfo.name || filePath.replace(/\\/g, "/").split("/").pop() || "book",
         );
+        const createdManagedPaths = new Set<string>();
         try {
           const ext = filePath.split(".").pop()?.toLowerCase() || "epub";
           const formatMap: Record<string, Book["format"]> = {
@@ -967,14 +1015,18 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             continue;
           }
 
-          let deletedMatch = fileHash
-            ? await db.getDeletedBookByFileHash(fileHash).catch((err) => {
-                console.warn("[Library] Failed to check deleted book by hash:", err);
-                return null;
-              })
-            : null;
+          let deletedMatch: Book | null = null;
+          let hashLookupConclusive = false;
+          if (fileHash) {
+            try {
+              deletedMatch = await db.getDeletedBookByFileHash(fileHash);
+              hashLookupConclusive = true;
+            } catch (err) {
+              console.warn("[Library] Failed to check deleted book by hash:", err);
+            }
+          }
           // Fallback: match by title if hash lookup failed (e.g. hash was null on first import)
-          if (!deletedMatch && fallbackTitle) {
+          if (!hashLookupConclusive && fallbackTitle) {
             deletedMatch = await db.getDeletedBookByTitle(fallbackTitle).catch((err) => {
               console.warn("[Library] Failed to check deleted book by title:", err);
               return null;
@@ -985,6 +1037,46 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             deletedMatch?.meta,
             fileInfo.metadata,
           );
+          let convertedDestination:
+            | { relativePath: string; destPath: string; created: boolean }
+            | undefined;
+          const persistImport = async (book: Book): Promise<void> => {
+            const restoreUpdates = {
+              filePath: book.filePath,
+              format: book.format,
+              meta: book.meta,
+              deletedAt: undefined,
+              progress: book.progress,
+              currentCfi: book.currentCfi,
+              isVectorized: false,
+              vectorizeProgress: 0,
+              tags: book.tags,
+              fileHash: book.fileHash,
+              syncStatus: "local" as const,
+              lastOpenedAt: Date.now(),
+            };
+
+            if (options.transactional) {
+              if (deletedMatch) {
+                await db.updateBook(book.id, restoreUpdates);
+              } else {
+                await db.insertBook(book);
+              }
+              set((state) => ({ books: [...state.books, book] }));
+              debouncedSave("library-books", get().books);
+              return;
+            }
+
+            if (deletedMatch) {
+              set((state) => ({ books: [...state.books, book] }));
+              db.updateBook(book.id, restoreUpdates).catch((err) =>
+                console.error("Failed to restore deleted book from database:", err),
+              );
+              debouncedSave("library-books", get().books);
+            } else {
+              get().addBook(book);
+            }
+          };
 
           // For TXT files, convert to EPUB first before storing
           if (ext === "txt") {
@@ -1006,8 +1098,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             const { join } = await import("@tauri-apps/api/path");
             const epubBytes = new Uint8Array(await result.file.arrayBuffer());
             await mkdir(await join(await getDesktopLibraryRoot(), "books"), { recursive: true });
-            const tmpPath = await resolveAppPath(`books/${bookId}.epub`);
-            await writeFile(tmpPath, epubBytes);
+            const destination = await getDesktopManagedDestination(
+              "books",
+              bookId,
+              "epub",
+              options.transactional === true,
+            );
+            convertedDestination = destination;
+            if (destination.created) createdManagedPaths.add(destination.destPath);
+            await writeFile(destination.destPath, epubBytes);
           }
 
           // For UMD files, parse and convert to EPUB before storing
@@ -1029,8 +1128,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
             const { join } = await import("@tauri-apps/api/path");
             await mkdir(await join(await getDesktopLibraryRoot(), "books"), { recursive: true });
-            const destEpub = await resolveAppPath(`books/${bookId}.epub`);
-            await writeFile(destEpub, result.epubBytes);
+            const destination = await getDesktopManagedDestination(
+              "books",
+              bookId,
+              "epub",
+              options.transactional === true,
+            );
+            convertedDestination = destination;
+            if (destination.created) createdManagedPaths.add(destination.destPath);
+            await writeFile(destination.destPath, result.epubBytes);
           }
 
           // Copy book file into the managed library root (books/{id}.{ext})
@@ -1038,12 +1144,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           let relativePath: string;
           let destPath: string;
           if (ext === "txt" || ext === "umd") {
-            relativePath = `books/${bookId}.epub`;
-            destPath = await resolveAppPath(relativePath);
+            const destination = convertedDestination;
+            if (!destination) throw new Error("Converted book destination missing");
+            relativePath = destination.relativePath;
+            destPath = destination.destPath;
           } else {
-            const copyResult = await copyBookToAppData(bookId, ext, filePath);
+            const copyResult = await copyBookToAppData(
+              bookId,
+              ext,
+              filePath,
+              options.transactional === true,
+            );
             relativePath = copyResult.relativePath;
             destPath = copyResult.destPath;
+            if (copyResult.created) createdManagedPaths.add(copyResult.destPath);
           }
 
           // Extract metadata WITHOUT loading the full file into JS memory.
@@ -1059,7 +1173,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const epubMeta = await extractEpubMetadata(blob);
               embeddedMeta = epubMeta;
               if (persistEmbeddedCover && epubMeta.coverBlob) {
-                embeddedMeta.coverUrl = await saveCoverToAppData(bookId, epubMeta.coverBlob);
+                embeddedMeta.coverUrl = await saveImportedDesktopCover({
+                  bookId,
+                  cover: epubMeta.coverBlob,
+                  avoidExisting: options.transactional === true,
+                  createdManagedPaths,
+                });
               }
             } else if (format === "pdf") {
               // PDF: use convertFileSrc URL so pdfjs streams from disk
@@ -1073,7 +1192,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               try {
                 const coverBlob = await generatePdfCover(pdfUrl);
                 if (persistEmbeddedCover && coverBlob) {
-                  embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
+                  embeddedMeta.coverUrl = await saveImportedDesktopCover({
+                    bookId,
+                    cover: coverBlob,
+                    avoidExisting: options.transactional === true,
+                    createdManagedPaths,
+                  });
                 }
               } catch (err) {
                 console.warn("[Library] PDF cover generation failed:", err);
@@ -1096,7 +1220,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               try {
                 const coverBlob = await bookDoc.getCover();
                 if (persistEmbeddedCover && coverBlob) {
-                  embeddedMeta.coverUrl = await saveCoverToAppData(bookId, coverBlob);
+                  embeddedMeta.coverUrl = await saveImportedDesktopCover({
+                    bookId,
+                    cover: coverBlob,
+                    avoidExisting: options.transactional === true,
+                    createdManagedPaths,
+                  });
                 }
               } catch (err) {
                 console.warn("[importBooks] getCover failed:", err);
@@ -1129,26 +1258,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             lastOpenedAt: deletedMatch?.lastOpenedAt ?? Date.now(),
           };
 
-          if (deletedMatch) {
-            set((state) => ({ books: [...state.books, book] }));
-            db.updateBook(book.id, {
-              filePath: book.filePath,
-              format: book.format,
-              meta: book.meta,
-              deletedAt: undefined,
-              progress: book.progress,
-              currentCfi: book.currentCfi,
-              isVectorized: false,
-              vectorizeProgress: 0,
-              tags: book.tags,
-              fileHash: book.fileHash,
-              syncStatus: "local",
-              lastOpenedAt: Date.now(),
-            }).catch((err) => console.error("Failed to restore deleted book from database:", err));
-            debouncedSave("library-books", get().books);
-          } else {
-            get().addBook(book);
-          }
+          await persistImport(book);
           result.imported.push(book);
           if (fileHash) {
             duplicateIndex.byHash.set(fileHash, book);
@@ -1171,6 +1281,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             });
           }
         } catch (err) {
+          if (options.transactional) {
+            const { remove } = await import("@tauri-apps/plugin-fs");
+            for (const path of createdManagedPaths) {
+              await remove(path).catch(() => undefined);
+            }
+          }
           console.error(`Failed to import ${filePath}:`, err);
           result.failures.push({
             name: fileName,

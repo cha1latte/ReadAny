@@ -34,6 +34,7 @@ export interface FoliateDocumentMetadata extends Record<string, unknown> {
 
 export interface DesktopImportFileContext {
   path: string;
+  name?: string;
   metadata?: Partial<BookMeta>;
 }
 

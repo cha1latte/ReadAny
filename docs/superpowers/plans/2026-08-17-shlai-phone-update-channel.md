@@ -31,6 +31,8 @@
 - Merge: `feat/opds-catalogs`
 - Resolve: `packages/app-expo/app.config.js`
 - Resolve: `packages/app-expo/scripts/build-reader.js`
+- Resolve: `packages/app-expo/src/lib/platform/expo-platform-service.ts`
+- Resolve: `pnpm-lock.yaml`
 - Verify generated: `packages/app-expo/assets/reader/reader.html`
 
 **Interfaces:**
@@ -106,6 +108,8 @@ const EXTRACTION_SESSIONS = path.resolve(__dirname, "../src/lib/rag/reader-extra
 ```
 
 Keep the MOBI `ReaderExtractionSessions` entry import/window export and the Shlai `JUSTIFIED_TEXT_MARKER` injection/one-marker assertion. The rebuilt `reader.html` must contain both behaviors and remain deterministic.
+
+For the known OPDS platform conflict, retain the shared imported `compareVersions`/`releaseTagToVersion` implementation from the Shlai side and retain OPDS's direct `secretGetItem`, `secretSetItem`, and `secretRemoveItem` SecureStore boundary. Drop OPDS's duplicate private `_compareVersions` method. For the lockfile conflict, retain OPDS's `jsdom@30.0.1` Vitest peer resolution (required by `packages/app`) and Shlai's direct `yaml@2.8.2` entry (required by workflow contract tests); confirm the combined result with `pnpm install --frozen-lockfile`.
 
 - [ ] **Step 4: Run the integration-focused suites**
 

@@ -67,8 +67,7 @@ function derivePreviewRelease({ upstreamVersion, releases, baselineVersionCode }
   const baseline = validateVersionCode(baselineVersionCode, "baseline");
   const flattenedReleases = Array.isArray(releases) ? releases.flat() : [];
   const seenTags = new Set();
-  let greatest = null;
-  let greatestVersionCode = baseline;
+  const parsedReleases = [];
 
   for (const release of flattenedReleases) {
     const parsed = parsePreviewRelease(release);
@@ -77,11 +76,25 @@ function derivePreviewRelease({ upstreamVersion, releases, baselineVersionCode }
       throw new Error(`Duplicate preview tag: ${parsed.tag}`);
     }
     seenTags.add(parsed.tag);
-    if (!greatest || compareTuples(parsed.tuple, greatest.tuple) > 0) {
-      greatest = parsed;
-    }
-    greatestVersionCode = Math.max(greatestVersionCode, parsed.versionCode);
+    parsedReleases.push(parsed);
   }
+
+  parsedReleases.sort((left, right) => compareTuples(left.tuple, right.tuple));
+  const seenVersionCodes = new Set();
+  let priorVersionCode = baseline;
+  for (const release of parsedReleases) {
+    if (seenVersionCodes.has(release.versionCode)) {
+      throw new Error(`Duplicate Android versionCode: ${release.versionCode}`);
+    }
+    seenVersionCodes.add(release.versionCode);
+    if (release.versionCode <= priorVersionCode) {
+      throw new Error("Android versionCode must strictly increase with preview release tags");
+    }
+    priorVersionCode = release.versionCode;
+  }
+
+  const greatest = parsedReleases.at(-1) ?? null;
+  const greatestVersionCode = greatest?.versionCode ?? baseline;
 
   const upstreamTuple = upstreamMatch.slice(1);
   let revision = 1;

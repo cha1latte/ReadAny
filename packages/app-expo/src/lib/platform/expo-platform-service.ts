@@ -1,4 +1,3 @@
-import { getShlaiReleaseConfig } from "@/lib/shlai-release";
 import i18n from "@readany/core/i18n";
 /**
  * ExpoPlatformService — IPlatformService implementation for Expo / React Native.
@@ -21,7 +20,6 @@ import type {
   PlatformFetchResponse,
   WebSocketOptions,
 } from "@readany/core/services";
-import { compareVersions, releaseTagToVersion } from "@readany/core/update/update-checker";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
@@ -641,47 +639,6 @@ export class ExpoPlatformService implements IPlatformService {
 
   async getAppVersion(): Promise<string> {
     return Constants.expoConfig?.version ?? "1.0.0";
-  }
-
-  // ---- Update (GitHub releases) ----
-
-  async checkUpdate() {
-    try {
-      const releaseConfig = getShlaiReleaseConfig();
-      if (!releaseConfig) return null;
-      const { apiUrl, assetName, tagPrefix } = releaseConfig;
-      const response = await fetch(apiUrl);
-      if (!response.ok) return null;
-
-      const release = await response.json();
-      const latestVersion = releaseTagToVersion(release.tag_name || "", tagPrefix);
-      if (!latestVersion) return null;
-      const currentVersion = await this.getAppVersion();
-
-      if (compareVersions(latestVersion, currentVersion) > 0) {
-        const apkAsset = Array.isArray(release.assets)
-          ? release.assets.find((a: { name: string }) => a.name === assetName)
-          : undefined;
-        if (apkAsset) {
-          return {
-            version: latestVersion,
-            notes: release.body || undefined,
-            date: release.published_at || undefined,
-            downloadUrl: apkAsset.browser_download_url,
-          };
-        }
-      }
-      return null;
-    } catch (e) {
-      console.error("[Updater] Check failed:", e);
-      return null;
-    }
-  }
-
-  async installUpdate(downloadUrl?: string) {
-    if (!downloadUrl) return;
-    const { Linking } = await import("react-native");
-    await Linking.openURL(downloadUrl);
   }
 
   // ---- Secret Storage (direct Expo SecureStore boundary; not indexed as general KV) ----

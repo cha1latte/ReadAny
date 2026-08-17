@@ -493,12 +493,13 @@ git commit -m "feat(update): verify and install preview APKs"
 
 - [ ] **Step 1: Add a failing parsed-YAML contract**
 
-Require the workflow to have exactly `push.branches: [main]` and `workflow_dispatch`, read-only top-level permissions, concurrency `{ group: "shlai-phone-release", cancel-in-progress: false }`, a main-ref guard, and jobs `validate`, `metadata`, `build`, `publish`. Assert:
+Require the workflow to have exactly `push.branches: [main]` and `workflow_dispatch`, read-only top-level permissions, concurrency `{ group: "shlai-phone-release", cancel-in-progress: false }`, exact-repository plus main-ref guards, and jobs `validate`, `metadata`, `build`, `verify`, `publish`. Assert:
 
 ```ts
 expect(build.env.APP_VARIANT).toBe("preview");
 expect(build.steps.map((step) => step.run).join("\n")).toContain("assembleRelease");
-expect(publish.permissions).toEqual({ contents: "write" });
+expect(publish.permissions).toEqual({ actions: "read", contents: "write" });
+expect(publish.steps.every((step) => !step.uses)).toBe(true);
 expect(serializedRuns).toContain('sha256sum "ReadAny-Shlai-Preview.apk"');
 expect(serializedRuns).toContain('gh release create "$TAG"');
 expect(JSON.stringify(workflow)).not.toMatch(/\bsecrets\b/i);
@@ -520,6 +521,7 @@ Use pinned versions already accepted in `shlai-pr.yml`. The metadata job must ru
 
 ```bash
 test "$GITHUB_REF" = "refs/heads/main"
+test "$GITHUB_REPOSITORY" = "cha1latte/ReadAny"
 UPSTREAM_VERSION="$(node -p "require('./packages/app-expo/package.json').version")"
 gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --slurp > "$RUNNER_TEMP/releases.json"
 node packages/app-expo/scripts/shlai-preview-release.js derive \
@@ -543,7 +545,7 @@ test "$(printf '%s\n' "$DIGEST" | wc -l | tr -d ' ')" = "1"
 sha256sum "ReadAny-Shlai-Preview.apk" > "ReadAny-Shlai-Preview.apk.sha256"
 ```
 
-The publish job downloads only the build artifact, repeats package/version/certificate/checksum verification, rejects an existing exact tag, and creates:
+The read-only verify job downloads the build artifact, repeats package/version/certificate/checksum verification, and exports the verified APK digest. The write-capable publish job contains no third-party actions: its single shell step downloads the exact current-run artifact with the built-in GitHub CLI, requires the APK digest to equal the read-only verify output, rejects an existing exact tag, and creates:
 
 ```bash
 NOTES="$(printf 'Unofficial ReadAny Shlai Preview Android release. Source: %s/%s/tree/%s\n\nAndroid versionCode: %s' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$SHLAI_VERSION_CODE")"

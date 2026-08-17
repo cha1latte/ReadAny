@@ -137,6 +137,42 @@ describe("derivePreviewRelease", () => {
     ).toThrow("Duplicate preview tag");
   });
 
+  it("rejects version codes that go backwards as preview tags increase", () => {
+    expect(() =>
+      derivePreviewRelease({
+        upstreamVersion: "1.3.6",
+        baselineVersionCode: 1,
+        releases: [
+          canonicalRelease("shlai-preview-v1.3.6.2", 10),
+          canonicalRelease("shlai-preview-v1.3.6.1", 20),
+        ],
+      }),
+    ).toThrow("strictly increase");
+  });
+
+  it("rejects duplicate version codes across canonical preview tags", () => {
+    expect(() =>
+      derivePreviewRelease({
+        upstreamVersion: "1.3.6",
+        baselineVersionCode: 1,
+        releases: [
+          canonicalRelease("shlai-preview-v1.3.6.1", 2),
+          canonicalRelease("shlai-preview-v1.3.6.2", 2),
+        ],
+      }),
+    ).toThrow("Duplicate Android versionCode");
+  });
+
+  it("rejects a canonical release that does not advance the installed baseline", () => {
+    expect(() =>
+      derivePreviewRelease({
+        upstreamVersion: "1.3.6",
+        baselineVersionCode: 2,
+        releases: [canonicalRelease("shlai-preview-v1.3.6.1", 2)],
+      }),
+    ).toThrow("strictly increase");
+  });
+
   it("rejects a repository version behind published preview history", () => {
     expect(() =>
       derivePreviewRelease({

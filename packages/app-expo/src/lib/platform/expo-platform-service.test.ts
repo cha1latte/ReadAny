@@ -328,3 +328,12 @@ describe("ExpoPlatformService secret contract", () => {
     expect(secureSet).not.toHaveBeenCalledWith("__readany_kv_keys__", expect.anything());
   });
 });
+
+describe("ExpoPlatformService update boundary", () => {
+  it("does not expose the legacy unverified mobile updater", () => {
+    const service = new ExpoPlatformService() as ExpoPlatformService & Record<string, unknown>;
+
+    expect(service.checkUpdate).toBeUndefined();
+    expect(service.installUpdate).toBeUndefined();
+  });
+});

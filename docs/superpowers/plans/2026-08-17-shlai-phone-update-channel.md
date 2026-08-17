@@ -30,6 +30,7 @@
 - Merge: `fix/mobi-vectorization`
 - Merge: `feat/opds-catalogs`
 - Resolve: `packages/app-expo/app.config.js`
+- Resolve: `packages/app-expo/scripts/build-reader.js`
 - Verify generated: `packages/app-expo/assets/reader/reader.html`
 
 **Interfaces:**
@@ -96,6 +97,15 @@ git merge --no-ff feat/opds-catalogs -m "merge: integrate OPDS catalogs"
 ```
 
 Expected: both histories merge without dropping the Shlai app config or Task 1 metadata fixes. If a conflict appears, list it with `git diff --name-only --diff-filter=U`, then inspect the exact conflicted file with `git show :1:packages/app-expo/app.config.js`, `git show :2:packages/app-expo/app.config.js`, and `git show :3:packages/app-expo/app.config.js`. Stop and amend this plan if a different file conflicts; do not improvise a resolution without a written contract.
+
+For the known MOBI conflict in `packages/app-expo/scripts/build-reader.js`, retain both owners:
+
+```js
+const JUSTIFIED_TEXT = path.resolve(ASSETS_DIR, "justified-text.js");
+const EXTRACTION_SESSIONS = path.resolve(__dirname, "../src/lib/rag/reader-extraction-sessions.ts");
+```
+
+Keep the MOBI `ReaderExtractionSessions` entry import/window export and the Shlai `JUSTIFIED_TEXT_MARKER` injection/one-marker assertion. The rebuilt `reader.html` must contain both behaviors and remain deterministic.
 
 - [ ] **Step 4: Run the integration-focused suites**
 

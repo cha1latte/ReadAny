@@ -46,6 +46,7 @@
     "system": "跟随系统",
     "light": "浅色",
     "dark": "深色",
+    "oled": "OLED 纯黑",
     "sepia": "护眼",
     "autoSave": "自动保存间隔",
     "autoSaveDesc": "阅读进度保存频率",

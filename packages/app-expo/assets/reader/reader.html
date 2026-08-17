@@ -2136,8 +2136,11 @@
       const primary = colors.primary || '#3b82f6';
 
       currentThemeColors = { bg, fg, muted, primary };
-      if (themeMode === 'dark' || themeMode === 'sepia') currentThemeMode = themeMode;
-      else currentThemeMode = 'light';
+      if (themeMode === 'dark' || themeMode === 'oled' || themeMode === 'sepia') {
+        currentThemeMode = themeMode;
+      } else {
+        currentThemeMode = 'light';
+      }
 
       document.documentElement.style.setProperty('--bg', bg);
       document.documentElement.style.setProperty('--fg', fg);
@@ -2172,6 +2175,8 @@
       // Mobile dark theme uses #1c1c1e. Mapping white with invert(0.89)
       // produces approximately #1c1c1c, avoiding a visible page/shell seam.
       dark: 'invert(0.89)',
+      // OLED maps white PDF paper to true black while preserving the dark-page smart skip.
+      oled: 'invert(1)',
       // Numerically tuned (invert->sepia->contrast->brightness) so a white PDF
       // page maps almost exactly to the sepia background #f0e6d2 (rgb 240,230,210).
       sepia: 'invert(0.245) sepia(0.286) contrast(1.328) brightness(1.005)',

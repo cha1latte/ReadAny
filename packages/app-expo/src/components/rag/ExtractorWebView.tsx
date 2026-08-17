@@ -3,9 +3,10 @@ import type { Book } from "@readany/core/types";
 import { Asset } from "expo-asset";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { WebView } from "react-native-webview";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { toBookExtractionError } from "../../lib/rag/extractor-error";
 import { createExtractorCommand } from "../../lib/rag/extractor-format";
+import { ExtractorRequestBoundary } from "../../lib/rag/extractor-request-boundary";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
 const EXTRACTION_TIMEOUT_MS = 45_000;
@@ -18,16 +19,6 @@ export interface ExtractorRef {
     fileName?: string,
     signal?: AbortSignal,
   ) => Promise<ChapterData[]>;
-}
-
-interface PendingExtraction {
-  requestId: string;
-  resolve: (chapters: ChapterData[]) => void;
-  reject: (err: Error) => void;
-  timeoutId: ReturnType<typeof setTimeout>;
-  bookFormat?: Book["format"];
-  signal?: AbortSignal;
-  abortHandler?: () => void;
 }
 
 function getAbortError(signal: AbortSignal): Error {
@@ -45,24 +36,29 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
   const webViewRef = useRef<WebView>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-
-  // Pending extraction requests
-  const pendingRequests = useRef<PendingExtraction[]>([]);
+  const [requestBoundary] = useState(
+    () =>
+      new ExtractorRequestBoundary<ChapterData[], Book["format"] | undefined>({
+        timeoutMs: EXTRACTION_TIMEOUT_MS,
+        sendCancel: (requestId) => {
+          webViewRef.current?.injectJavaScript(`
+            window.postMessage(${JSON.stringify(
+              JSON.stringify({ type: "cancelExtraction", requestId }),
+            )}, "*");
+            true;
+          `);
+        },
+        onCancelError: (requestId, error) => {
+          console.warn(`[ExtractorWebView] Failed to cancel request ${requestId}:`, error);
+        },
+      }),
+  );
 
   useEffect(() => {
     return () => {
-      for (const pending of pendingRequests.current) {
-        clearTimeout(pending.timeoutId);
-        if (pending.abortHandler) {
-          pending.signal?.removeEventListener("abort", pending.abortHandler);
-        }
-        pending.reject(
-          toBookExtractionError(new Error("Extractor WebView unmounted"), pending.bookFormat),
-        );
-      }
-      pendingRequests.current = [];
+      requestBoundary.rejectAll();
     };
-  }, []);
+  }, [requestBoundary]);
 
   useEffect(() => {
     const loadAsset = async () => {
@@ -78,19 +74,16 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
     loadAsset();
   }, []);
 
-  // biome-ignore lint/suspicious/noExplicitAny: Required for React Native WebView events
-  const handleMessage = useCallback((event: any) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === "ready") {
-        setReady(true);
-      } else if (msg.type === "loaded") {
-        const pending = pendingRequests.current.find(
-          (request) => request.requestId === msg.requestId,
-        );
-        if (!pending) return;
-        // Trigger extraction once the book is fully loaded
-        webViewRef.current?.injectJavaScript(`
+  const handleMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === "ready") {
+          setReady(true);
+        } else if (msg.type === "loaded") {
+          if (!requestBoundary.has(msg.requestId)) return;
+          // Trigger extraction once the book is fully loaded
+          webViewRef.current?.injectJavaScript(`
           if (window.handleExtractChapters) {
              window.handleExtractChapters(${JSON.stringify(msg.requestId)});
           } else {
@@ -98,42 +91,33 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           }
           true;
         `);
-      } else if (msg.type === "chaptersExtracted") {
-        const index = pendingRequests.current.findIndex(
-          (request) => request.requestId === msg.requestId,
-        );
-        const pending = index >= 0 ? pendingRequests.current.splice(index, 1)[0] : undefined;
-        if (!pending) return;
-
-        clearTimeout(pending.timeoutId);
-        if (pending.abortHandler) {
-          pending.signal?.removeEventListener("abort", pending.abortHandler);
-        }
-        if (msg.error) {
-          pending.reject(toBookExtractionError(new Error(String(msg.error)), pending.bookFormat));
-        } else if (msg.chapters) {
-          pending.resolve(msg.chapters);
-        }
-      } else if (msg.type === "debug") {
-        console.log("[ExtractorWebView]", msg.message);
-      } else if (msg.type === "error") {
-        console.error("[ExtractorWebView] WebView error:", msg.message);
-        const index = pendingRequests.current.findIndex(
-          (request) => request.requestId === msg.requestId,
-        );
-        const pending = index >= 0 ? pendingRequests.current.splice(index, 1)[0] : undefined;
-        if (pending) {
-          clearTimeout(pending.timeoutId);
-          if (pending.abortHandler) {
-            pending.signal?.removeEventListener("abort", pending.abortHandler);
+        } else if (msg.type === "chaptersExtracted") {
+          const classificationFormat = requestBoundary.getContext(msg.requestId);
+          if (msg.error) {
+            requestBoundary.reject(
+              msg.requestId,
+              toBookExtractionError(new Error(String(msg.error)), classificationFormat),
+            );
+          } else if (msg.chapters) {
+            requestBoundary.resolve(msg.requestId, msg.chapters);
           }
-          pending.reject(toBookExtractionError(new Error(String(msg.message)), pending.bookFormat));
+        } else if (msg.type === "debug") {
+          console.log("[ExtractorWebView]", msg.message);
+        } else if (msg.type === "error") {
+          if (!requestBoundary.has(msg.requestId)) return;
+          console.error("[ExtractorWebView] WebView error:", msg.message);
+          const classificationFormat = requestBoundary.getContext(msg.requestId);
+          requestBoundary.reject(
+            msg.requestId,
+            toBookExtractionError(new Error(String(msg.message)), classificationFormat),
+          );
         }
+      } catch (err) {
+        console.warn("[ExtractorWebView] Failed to parse message:", err);
       }
-    } catch (err) {
-      console.warn("[ExtractorWebView] Failed to parse message:", err);
-    }
-  }, []);
+    },
+    [requestBoundary],
+  );
 
   useImperativeHandle(ref, () => ({
     extractChapters: (
@@ -160,41 +144,21 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           );
         }
 
-        const timeoutId = setTimeout(() => {
-          const index = pendingRequests.current.findIndex((pending) => pending.reject === reject);
-          if (index >= 0) pendingRequests.current.splice(index, 1);
-          signal?.removeEventListener("abort", abortHandler);
-          reject(
+        requestBoundary.add({
+          requestId,
+          resolve,
+          reject,
+          context: classificationFormat,
+          signal,
+          abortError: () => getAbortError(signal as AbortSignal),
+          timeoutError: () =>
             toBookExtractionError(
               new Error("Timed out extracting book content"),
               classificationFormat,
             ),
-          );
-        }, EXTRACTION_TIMEOUT_MS);
-
-        const abortHandler = () => {
-          clearTimeout(timeoutId);
-          const index = pendingRequests.current.indexOf(pendingRequest);
-          if (index >= 0) pendingRequests.current.splice(index, 1);
-          webViewRef.current?.injectJavaScript(`
-            window.postMessage(${JSON.stringify(
-              JSON.stringify({ type: "cancelExtraction", requestId }),
-            )}, "*");
-            true;
-          `);
-          reject(getAbortError(signal as AbortSignal));
-        };
-        const pendingRequest: PendingExtraction = {
-          requestId,
-          resolve,
-          reject,
-          timeoutId,
-          bookFormat: classificationFormat,
-          signal,
-          abortHandler,
-        };
-        pendingRequests.current.push(pendingRequest);
-        signal?.addEventListener("abort", abortHandler, { once: true });
+          disposeError: () =>
+            toBookExtractionError(new Error("Extractor WebView unmounted"), classificationFormat),
+        });
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
@@ -204,11 +168,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
             true;
           `);
         } catch (error) {
-          clearTimeout(timeoutId);
-          const index = pendingRequests.current.indexOf(pendingRequest);
-          if (index >= 0) pendingRequests.current.splice(index, 1);
-          signal?.removeEventListener("abort", abortHandler);
-          reject(toBookExtractionError(error, classificationFormat));
+          requestBoundary.reject(requestId, toBookExtractionError(error, classificationFormat));
         }
       });
     },

@@ -555,6 +555,59 @@ describe("parseOpdsDocument", () => {
 
   it.each([
     [
+      "a search link without href",
+      `<link rel="search" type="application/opensearchdescription+xml" />`,
+    ],
+    [
+      "a navigation link without href",
+      `<link rel="next" type="application/atom+xml;profile=opds-catalog" />`,
+    ],
+    [
+      "a search link with a blank href",
+      `<link rel="search" href="   " type="application/opensearchdescription+xml" />`,
+    ],
+    [
+      "a navigation link with an invalid href",
+      `<link rel="next" href="http://[::1" type="application/atom+xml;profile=opds-catalog" />`,
+    ],
+    [
+      "a feed-level acquisition",
+      `<link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" />`,
+    ],
+    [
+      "an entry acquisition without href",
+      `<entry><title>Book</title><link rel="http://opds-spec.org/acquisition" type="application/epub+zip" /></entry>`,
+    ],
+    [
+      "an entry acquisition with an invalid href",
+      `<entry><title>Book</title><link rel="http://opds-spec.org/acquisition" href="http://[::1" type="application/epub+zip" /></entry>`,
+    ],
+  ])("rejects an otherwise empty Atom feed with %s", (_name, evidence) => {
+    const body = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Generic feed</title>${evidence}</feed>`;
+
+    expect(() =>
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml"),
+    ).toThrow("Invalid OPDS XML document");
+  });
+
+  it("accepts a direct feed navigation link with a valid href", () => {
+    const body = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Catalog</title><link rel="next" href="page-2.xml" type="application/atom+xml;profile=opds-catalog" /></feed>`;
+
+    expect(
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml"),
+    ).toMatchObject({ title: "Catalog", nextUrl: "https://catalog.test/page-2.xml" });
+  });
+
+  it("accepts an acquisition link owned by a direct entry", () => {
+    const body = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Catalog</title><entry><title>Book</title><link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" /></entry></feed>`;
+
+    expect(
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml").publications,
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    [
       "navigation",
       `<entry><title>Books</title><link href="books.xml" type="Application/Atom+XML; PROFILE=&quot;OPDS-CATALOG&quot;; charset=utf-8" /></entry>`,
     ],

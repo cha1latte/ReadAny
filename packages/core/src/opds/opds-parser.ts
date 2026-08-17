@@ -506,19 +506,39 @@ function parseMediaType(value: string): { type: string; parameters: Map<string, 
   return { type: rawType.trim().toLowerCase(), parameters };
 }
 
-function getDirectAtomLinks(root: Element): Element[] {
+interface DirectAtomLink {
+  element: Element;
+  owner: "feed" | "entry";
+}
+
+function getDirectAtomLinks(root: Element): DirectAtomLink[] {
   const namespace = root.namespaceURI || null;
   const belongsToFeed = (element: Element, localName: string) =>
     element.localName === localName && (element.namespaceURI || null) === namespace;
   const feedChildren = getElementChildren(root);
   return [
-    ...feedChildren.filter((child) => belongsToFeed(child, "link")),
+    ...feedChildren
+      .filter((child) => belongsToFeed(child, "link"))
+      .map((element) => ({ element, owner: "feed" as const })),
     ...feedChildren
       .filter((child) => belongsToFeed(child, "entry"))
       .flatMap((entry) =>
-        getElementChildren(entry).filter((child) => belongsToFeed(child, "link")),
+        getElementChildren(entry)
+          .filter((child) => belongsToFeed(child, "link"))
+          .map((element) => ({ element, owner: "entry" as const })),
       ),
   ];
+}
+
+function hasValidAtomHref(link: Element, documentUrl: string): boolean {
+  const href = link.getAttribute("href")?.trim();
+  if (!href) return false;
+  try {
+    new URL(href, documentUrl);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function parseXml(body: string, documentUrl: string): OpdsFeed {
@@ -544,11 +564,12 @@ function parseXml(body: string, documentUrl: string): OpdsFeed {
     throw new Error("Invalid OPDS XML document");
   }
 
-  const hasOpdsSemantics = getDirectAtomLinks(root).some((link) => {
-    const rel = (link.getAttribute("rel") ?? "").trim().split(/\s+/).filter(Boolean);
-    const media = parseMediaType(link.getAttribute("type") ?? "");
+  const hasOpdsSemantics = getDirectAtomLinks(root).some(({ element, owner }) => {
+    if (!hasValidAtomHref(element, documentUrl)) return false;
+    const rel = (element.getAttribute("rel") ?? "").trim().split(/\s+/).filter(Boolean);
+    const media = parseMediaType(element.getAttribute("type") ?? "");
     return (
-      classifyOpdsAcquisitionRelation(rel) !== undefined ||
+      (owner === "entry" && classifyOpdsAcquisitionRelation(rel) !== undefined) ||
       (media.type === "application/atom+xml" &&
         media.parameters.get("profile") === "opds-catalog") ||
       (rel.includes("search") && media.type === "application/opensearchdescription+xml") ||

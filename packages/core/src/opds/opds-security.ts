@@ -99,6 +99,10 @@ function isLocalHttpHost(hostname: string): boolean {
   return ipv6 ? isLocalIpv6(ipv6) : false;
 }
 
+/**
+ * Applies a syntactic URL policy only. It deliberately does not resolve or pin DNS, and must not
+ * be described as protection against DNS rebinding for otherwise allowed HTTPS hostnames.
+ */
 export function classifyOpdsUrl(value: string): OpdsUrlClassification {
   let url: URL;
   try {

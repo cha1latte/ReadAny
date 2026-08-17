@@ -49,8 +49,6 @@ interface RequestOptions {
   accept: string;
   responseType: "text" | "arraybuffer";
   credentials?: OpdsCredentials;
-  catalogOrigin?: string;
-  signal?: AbortSignal;
 }
 
 type OpdsFetchPlatform = Pick<IPlatformService, "fetch">;
@@ -67,10 +65,66 @@ export class OpdsError extends Error {
   }
 }
 
-function asOpdsError(error: unknown, signal?: AbortSignal): OpdsError {
-  if (error instanceof OpdsError) return error;
-  if (signal?.aborted) return new OpdsError("cancelled");
-  return new OpdsError("unreachable");
+class RequestLifecycle {
+  private readonly controller = new AbortController();
+  private readonly userSignal?: AbortSignal;
+  private readonly onUserAbort = () => this.abort("cancelled");
+  private timeout: ReturnType<typeof setTimeout> | undefined;
+  private abortCode: "cancelled" | "unreachable" | undefined;
+  private disposed = false;
+
+  constructor(userSignal?: AbortSignal) {
+    this.userSignal = userSignal;
+    if (userSignal?.aborted) {
+      this.abort("cancelled");
+      return;
+    }
+    userSignal?.addEventListener("abort", this.onUserAbort, { once: true });
+    this.timeout = setTimeout(() => this.abort("unreachable"), REQUEST_TIMEOUT_MS);
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  throwIfAborted(): void {
+    if (this.abortCode) throw new OpdsError(this.abortCode);
+  }
+
+  mapError(error: unknown): OpdsError {
+    if (error instanceof OpdsError) return error;
+    return new OpdsError(this.abortCode ?? "unreachable");
+  }
+
+  async race<T>(operation: Promise<T>): Promise<T> {
+    this.throwIfAborted();
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(new OpdsError(this.abortCode ?? "cancelled"));
+      this.controller.signal.addEventListener("abort", onAbort, { once: true });
+    });
+    try {
+      return await Promise.race([operation, aborted]);
+    } catch (error) {
+      throw this.mapError(error);
+    } finally {
+      if (onAbort) this.controller.signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.timeout !== undefined) clearTimeout(this.timeout);
+    this.userSignal?.removeEventListener("abort", this.onUserAbort);
+  }
+
+  private abort(code: "cancelled" | "unreachable"): void {
+    if (this.abortCode) return;
+    this.abortCode = code;
+    this.controller.abort();
+    this.dispose();
+  }
 }
 
 function normalizeAllowedOrigin(value: string): string {
@@ -100,9 +154,9 @@ function encodeBase64(value: string): string {
   return encoded;
 }
 
-function getAuthOrigin(credentials?: OpdsCredentials, override?: string): string | undefined {
+function getAuthOrigin(credentials?: OpdsCredentials): string | undefined {
   if (!credentials) return undefined;
-  return normalizeAllowedOrigin(override ?? credentials.catalogOrigin);
+  return normalizeAllowedOrigin(credentials.catalogOrigin);
 }
 
 function getHeaders(
@@ -144,40 +198,29 @@ function runPlatformFetch(
   platform: OpdsFetchPlatform,
   url: string,
   options: FetchOptions,
-  userSignal?: AbortSignal,
+  lifecycle: RequestLifecycle,
 ): Promise<Response> {
-  if (userSignal?.aborted) return Promise.reject(new OpdsError("cancelled"));
-
-  const controller = new AbortController();
-  let timedOut = false;
-  const onUserAbort = () => controller.abort();
-  userSignal?.addEventListener("abort", onUserAbort, { once: true });
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, REQUEST_TIMEOUT_MS);
-  const abortPromise = new Promise<never>((_resolve, reject) => {
-    controller.signal.addEventListener(
-      "abort",
-      () => reject(new OpdsError(timedOut ? "unreachable" : "cancelled")),
-      { once: true },
+  try {
+    return lifecycle.race(
+      Promise.resolve(platform.fetch(url, { ...options, signal: lifecycle.signal })),
     );
-  });
-
-  return Promise.race([
-    platform.fetch(url, { ...options, signal: controller.signal }),
-    abortPromise,
-  ]).finally(() => {
-    clearTimeout(timeout);
-    userSignal?.removeEventListener("abort", onUserAbort);
-  });
+  } catch (error) {
+    return Promise.reject(lifecycle.mapError(error));
+  }
 }
 
-async function readLimitedText(response: Response): Promise<string> {
+function cancelResponseBody(response: Response): void {
+  if (response.body && !response.body.locked) {
+    void response.body.cancel().catch(() => {});
+  }
+}
+
+async function readLimitedText(response: Response, lifecycle: RequestLifecycle): Promise<string> {
   const contentLength = response.headers.get("Content-Length");
   if (contentLength) {
     const parsedLength = Number(contentLength);
     if (Number.isFinite(parsedLength) && parsedLength > MAX_CATALOG_BYTES) {
+      cancelResponseBody(response);
       throw new OpdsError("too-large");
     }
   }
@@ -189,7 +232,7 @@ async function readLimitedText(response: Response): Promise<string> {
     let received = 0;
     try {
       for (;;) {
-        const { done, value } = await reader.read();
+        const { done, value } = await lifecycle.race(reader.read());
         if (done) break;
         received += value.byteLength;
         if (received > MAX_CATALOG_BYTES) {
@@ -205,21 +248,59 @@ async function readLimitedText(response: Response): Promise<string> {
       chunks.push(decoder.decode());
       return chunks.join("");
     } catch (error) {
-      if (error instanceof OpdsError) throw error;
-      throw new OpdsError("unreachable");
+      void reader.cancel().catch(() => {});
+      throw lifecycle.mapError(error);
     }
   }
 
   let body: string;
   try {
-    body = await response.text();
-  } catch {
-    throw new OpdsError("unreachable");
+    body = await lifecycle.race(response.text());
+  } catch (error) {
+    throw lifecycle.mapError(error);
   }
   if (new TextEncoder().encode(body).byteLength > MAX_CATALOG_BYTES) {
     throw new OpdsError("too-large");
   }
   return body;
+}
+
+function wrapAssetResponse(response: Response, lifecycle: RequestLifecycle): Response {
+  if (!response.body) {
+    lifecycle.dispose();
+    return response;
+  }
+
+  const reader = response.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await lifecycle.race(reader.read());
+        if (done) {
+          controller.close();
+          lifecycle.dispose();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (error) {
+        void reader.cancel().catch(() => {});
+        lifecycle.dispose();
+        controller.error(lifecycle.mapError(error));
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        lifecycle.dispose();
+      }
+    },
+  });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 function getMediaType(response: Response): string {
@@ -283,12 +364,16 @@ async function expandTemplate(
 export class OpdsClient {
   constructor(private readonly platform: OpdsFetchPlatform) {}
 
-  private async request(url: string, options: RequestOptions): Promise<RequestResult> {
-    const authOrigin = getAuthOrigin(options.credentials, options.catalogOrigin);
+  private async request(
+    url: string,
+    options: RequestOptions,
+    lifecycle: RequestLifecycle,
+  ): Promise<RequestResult> {
+    const authOrigin = getAuthOrigin(options.credentials);
     let current = checkUrl(url);
 
     for (let redirects = 0; ; redirects += 1) {
-      if (options.signal?.aborted) throw new OpdsError("cancelled");
+      lifecycle.throwIfAborted();
       const headers = getHeaders(current, options.accept, options.credentials, authOrigin);
       let response: Response;
       try {
@@ -301,18 +386,25 @@ export class OpdsClient {
             timeoutMs: REQUEST_TIMEOUT_MS,
             responseType: options.responseType,
           },
-          options.signal,
+          lifecycle,
         );
       } catch (error) {
-        throw asOpdsError(error, options.signal);
+        throw lifecycle.mapError(error);
       }
 
       const authenticationError = authError(response);
-      if (authenticationError) throw authenticationError;
+      if (authenticationError) {
+        cancelResponseBody(response);
+        throw authenticationError;
+      }
       if (!REDIRECT_STATUSES.has(response.status)) {
-        if (!response.ok) throw new OpdsError("unreachable");
+        if (!response.ok) {
+          cancelResponseBody(response);
+          throw new OpdsError("unreachable");
+        }
         return { response, finalUrl: current.href };
       }
+      cancelResponseBody(response);
       if (redirects >= MAX_REDIRECTS) throw new OpdsError("invalid-catalog");
 
       const location = response.headers.get("Location");
@@ -332,20 +424,31 @@ export class OpdsClient {
   }
 
   async open(url: string, credentials?: OpdsCredentials, signal?: AbortSignal): Promise<OpdsFeed> {
-    const { response, finalUrl } = await this.request(url, {
-      accept: CATALOG_ACCEPT,
-      responseType: "text",
-      credentials,
-      signal,
-    });
-    const contentType = getMediaType(response);
-    if (!CATALOG_MEDIA_TYPES.has(contentType)) throw new OpdsError("invalid-catalog");
-    const body = await readLimitedText(response);
+    const lifecycle = new RequestLifecycle(signal);
     try {
-      return parseOpdsDocument(body, contentType, finalUrl);
-    } catch (error) {
-      if (error instanceof OpdsError) throw error;
-      throw new OpdsError("invalid-catalog");
+      const { response, finalUrl } = await this.request(
+        url,
+        {
+          accept: CATALOG_ACCEPT,
+          responseType: "text",
+          credentials,
+        },
+        lifecycle,
+      );
+      const contentType = getMediaType(response);
+      if (!CATALOG_MEDIA_TYPES.has(contentType)) {
+        cancelResponseBody(response);
+        throw new OpdsError("invalid-catalog");
+      }
+      const body = await readLimitedText(response, lifecycle);
+      try {
+        return parseOpdsDocument(body, contentType, finalUrl);
+      } catch (error) {
+        if (error instanceof OpdsError) throw error;
+        throw new OpdsError("invalid-catalog");
+      }
+    } finally {
+      lifecycle.dispose();
     }
   }
 
@@ -360,27 +463,36 @@ export class OpdsClient {
       return this.open(searchUrl, credentials, signal);
     }
 
-    const { response, finalUrl } = await this.request(descriptor.descriptorUrl, {
-      accept: OPENSEARCH_ACCEPT,
-      responseType: "text",
-      credentials,
-      signal,
-    });
-    if (!OPENSEARCH_MEDIA_TYPES.has(getMediaType(response))) {
-      throw new OpdsError("invalid-catalog");
-    }
-    const search = parseOpenSearch(await readLimitedText(response));
-    if (!search.params.some((param) => param.name === "searchTerms" && !param.ns)) {
-      throw new OpdsError("invalid-catalog");
-    }
+    const lifecycle = new RequestLifecycle(signal);
     let searchUrl: string;
     try {
-      searchUrl = new URL(
-        search.search(new Map([[null, new Map([["searchTerms", query]])]])),
-        finalUrl,
-      ).href;
-    } catch {
-      throw new OpdsError("invalid-catalog");
+      const { response, finalUrl } = await this.request(
+        descriptor.descriptorUrl,
+        {
+          accept: OPENSEARCH_ACCEPT,
+          responseType: "text",
+          credentials,
+        },
+        lifecycle,
+      );
+      if (!OPENSEARCH_MEDIA_TYPES.has(getMediaType(response))) {
+        cancelResponseBody(response);
+        throw new OpdsError("invalid-catalog");
+      }
+      const search = parseOpenSearch(await readLimitedText(response, lifecycle));
+      if (!search.params.some((param) => param.name === "searchTerms" && !param.ns)) {
+        throw new OpdsError("invalid-catalog");
+      }
+      try {
+        searchUrl = new URL(
+          search.search(new Map([[null, new Map([["searchTerms", query]])]])),
+          finalUrl,
+        ).href;
+      } catch {
+        throw new OpdsError("invalid-catalog");
+      }
+    } finally {
+      lifecycle.dispose();
     }
     return this.open(searchUrl, credentials, signal);
   }
@@ -391,13 +503,28 @@ export class OpdsClient {
     credentials?: OpdsCredentials,
     signal?: AbortSignal,
   ): Promise<Response> {
-    const { response } = await this.request(url, {
-      accept: "*/*",
-      responseType: "arraybuffer",
-      credentials,
-      catalogOrigin,
-      signal,
-    });
-    return response;
+    const normalizedCatalogOrigin = normalizeAllowedOrigin(catalogOrigin);
+    if (
+      credentials &&
+      normalizeAllowedOrigin(credentials.catalogOrigin) !== normalizedCatalogOrigin
+    ) {
+      throw new OpdsError("insecure-url");
+    }
+    const lifecycle = new RequestLifecycle(signal);
+    try {
+      const { response } = await this.request(
+        url,
+        {
+          accept: "*/*",
+          responseType: "arraybuffer",
+          credentials,
+        },
+        lifecycle,
+      );
+      return wrapAssetResponse(response, lifecycle);
+    } catch (error) {
+      lifecycle.dispose();
+      throw error;
+    }
   }
 }

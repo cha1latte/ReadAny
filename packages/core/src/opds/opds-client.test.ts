@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchOptions } from "../services/platform";
 import { OpdsClient, type OpdsCredentials, type OpdsError } from "./opds-client";
 
@@ -58,6 +58,32 @@ function fakePlatform(
 function authorization(call: FetchCall): string | null {
   return new Headers(call.options?.headers).get("Authorization");
 }
+
+function stalledBodyResponse(contentType = "application/atom+xml") {
+  let startReading: (() => void) | undefined;
+  let cancelled = false;
+  const readingStarted = new Promise<void>((resolve) => {
+    startReading = resolve;
+  });
+  const body = new ReadableStream<Uint8Array>({
+    pull() {
+      startReading?.();
+      return new Promise<void>(() => {});
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  return {
+    response: new Response(body, { headers: { "Content-Type": contentType } }),
+    readingStarted,
+    wasCancelled: () => cancelled,
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 async function expectOpdsError(promise: Promise<unknown>, code: OpdsError["code"]): Promise<void> {
   await expect(promise).rejects.toMatchObject({ name: "OpdsError", code });
@@ -183,6 +209,72 @@ describe("OpdsClient catalog requests", () => {
     expect(platform.calls[0]?.options?.timeoutMs).toBe(15_000);
   });
 
+  it("keeps the 15 second timeout active while a catalog body is stalled", async () => {
+    vi.useFakeTimers();
+    const stalled = stalledBodyResponse();
+    const platform = fakePlatform(() => stalled.response);
+    let rejection: unknown;
+    const request = new OpdsClient(platform)
+      .open("https://catalog.test/feed.xml")
+      .catch((error: unknown) => {
+        rejection = error;
+      });
+    await stalled.readingStarted;
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await Promise.resolve();
+
+    expect(rejection).toMatchObject({ name: "OpdsError", code: "unreachable" });
+    expect(stalled.wasCancelled()).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    await request;
+  });
+
+  it("keeps user cancellation active while a catalog body is stalled", async () => {
+    const stalled = stalledBodyResponse();
+    const platform = fakePlatform(() => stalled.response);
+    const controller = new AbortController();
+    const request = new OpdsClient(platform).open(
+      "https://catalog.test/feed.xml",
+      undefined,
+      controller.signal,
+    );
+    await stalled.readingStarted;
+
+    controller.abort();
+
+    const outcome = await Promise.race([
+      request.then(
+        () => ({ kind: "resolved" as const }),
+        (error: unknown) => ({ kind: "rejected" as const, error }),
+      ),
+      new Promise<{ kind: "pending" }>((resolve) =>
+        setTimeout(() => resolve({ kind: "pending" }), 0),
+      ),
+    ]);
+    expect(outcome).toMatchObject({
+      kind: "rejected",
+      error: { name: "OpdsError", code: "cancelled" },
+    });
+    expect(stalled.wasCancelled()).toBe(true);
+  });
+
+  it("removes its abort listener and timer after body completion", async () => {
+    vi.useFakeTimers();
+    const platform = fakePlatform(() => response(ATOM));
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+
+    await new OpdsClient(platform).open(
+      "https://catalog.test/feed.xml",
+      undefined,
+      controller.signal,
+    );
+
+    expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("rejects a pre-cancelled request without starting network work", async () => {
     const platform = fakePlatform(() => response(ATOM));
     const controller = new AbortController();
@@ -216,23 +308,24 @@ describe("OpdsClient catalog requests", () => {
   });
 
   it("rejects oversized catalogs from Content-Length without reading the body", async () => {
-    let bodyRead = false;
-    const oversized = response("small", {
-      headers: { "Content-Type": "application/atom+xml", "Content-Length": "5242881" },
-    });
-    Object.defineProperty(oversized, "text", {
-      value: async () => {
-        bodyRead = true;
-        return "small";
+    let cancelled = false;
+    const oversized = new Response(
+      new ReadableStream<Uint8Array>({
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      {
+        headers: { "Content-Type": "application/atom+xml", "Content-Length": "5242881" },
       },
-    });
+    );
     const platform = fakePlatform(() => oversized);
 
     await expectOpdsError(
       new OpdsClient(platform).open("https://catalog.test/feed.xml"),
       "too-large",
     );
-    expect(bodyRead).toBe(false);
+    expect(cancelled).toBe(true);
   });
 
   it("rejects oversized decoded catalog text", async () => {
@@ -292,6 +385,25 @@ describe("OpdsClient catalog requests", () => {
     );
   });
 
+  it("cancels the response stream when the content type is unsupported", async () => {
+    let cancelled = false;
+    const invalid = new Response(
+      new ReadableStream<Uint8Array>({
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      { headers: { "Content-Type": "text/html" } },
+    );
+    const platform = fakePlatform(() => invalid);
+
+    await expectOpdsError(
+      new OpdsClient(platform).open("https://catalog.test/feed.xml"),
+      "invalid-catalog",
+    );
+    expect(cancelled).toBe(true);
+  });
+
   it("maps malformed supported content to invalid-catalog", async () => {
     const platform = fakePlatform(() => response("<not-a-feed />"));
 
@@ -326,6 +438,20 @@ describe("OpdsClient catalog requests", () => {
 });
 
 describe("OpdsClient assets", () => {
+  it("rejects mismatched credential and catalog origins without sending a request", async () => {
+    const platform = fakePlatform(() => response("asset", { headers: {} }));
+
+    await expectOpdsError(
+      new OpdsClient(platform).fetchAsset(
+        "https://other.test/cover.jpg",
+        "https://other.test",
+        credentials,
+      ),
+      "insecure-url",
+    );
+    expect(platform.calls).toHaveLength(0);
+  });
+
   it("sends credentials to cover and acquisition assets only on the exact catalog origin", async () => {
     const platform = fakePlatform(() => response("asset", { headers: {} }));
     const client = new OpdsClient(platform);
@@ -353,6 +479,58 @@ describe("OpdsClient assets", () => {
 
     expect(authorization(platform.calls[0] as FetchCall)).not.toBeNull();
     expect(authorization(platform.calls[1] as FetchCall)).toBeNull();
+  });
+
+  it("keeps user cancellation active while an asset body is being consumed", async () => {
+    const stalled = stalledBodyResponse("application/epub+zip");
+    const platform = fakePlatform(() => stalled.response);
+    const controller = new AbortController();
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+      undefined,
+      controller.signal,
+    );
+    const reading = asset.arrayBuffer();
+    await stalled.readingStarted;
+
+    controller.abort();
+
+    const outcome = await Promise.race([
+      reading.then(
+        () => ({ kind: "resolved" as const }),
+        (error: unknown) => ({ kind: "rejected" as const, error }),
+      ),
+      new Promise<{ kind: "pending" }>((resolve) =>
+        setTimeout(() => resolve({ kind: "pending" }), 0),
+      ),
+    ]);
+    expect(outcome).toMatchObject({
+      kind: "rejected",
+      error: { name: "OpdsError", code: "cancelled" },
+    });
+  });
+
+  it("keeps the timeout active while an asset body is being consumed", async () => {
+    vi.useFakeTimers();
+    const stalled = stalledBodyResponse("application/epub+zip");
+    const platform = fakePlatform(() => stalled.response);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+    let rejection: unknown;
+    const reading = asset.arrayBuffer().catch((error: unknown) => {
+      rejection = error;
+    });
+    await stalled.readingStarted;
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await Promise.resolve();
+
+    expect(rejection).toMatchObject({ name: "OpdsError", code: "unreachable" });
+    expect(vi.getTimerCount()).toBe(0);
+    await reading;
   });
 });
 

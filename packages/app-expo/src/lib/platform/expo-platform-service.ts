@@ -27,6 +27,7 @@ import * as LegacyFS from "expo-file-system/legacy";
 import * as Network from "expo-network";
 import * as SecureStore from "expo-secure-store";
 import * as Sharing from "expo-sharing";
+import type { FetchRequestInit } from "expo/fetch";
 
 /** Simple KV storage keys tracking (SecureStore doesn't have getAllKeys) */
 const KV_KEYS_INDEX = "__readany_kv_keys__";
@@ -285,6 +286,23 @@ export class ExpoPlatformService implements IPlatformService {
     const { allowInsecure, timeoutMs, responseType, onDownloadProgress, ...fetchOptions } =
       options ?? {};
     const effectiveUrl = allowInsecure ? url.replace(/^https:\/\//i, "http://") : url;
+    if (fetchOptions.redirect === "manual") {
+      const { fetch: expoFetch } = await import("expo/fetch");
+      const expoOptions: FetchRequestInit = {
+        body: fetchOptions.body ?? undefined,
+        credentials: fetchOptions.credentials,
+        headers: fetchOptions.headers,
+        integrity: fetchOptions.integrity,
+        keepalive: fetchOptions.keepalive,
+        method: fetchOptions.method,
+        mode: fetchOptions.mode,
+        redirect: fetchOptions.redirect,
+        referrer: fetchOptions.referrer,
+        signal: fetchOptions.signal ?? undefined,
+        window: fetchOptions.window,
+      };
+      return expoFetch(effectiveUrl, expoOptions);
+    }
     const method = fetchOptions?.method?.toUpperCase() || "GET";
 
     // Always use XHR for WebDAV to handle large binary files properly

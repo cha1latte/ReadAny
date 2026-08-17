@@ -15,6 +15,7 @@ import type {
   UpdateInfo,
   WebSocketOptions,
 } from "@readany/core/services";
+import type { ClientOptions } from "@tauri-apps/plugin-http";
 
 const TAURI_LAN_RUNTIME_ERROR =
   "Tauri desktop runtime is required to use the LAN sender. Open the desktop app instead of the browser dev server.";
@@ -192,14 +193,17 @@ export class TauriPlatformService implements IPlatformService {
       timeoutMs: _timeoutMs,
       responseType: _responseType,
       onDownloadProgress: _onDownloadProgress,
+      redirect,
       ...fetchOptions
     } = options ?? {};
-    const tauriOptions = allowInsecure
-      ? {
-          ...fetchOptions,
-          danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
-        } as any
-      : fetchOptions;
+    const browserOptions = redirect ? { ...fetchOptions, redirect } : fetchOptions;
+    const tauriOptions: RequestInit & ClientOptions = {
+      ...fetchOptions,
+      ...(redirect === "manual" ? { maxRedirections: 0 } : {}),
+      ...(allowInsecure
+        ? { danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true } }
+        : {}),
+    };
     try {
       return await tauriFetch(url, tauriOptions);
     } catch (error: unknown) {
@@ -217,7 +221,7 @@ export class TauriPlatformService implements IPlatformService {
         console.warn(
           "[TauriPlatform] tauriFetch failed due to non-ASCII response headers; falling back to native fetch",
         );
-        return globalThis.fetch(url, fetchOptions);
+        return globalThis.fetch(url, browserOptions);
       }
       throw error;
     }

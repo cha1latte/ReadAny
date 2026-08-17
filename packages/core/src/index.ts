@@ -59,6 +59,19 @@ export type {
 } from "./import/webdav-import-types";
 export type { ImportBooksResult, ImportDuplicateIndex } from "./import/import-dedupe";
 
+// OPDS catalogs
+export { parseOpdsDocument } from "./opds/opds-parser";
+export { sanitizeOpdsDescription } from "./opds/opds-sanitize";
+export type {
+  OpdsAcquisition,
+  OpdsFacet,
+  OpdsFeed,
+  OpdsLink,
+  OpdsNavigationItem,
+  OpdsPublication,
+  OpdsSearchDescriptor,
+} from "./opds/opds-types";
+
 // EPUB services
 export { inspectEpubBytes } from "./epub/inspect";
 export type {

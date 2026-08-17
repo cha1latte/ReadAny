@@ -550,6 +550,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      foliate-js:
+        specifier: workspace:*
+        version: link:../foliate-js
       i18next:
         specifier: ^25.8.13
         version: 25.8.18(typescript@5.9.3)

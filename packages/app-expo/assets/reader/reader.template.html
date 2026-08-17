@@ -161,6 +161,8 @@
     </div>
   </div>
 
+  <!-- __READANY_JUSTIFIED_TEXT_INSERT_POINT_6c18f4d2__ -->
+
   <script>
     // ═══════════════════════════════════════════════════════════════
     // ReadAny WebView Reader Bridge
@@ -201,6 +203,7 @@
     let currentFontSize = 16;
     let currentLineHeight = 1.6;
     let currentParagraphSpacing = 8;
+    let currentJustifyBodyText = true;
     let currentFontTheme = 'default';
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
@@ -1806,6 +1809,9 @@
     function applySettings(settings) {
       if (!view || !view.renderer) return;
       const renderer = view.renderer;
+      if (settings.justifyBodyText !== undefined) {
+        currentJustifyBodyText = settings.justifyBodyText !== false;
+      }
       // PDF pages are fixed-layout canvases. Reader font, line-height, custom
       // font and paragraph-spacing rules would move the transparent text layer
       // away from the canvas and render a second, misaligned copy of the text.
@@ -1849,7 +1855,7 @@
           settings.paginatedLayout === 'single' ? 'single' : 'double';
       }
 
-      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined
+      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined || settings.justifyBodyText !== undefined
           || settings.customFontFamily !== undefined || settings.customFontFaceCSS !== undefined || settings.useBookFonts !== undefined) {
         const fontThemes = {
           default: { cjk: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', serif: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif' },
@@ -1964,6 +1970,7 @@
         }
         syncReaderOverrideStylesForAllDocs(themedStyles);
         syncCustomFontStylesForAllDocs(currentCustomFontFaceCSS);
+        syncJustifiedTextForAllDocs();
       }
 
       if (settings.pageMargin != null) {
@@ -2121,6 +2128,19 @@
       for (const content of getRendererContents()) {
         if (!content || !content.doc) continue;
         syncReaderOverrideStylesForDoc(content.doc, css);
+      }
+    }
+
+    function syncJustifiedTextForAllDocs() {
+      const fixedLayout = Boolean(view?.isFixedLayout);
+      for (const content of getRendererContents()) {
+        if (!content?.doc) continue;
+        const unsupportedLayout = fixedLayout || isVerticalDoc(content.doc);
+        globalThis.ReadAnyJustifiedText?.apply(
+          content.doc,
+          currentJustifyBodyText,
+          unsupportedLayout,
+        );
       }
     }
 
@@ -2438,6 +2458,11 @@ a { color: ${primary} !important; }
       }
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
+      globalThis.ReadAnyJustifiedText?.apply(
+        doc,
+        currentJustifyBodyText,
+        verticalDoc || Boolean(view?.isFixedLayout),
+      );
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.webkitUserDrag = 'none';

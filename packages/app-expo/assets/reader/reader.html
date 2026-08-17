@@ -162,6 +162,55 @@
   </div>
 
   <script>
+(function installReadAnyJustifiedText(root) {
+  const MARKER = "data-readany-justify-body";
+  const STYLE_ID = "__readany_justified_text__";
+  const PRESERVED_ALIGNMENTS = new Set([
+    "center",
+    "right",
+    "end",
+    "-webkit-center",
+    "-webkit-right",
+  ]);
+  const EXCLUDED_ANCESTORS =
+    "pre, code, kbd, samp, table, caption, figcaption, form, button, input, textarea, select";
+
+  function shouldJustify(paragraph, unsupportedLayout, view) {
+    if (!paragraph || unsupportedLayout || paragraph.querySelector("br")) return false;
+    if (paragraph.closest(EXCLUDED_ANCESTORS)) return false;
+    const alignment = String(view.getComputedStyle(paragraph).textAlign || "").toLowerCase();
+    return !PRESERVED_ALIGNMENTS.has(alignment);
+  }
+
+  function apply(doc, enabled, unsupportedLayout) {
+    if (!doc || !doc.head) return;
+
+    for (const element of doc.querySelectorAll(`[${MARKER}]`)) {
+      element.removeAttribute(MARKER);
+    }
+    const existingStyle = doc.getElementById(STYLE_ID);
+    if (existingStyle) existingStyle.remove();
+
+    if (!enabled || unsupportedLayout || !doc.defaultView) return;
+
+    for (const paragraph of doc.querySelectorAll("p")) {
+      if (shouldJustify(paragraph, unsupportedLayout, doc.defaultView)) {
+        paragraph.setAttribute(MARKER, "true");
+      }
+    }
+
+    const style = doc.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `[${MARKER}="true"] { text-align: justify !important; text-justify: inter-word; }`;
+    doc.head.appendChild(style);
+  }
+
+  root.ReadAnyJustifiedText = { apply, shouldJustify };
+})(globalThis);
+
+</script>
+
+  <script>
     // ═══════════════════════════════════════════════════════════════
     // ReadAny WebView Reader Bridge
     // Communicates with React Native via postMessage
@@ -201,6 +250,7 @@
     let currentFontSize = 16;
     let currentLineHeight = 1.6;
     let currentParagraphSpacing = 8;
+    let currentJustifyBodyText = true;
     let currentFontTheme = 'default';
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
@@ -1806,6 +1856,9 @@
     function applySettings(settings) {
       if (!view || !view.renderer) return;
       const renderer = view.renderer;
+      if (settings.justifyBodyText !== undefined) {
+        currentJustifyBodyText = settings.justifyBodyText !== false;
+      }
       // PDF pages are fixed-layout canvases. Reader font, line-height, custom
       // font and paragraph-spacing rules would move the transparent text layer
       // away from the canvas and render a second, misaligned copy of the text.
@@ -1849,7 +1902,7 @@
           settings.paginatedLayout === 'single' ? 'single' : 'double';
       }
 
-      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined
+      if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined || settings.justifyBodyText !== undefined
           || settings.customFontFamily !== undefined || settings.customFontFaceCSS !== undefined || settings.useBookFonts !== undefined) {
         const fontThemes = {
           default: { cjk: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', serif: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif' },
@@ -1964,6 +2017,7 @@
         }
         syncReaderOverrideStylesForAllDocs(themedStyles);
         syncCustomFontStylesForAllDocs(currentCustomFontFaceCSS);
+        syncJustifiedTextForAllDocs();
       }
 
       if (settings.pageMargin != null) {
@@ -2121,6 +2175,19 @@
       for (const content of getRendererContents()) {
         if (!content || !content.doc) continue;
         syncReaderOverrideStylesForDoc(content.doc, css);
+      }
+    }
+
+    function syncJustifiedTextForAllDocs() {
+      const fixedLayout = Boolean(view?.isFixedLayout);
+      for (const content of getRendererContents()) {
+        if (!content?.doc) continue;
+        const unsupportedLayout = fixedLayout || isVerticalDoc(content.doc);
+        globalThis.ReadAnyJustifiedText?.apply(
+          content.doc,
+          currentJustifyBodyText,
+          unsupportedLayout,
+        );
       }
     }
 
@@ -2438,6 +2505,11 @@ a { color: ${primary} !important; }
       }
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
+      globalThis.ReadAnyJustifiedText?.apply(
+        doc,
+        currentJustifyBodyText,
+        verticalDoc || Boolean(view?.isFixedLayout),
+      );
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.webkitUserDrag = 'none';

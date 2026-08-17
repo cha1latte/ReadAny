@@ -45,6 +45,7 @@ export function OpdsCatalogFormDialog({
   const [password, setPassword] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [renderedOpenGeneration, setRenderedOpenGeneration] = useState(0);
   const [confirmingLocalHttp, setConfirmingLocalHttp] = useState(false);
   const [error, setError] = useState<string>();
   const openGeneration = useRef(0);
@@ -65,6 +66,7 @@ export function OpdsCatalogFormDialog({
     }
     if (!opening) return;
     openGeneration.current += 1;
+    setRenderedOpenGeneration(openGeneration.current);
     setName(catalog?.name ?? "");
     setUrl(catalog?.url ?? "");
     setAuth(catalog?.auth ?? "anonymous");
@@ -82,6 +84,8 @@ export function OpdsCatalogFormDialog({
     (auth === "anonymous" ||
       (username.trim().length > 0 && (password.length > 0 || hasPassword))) &&
     !submitting;
+  const savingCurrentOpen =
+    submitting && activeSave.current?.openGeneration === renderedOpenGeneration;
 
   const persist = async () => {
     if (!canSubmit || activeSave.current) return;
@@ -151,22 +155,22 @@ export function OpdsCatalogFormDialog({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && submitting) return;
+        if (!nextOpen && savingCurrentOpen) return;
         onOpenChange(nextOpen);
       }}
     >
       <DialogContent
         closeLabel={t("library.opds.close")}
-        closeDisabled={submitting}
-        aria-busy={submitting}
+        closeDisabled={savingCurrentOpen}
+        aria-busy={savingCurrentOpen}
         onEscapeKeyDown={(event) => {
-          if (submitting) event.preventDefault();
+          if (savingCurrentOpen) event.preventDefault();
         }}
         onPointerDownOutside={(event) => {
-          if (submitting) event.preventDefault();
+          if (savingCurrentOpen) event.preventDefault();
         }}
         onInteractOutside={(event) => {
-          if (submitting) event.preventDefault();
+          if (savingCurrentOpen) event.preventDefault();
         }}
         className="max-h-[calc(100vh-32px)] w-[min(92vw,620px)] max-w-none overflow-y-auto"
       >
@@ -190,6 +194,7 @@ export function OpdsCatalogFormDialog({
               <Input
                 id="opds-catalog-name"
                 autoFocus
+                disabled={savingCurrentOpen}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={t("library.opds.form.namePlaceholder")}
@@ -206,6 +211,7 @@ export function OpdsCatalogFormDialog({
                 inputMode="url"
                 autoCapitalize="none"
                 autoCorrect="off"
+                disabled={savingCurrentOpen}
                 value={url}
                 onChange={(event) => setUrl(event.target.value)}
                 placeholder="https://catalog.example.com/opds"
@@ -219,7 +225,9 @@ export function OpdsCatalogFormDialog({
               {(["anonymous", "basic"] as const).map((mode) => (
                 <label
                   key={mode}
-                  className={`cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
+                    savingCurrentOpen ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                  } ${
                     auth === mode
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -231,6 +239,7 @@ export function OpdsCatalogFormDialog({
                     name="opds-authentication"
                     value={mode}
                     checked={auth === mode}
+                    disabled={savingCurrentOpen}
                     onChange={() => setAuth(mode)}
                   />
                   {t(`library.opds.form.${mode}`)}
@@ -247,6 +256,7 @@ export function OpdsCatalogFormDialog({
                   id="opds-catalog-username"
                   autoCapitalize="none"
                   autoCorrect="off"
+                  disabled={savingCurrentOpen}
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                 />
@@ -256,6 +266,7 @@ export function OpdsCatalogFormDialog({
                 <PasswordInput
                   id="opds-catalog-password"
                   autoComplete="new-password"
+                  disabled={savingCurrentOpen}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   showPasswordLabel={t("library.opds.showPassword")}
@@ -286,6 +297,7 @@ export function OpdsCatalogFormDialog({
             </div>
             <Switch
               checked={enabled}
+              disabled={savingCurrentOpen}
               onCheckedChange={setEnabled}
               aria-label={t("library.opds.form.enabled")}
             />
@@ -305,6 +317,7 @@ export function OpdsCatalogFormDialog({
                       type="button"
                       size="sm"
                       variant="outline"
+                      disabled={savingCurrentOpen}
                       onClick={() => setConfirmingLocalHttp(false)}
                     >
                       {t("library.opds.cancel")}
@@ -313,7 +326,7 @@ export function OpdsCatalogFormDialog({
                       type="button"
                       size="sm"
                       onClick={() => void persist()}
-                      disabled={submitting}
+                      disabled={savingCurrentOpen}
                     >
                       {t("library.opds.continue")}
                     </Button>
@@ -337,7 +350,7 @@ export function OpdsCatalogFormDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={submitting}
+              disabled={savingCurrentOpen}
             >
               {t("library.opds.cancel")}
             </Button>

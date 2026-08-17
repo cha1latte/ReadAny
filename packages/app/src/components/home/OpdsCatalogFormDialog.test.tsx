@@ -107,22 +107,81 @@ describe("OpdsCatalogFormDialog", () => {
     expect(onSaved).toHaveBeenCalledOnce();
   });
 
-  it("blocks every user dismissal and concurrent add while a save is pending", async () => {
+  it("locks every mutable control and dismissal path during a current-generation save", async () => {
     const firstSave = deferred<{ id: string }>();
     const addCatalog = vi.fn(() => firstSave.promise);
     renderControlledForm({ store: { addCatalog } });
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("library.opds.form.name"), "Pending shelf");
-    await user.type(screen.getByLabelText("library.opds.form.url"), "https://catalog.test/pending");
+    const name = screen.getByLabelText("library.opds.form.name") as HTMLInputElement;
+    const url = screen.getByLabelText("library.opds.form.url") as HTMLInputElement;
+    await user.type(name, "Pending shelf");
+    await user.type(url, "http://localhost:8080/opds");
+    await user.click(screen.getByRole("radio", { name: "library.opds.form.basic" }));
+    const username = screen.getByLabelText("library.opds.form.username") as HTMLInputElement;
+    const password = screen.getByLabelText("library.opds.form.password") as HTMLInputElement;
+    const reveal = screen.getByRole("button", { name: "library.opds.showPassword" });
+    const enabled = screen.getByRole("switch", {
+      name: "library.opds.form.enabled",
+    }) as HTMLButtonElement;
+    await user.type(username, "reader");
+    await user.type(password, "secret");
     await user.click(screen.getByRole("button", { name: "library.opds.save" }));
+    const warning = screen.getByRole("alert");
+    const warningCancel = screen.getAllByRole("button", { name: "library.opds.cancel" })[0];
+    const continueSave = screen.getByRole("button", { name: "library.opds.continue" });
+    await user.click(continueSave);
 
     const dialog = screen.getByRole("dialog", { name: "library.opds.form.addTitle" });
     const save = screen.getByRole("button", { name: "library.opds.save" });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
+    const footerCancel = screen.getAllByRole("button", { name: "library.opds.cancel" })[1];
+    const close = screen.getByRole("button", { name: "library.opds.close" });
+    const anonymous = screen.getByRole("radio", {
+      name: "library.opds.form.anonymous",
+    }) as HTMLInputElement;
+    const basic = screen.getByRole("radio", {
+      name: "library.opds.form.basic",
+    }) as HTMLInputElement;
+    for (const control of [
+      name,
+      url,
+      anonymous,
+      basic,
+      username,
+      password,
+      reveal,
+      enabled,
+      warningCancel,
+      continueSave,
+      footerCancel,
+      save,
+      close,
+    ]) {
+      expect((control as HTMLButtonElement | HTMLInputElement).disabled).toBe(true);
+    }
     expect(dialog.getAttribute("aria-busy")).toBe("true");
+
+    await user.type(name, " changed");
+    await user.type(url, "/changed");
+    await user.click(anonymous);
+    await user.type(username, "-changed");
+    await user.type(password, "-changed");
+    await user.click(reveal);
+    await user.click(enabled);
+    await user.click(warningCancel);
+    await user.click(continueSave);
+    await user.click(footerCancel);
     fireEvent.submit(dialog.querySelector("form") as HTMLFormElement);
     expect(addCatalog).toHaveBeenCalledOnce();
+    expect(name.value).toBe("Pending shelf");
+    expect(url.value).toBe("http://localhost:8080/opds");
+    expect(anonymous.checked).toBe(false);
+    expect(basic.checked).toBe(true);
+    expect(username.value).toBe("reader");
+    expect(password.value).toBe("secret");
+    expect(password.type).toBe("password");
+    expect(enabled.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("alert")).toBe(warning);
 
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog", { name: "library.opds.form.addTitle" })).toBeTruthy();
@@ -130,7 +189,7 @@ describe("OpdsCatalogFormDialog", () => {
     fireEvent.pointerDown(overlay, { button: 0, pointerType: "mouse" });
     fireEvent.click(overlay);
     expect(screen.getByRole("dialog", { name: "library.opds.form.addTitle" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "library.opds.close" }));
+    await user.click(close);
     expect(screen.getByRole("dialog", { name: "library.opds.form.addTitle" })).toBeTruthy();
 
     firstSave.resolve({ id: "added" });
@@ -170,7 +229,9 @@ describe("OpdsCatalogFormDialog", () => {
     harness.forceOpen(false);
     expect(screen.queryByRole("dialog")).toBeNull();
     harness.forceOpen(true);
-    await screen.findByRole("dialog", { name: "library.opds.form.editTitle" });
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: "library.opds.form.editTitle",
+    });
     const reopenedName = screen.getByLabelText("library.opds.form.name");
     const reopenedPassword = screen.getByLabelText("library.opds.form.password");
     await user.clear(reopenedName);
@@ -178,6 +239,9 @@ describe("OpdsCatalogFormDialog", () => {
     await user.type(reopenedPassword, "second-secret");
 
     const reopenedSave = screen.getByRole("button", { name: "library.opds.save" });
+    expect((reopenedName as HTMLInputElement).disabled).toBe(false);
+    expect((reopenedPassword as HTMLInputElement).disabled).toBe(false);
+    expect(reopenedDialog.getAttribute("aria-busy")).toBe("false");
     expect((reopenedSave as HTMLButtonElement).disabled).toBe(true);
     fireEvent.submit(reopenedSave.closest("form") as HTMLFormElement);
     expect(updateCatalog).toHaveBeenCalledOnce();

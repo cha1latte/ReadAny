@@ -1,9 +1,13 @@
 import { OpdsClient, type OpdsCredentials } from "@readany/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const tauriFetch = vi.hoisted(() => vi.fn());
+const { tauriFetch, tauriInvoke } = vi.hoisted(() => ({
+  tauriFetch: vi.fn(),
+  tauriInvoke: vi.fn(),
+}));
 
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch: tauriFetch }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: tauriInvoke }));
 
 import { TauriPlatformService } from "./tauri-platform-service";
 
@@ -106,5 +110,32 @@ describe("TauriPlatformService manual redirect contract", () => {
       new OpdsClient(new TauriPlatformService()).open("https://catalog.test/feed.xml", credentials),
     ).rejects.toMatchObject({ code: "insecure-url" });
     expect(tauriFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TauriPlatformService secret contract", () => {
+  beforeEach(() => {
+    tauriInvoke.mockReset();
+  });
+
+  it("invokes the three OS credential commands without routing through localStorage", async () => {
+    tauriInvoke.mockResolvedValueOnce("stored-password").mockResolvedValue(undefined);
+    const localStorageSet = vi.fn();
+    vi.stubGlobal("localStorage", { setItem: localStorageSet });
+    const service = new TauriPlatformService();
+
+    await expect(service.secretGetItem("opds.catalog.one.password")).resolves.toBe(
+      "stored-password",
+    );
+    await service.secretSetItem("opds.catalog.one.password", "new-password");
+    await service.secretRemoveItem("opds.catalog.one.password");
+
+    expect(tauriInvoke.mock.calls).toEqual([
+      ["secret_get", { key: "opds.catalog.one.password" }],
+      ["secret_set", { key: "opds.catalog.one.password", value: "new-password" }],
+      ["secret_remove", { key: "opds.catalog.one.password" }],
+    ]);
+    expect(localStorageSet).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

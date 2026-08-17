@@ -299,6 +299,23 @@ export class TauriPlatformService implements IPlatformService {
     }
   }
 
+  // ---- Secret Storage (OS credential store via Tauri commands) ----
+
+  async secretGetItem(key: string): Promise<string | null> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<string | null>("secret_get", { key });
+  }
+
+  async secretSetItem(key: string, value: string): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("secret_set", { key, value });
+  }
+
+  async secretRemoveItem(key: string): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("secret_remove", { key });
+  }
+
   // ---- KV Storage (backed by localStorage on desktop/web) ----
 
   async kvGetItem(key: string): Promise<string | null> {

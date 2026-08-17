@@ -60,6 +60,18 @@ export type {
 export type { ImportBooksResult, ImportDuplicateIndex } from "./import/import-dedupe";
 
 // OPDS catalogs
+export {
+  OPDS_BUILT_IN_CATALOGS,
+  OPDS_CATALOG_STORAGE_KEY,
+  OpdsCatalogStore,
+  opdsCatalogSecretKey,
+  type OpdsCatalog,
+  type OpdsCatalogAuth,
+  type OpdsCatalogInput,
+  type OpdsCatalogStorage,
+  type OpdsCatalogUpdate,
+  type OpdsPasswordStorage,
+} from "./opds/opds-catalog-store";
 export { OpdsClient, OpdsError, type OpdsAssetResponse } from "./opds/opds-client";
 export { parseOpdsDocument } from "./opds/opds-parser";
 export { classifyOpdsUrl } from "./opds/opds-security";

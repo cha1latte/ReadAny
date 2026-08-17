@@ -690,6 +690,20 @@ export class ExpoPlatformService implements IPlatformService {
     return 0;
   }
 
+  // ---- Secret Storage (direct Expo SecureStore boundary; not indexed as general KV) ----
+
+  async secretGetItem(key: string): Promise<string | null> {
+    return SecureStore.getItemAsync(key);
+  }
+
+  async secretSetItem(key: string, value: string): Promise<void> {
+    await SecureStore.setItemAsync(key, value);
+  }
+
+  async secretRemoveItem(key: string): Promise<void> {
+    await SecureStore.deleteItemAsync(key);
+  }
+
   // ---- KV Storage (backed by expo-secure-store) ----
 
   private async _getKeysIndex(): Promise<string[]> {

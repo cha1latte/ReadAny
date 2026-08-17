@@ -1,7 +1,12 @@
 import { OpdsClient, type OpdsCredentials } from "@readany/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const expoFetch = vi.hoisted(() => vi.fn());
+const { expoFetch, secureDelete, secureGet, secureSet } = vi.hoisted(() => ({
+  expoFetch: vi.fn(),
+  secureDelete: vi.fn(),
+  secureGet: vi.fn(),
+  secureSet: vi.fn(),
+}));
 
 vi.mock("expo/fetch", () => ({ fetch: expoFetch }));
 vi.mock("@readany/core/i18n", () => ({ default: { t: (key: string) => key } }));
@@ -15,7 +20,11 @@ vi.mock("expo-file-system", () => ({
 }));
 vi.mock("expo-file-system/legacy", () => ({}));
 vi.mock("expo-network", () => ({}));
-vi.mock("expo-secure-store", () => ({}));
+vi.mock("expo-secure-store", () => ({
+  deleteItemAsync: secureDelete,
+  getItemAsync: secureGet,
+  setItemAsync: secureSet,
+}));
 vi.mock("expo-sharing", () => ({}));
 
 import { ExpoPlatformService } from "./expo-platform-service";
@@ -292,5 +301,29 @@ describe("ExpoPlatformService standards fetch contract", () => {
     expect(asset.url).toBe("https://catalog.test/final-book.epub");
     expect(asset.redirected).toBe(true);
     expect(signalForCall().aborted).toBe(false);
+  });
+});
+
+describe("ExpoPlatformService secret contract", () => {
+  beforeEach(() => {
+    secureDelete.mockReset();
+    secureGet.mockReset();
+    secureSet.mockReset();
+  });
+
+  it("delegates secrets directly to SecureStore without the general KV index", async () => {
+    secureGet.mockResolvedValue("stored-password");
+    const service = new ExpoPlatformService();
+
+    await expect(service.secretGetItem("opds.catalog.one.password")).resolves.toBe(
+      "stored-password",
+    );
+    await service.secretSetItem("opds.catalog.one.password", "new-password");
+    await service.secretRemoveItem("opds.catalog.one.password");
+
+    expect(secureGet).toHaveBeenCalledWith("opds.catalog.one.password");
+    expect(secureSet).toHaveBeenCalledWith("opds.catalog.one.password", "new-password");
+    expect(secureDelete).toHaveBeenCalledWith("opds.catalog.one.password");
+    expect(secureSet).not.toHaveBeenCalledWith("__readany_kv_keys__", expect.anything());
   });
 });

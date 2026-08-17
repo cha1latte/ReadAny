@@ -117,6 +117,12 @@ export interface IPlatformService {
   kvRemoveItem(key: string): Promise<void>;
   kvGetAllKeys(): Promise<string[]>;
 
+  // ---- Secret Storage (device-local OS credential storage) ----
+  // Secrets are intentionally separate from general KV persistence and are never synced.
+  secretGetItem?(key: string): Promise<string | null>;
+  secretSetItem?(key: string, value: string): Promise<void>;
+  secretRemoveItem?(key: string): Promise<void>;
+
   // ---- Clipboard ----
   // Web: navigator.clipboard, RN: expo-clipboard
   copyToClipboard(content: string): Promise<void>;

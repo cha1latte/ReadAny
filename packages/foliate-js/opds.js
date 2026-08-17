@@ -143,8 +143,8 @@ export const getPublication = (entry) => {
   const filterDCEL = filterNS(NS.DC);
   const filterDCTERMS = filterNS(NS.DCTERMS);
   const filterDC = (x) => {
-    const a = filterDCEL(x),
-      b = filterDCTERMS(x);
+    const a = filterDCEL(x);
+    const b = filterDCTERMS(x);
     return (y) => a(y) || b(y);
   };
   const links = children.filter(filter("link")).map(getLink);

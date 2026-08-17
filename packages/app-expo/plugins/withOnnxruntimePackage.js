@@ -11,7 +11,7 @@ const PACKAGE = "add(OnnxruntimePackage())";
  * Register it in MainApplication so NativeModules.Onnxruntime is available.
  */
 module.exports = function withOnnxruntimePackage(config) {
-  config = withMainApplication(config, (cfg) => {
+  const configWithAndroidPackage = withMainApplication(config, (cfg) => {
     if (cfg.modResults.language !== "kt") {
       throw new Error("withOnnxruntimePackage requires Kotlin MainApplication");
     }
@@ -35,16 +35,19 @@ module.exports = function withOnnxruntimePackage(config) {
 
   // The package plugin hardcodes ../node_modules, but pnpm hoists dependencies
   // to the monorepo root, which is three levels above the iOS Podfile.
-  return withDangerousMod(config, ["ios", (cfg) => {
-    const podfilePath = path.join(cfg.modRequest.platformProjectRoot, "Podfile");
-    const source = fs.readFileSync(podfilePath, "utf8");
-    const fixedSource = source.replace(
-      ":path => '../node_modules/onnxruntime-react-native'",
-      ":path => '../../../node_modules/onnxruntime-react-native'",
-    );
-    if (fixedSource !== source) {
-      fs.writeFileSync(podfilePath, fixedSource);
-    }
-    return cfg;
-  }]);
+  return withDangerousMod(configWithAndroidPackage, [
+    "ios",
+    (cfg) => {
+      const podfilePath = path.join(cfg.modRequest.platformProjectRoot, "Podfile");
+      const source = fs.readFileSync(podfilePath, "utf8");
+      const fixedSource = source.replace(
+        ":path => '../node_modules/onnxruntime-react-native'",
+        ":path => '../../../node_modules/onnxruntime-react-native'",
+      );
+      if (fixedSource !== source) {
+        fs.writeFileSync(podfilePath, fixedSource);
+      }
+      return cfg;
+    },
+  ]);
 };

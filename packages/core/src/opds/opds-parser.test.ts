@@ -538,6 +538,46 @@ describe("parseOpdsDocument", () => {
     ).toThrow("Invalid OPDS XML document");
   });
 
+  it.each([
+    [
+      "an unrelated namespace descendant",
+      `<feed xmlns="http://www.w3.org/2005/Atom"><title>News</title><entry><title>Story</title><link href="more.xml" type="application/atom+xml" /><content><link xmlns="urn:not-atom" rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" /></content></entry></feed>`,
+    ],
+    [
+      "a nested Atom link",
+      `<feed xmlns="http://www.w3.org/2005/Atom"><title>News</title><entry><title>Story</title><link href="more.xml" type="application/atom+xml" /><content><link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" /></content></entry></feed>`,
+    ],
+  ])("rejects OPDS evidence from %s", (_name, body) => {
+    expect(() =>
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml"),
+    ).toThrow("Invalid OPDS XML document");
+  });
+
+  it.each([
+    [
+      "navigation",
+      `<entry><title>Books</title><link href="books.xml" type="Application/Atom+XML; PROFILE=&quot;OPDS-CATALOG&quot;; charset=utf-8" /></entry>`,
+    ],
+    [
+      "search",
+      `<link rel="search" href="search.xml" type="Application/OpenSearchDescription+XML; charset=UTF-8" />`,
+    ],
+    [
+      "facet",
+      `<link rel="http://opds-spec.org/facet" href="fiction.xml" title="Fiction" opds:facetGroup="Genre" />`,
+    ],
+    [
+      "acquisition",
+      `<entry><title>Book</title><link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip" /></entry>`,
+    ],
+  ])("accepts a valid Atom OPDS %s feed", (_name, evidence) => {
+    const body = `<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog"><title>Catalog</title>${evidence}</feed>`;
+
+    expect(
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml").title,
+    ).toBe("Catalog");
+  });
+
   it("preserves distinct Atom IDs when grouped entries share an acquisition URL", () => {
     const body = `<feed xmlns="http://www.w3.org/2005/Atom">
   <title>Grouped catalog</title>

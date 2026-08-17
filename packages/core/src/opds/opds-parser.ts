@@ -488,6 +488,39 @@ function hasOnlyNamespaceLessAtomStructure(root: Element): boolean {
     );
 }
 
+function parseMediaType(value: string): { type: string; parameters: Map<string, string> } {
+  const [rawType = "", ...rawParameters] = value.split(";");
+  const parameters = new Map<string, string>();
+  for (const parameter of rawParameters) {
+    const separator = parameter.indexOf("=");
+    if (separator < 0) continue;
+    const name = parameter.slice(0, separator).trim().toLowerCase();
+    const rawValue = parameter.slice(separator + 1).trim();
+    const unquoted =
+      (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+      (rawValue.startsWith("'") && rawValue.endsWith("'"))
+        ? rawValue.slice(1, -1)
+        : rawValue;
+    parameters.set(name, unquoted.trim().toLowerCase());
+  }
+  return { type: rawType.trim().toLowerCase(), parameters };
+}
+
+function getDirectAtomLinks(root: Element): Element[] {
+  const namespace = root.namespaceURI || null;
+  const belongsToFeed = (element: Element, localName: string) =>
+    element.localName === localName && (element.namespaceURI || null) === namespace;
+  const feedChildren = getElementChildren(root);
+  return [
+    ...feedChildren.filter((child) => belongsToFeed(child, "link")),
+    ...feedChildren
+      .filter((child) => belongsToFeed(child, "entry"))
+      .flatMap((entry) =>
+        getElementChildren(entry).filter((child) => belongsToFeed(child, "link")),
+      ),
+  ];
+}
+
 function parseXml(body: string, documentUrl: string): OpdsFeed {
   const errors: string[] = [];
   const document = new DOMParser({
@@ -511,14 +544,14 @@ function parseXml(body: string, documentUrl: string): OpdsFeed {
     throw new Error("Invalid OPDS XML document");
   }
 
-  const hasOpdsSemantics = Array.from(root.getElementsByTagName("link")).some((link) => {
+  const hasOpdsSemantics = getDirectAtomLinks(root).some((link) => {
     const rel = (link.getAttribute("rel") ?? "").trim().split(/\s+/).filter(Boolean);
-    const type = (link.getAttribute("type") ?? "").toLowerCase();
+    const media = parseMediaType(link.getAttribute("type") ?? "");
     return (
       classifyOpdsAcquisitionRelation(rel) !== undefined ||
-      (type.includes("application/atom+xml") &&
-        /(?:^|;)\s*profile\s*=\s*["']?opds-catalog/i.test(type)) ||
-      (rel.includes("search") && type.includes("application/opensearchdescription+xml")) ||
+      (media.type === "application/atom+xml" &&
+        media.parameters.get("profile") === "opds-catalog") ||
+      (rel.includes("search") && media.type === "application/opensearchdescription+xml") ||
       rel.includes("http://opds-spec.org/facet")
     );
   });

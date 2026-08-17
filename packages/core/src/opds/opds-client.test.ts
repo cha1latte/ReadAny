@@ -22,6 +22,37 @@ const OPENSEARCH = `<?xml version="1.0"?>
   <Url type="application/atom+xml;profile=opds-catalog" template="https://catalog.test/search?q={searchTerms}" />
 </OpenSearchDescription>`;
 
+const GUTENBERG_OPENSEARCH = `<?xml version="1.0" encoding="UTF-8"?>
+
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+   <LongName>Project Gutenberg</LongName>
+   <ShortName>Gutenberg</ShortName>
+   <Description>Search the Project Gutenberg ebook catalog.</Description>
+   <Tags>free ebooks books public domain</Tags>
+   <Developer>Marcello Perathoner</Developer>
+   <Contact>webmaster@gutenberg.org</Contact>
+
+   <Url type="text/html"
+        template="http://www.gutenberg.org/ebooks/search/?query={searchTerms}"/>
+
+   <Url type="application/atom+xml"
+        template="http://m.gutenberg.org/ebooks/search.opds/?query={searchTerms}"/>
+
+   <Url type="application/x-suggestions+json"
+	rel="suggestions"
+        template="http://www.gutenberg.org/ebooks/suggest/?query={searchTerms}"/>
+
+   <Query role="example" searchTerms="shakespeare hamlet" />
+   <Query role="example" searchTerms="doyle detective" />
+   <Query role="example" searchTerms="love stories" />
+
+   <Attribution>Search Data Copyright 1971-2012, Project Gutenberg, All Rights Reserved.</Attribution>
+   <SyndicationRight>open</SyndicationRight>
+   <Language>en-us</Language>
+   <OutputEncoding>UTF-8</OutputEncoding>
+   <InputEncoding>UTF-8</InputEncoding>
+</OpenSearchDescription>`;
+
 const credentials: OpdsCredentials = {
   username: "reader",
   password: "secret-password",
@@ -940,10 +971,9 @@ describe("OpdsClient assets", () => {
 
 describe("OpdsClient search", () => {
   it("upgrades Gutenberg-style public HTTP search templates advertised by HTTPS", async () => {
-    const gutenbergDescriptor = `<?xml version="1.0"?><OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Gutenberg</ShortName><Url type="application/atom+xml;profile=opds-catalog" template="http://m.gutenberg.org/ebooks/search.opds/?query={searchTerms}" /></OpenSearchDescription>`;
     const platform = fakePlatform((url) => {
       if (url === "https://www.gutenberg.org/catalog/osd-books.xml") {
-        return response(gutenbergDescriptor, {
+        return response(GUTENBERG_OPENSEARCH, {
           headers: { "Content-Type": "application/opensearchdescription+xml" },
         });
       }
@@ -968,6 +998,73 @@ describe("OpdsClient search", () => {
     ]);
   });
 
+  it("prefers OPDS JSON and Atom search URLs over generic XML", async () => {
+    const descriptor = `<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+      <ShortName>Ranked search</ShortName>
+      <Url type="application/xml" template="https://catalog.test/generic?q={searchTerms}" />
+      <Url type="application/atom+xml" template="https://catalog.test/atom?q={searchTerms}" />
+      <Url type="application/opds+json" template="https://catalog.test/json?q={searchTerms}" />
+    </OpenSearchDescription>`;
+    const opdsJson = JSON.stringify({
+      metadata: { title: "JSON results" },
+      links: [{ rel: "self", href: "https://catalog.test/json?q=books" }],
+      navigation: [{ title: "More", href: "https://catalog.test/more" }],
+    });
+    const platform = fakePlatform((url) => {
+      if (url === "https://catalog.test/open-search.xml") {
+        return response(descriptor, {
+          headers: { "Content-Type": "application/opensearchdescription+xml" },
+        });
+      }
+      if (url === "https://catalog.test/json?q=books") {
+        return response(opdsJson, { headers: { "Content-Type": "application/opds+json" } });
+      }
+      throw new Error(`Unexpected test URL: ${url}`);
+    });
+
+    const feed = await new OpdsClient(platform).search(
+      { kind: "openSearch", descriptorUrl: "https://catalog.test/open-search.xml" },
+      "books",
+    );
+
+    expect(feed.title).toBe("JSON results");
+    expect(platform.calls.map((call) => call.url)).toEqual([
+      "https://catalog.test/open-search.xml",
+      "https://catalog.test/json?q=books",
+    ]);
+  });
+
+  it.each([
+    [
+      "HTML only",
+      `<Url type="text/html" template="https://catalog.test/search?q={searchTerms}" />`,
+    ],
+    [
+      "POST method",
+      `<Url type="application/atom+xml" method="POST" template="https://catalog.test/search?q={searchTerms}" />`,
+    ],
+    [
+      "missing search terms",
+      `<Url type="application/atom+xml" template="https://catalog.test/search?q={query}" />`,
+    ],
+  ])("rejects an OpenSearch descriptor with %s", async (_name, urlElement) => {
+    const descriptor = `<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Bad search</ShortName>${urlElement}</OpenSearchDescription>`;
+    const platform = fakePlatform(() =>
+      response(descriptor, {
+        headers: { "Content-Type": "application/opensearchdescription+xml" },
+      }),
+    );
+
+    await expectOpdsError(
+      new OpdsClient(platform).search(
+        { kind: "openSearch", descriptorUrl: "https://catalog.test/open-search.xml" },
+        "books",
+      ),
+      "invalid-catalog",
+    );
+    expect(platform.calls).toHaveLength(1);
+  });
+
   it("does not upgrade or request a local HTTP search target advertised by HTTPS", async () => {
     const platform = fakePlatform(() => response(ATOM));
 
@@ -982,6 +1079,24 @@ describe("OpdsClient search", () => {
       "insecure-url",
     );
     expect(platform.calls).toHaveLength(0);
+  });
+
+  it("does not upgrade a local HTTP URL selected from an HTTPS OpenSearch descriptor", async () => {
+    const descriptor = `<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Unsafe</ShortName><Url type="application/atom+xml" template="http://127.0.0.1:8080/search?q={searchTerms}" /></OpenSearchDescription>`;
+    const platform = fakePlatform(() =>
+      response(descriptor, {
+        headers: { "Content-Type": "application/opensearchdescription+xml" },
+      }),
+    );
+
+    await expectOpdsError(
+      new OpdsClient(platform).search(
+        { kind: "openSearch", descriptorUrl: "https://remote.test/open-search.xml" },
+        "books",
+      ),
+      "insecure-url",
+    );
+    expect(platform.calls.map((call) => call.url)).toEqual(["https://remote.test/open-search.xml"]);
   });
   it("fetches an advertised OPDS 1 OpenSearch descriptor and encodes the query", async () => {
     const platform = fakePlatform((url) => {

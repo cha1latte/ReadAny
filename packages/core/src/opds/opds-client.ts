@@ -1,5 +1,5 @@
 import { DOMParser } from "@xmldom/xmldom";
-import { getOpenSearch, getSearch } from "foliate-js/opds.js";
+import { getSearch } from "foliate-js/opds.js";
 import type { FetchOptions, IPlatformService, PlatformFetchResponse } from "../services/platform";
 import { parseOpdsDocument } from "./opds-parser";
 import { classifyOpdsUrl } from "./opds-security";
@@ -547,7 +547,7 @@ function removeDoctypeAndEntityReferences(body: string): string {
   return withoutDoctype.replace(/&(?!(?:amp|lt|gt|quot|apos);)[A-Za-z_][\w.:-]*;/g, "");
 }
 
-function parseOpenSearch(body: string): SearchDocument {
+async function parseOpenSearch(body: string): Promise<SearchDocument> {
   const errors: string[] = [];
   const document = new DOMParser({
     errorHandler: {
@@ -556,16 +556,78 @@ function parseOpenSearch(body: string): SearchDocument {
       fatalError: (message) => errors.push(message),
     },
   }).parseFromString(removeDoctypeAndEntityReferences(body), "application/xml");
-  if (errors.length > 0) throw new OpdsError("invalid-catalog");
-  try {
-    const result = getOpenSearch(document as unknown as Document) as Partial<SearchDocument>;
-    if (typeof result.search !== "function" || !Array.isArray(result.params)) {
-      throw new OpdsError("invalid-catalog");
-    }
-    return result as SearchDocument;
-  } catch {
+  const root = document.documentElement;
+  if (
+    errors.length > 0 ||
+    root.localName !== "OpenSearchDescription" ||
+    root.namespaceURI !== "http://a9.com/-/spec/opensearch/1.1/"
+  ) {
     throw new OpdsError("invalid-catalog");
   }
+  const children = Array.from(root.childNodes).filter(
+    (node): node is Element => node.nodeType === 1,
+  );
+  const title = children
+    .find(
+      (element) => element.localName === "ShortName" && element.namespaceURI === root.namespaceURI,
+    )
+    ?.textContent?.trim();
+  const candidates = children
+    .filter((element) => element.localName === "Url" && element.namespaceURI === root.namespaceURI)
+    .flatMap((element, index) => {
+      const method = (element.getAttribute("method") ?? "").trim().toUpperCase() || "GET";
+      const template = element.getAttribute("template")?.trim();
+      const rawType = element.getAttribute("type") ?? "";
+      const [rawMediaType = "", ...rawParameters] = rawType.split(";");
+      const mediaType = rawMediaType.trim().toLowerCase();
+      const parameters = new Map<string, string>();
+      for (const rawParameter of rawParameters) {
+        const separator = rawParameter.indexOf("=");
+        if (separator < 0) continue;
+        const name = rawParameter.slice(0, separator).trim().toLowerCase();
+        const rawValue = rawParameter.slice(separator + 1).trim();
+        const value =
+          (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+          (rawValue.startsWith("'") && rawValue.endsWith("'"))
+            ? rawValue.slice(1, -1)
+            : rawValue;
+        parameters.set(name, value.trim().toLowerCase());
+      }
+      const rank =
+        mediaType === "application/opds+json"
+          ? 4
+          : mediaType === "application/atom+xml" && parameters.get("profile") === "opds-catalog"
+            ? 3
+            : mediaType === "application/atom+xml"
+              ? 2
+              : mediaType === "application/xml" || mediaType === "text/xml"
+                ? 1
+                : 0;
+      return method === "GET" && template && rank > 0
+        ? [{ index, rank, template, type: rawType }]
+        : [];
+    })
+    .sort((left, right) => right.rank - left.rank || left.index - right.index);
+
+  for (const candidate of candidates) {
+    try {
+      const result = (await getSearch({
+        href: candidate.template,
+        title,
+        type: candidate.type,
+      })) as Partial<SearchDocument>;
+      if (
+        typeof result.search === "function" &&
+        Array.isArray(result.params) &&
+        result.params.some((param) => param.name === "searchTerms" && !param.ns)
+      ) {
+        return result as SearchDocument;
+      }
+    } catch {
+      // Try the next advertised catalog representation.
+    }
+  }
+  throw new OpdsError("invalid-catalog");
 }
 
 async function expandTemplate(
@@ -727,7 +789,7 @@ export class OpdsClient {
         discardResponse(response);
         throw new OpdsError("invalid-catalog");
       }
-      const search = parseOpenSearch(await readLimitedText(response, lifecycle));
+      const search = await parseOpenSearch(await readLimitedText(response, lifecycle));
       if (!search.params.some((param) => param.name === "searchTerms" && !param.ns)) {
         throw new OpdsError("invalid-catalog");
       }

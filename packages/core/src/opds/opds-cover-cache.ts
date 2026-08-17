@@ -99,11 +99,17 @@ interface CacheEntry extends OpdsCoverValue {
   lastUsed: number;
 }
 
-interface InFlightEntry {
+interface PendingEntry {
+  readonly url: string;
+  readonly generation: number;
   controller: AbortController;
   promise: Promise<CacheEntry>;
+  resolve(entry: CacheEntry): void;
+  reject(error: Error): void;
   waiters: number;
+  state: "queued" | "loading" | "resolved" | "rejected" | "cancelled";
   releaseReservation(): void;
+  releaseActiveLoad(): void;
 }
 
 export function createOpdsCoverCache({
@@ -112,6 +118,7 @@ export function createOpdsCoverCache({
   maxBytes,
   maxLoadBytes = maxBytes,
   maxConcurrentLoads = 4,
+  maxQueuedLoads = Math.max(1, maxEntries * 4),
 }: {
   load(url: string, signal: AbortSignal): Promise<OpdsCoverValue>;
   maxEntries: number;
@@ -119,69 +126,129 @@ export function createOpdsCoverCache({
   /** Maximum bytes one loader can return; reserved before the transport starts. */
   maxLoadBytes?: number;
   maxConcurrentLoads?: number;
+  /** Maximum number of distinct queued/loading covers. Duplicate URLs share one slot. */
+  maxQueuedLoads?: number;
 }) {
   const entries = new Map<string, CacheEntry>();
-  const inFlight = new Map<string, InFlightEntry>();
+  const retiredEntries = new Set<CacheEntry>();
+  const pendingByUrl = new Map<string, PendingEntry>();
+  const pendingQueue: PendingEntry[] = [];
   let sourceBytes = 0;
+  let retiredBytes = 0;
   let clock = 0;
   let generation = 0;
   let activeLoads = 0;
   let reservedBytes = 0;
-  const queuedLoads: Array<() => void> = [];
 
-  const runQueuedLoads = () => {
-    const limit = Math.max(1, maxConcurrentLoads);
-    while (activeLoads < limit) {
-      const start = queuedLoads.shift();
-      if (!start) return;
-      activeLoads += 1;
-      start();
-    }
-  };
-
-  const scheduleLoad = (url: string, signal: AbortSignal): Promise<OpdsCoverValue> =>
-    new Promise((resolve, reject) => {
-      queuedLoads.push(() => {
-        if (signal.aborted) {
-          activeLoads -= 1;
-          reject(new Error("cancelled"));
-          runQueuedLoads();
-          return;
-        }
-        void load(url, signal)
-          .then(resolve, reject)
-          .finally(() => {
-            activeLoads -= 1;
-            runQueuedLoads();
-          });
-      });
-      runQueuedLoads();
-    });
-
-  const evict = () => {
-    while (entries.size > maxEntries || sourceBytes > maxBytes) {
-      const candidate = [...entries.entries()]
-        .filter(([, entry]) => entry.references === 0)
-        .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
-      if (!candidate) return;
-      entries.delete(candidate[0]);
-      sourceBytes -= candidate[1].byteLength;
-    }
-  };
-
-  const evictForReservation = (bytes: number) => {
-    while (
-      entries.size + inFlight.size >= maxEntries ||
-      sourceBytes + reservedBytes + bytes > maxBytes
-    ) {
-      const candidate = [...entries.entries()]
-        .filter(([, entry]) => entry.references === 0)
-        .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
-      if (!candidate) return false;
-      entries.delete(candidate[0]);
-      sourceBytes -= candidate[1].byteLength;
-    }
+  const evictOldestReleased = () => {
+    const candidate = [...entries.entries()]
+      .filter(([url, entry]) => {
+        const pending = pendingByUrl.get(url);
+        return entry.references === 0 && !(pending?.state === "resolved" && pending.waiters > 0);
+      })
+      .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
+    if (!candidate) return false;
+    entries.delete(candidate[0]);
+    sourceBytes -= candidate[1].byteLength;
     return true;
+  };
+
+  const reserveCapacity = (pending: PendingEntry, bytes: number) => {
+    while (
+      entries.size + retiredEntries.size + activeLoads >= maxEntries ||
+      sourceBytes + retiredBytes + reservedBytes + bytes > maxBytes
+    ) {
+      if (!evictOldestReleased()) return false;
+    }
+    reservedBytes += bytes;
+    let reservationActive = true;
+    pending.releaseReservation = () => {
+      if (!reservationActive) return;
+      reservationActive = false;
+      reservedBytes = Math.max(0, reservedBytes - bytes);
+    };
+    return true;
+  };
+
+  const removePending = (pending: PendingEntry) => {
+    if (pendingByUrl.get(pending.url) === pending) pendingByUrl.delete(pending.url);
+  };
+
+  let drainQueue = () => {};
+
+  const cancelPending = (pending: PendingEntry, shouldDrain = true) => {
+    if (
+      pending.state === "resolved" ||
+      pending.state === "rejected" ||
+      pending.state === "cancelled"
+    ) {
+      removePending(pending);
+      return;
+    }
+    pending.state = "cancelled";
+    pending.controller.abort();
+    pending.releaseReservation();
+    pending.releaseActiveLoad();
+    pending.reject(new Error("cancelled"));
+    removePending(pending);
+    if (shouldDrain) drainQueue();
+  };
+
+  const finishPending = (pending: PendingEntry) => {
+    pending.releaseReservation();
+    pending.releaseActiveLoad();
+    if (pending.waiters === 0) {
+      removePending(pending);
+      drainQueue();
+    } else if (pending.state !== "resolved") {
+      drainQueue();
+    }
+  };
+
+  const startLoad = (pending: PendingEntry, reservation: number) => {
+    pending.state = "loading";
+    activeLoads += 1;
+    let active = true;
+    pending.releaseActiveLoad = () => {
+      if (!active) return;
+      active = false;
+      activeLoads = Math.max(0, activeLoads - 1);
+    };
+    let loaded: Promise<OpdsCoverValue>;
+    try {
+      loaded = load(pending.url, pending.controller.signal);
+    } catch (error) {
+      loaded = Promise.reject(error);
+    }
+    void loaded
+      .then((value) => {
+        if (pending.state === "cancelled" || pending.generation !== generation) return;
+        if (value.byteLength > reservation) throw new Error("cover-too-large");
+        const entry = { ...value, references: 0, lastUsed: ++clock };
+        entries.set(pending.url, entry);
+        sourceBytes += value.byteLength;
+        pending.state = "resolved";
+        pending.resolve(entry);
+      })
+      .catch((error: unknown) => {
+        if (pending.state === "cancelled") return;
+        pending.state = "rejected";
+        pending.reject(error instanceof Error ? error : new Error(String(error)));
+      })
+      .finally(() => finishPending(pending));
+  };
+
+  drainQueue = () => {
+    const concurrencyLimit = Math.max(1, maxConcurrentLoads);
+    const reservation = Math.min(maxLoadBytes, maxBytes);
+    while (activeLoads < concurrencyLimit) {
+      while (pendingQueue[0] && pendingQueue[0].state !== "queued") pendingQueue.shift();
+      const pending = pendingQueue[0];
+      if (!pending) return;
+      if (!reserveCapacity(pending, reservation)) return;
+      pendingQueue.shift();
+      startLoad(pending, reservation);
+    }
   };
 
   const lease = (entry: CacheEntry): OpdsCoverLease => {
@@ -195,7 +262,10 @@ export function createOpdsCoverCache({
         released = true;
         entry.references = Math.max(0, entry.references - 1);
         entry.lastUsed = ++clock;
-        evict();
+        if (entry.references === 0 && retiredEntries.delete(entry)) {
+          retiredBytes = Math.max(0, retiredBytes - entry.byteLength);
+        }
+        drainQueue();
       },
     };
   };
@@ -207,45 +277,38 @@ export function createOpdsCoverCache({
       const cached = entries.get(url);
       if (cached) return lease(cached);
 
-      let pending = inFlight.get(url);
+      let pending = pendingByUrl.get(url);
       if (!pending) {
-        const reservation = Math.min(maxLoadBytes, maxBytes);
-        if (
-          maxEntries <= 0 ||
-          maxLoadBytes <= 0 ||
-          maxLoadBytes > maxBytes ||
-          !evictForReservation(reservation)
-        ) {
+        if (maxEntries <= 0 || maxLoadBytes <= 0 || maxLoadBytes > maxBytes) {
           throw new Error("cover-cache-full");
         }
+        if (pendingByUrl.size >= Math.max(1, maxQueuedLoads)) throw new Error("cover-cache-full");
         const controller = new AbortController();
-        reservedBytes += reservation;
-        let reservationActive = true;
-        const releaseReservation = () => {
-          if (!reservationActive) return;
-          reservationActive = false;
-          reservedBytes = Math.max(0, reservedBytes - reservation);
+        let resolvePending!: (entry: CacheEntry) => void;
+        let rejectPending!: (error: Error) => void;
+        const promise = new Promise<CacheEntry>((resolve, reject) => {
+          resolvePending = resolve;
+          rejectPending = reject;
+        });
+        void promise.catch(() => {});
+        pending = {
+          url,
+          generation,
+          controller,
+          promise,
+          resolve: resolvePending,
+          reject: rejectPending,
+          waiters: 0,
+          state: "queued",
+          releaseReservation: () => {},
+          releaseActiveLoad: () => {},
         };
-        const loadGeneration = generation;
-        const promise = scheduleLoad(url, controller.signal)
-          .then((value): CacheEntry => {
-            if (loadGeneration !== generation) throw new Error("cancelled");
-            if (value.byteLength > reservation) throw new Error("cover-too-large");
-            const entry = { ...value, references: 0, lastUsed: ++clock };
-            entries.set(url, entry);
-            sourceBytes += value.byteLength;
-            releaseReservation();
-            return entry;
-          })
-          .finally(() => {
-            releaseReservation();
-            if (inFlight.get(url)?.promise === promise) inFlight.delete(url);
-          });
-        pending = { controller, promise, waiters: 0, releaseReservation };
-        inFlight.set(url, pending);
+        pendingByUrl.set(url, pending);
+        pendingQueue.push(pending);
+        drainQueue();
       }
       pending.waiters += 1;
-      let settled = false;
+      let leased = false;
       let rejectCancelled: ((error: Error) => void) | undefined;
       const cancelled = new Promise<never>((_resolve, reject) => {
         rejectCancelled = reject;
@@ -254,22 +317,34 @@ export function createOpdsCoverCache({
       signal?.addEventListener("abort", onAbort, { once: true });
       try {
         const entry = await Promise.race([pending.promise, cancelled]);
-        settled = true;
         if (acquisitionGeneration !== generation) throw new Error("cancelled");
-        return lease(entry);
+        const result = lease(entry);
+        leased = true;
+        return result;
       } finally {
         signal?.removeEventListener("abort", onAbort);
         pending.waiters = Math.max(0, pending.waiters - 1);
-        if (!settled && pending.waiters === 0) pending.controller.abort();
+        if (pending.waiters === 0) {
+          if (!leased && (pending.state === "queued" || pending.state === "loading")) {
+            cancelPending(pending);
+          } else {
+            removePending(pending);
+            drainQueue();
+          }
+        }
       }
     },
     clear(): void {
       generation += 1;
-      for (const pending of inFlight.values()) {
-        pending.controller.abort();
-        pending.releaseReservation();
+      for (const pending of pendingByUrl.values()) cancelPending(pending, false);
+      pendingByUrl.clear();
+      pendingQueue.length = 0;
+      for (const entry of entries.values()) {
+        if (entry.references > 0 && !retiredEntries.has(entry)) {
+          retiredEntries.add(entry);
+          retiredBytes += entry.byteLength;
+        }
       }
-      inFlight.clear();
       entries.clear();
       sourceBytes = 0;
       reservedBytes = 0;
@@ -279,9 +354,10 @@ export function createOpdsCoverCache({
         entries: entries.size,
         sourceBytes,
         urls: [...entries.keys()],
-        liveEntries: entries.size + inFlight.size,
-        liveBytes: sourceBytes + reservedBytes,
+        liveEntries: entries.size + retiredEntries.size + activeLoads,
+        liveBytes: sourceBytes + retiredBytes + reservedBytes,
         reservedBytes,
+        queued: pendingQueue.filter((pending) => pending.state === "queued").length,
       };
     },
   };

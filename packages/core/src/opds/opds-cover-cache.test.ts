@@ -41,29 +41,30 @@ describe("shared OPDS cover cache", () => {
     expect(cache.snapshot()).toMatchObject({ entries: 1, sourceBytes: 4, urls: ["second"] });
   });
 
-  it("never admits beyond entry or byte bounds while every cached cover is leased", async () => {
+  it("loads a dense FIFO window as earlier leases release capacity", async () => {
+    const loaded: string[] = [];
     const cache = createOpdsCoverCache({
-      load: async (url) => ({ uri: url, byteLength: 2 }),
-      maxEntries: 12,
-      maxBytes: 24,
+      load: async (url) => {
+        loaded.push(url);
+        return { uri: url, byteLength: 2 };
+      },
+      maxEntries: 2,
+      maxBytes: 4,
       maxLoadBytes: 2,
     });
-    const leases = await Promise.all(
-      Array.from({ length: 12 }, (_, index) => cache.acquire(`cover-${index}`)),
-    );
-    await expect(cache.acquire("cover-12")).rejects.toThrow("cover-cache-full");
-    expect(cache.snapshot()).toMatchObject({
-      entries: 12,
-      sourceBytes: 24,
-      liveEntries: 12,
-      liveBytes: 24,
-      reservedBytes: 0,
-    });
-    leases[0]?.release();
-    const replacement = await cache.acquire("cover-12");
-    expect(cache.snapshot()).toMatchObject({ liveEntries: 12, liveBytes: 24 });
-    replacement.release();
-    for (const lease of leases) lease.release();
+    const pending = Array.from({ length: 8 }, (_, index) => cache.acquire(`cover-${index}`));
+    const held = await Promise.all(pending.slice(0, 2));
+    expect(loaded).toEqual(["cover-0", "cover-1"]);
+
+    for (let index = 2; index < pending.length; index += 1) {
+      held.shift()?.release();
+      const next = await pending[index];
+      held.push(next);
+      expect(cache.snapshot().liveBytes).toBeLessThanOrEqual(4);
+    }
+
+    for (const lease of held) lease.release();
+    expect(loaded).toEqual(Array.from({ length: 8 }, (_, index) => `cover-${index}`));
   });
 
   it("reserves the hard live-byte budget before starting distinct loads", async () => {
@@ -82,7 +83,7 @@ describe("shared OPDS cover cache", () => {
 
     const first = cache.acquire("first");
     const second = cache.acquire("second");
-    await expect(cache.acquire("third")).rejects.toThrow("cover-cache-full");
+    const third = cache.acquire("third");
     expect(load).toHaveBeenCalledTimes(2);
     expect(cache.snapshot()).toMatchObject({
       entries: 0,
@@ -95,6 +96,82 @@ describe("shared OPDS cover cache", () => {
     const leases = await Promise.all([first, second]);
     expect(cache.snapshot()).toMatchObject({ liveEntries: 2, liveBytes: 8, reservedBytes: 0 });
     for (const lease of leases) lease.release();
+    const thirdLease = await third;
+    thirdLease.release();
+  });
+
+  it("deduplicates a queued URL and gives both waiters leases when capacity frees", async () => {
+    const load = vi.fn(async (url: string) => ({ uri: url, byteLength: 2 }));
+    const cache = createOpdsCoverCache({ load, maxEntries: 1, maxBytes: 2, maxLoadBytes: 2 });
+    const first = await cache.acquire("first");
+    const secondA = cache.acquire("second");
+    const secondB = cache.acquire("second");
+    await Promise.resolve();
+    expect(load).toHaveBeenCalledTimes(1);
+
+    first.release();
+    const [leaseA, leaseB] = await Promise.all([secondA, secondB]);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(leaseA.uri).toBe(leaseB.uri);
+    leaseA.release();
+    leaseB.release();
+  });
+
+  it("releases queue capacity after a load failure", async () => {
+    const load = vi.fn(async (url: string) => {
+      if (url === "bad") throw new Error("bad-cover");
+      return { uri: url, byteLength: 1 };
+    });
+    const cache = createOpdsCoverCache({ load, maxEntries: 1, maxBytes: 1, maxLoadBytes: 1 });
+    const bad = cache.acquire("bad");
+    const good = cache.acquire("good");
+
+    await expect(bad).rejects.toThrow("bad-cover");
+    const lease = await good;
+    expect(load.mock.calls.map(([url]) => url)).toEqual(["bad", "good"]);
+    lease.release();
+  });
+
+  it("cancels queued and in-flight covers on clear without late repopulation", async () => {
+    let resolveFirst!: (value: { uri: string; byteLength: number }) => void;
+    const load = vi.fn(async (url: string) =>
+      url === "first"
+        ? new Promise<{ uri: string; byteLength: number }>((resolve) => {
+            resolveFirst = resolve;
+          })
+        : { uri: url, byteLength: 1 },
+    );
+    const cache = createOpdsCoverCache({ load, maxEntries: 1, maxBytes: 1, maxLoadBytes: 1 });
+    const first = cache.acquire("first");
+    const queued = cache.acquire("queued");
+    await Promise.resolve();
+    expect(load).toHaveBeenCalledTimes(1);
+
+    cache.clear();
+    resolveFirst({ uri: "late", byteLength: 1 });
+    await expect(Promise.allSettled([first, queued])).resolves.toEqual([
+      expect.objectContaining({ status: "rejected" }),
+      expect.objectContaining({ status: "rejected" }),
+    ]);
+    expect(cache.snapshot()).toMatchObject({ entries: 0, liveBytes: 0, queued: 0 });
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a cleared generation's leased bytes live until the lease releases", async () => {
+    const load = vi.fn(async (url: string) => ({ uri: url, byteLength: 1 }));
+    const cache = createOpdsCoverCache({ load, maxEntries: 1, maxBytes: 1, maxLoadBytes: 1 });
+    const oldLease = await cache.acquire("old");
+
+    cache.clear();
+    const nextLease = cache.acquire("next");
+    await Promise.resolve();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(cache.snapshot()).toMatchObject({ entries: 0, liveEntries: 1, liveBytes: 1 });
+
+    oldLease.release();
+    const next = await nextLease;
+    expect(load).toHaveBeenCalledTimes(2);
+    next.release();
   });
 
   it("caps concurrent distinct loads", async () => {

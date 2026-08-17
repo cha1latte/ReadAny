@@ -122,10 +122,11 @@ describe("OPDS cover streaming and cache", () => {
       maxEntries: 4,
       maxBytes: 100,
     });
-    void cache.acquire("pending");
+    const pending = cache.acquire("pending");
 
     cache.clear();
 
+    await expect(pending).rejects.toThrow("cancelled");
     expect(loaderSignal?.aborted).toBe(true);
     expect(cache.snapshot()).toMatchObject({ entries: 0, sourceBytes: 0, urls: [] });
   });

@@ -60,7 +60,7 @@ export type {
 export type { ImportBooksResult, ImportDuplicateIndex } from "./import/import-dedupe";
 
 // OPDS catalogs
-export { OpdsClient, OpdsError } from "./opds/opds-client";
+export { OpdsClient, OpdsError, type OpdsAssetResponse } from "./opds/opds-client";
 export { parseOpdsDocument } from "./opds/opds-parser";
 export { classifyOpdsUrl } from "./opds/opds-security";
 export { sanitizeOpdsDescription } from "./opds/opds-sanitize";

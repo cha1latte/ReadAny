@@ -90,6 +90,7 @@ function stalledBodyResponse(contentType = "application/atom+xml") {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 async function expectOpdsError(promise: Promise<unknown>, code: OpdsError["code"]): Promise<void> {
@@ -463,25 +464,123 @@ describe("OpdsClient catalog requests", () => {
 });
 
 describe("OpdsClient assets", () => {
-  it("preserves the final response identity metadata", async () => {
-    const source = response("asset", { headers: { "Content-Type": "image/jpeg" } });
+  it("returns exact binary bytes and metadata without constructing an ambient Response", async () => {
+    const bytes = Uint8Array.of(0, 255, 16, 128, 42);
+    const source = new Response(bytes, { headers: { "Content-Type": "image/jpeg" } });
     Object.defineProperties(source, {
       url: { value: "https://cdn.test/final-cover.jpg" },
       redirected: { value: true },
       type: { value: "cors" },
     });
     const platform = fakePlatform(() => source);
+    vi.stubGlobal(
+      "Response",
+      class NonStreamingWhatwgResponse {
+        constructor() {
+          throw new Error("This React Native Response cannot wrap streams");
+        }
+      },
+    );
 
     const asset = await new OpdsClient(platform).fetchAsset(
       "https://cdn.test/final-cover.jpg",
       "https://catalog.test",
     );
 
+    expect(Array.from(new Uint8Array(await asset.arrayBuffer()))).toEqual(Array.from(bytes));
     expect(asset.url).toBe("https://cdn.test/final-cover.jpg");
     expect(asset.redirected).toBe(true);
     expect(asset.type).toBe("cors");
     expect(asset.status).toBe(source.status);
     expect(asset.headers.get("Content-Type")).toBe("image/jpeg");
+  });
+
+  it("supports text and enforces single body consumption", async () => {
+    const platform = fakePlatform(
+      () =>
+        new Response(new TextEncoder().encode("héllo"), {
+          headers: { "Content-Type": "text/plain" },
+        }),
+    );
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/readme.txt",
+      "https://catalog.test",
+    );
+
+    expect(asset.bodyUsed).toBe(false);
+    expect(await asset.text()).toBe("héllo");
+    expect(asset.bodyUsed).toBe(true);
+    await expect(asset.arrayBuffer()).rejects.toThrow(TypeError);
+  });
+
+  it("supports JSON and preserves JSON parse errors", async () => {
+    const validPlatform = fakePlatform(
+      () =>
+        new Response('{"title":"Catalog","count":2}', {
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const valid = await new OpdsClient(validPlatform).fetchAsset(
+      "https://catalog.test/data.json",
+      "https://catalog.test",
+    );
+
+    await expect(valid.json()).resolves.toEqual({ title: "Catalog", count: 2 });
+    expect(valid.bodyUsed).toBe(true);
+
+    const invalidPlatform = fakePlatform(
+      () => new Response("{bad json", { headers: { "Content-Type": "application/json" } }),
+    );
+    const invalid = await new OpdsClient(invalidPlatform).fetchAsset(
+      "https://catalog.test/bad.json",
+      "https://catalog.test",
+    );
+
+    await expect(invalid.json()).rejects.toThrow(SyntaxError);
+    expect(invalid.bodyUsed).toBe(true);
+  });
+
+  it("supports Blob when the platform provides Blob", async () => {
+    const bytes = Uint8Array.of(5, 4, 3, 2, 1);
+    const platform = fakePlatform(
+      () => new Response(bytes, { headers: { "Content-Type": "application/octet-stream" } }),
+    );
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.bin",
+      "https://catalog.test",
+    );
+
+    const blob = await asset.blob();
+
+    expect(blob.type).toBe("application/octet-stream");
+    expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual(Array.from(bytes));
+  });
+
+  it("reports unavailable Blob support without consuming the body", async () => {
+    const platform = fakePlatform(() => response("asset", { headers: {} }));
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.bin",
+      "https://catalog.test",
+    );
+    vi.stubGlobal("Blob", undefined);
+
+    await expect(asset.blob()).rejects.toThrow(TypeError);
+    expect(asset.bodyUsed).toBe(false);
+    expect(await asset.text()).toBe("asset");
+  });
+
+  it("completes a normal asset read without aborting its transport", async () => {
+    const transport = transportResponse(response("asset", { headers: {} }));
+    const platform = fakePlatform(() => transport.response);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    expect(await asset.text()).toBe("asset");
+
+    expect(transport.cancelTransport).not.toHaveBeenCalled();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
   });
 
   it("aborts the asset transport when its returned body is cancelled", async () => {

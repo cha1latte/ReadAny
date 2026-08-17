@@ -1,5 +1,5 @@
 import { OpdsClient, type OpdsCredentials } from "@readany/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const expoFetch = vi.hoisted(() => vi.fn());
 
@@ -45,6 +45,10 @@ function signalForCall(index = 0): AbortSignal {
 describe("ExpoPlatformService standards fetch contract", () => {
   beforeEach(() => {
     expoFetch.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("uses expo/fetch for manual requests and preserves request and response web APIs", async () => {
@@ -241,5 +245,35 @@ describe("ExpoPlatformService standards fetch contract", () => {
     await asset.body?.cancel();
 
     expect(signalForCall().aborted).toBe(true);
+  });
+
+  it("reads exact asset bytes when React Native Response cannot wrap a stream", async () => {
+    const bytes = Uint8Array.of(1, 0, 255, 127, 64);
+    const source = new Response(bytes, {
+      headers: { "Content-Type": "application/octet-stream" },
+    });
+    Object.defineProperties(source, {
+      url: { value: "https://catalog.test/final-book.epub" },
+      redirected: { value: true },
+    });
+    expoFetch.mockResolvedValue(source);
+    vi.stubGlobal(
+      "Response",
+      class NonStreamingWhatwgResponse {
+        constructor() {
+          throw new Error("React Native whatwg Response does not accept ReadableStream");
+        }
+      },
+    );
+
+    const asset = await new OpdsClient(new ExpoPlatformService()).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    expect(Array.from(new Uint8Array(await asset.arrayBuffer()))).toEqual(Array.from(bytes));
+    expect(asset.url).toBe("https://catalog.test/final-book.epub");
+    expect(asset.redirected).toBe(true);
+    expect(signalForCall().aborted).toBe(false);
   });
 });

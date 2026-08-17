@@ -56,6 +56,23 @@ type OpdsFetchPlatform = Pick<IPlatformService, "fetch">;
 
 export type { OpdsCredentials, OpdsErrorCode } from "./opds-types";
 
+export interface OpdsAssetResponse {
+  readonly body: ReadableStream<Uint8Array> | null;
+  readonly bodyUsed: boolean;
+  readonly headers: Headers;
+  readonly ok: boolean;
+  readonly redirected: boolean;
+  readonly status: number;
+  readonly statusText: string;
+  readonly type: ResponseType;
+  readonly url: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  blob(): Promise<Blob>;
+  json(): Promise<unknown>;
+  text(): Promise<string>;
+  cancel(reason?: unknown): Promise<void>;
+}
+
 export class OpdsError extends Error {
   readonly code: OpdsErrorCode;
 
@@ -287,52 +304,143 @@ async function readLimitedText(
   return body;
 }
 
-function wrapAssetResponse(response: PlatformFetchResponse, lifecycle: RequestLifecycle): Response {
-  if (!response.body) {
-    disposeResponse(response);
-    lifecycle.dispose();
-    return response;
+class ManagedAssetResponse implements OpdsAssetResponse {
+  readonly headers: Headers;
+  readonly ok: boolean;
+  readonly redirected: boolean;
+  readonly status: number;
+  readonly statusText: string;
+  readonly type: ResponseType;
+  readonly url: string;
+  readonly body: ReadableStream<Uint8Array> | null;
+
+  private readonly reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  private used = false;
+
+  constructor(
+    private readonly response: PlatformFetchResponse,
+    private readonly lifecycle: RequestLifecycle,
+  ) {
+    this.headers = response.headers;
+    this.ok = response.ok;
+    this.redirected = response.redirected;
+    this.status = response.status;
+    this.statusText = response.statusText;
+    this.type = response.type;
+    this.url = response.url;
+
+    if (!response.body) {
+      this.body = null;
+      disposeResponse(response);
+      lifecycle.dispose();
+      return;
+    }
+
+    const reader = response.body.getReader();
+    this.reader = reader;
+    this.body = new ReadableStream<Uint8Array>(
+      {
+        pull: async (controller) => {
+          this.used = true;
+          try {
+            const { done, value } = await lifecycle.race(reader.read());
+            if (done) {
+              controller.close();
+              this.finishNormally();
+              return;
+            }
+            controller.enqueue(value);
+          } catch (error) {
+            const mapped = lifecycle.mapError(error);
+            await this.abort(error);
+            controller.error(mapped);
+          }
+        },
+        cancel: async (reason) => {
+          this.used = true;
+          await this.abort(reason);
+        },
+      },
+      { highWaterMark: 0 },
+    );
   }
 
-  const reader = response.body.getReader();
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await lifecycle.race(reader.read());
-        if (done) {
-          controller.close();
-          disposeResponse(response);
-          lifecycle.dispose();
-          return;
-        }
-        controller.enqueue(value);
-      } catch (error) {
-        void reader.cancel().catch(() => {});
-        abortResponseTransport(response);
-        lifecycle.dispose();
-        controller.error(lifecycle.mapError(error));
+  get bodyUsed(): boolean {
+    return this.used || Boolean(this.body?.locked);
+  }
+
+  async arrayBuffer(): Promise<ArrayBuffer> {
+    return (await this.consumeBytes()).buffer as ArrayBuffer;
+  }
+
+  async blob(): Promise<Blob> {
+    if (typeof globalThis.Blob !== "function") {
+      throw new TypeError("Blob is not available on this platform.");
+    }
+    const bytes = await this.consumeBytes();
+    return new Blob([bytes.buffer as ArrayBuffer], {
+      type: this.headers.get("Content-Type") ?? "",
+    });
+  }
+
+  async json(): Promise<unknown> {
+    return JSON.parse(await this.text());
+  }
+
+  async text(): Promise<string> {
+    return new TextDecoder().decode(await this.consumeBytes());
+  }
+
+  async cancel(reason?: unknown): Promise<void> {
+    if (disposedTransports.has(this.response)) return;
+    this.used = true;
+    await this.abort(reason);
+  }
+
+  private async consumeBytes(): Promise<Uint8Array> {
+    if (this.used || this.body?.locked) {
+      throw new TypeError("The response body has already been consumed.");
+    }
+    this.used = true;
+    if (!this.body) return new Uint8Array();
+
+    const reader = this.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        total += value.byteLength;
       }
-    },
-    async cancel(reason) {
-      try {
-        await reader.cancel(reason);
-      } finally {
-        abortResponseTransport(response);
-        lifecycle.dispose();
-      }
-    },
-  });
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-  Object.defineProperties(wrapped, {
-    url: { value: response.url },
-    redirected: { value: response.redirected },
-    type: { value: response.type },
-  });
-  return wrapped;
+    } finally {
+      reader.releaseLock();
+    }
+
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  }
+
+  private finishNormally(): void {
+    disposeResponse(this.response);
+    this.lifecycle.dispose();
+  }
+
+  private async abort(reason?: unknown): Promise<void> {
+    abortResponseTransport(this.response);
+    this.lifecycle.dispose();
+    try {
+      await this.reader?.cancel(reason);
+    } catch {
+      // The native transport is already aborted; stream cancellation is best effort.
+    }
+  }
 }
 
 function getMediaType(response: Response): string {
@@ -534,7 +642,7 @@ export class OpdsClient {
     catalogOrigin: string,
     credentials?: OpdsCredentials,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<OpdsAssetResponse> {
     const normalizedCatalogOrigin = normalizeAllowedOrigin(catalogOrigin);
     if (
       credentials &&
@@ -553,7 +661,7 @@ export class OpdsClient {
         },
         lifecycle,
       );
-      return wrapAssetResponse(response, lifecycle);
+      return new ManagedAssetResponse(response, lifecycle);
     } catch (error) {
       lifecycle.dispose();
       throw error;

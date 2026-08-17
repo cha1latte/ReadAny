@@ -1,9 +1,14 @@
 import type { ChapterData } from "@readany/core/rag";
 import type { Book } from "@readany/core/types";
+import {
+  BookExtractionError,
+  type BookExtractionErrorCategory,
+  toBookExtractionError,
+} from "./extractor-error";
 
 export type AutoVectorizeCallback = (
   bookId: string,
-  progress: { status: string; progress: number },
+  progress: { status: string; progress: number; errorCategory?: BookExtractionErrorCategory },
 ) => void;
 
 interface ExtractorRef {
@@ -53,46 +58,56 @@ async function processQueue() {
   if (processing) return;
   processing = true;
 
-  const { triggerVectorizeBook } = await import("./vectorize-trigger");
+  try {
+    const { resetBookVectorization, triggerVectorizeBook } = await import("./vectorize-trigger");
 
-  while (queue.length > 0) {
-    const item = queue.shift();
-    if (!item) break;
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (!item) break;
 
-    const { book, base64Data, mimeType } = item;
+      const { book, base64Data, mimeType } = item;
 
-    try {
-      callback?.(book.id, { status: "extracting", progress: 0 });
+      try {
+        callback?.(book.id, { status: "extracting", progress: 0 });
 
-      if (!extractorRef) {
-        console.warn("[AutoVectorize] Extractor not ready, skipping");
-        continue;
+        if (!extractorRef) {
+          throw toBookExtractionError(new Error("Extractor WebView not ready"), book.format);
+        }
+
+        const chapters = await extractorRef.extractChapters(
+          base64Data,
+          mimeType,
+          book.format,
+          book.filePath,
+        );
+        if (!chapters || chapters.length === 0) {
+          throw toBookExtractionError(new Error("No chapters extracted from book"), book.format);
+        }
+
+        callback?.(book.id, { status: "vectorizing", progress: 0 });
+
+        await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
+          const pct =
+            progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
+          callback?.(book.id, { status: "vectorizing", progress: pct });
+        });
+
+        callback?.(book.id, { status: "completed", progress: 1 });
+      } catch (err) {
+        console.error(`[AutoVectorize] Failed for ${book.meta.title}:`, err);
+        try {
+          await resetBookVectorization(book.id);
+        } catch (cleanupError) {
+          console.error(`[AutoVectorize] Failed to clean up ${book.meta.title}:`, cleanupError);
+        }
+        callback?.(book.id, {
+          status: "error",
+          progress: 0,
+          errorCategory: err instanceof BookExtractionError ? err.category : undefined,
+        });
       }
-
-      const chapters = await extractorRef.extractChapters(
-        base64Data,
-        mimeType,
-        book.format,
-        book.filePath,
-      );
-      if (!chapters || chapters.length === 0) {
-        console.warn(`[AutoVectorize] No chapters for ${book.meta.title}`);
-        continue;
-      }
-
-      callback?.(book.id, { status: "vectorizing", progress: 0 });
-
-      await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
-        const pct = progress.totalChunks > 0 ? progress.processedChunks / progress.totalChunks : 0;
-        callback?.(book.id, { status: "vectorizing", progress: pct });
-      });
-
-      callback?.(book.id, { status: "completed", progress: 1 });
-    } catch (err) {
-      console.error(`[AutoVectorize] Failed for ${book.meta.title}:`, err);
-      callback?.(book.id, { status: "error", progress: 0 });
     }
+  } finally {
+    processing = false;
   }
-
-  processing = false;
 }

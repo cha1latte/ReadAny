@@ -23,6 +23,7 @@ import { SyncButton } from "@/components/ui/SyncButton";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import { setCallback, setExtractorRef } from "@/lib/rag/auto-vectorize-service";
+import { getBookExtractionErrorMessageKeys } from "@/lib/rag/extractor-error";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { WebDavConnectSheet } from "@/screens/library/WebDavConnectSheet";
 import { WebDavImportSourceSheet } from "@/screens/library/WebDavImportSourceSheet";
@@ -303,13 +304,24 @@ export function LibraryScreen() {
       console.log(
         `[AutoVectorize] Book ${bookId}: ${progress.status} (${Math.round(progress.progress * 100)}%)`,
       );
+      if (progress.status === "error") {
+        if (progress.errorCategory) {
+          const keys = getBookExtractionErrorMessageKeys(progress.errorCategory);
+          Alert.alert(t(keys.title), t(keys.description));
+        } else {
+          Alert.alert(
+            t("vectorize.vectorizationFailedTitle"),
+            t("vectorize.vectorizationFailedDesc"),
+          );
+        }
+      }
     });
     return () => {
       setExtractorRef(null);
       setFallbackContentProvider(null);
       setCallback(null);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     return onLibraryChanged((deletedTags) => loadBooks(deletedTags));

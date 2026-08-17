@@ -1,7 +1,12 @@
 import type { ExtractorRef } from "@/components/rag/ExtractorWebView";
 import { inspectMobileBookForVectorize } from "@/lib/rag/auto-vectorize-book";
+import {
+  BookExtractionError,
+  getBookExtractionErrorMessageKeys,
+  toBookExtractionError,
+} from "@/lib/rag/extractor-error";
 import { MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION } from "@/lib/rag/mobile-vectorize-capability";
-import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
+import { resetBookVectorization, triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -40,7 +45,7 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
 
       try {
         if (!extractorRef.current) {
-          throw new Error("Extractor WebView not ready");
+          throw toBookExtractionError(new Error("Extractor WebView not ready"), book.format);
         }
 
         const info = await inspectMobileBookForVectorize(book);
@@ -59,7 +64,7 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
           info.absPath,
         );
         if (!chapters || chapters.length === 0) {
-          throw new Error("No chapters extracted from book");
+          throw toBookExtractionError(new Error("No chapters extracted from book"), book.format);
         }
 
         await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
@@ -78,16 +83,34 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
           `[useVectorizationQueue] Vectorization failed for "${book.meta.title}":`,
           err,
         );
+        try {
+          await resetBookVectorization(book.id);
+        } catch (cleanupError) {
+          console.error(
+            `[useVectorizationQueue] Failed to clean up "${book.meta.title}":`,
+            cleanupError,
+          );
+        }
         setVectorProgress({
           bookId: book.id,
           status: "error",
           processedChunks: 0,
           totalChunks: 0,
         });
+
+        if (err instanceof BookExtractionError) {
+          const keys = getBookExtractionErrorMessageKeys(err.category);
+          Alert.alert(t(keys.title), t(keys.description));
+        } else {
+          Alert.alert(
+            t("vectorize.vectorizationFailedTitle"),
+            t("vectorize.vectorizationFailedDesc"),
+          );
+        }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     },
-    [extractorRef],
+    [extractorRef, t],
   );
 
   const processQueue = useCallback(async () => {

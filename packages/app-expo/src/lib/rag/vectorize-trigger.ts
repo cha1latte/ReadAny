@@ -1,6 +1,9 @@
 import { useLibraryStore } from "@/stores/library-store";
 import { useVectorModelStore } from "@/stores/vector-model-store";
-import { triggerVectorizeBook as coreTriggerVectorizeBook } from "@readany/core/rag";
+import {
+  resetBookVectorization as coreResetBookVectorization,
+  triggerVectorizeBook as coreTriggerVectorizeBook,
+} from "@readany/core/rag";
 import type {
   ChapterData,
   VectorizeStatusCallback,
@@ -8,6 +11,12 @@ import type {
 } from "@readany/core/rag";
 
 export type { VectorizeStatusCallback };
+
+export async function resetBookVectorization(bookId: string): Promise<void> {
+  await coreResetBookVectorization(bookId, {
+    onBookUpdate: useLibraryStore.getState().updateBook,
+  });
+}
 
 export async function triggerVectorizeBook(
   bookId: string,

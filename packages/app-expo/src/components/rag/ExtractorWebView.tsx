@@ -4,6 +4,7 @@ import { Asset } from "expo-asset";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { toBookExtractionError } from "../../lib/rag/extractor-error";
 import { createExtractorCommand } from "../../lib/rag/extractor-format";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
@@ -22,6 +23,7 @@ interface PendingExtraction {
   resolve: (chapters: ChapterData[]) => void;
   reject: (err: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
+  bookFormat?: Book["format"];
 }
 
 export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
@@ -36,7 +38,9 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
     return () => {
       for (const pending of pendingRequests.current) {
         clearTimeout(pending.timeoutId);
-        pending.reject(new Error("Extractor WebView unmounted"));
+        pending.reject(
+          toBookExtractionError(new Error("Extractor WebView unmounted"), pending.bookFormat),
+        );
       }
       pendingRequests.current = [];
     };
@@ -78,7 +82,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
 
         clearTimeout(pending.timeoutId);
         if (msg.error) {
-          pending.reject(new Error(msg.error));
+          pending.reject(toBookExtractionError(new Error(String(msg.error)), pending.bookFormat));
         } else if (msg.chapters) {
           pending.resolve(msg.chapters);
         }
@@ -89,7 +93,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         const pending = pendingRequests.current.shift();
         if (pending) {
           clearTimeout(pending.timeoutId);
-          pending.reject(new Error(msg.message));
+          pending.reject(toBookExtractionError(new Error(String(msg.message)), pending.bookFormat));
         }
       }
     } catch (err) {
@@ -106,16 +110,19 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
     ) => {
       return new Promise<ChapterData[]>((resolve, reject) => {
         if (!ready || !webViewRef.current) {
-          return reject(new Error("Extractor WebView not ready"));
+          return reject(
+            toBookExtractionError(new Error("Extractor WebView not ready"), bookFormat),
+          );
         }
 
         const timeoutId = setTimeout(() => {
           const index = pendingRequests.current.findIndex((pending) => pending.reject === reject);
           if (index >= 0) pendingRequests.current.splice(index, 1);
-          reject(new Error("Timed out extracting book content"));
+          reject(toBookExtractionError(new Error("Timed out extracting book content"), bookFormat));
         }, EXTRACTION_TIMEOUT_MS);
 
-        pendingRequests.current.push({ resolve, reject, timeoutId });
+        const pendingRequest = { resolve, reject, timeoutId, bookFormat };
+        pendingRequests.current.push(pendingRequest);
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
@@ -126,10 +133,17 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           fileName,
         });
 
-        webViewRef.current.injectJavaScript(`
-          window.postMessage(${JSON.stringify(JSON.stringify(cmd))}, "*");
-          true;
-        `);
+        try {
+          webViewRef.current.injectJavaScript(`
+            window.postMessage(${JSON.stringify(JSON.stringify(cmd))}, "*");
+            true;
+          `);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          const index = pendingRequests.current.indexOf(pendingRequest);
+          if (index >= 0) pendingRequests.current.splice(index, 1);
+          reject(toBookExtractionError(error, bookFormat));
+        }
       });
     },
   }));

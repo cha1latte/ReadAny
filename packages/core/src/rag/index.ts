@@ -62,7 +62,7 @@ export type {
 export { vectorizeBook } from "./vectorize";
 export type { VectorizeCallback } from "./vectorize";
 
-export { triggerVectorizeBook } from "./vectorize-trigger";
+export { resetBookVectorization, triggerVectorizeBook } from "./vectorize-trigger";
 export type {
   VectorizeStatusCallback,
   VectorizeTriggerConfig,

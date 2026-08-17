@@ -46,7 +46,7 @@ export interface VectorizeTriggerCallbacks {
   onBookUpdate: (
     bookId: string,
     update: { isVectorized: boolean; vectorizeProgress: number },
-  ) => void;
+  ) => void | Promise<void>;
 }
 
 /** Yield to the event loop so UI can repaint */
@@ -58,6 +58,35 @@ export function canStoreInSharedVectorDB(
   embeddingDimension: number,
 ): boolean {
   return stats.totalVectors === 0 || stats.dimension === embeddingDimension;
+}
+
+/** Clear every persisted part of a book index and reset its library state. */
+export async function resetBookVectorization(
+  bookId: string,
+  callbacks: VectorizeTriggerCallbacks,
+): Promise<void> {
+  const results = await Promise.allSettled([
+    deleteChunks(bookId),
+    deleteVectorIndexProvenance(bookId),
+    (async () => {
+      if (!hasVectorDB()) return;
+      const vectorDB = getVectorDB();
+      if (vectorDB && (await vectorDB.isReady())) {
+        await vectorDB.deleteByBookId(bookId);
+      }
+    })(),
+  ]);
+
+  invalidateChunkCache(bookId);
+  await callbacks.onBookUpdate(bookId, {
+    isVectorized: false,
+    vectorizeProgress: 0,
+  });
+
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failure) throw failure.reason;
 }
 
 /**
@@ -97,7 +126,7 @@ export async function triggerVectorizeBook(
 
   try {
     // Update book state: vectorizing
-    callbacks.onBookUpdate(bookId, {
+    await callbacks.onBookUpdate(bookId, {
       isVectorized: false,
       vectorizeProgress: 0,
     });
@@ -241,7 +270,7 @@ export async function triggerVectorizeBook(
     progress.status = "completed";
     onProgress?.(progress);
 
-    callbacks.onBookUpdate(bookId, {
+    await callbacks.onBookUpdate(bookId, {
       isVectorized: true,
       vectorizeProgress: 1,
     });
@@ -251,14 +280,15 @@ export async function triggerVectorizeBook(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    try {
+      await resetBookVectorization(bookId, callbacks);
+    } catch (cleanupError) {
+      console.error(`[Vectorize] Failed to clean up partial index for ${bookId}:`, cleanupError);
+    }
+
     progress.status = "error";
     progress.error = message;
     onProgress?.(progress);
-
-    callbacks.onBookUpdate(bookId, {
-      isVectorized: false,
-      vectorizeProgress: 0,
-    });
     eventBus.emit("vectorize:error", { bookId, error: message });
     throw err;
   }
@@ -269,12 +299,15 @@ function getEmbeddingProvenance(
   actualDimensions: number,
 ): EmbeddingProvenance {
   if (config.vectorModelMode === "builtin") {
-    const model = BUILTIN_EMBEDDING_MODELS.find((candidate) => candidate.id === config.selectedBuiltinModelId);
+    const model = BUILTIN_EMBEDDING_MODELS.find(
+      (candidate) => candidate.id === config.selectedBuiltinModelId,
+    );
     if (!model) throw new Error("Cannot save provenance for an unknown built-in embedding model.");
     return { kind: "builtin", modelId: model.id, dimensions: actualDimensions || model.dimension };
   }
 
-  if (!config.remoteModel) throw new Error("Cannot save provenance without a selected remote embedding model.");
+  if (!config.remoteModel)
+    throw new Error("Cannot save provenance without a selected remote embedding model.");
   return {
     kind: "remote",
     modelId: config.remoteModel.modelId,

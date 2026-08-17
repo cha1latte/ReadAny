@@ -17,7 +17,7 @@ import {
   classifyOpdsUrl,
 } from "@readany/core";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 interface OpdsCatalogFormDialogProps {
@@ -26,6 +26,7 @@ interface OpdsCatalogFormDialogProps {
   store: OpdsCatalogStore;
   onOpenChange(open: boolean): void;
   onSaved(): void;
+  onBackgroundSaved?(): void;
 }
 
 export function OpdsCatalogFormDialog({
@@ -34,6 +35,7 @@ export function OpdsCatalogFormDialog({
   store,
   onOpenChange,
   onSaved,
+  onBackgroundSaved,
 }: OpdsCatalogFormDialogProps) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
@@ -45,19 +47,30 @@ export function OpdsCatalogFormDialog({
   const [submitting, setSubmitting] = useState(false);
   const [confirmingLocalHttp, setConfirmingLocalHttp] = useState(false);
   const [error, setError] = useState<string>();
+  const openGeneration = useRef(0);
+  const saveGeneration = useRef(0);
+  const wasOpen = useRef(false);
+  const openRef = useRef(open);
+  const activeSave = useRef<{ saveGeneration: number; openGeneration: number } | undefined>(
+    undefined,
+  );
+  openRef.current = open;
 
   useEffect(() => {
+    const opening = open && !wasOpen.current;
+    wasOpen.current = open;
     if (!open) {
       setPassword("");
       return;
     }
+    if (!opening) return;
+    openGeneration.current += 1;
     setName(catalog?.name ?? "");
     setUrl(catalog?.url ?? "");
     setAuth(catalog?.auth ?? "anonymous");
     setUsername(catalog?.username ?? "");
     setPassword("");
     setEnabled(catalog?.enabled ?? true);
-    setSubmitting(false);
     setConfirmingLocalHttp(false);
     setError(undefined);
   }, [catalog, open]);
@@ -71,7 +84,17 @@ export function OpdsCatalogFormDialog({
     !submitting;
 
   const persist = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || activeSave.current) return;
+    const saveId = ++saveGeneration.current;
+    const saveOpenGeneration = openGeneration.current;
+    activeSave.current = {
+      saveGeneration: saveId,
+      openGeneration: saveOpenGeneration,
+    };
+    const isCurrentOpenAttempt = () =>
+      activeSave.current?.saveGeneration === saveId &&
+      activeSave.current.openGeneration === openGeneration.current &&
+      openRef.current;
     setSubmitting(true);
     setError(undefined);
     try {
@@ -86,12 +109,21 @@ export function OpdsCatalogFormDialog({
       };
       if (catalog) await store.updateCatalog(catalog.id, input);
       else await store.addCatalog(input);
+      if (!isCurrentOpenAttempt()) {
+        onBackgroundSaved?.();
+        return;
+      }
       setPassword("");
       onSaved();
     } catch {
-      setError(t("library.opds.form.saveFailed"));
+      if (isCurrentOpenAttempt()) {
+        setError(t("library.opds.form.saveFailed"));
+      }
     } finally {
-      setSubmitting(false);
+      if (activeSave.current?.saveGeneration === saveId) {
+        activeSave.current = undefined;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -116,9 +148,26 @@ export function OpdsCatalogFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && submitting) return;
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent
         closeLabel={t("library.opds.close")}
+        closeDisabled={submitting}
+        aria-busy={submitting}
+        onEscapeKeyDown={(event) => {
+          if (submitting) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (submitting) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (submitting) event.preventDefault();
+        }}
         className="max-h-[calc(100vh-32px)] w-[min(92vw,620px)] max-w-none overflow-y-auto"
       >
         <DialogHeader>

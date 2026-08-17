@@ -395,6 +395,7 @@ export function OpdsCatalogsDialog({ open, onOpenChange }: OpdsCatalogsDialogPro
           setEditing(undefined);
           syncCatalogs();
         }}
+        onBackgroundSaved={syncCatalogs}
       />
 
       <Dialog open={!!deleting} onOpenChange={(next) => !next && setDeleting(undefined)}>

@@ -17,10 +17,24 @@ const harness = vi.hoisted(() => {
     hidden: false,
     passwordStorage: "none" as const,
   };
+  const visibleBuiltIn = {
+    ...catalog,
+    id: "built-in-visible",
+    name: "Built-in Catalog",
+    builtIn: true,
+  };
+  const hiddenBuiltIn = {
+    ...catalog,
+    id: "built-in-hidden",
+    name: "Hidden Catalog",
+    builtIn: true,
+    hidden: true,
+  };
   const store = {
-    listCatalogs: vi.fn(() => [catalog]),
+    listCatalogs: vi.fn(() => [catalog, visibleBuiltIn, hiddenBuiltIn]),
     getCredentials: vi.fn(async () => undefined),
     removeCatalog: vi.fn(async () => undefined),
+    updateCatalog: vi.fn(async () => undefined),
     setCatalogEnabled: vi.fn(async () => undefined),
     hideBuiltIn: vi.fn(async () => undefined),
     restoreBuiltIn: vi.fn(async () => undefined),
@@ -118,6 +132,45 @@ describe("OpdsCatalogsDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "library.opds.delete" }));
 
     await waitFor(() => expect(harness.store.removeCatalog).toHaveBeenCalledWith("custom"));
+  });
+
+  it("wires rendered update, enable, hide, and restore catalog actions", async () => {
+    render(<OpdsCatalogsDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(harness.store.listCatalogs).toHaveBeenCalled());
+
+    await userEvent.click(
+      screen.getByRole("switch", { name: "library.opds.toggleCatalog:Test Catalog" }),
+    );
+    expect(harness.store.setCatalogEnabled).toHaveBeenCalledWith("custom", false);
+
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "library.opds.hideCatalog:Built-in Catalog",
+      }),
+    );
+    expect(harness.store.hideBuiltIn).toHaveBeenCalledWith("built-in-visible");
+
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "library.opds.restoreCatalog:Hidden Catalog",
+      }),
+    );
+    expect(harness.store.restoreBuiltIn).toHaveBeenCalledWith("built-in-hidden");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "library.opds.editCatalog:Test Catalog" }),
+    );
+    const name = await screen.findByLabelText("library.opds.form.name");
+    await userEvent.clear(name);
+    await userEvent.type(name, "Updated Catalog");
+    await userEvent.click(screen.getByRole("button", { name: "library.opds.save" }));
+
+    await waitFor(() =>
+      expect(harness.store.updateCatalog).toHaveBeenCalledWith(
+        "custom",
+        expect.objectContaining({ name: "Updated Catalog", enabled: true }),
+      ),
+    );
   });
 
   it("returns focus to the originating control when the dialog closes", async () => {

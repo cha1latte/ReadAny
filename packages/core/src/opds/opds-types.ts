@@ -75,4 +75,7 @@ export type OpdsErrorCode =
   | "unreachable"
   | "invalid-catalog"
   | "cancelled"
-  | "too-large";
+  | "too-large"
+  | "unsupported-acquisition"
+  | "download-failed"
+  | "import-failed";

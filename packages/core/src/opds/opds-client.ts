@@ -34,6 +34,9 @@ const ERROR_MESSAGES: Record<OpdsErrorCode, string> = {
   "invalid-catalog": "The response is not a valid OPDS catalog.",
   cancelled: "The catalog request was cancelled.",
   "too-large": "The catalog response is too large.",
+  "unsupported-acquisition": "The selected book format is not supported.",
+  "download-failed": "The book could not be downloaded.",
+  "import-failed": "The downloaded book could not be imported.",
 };
 
 interface SearchDocument {

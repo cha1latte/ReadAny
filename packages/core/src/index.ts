@@ -73,6 +73,16 @@ export {
   type OpdsPasswordStorage,
 } from "./opds/opds-catalog-store";
 export { OpdsClient, OpdsError, type OpdsAssetResponse } from "./opds/opds-client";
+export {
+  downloadOpdsAcquisition,
+  listSupportedAcquisitions,
+  sanitizeOpdsFileName,
+  toBookMeta,
+  type DownloadOpdsAcquisitionInput,
+  type DownloadOpdsAcquisitionResult,
+  type OpdsDownloadProgress,
+  type SupportedOpdsAcquisition,
+} from "./opds/opds-acquisition";
 export { parseOpdsDocument } from "./opds/opds-parser";
 export { classifyOpdsUrl } from "./opds/opds-security";
 export { sanitizeOpdsDescription } from "./opds/opds-sanitize";

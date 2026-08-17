@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveExtractorFormat } from "./extractor-format";
+import { createExtractorCommand, resolveExtractorFormat } from "./extractor-format";
 
 describe("resolveExtractorFormat", () => {
   it.each(["epub", "pdf", "txt", "umd", "mobi", "azw", "azw3"])(
@@ -50,5 +50,32 @@ describe("resolveExtractorFormat", () => {
     ).toBeNull();
     expect(resolveExtractorFormat({ bookFormat: "unknown" })).toBeNull();
     expect(resolveExtractorFormat({})).toBeNull();
+  });
+});
+
+describe("createExtractorCommand", () => {
+  it.each([
+    [
+      { bookFormat: "mobi", mimeType: "application/pdf", fileName: "stored.pdf" },
+      { type: "openBook", bookFormat: "mobi", fileName: "stored.mobi" },
+    ],
+    [
+      { mimeType: "application/pdf", fileName: "filename.mobi" },
+      { type: "openBook", bookFormat: "mobi", fileName: "filename.mobi" },
+    ],
+    [
+      {
+        bookFormat: "pdf",
+        mimeType: "application/x-mobipocket-ebook",
+        fileName: "stored.mobi",
+      },
+      { type: "extractBookChapters", bookFormat: "pdf", fileName: "stored.pdf" },
+    ],
+    [
+      { mimeType: "application/x-mobipocket-ebook", fileName: "filename.pdf" },
+      { type: "extractBookChapters", bookFormat: "pdf", fileName: "filename.pdf" },
+    ],
+  ])("dispatches from resolved format for %#", (input, expected) => {
+    expect(createExtractorCommand({ base64BookData: "data", ...input })).toMatchObject(expected);
   });
 });

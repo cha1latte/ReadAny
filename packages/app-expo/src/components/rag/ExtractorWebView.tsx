@@ -4,41 +4,10 @@ import { Asset } from "expo-asset";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { resolveExtractorFormat } from "../../lib/rag/extractor-format";
+import { createExtractorCommand } from "../../lib/rag/extractor-format";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../../assets/reader/reader.html"));
 const EXTRACTION_TIMEOUT_MS = 45_000;
-
-const EXTRACTOR_EXTENSIONS_BY_MIME: Record<string, string> = {
-  "application/epub+zip": "epub",
-  "application/pdf": "pdf",
-  "application/x-mobipocket-ebook": "mobi",
-  "application/vnd.amazon.ebook": "azw3",
-  "application/vnd.comicbook+zip": "cbz",
-  "application/x-fictionbook+xml": "fb2",
-  "application/x-zip-compressed-fb2": "fbz",
-  "text/plain": "txt",
-};
-
-function getExtractorFileName(
-  mimeType: string,
-  bookFormat: Book["format"] | null,
-  fileName?: string,
-) {
-  const cleanFileName = fileName?.split(/[?#]/, 1)[0]?.split(/[\\/]/).pop();
-  if (bookFormat) {
-    const baseName = cleanFileName?.replace(/\.[^.]*$/, "") || "book";
-    return `${baseName}.${bookFormat}`;
-  }
-  if (cleanFileName) return cleanFileName;
-
-  const normalized = mimeType.split(";")[0]?.trim().toLowerCase() || "application/epub+zip";
-  return `book.${EXTRACTOR_EXTENSIONS_BY_MIME[normalized] || "epub"}`;
-}
-
-function isPDFMimeType(mimeType: string) {
-  return mimeType.split(";")[0]?.trim().toLowerCase() === "application/pdf";
-}
 
 export interface ExtractorRef {
   extractChapters: (
@@ -150,17 +119,12 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
 
         // Command the webview to open the book first.
         // It will reply with "loaded" when it finishes rendering.
-        const resolvedFormat = resolveExtractorFormat({ bookFormat, mimeType, fileName });
-        const cmd = {
-          type:
-            resolvedFormat === "pdf" || isPDFMimeType(mimeType)
-              ? "extractBookChapters"
-              : "openBook",
-          base64: base64BookData,
+        const cmd = createExtractorCommand({
+          base64BookData,
           mimeType,
-          bookFormat: resolvedFormat,
-          fileName: getExtractorFileName(mimeType, resolvedFormat, fileName),
-        };
+          bookFormat,
+          fileName,
+        });
 
         webViewRef.current.injectJavaScript(`
           window.postMessage(${JSON.stringify(JSON.stringify(cmd))}, "*");

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getMobileVectorizeCapability } from "./mobile-vectorize-capability";
+import {
+  MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION,
+  getMobileVectorizeCapability,
+} from "./mobile-vectorize-capability";
 
 describe("getMobileVectorizeCapability", () => {
   it.each([
@@ -22,5 +25,11 @@ describe("getMobileVectorizeCapability", () => {
     expect(getMobileVectorizeCapability("kfx")).toEqual({ supported: false, mimeType: null });
     expect(getMobileVectorizeCapability("unknown")).toEqual({ supported: false, mimeType: null });
     expect(getMobileVectorizeCapability(undefined)).toEqual({ supported: false, mimeType: null });
+  });
+
+  it("describes MOBI-family support as DRM-free", () => {
+    expect(MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION).toBe(
+      "Mobile vectorization supports EPUB, PDF, TXT, UMD, and DRM-free MOBI, AZW, and AZW3 books.",
+    );
   });
 });

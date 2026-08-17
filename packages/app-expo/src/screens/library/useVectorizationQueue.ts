@@ -1,5 +1,6 @@
 import type { ExtractorRef } from "@/components/rag/ExtractorWebView";
 import { inspectMobileBookForVectorize } from "@/lib/rag/auto-vectorize-book";
+import { MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION } from "@/lib/rag/mobile-vectorize-capability";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useVectorModelStore } from "@/stores/vector-model-store";
@@ -115,10 +116,7 @@ export function useVectorizationQueue({ extractorRef, nav }: UseVectorizationQue
         if (info.reason === "unsupported-format") {
           Alert.alert(
             t("vectorize.unsupportedFormatTitle", "Unsupported format"),
-            t(
-              "vectorize.unsupportedFormatDesc",
-              "Mobile vectorization currently supports EPUB, PDF, TXT, and UMD books.",
-            ),
+            t("vectorize.unsupportedFormatDesc", MOBILE_VECTORIZE_UNSUPPORTED_FORMAT_DESCRIPTION),
           );
           return;
         }

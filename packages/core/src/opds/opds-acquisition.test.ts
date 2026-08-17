@@ -150,6 +150,14 @@ describe("toBookMeta", () => {
 
     expect(toBookMeta(input)).not.toHaveProperty("isbn");
   });
+
+  it("stores an OPDS HTML description as readable plain text", () => {
+    const input = publication([]);
+    input.description =
+      "<p>A <strong>safe</strong> description.</p><p>Second &amp; final.<br>Line.</p><script>hidden()</script>";
+
+    expect(toBookMeta(input).description).toBe("A safe description.\nSecond & final.\nLine.");
+  });
 });
 
 describe("downloadOpdsAcquisition", () => {

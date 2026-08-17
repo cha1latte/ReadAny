@@ -3,6 +3,7 @@ import type { BookFormat, BookMeta } from "../types/book";
 import { normalizeIsbn } from "../utils/book-metadata";
 import { type OpdsAssetResponse, type OpdsClient, OpdsError } from "./opds-client";
 import { classifyOpdsAcquisitionRelation } from "./opds-relations";
+import { opdsDescriptionToPlainText } from "./opds-sanitize";
 import type { OpdsAcquisition, OpdsCredentials, OpdsPublication } from "./opds-types";
 
 const FORMAT_BY_MEDIA_TYPE: Readonly<Record<string, BookFormat>> = {
@@ -177,6 +178,9 @@ export function listSupportedAcquisitions(
 
 export function toBookMeta(publication: OpdsPublication): Partial<BookMeta> {
   const isbn = normalizeIsbn(publication.identifier);
+  const description = publication.description
+    ? opdsDescriptionToPlainText(publication.description)
+    : undefined;
   return {
     title: publication.title,
     author: publication.authors.join(", "),
@@ -184,7 +188,7 @@ export function toBookMeta(publication: OpdsPublication): Partial<BookMeta> {
     ...(publication.language ? { language: publication.language } : {}),
     ...(isbn ? { isbn } : {}),
     ...(publication.published ? { publishDate: publication.published } : {}),
-    ...(publication.description ? { description: publication.description } : {}),
+    ...(description ? { description } : {}),
     ...(publication.subjects.length > 0 ? { subjects: [...publication.subjects] } : {}),
   };
 }

@@ -102,7 +102,10 @@ export {
   type OpdsCoverLease,
   type OpdsCoverValue,
 } from "./opds/opds-cover-cache";
-export { sanitizeOpdsDescription } from "./opds/opds-sanitize";
+export {
+  opdsDescriptionToPlainText,
+  sanitizeOpdsDescription,
+} from "./opds/opds-sanitize";
 export type {
   OpdsAcquisition,
   OpdsCredentials,

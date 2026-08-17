@@ -128,3 +128,21 @@ export function sanitizeOpdsDescription(input: string, documentUrl?: string): st
   while (allowedStack.length > 0) output.push(`</${allowedStack.pop()}>`);
   return output.join("");
 }
+
+/** Converts an untrusted OPDS description into plain text for persisted book metadata. */
+export function opdsDescriptionToPlainText(
+  input: string,
+  documentUrl?: string,
+): string | undefined {
+  const text = sanitizeOpdsDescription(input, documentUrl)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|li|blockquote)>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  const normalized = decodeEntities(text)
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return normalized || undefined;
+}

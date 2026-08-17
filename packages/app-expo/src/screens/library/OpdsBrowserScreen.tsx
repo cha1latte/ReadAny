@@ -20,7 +20,7 @@ import {
   type OpdsFeed,
   type OpdsPublication,
   listSupportedAcquisitions,
-  sanitizeOpdsDescription,
+  opdsDescriptionToPlainText,
 } from "@readany/core";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -75,20 +75,7 @@ const MAX_COVER_CACHE_BYTES = 8 * 1024 * 1024;
 const MAX_COVER_CACHE_ENTRIES = 12;
 
 function plainDescription(description: string | undefined): string | undefined {
-  if (!description) return undefined;
-  const sanitized = sanitizeOpdsDescription(description);
-  const text = sanitized
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(?:p|li|blockquote)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return text || undefined;
+  return description ? opdsDescriptionToPlainText(description) : undefined;
 }
 
 function toErrorCode(error: unknown): OpdsErrorCode {

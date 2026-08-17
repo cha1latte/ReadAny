@@ -829,6 +829,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   updateBookStrict: async (bookId, updates) => {
+    await persistBookUpdate(bookId, updates);
     set((state) => ({
       books: state.books.map((b) => (b.id === bookId ? { ...b, ...updates } : b)),
       allTags:
@@ -837,7 +838,6 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           : state.allTags,
     }));
     debouncedSave("library-books", get().books);
-    await persistBookUpdate(bookId, updates);
   },
 
   setFilter: (filter) => set((state) => ({ filter: { ...state.filter, ...filter } })),

@@ -307,7 +307,9 @@ export class OpdsCatalogStore {
     assertCatalogInputShape(update, { requireDefinition: false });
     return this.enqueueMutation(async () => {
       if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be edited");
-      await this.requirePendingSecretCleanupResolved(id);
+      if (this.pendingSecretCleanups.has(id) && this.hasCompleteSecretStorage()) {
+        await this.requirePendingSecretCleanupResolved(id);
+      }
       const current = this.customCatalogs.get(id);
       if (!current) throw new Error("Catalog not found");
 
@@ -326,24 +328,27 @@ export class OpdsCatalogStore {
         next.auth !== current.auth ||
         next.username !== current.username ||
         update.password !== undefined;
-      const previousPersistentPassword = credentialChanged
-        ? await this.readPersistentPassword(id)
-        : undefined;
+      const cleanupAlreadyPending = this.pendingSecretCleanups.has(id);
+      const previousPersistentPassword =
+        credentialChanged && !cleanupAlreadyPending
+          ? await this.readPersistentPassword(id)
+          : undefined;
       const previousCatalogs = this.customCatalogs;
       const nextCatalogs = new Map(previousCatalogs).set(id, next);
       const previousPendingSecretCleanups = this.pendingSecretCleanups;
-      const nextPendingSecretCleanups = credentialChanged
-        ? this.withPendingSecretCleanup(id)
-        : previousPendingSecretCleanups;
+      const nextPendingSecretCleanups =
+        credentialChanged && !cleanupAlreadyPending
+          ? this.withPendingSecretCleanup(id)
+          : previousPendingSecretCleanups;
       await this.persistState(nextCatalogs, this.hiddenBuiltInIds, nextPendingSecretCleanups);
       this.customCatalogs = nextCatalogs;
       this.pendingSecretCleanups = nextPendingSecretCleanups;
 
       if (credentialChanged) {
-        if (!this.hasCompleteSecretStorage()) {
+        if (cleanupAlreadyPending || !this.hasCompleteSecretStorage()) {
           this.clearPasswordState(id);
           if (next.auth === "basic" && update.password) {
-            await this.storePassword(id, update.password);
+            this.storeSessionPassword(id, update.password);
           }
           return this.toCustomCatalog(next);
         }
@@ -389,18 +394,25 @@ export class OpdsCatalogStore {
   async removeCatalog(id: string): Promise<boolean> {
     return this.enqueueMutation(async () => {
       if (builtInIds.has(id)) throw new Error("Built-in catalogs cannot be deleted");
-      await this.requirePendingSecretCleanupResolved(id);
+      if (this.pendingSecretCleanups.has(id) && this.hasCompleteSecretStorage()) {
+        await this.requirePendingSecretCleanupResolved(id);
+      }
       if (!this.customCatalogs.has(id)) return false;
-      const previousPersistentPassword = await this.readPersistentPassword(id);
+      const cleanupAlreadyPending = this.pendingSecretCleanups.has(id);
+      const previousPersistentPassword = cleanupAlreadyPending
+        ? undefined
+        : await this.readPersistentPassword(id);
       const previousCatalogs = this.customCatalogs;
       const nextCatalogs = new Map(previousCatalogs);
       nextCatalogs.delete(id);
       const previousPendingSecretCleanups = this.pendingSecretCleanups;
-      const nextPendingSecretCleanups = this.withPendingSecretCleanup(id);
+      const nextPendingSecretCleanups = cleanupAlreadyPending
+        ? previousPendingSecretCleanups
+        : this.withPendingSecretCleanup(id);
       await this.persistState(nextCatalogs, this.hiddenBuiltInIds, nextPendingSecretCleanups);
       this.customCatalogs = nextCatalogs;
       this.pendingSecretCleanups = nextPendingSecretCleanups;
-      if (!this.hasCompleteSecretStorage()) {
+      if (cleanupAlreadyPending || !this.hasCompleteSecretStorage()) {
         this.clearPasswordState(id);
         return true;
       }
@@ -525,6 +537,10 @@ export class OpdsCatalogStore {
         // A secret backend failure intentionally degrades to an explicit in-memory session secret.
       }
     }
+    this.storeSessionPassword(id, password);
+  }
+
+  private storeSessionPassword(id: string, password: string): void {
     this.sessionPasswords.set(id, password);
     this.passwordStorage.set(id, "session-only");
     this.blockedPersistentPasswords.delete(id);

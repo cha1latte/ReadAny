@@ -1183,6 +1183,103 @@ describe("OpdsCatalogStore", () => {
     await expect(restored.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
   });
 
+  it("allows safe missing-backend edits and deletion while retaining cleanup", async () => {
+    const { storage, secrets, persisted } = createStorage();
+    const complete = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+    await complete.load();
+    await complete.addCatalog({
+      name: "Private",
+      url: "https://catalog.test/opds",
+      auth: "basic",
+      username: "reader",
+      password: "old-password",
+    });
+    const missingStorage: OpdsCatalogStorage = {
+      kvGetItem: storage.kvGetItem,
+      kvSetItem: storage.kvSetItem,
+    };
+    const missing = new OpdsCatalogStore(missingStorage, () => OTHER_ID);
+    await missing.load();
+    vi.mocked(storage.secretGetItem).mockClear();
+    vi.mocked(storage.secretSetItem).mockClear();
+    vi.mocked(storage.secretRemoveItem).mockClear();
+
+    await expect(
+      missing.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+    ).resolves.toMatchObject({ url: "https://other.test/opds" });
+    await expect(missing.updateCatalog(CUSTOM_ID, { name: "Renamed" })).resolves.toMatchObject({
+      name: "Renamed",
+    });
+    await expect(missing.setCatalogEnabled(CUSTOM_ID, false)).resolves.toMatchObject({
+      enabled: false,
+    });
+    await expect(missing.removeCatalog(CUSTOM_ID)).resolves.toBe(true);
+
+    expect(missing.getCatalog(CUSTOM_ID)).toBeUndefined();
+    expect(JSON.parse(persisted() ?? "{}")).toMatchObject({
+      customCatalogs: [],
+      pendingSecretCleanups: [{ id: CUSTOM_ID, revision: 1, action: "remove-secret" }],
+    });
+    expect(secrets.get(opdsCatalogSecretKey(CUSTOM_ID))).toBe("old-password");
+    expect(storage.secretGetItem).not.toHaveBeenCalled();
+    expect(storage.secretSetItem).not.toHaveBeenCalled();
+    expect(storage.secretRemoveItem).not.toHaveBeenCalled();
+
+    const restored = new OpdsCatalogStore(storage, () => OTHER_ID);
+    await restored.load();
+
+    expect(storage.secretRemoveItem).toHaveBeenCalledWith(opdsCatalogSecretKey(CUSTOM_ID));
+    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
+    expect(restored.getCatalog(CUSTOM_ID)).toBeUndefined();
+    await expect(restored.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+  });
+
+  it("uses only a new session password for identity edits while cleanup is pending", async () => {
+    const { storage, secrets, persisted } = createStorage();
+    const complete = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+    await complete.load();
+    await complete.addCatalog({
+      name: "Private",
+      url: "https://catalog.test/opds",
+      auth: "basic",
+      username: "reader",
+      password: "old-password",
+    });
+    const missingStorage: OpdsCatalogStorage = {
+      kvGetItem: storage.kvGetItem,
+      kvSetItem: storage.kvSetItem,
+    };
+    const missing = new OpdsCatalogStore(missingStorage, () => OTHER_ID);
+    await missing.load();
+    await missing.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" });
+    vi.mocked(storage.secretGetItem).mockClear();
+    vi.mocked(storage.secretSetItem).mockClear();
+    vi.mocked(storage.secretRemoveItem).mockClear();
+
+    const updated = await missing.updateCatalog(CUSTOM_ID, {
+      url: "https://third.test/opds",
+      password: "new-session-password",
+    });
+
+    expect(updated).toMatchObject({
+      url: "https://third.test/opds",
+      passwordStorage: "session-only",
+    });
+    await expect(missing.getCredentials(CUSTOM_ID)).resolves.toEqual({
+      username: "reader",
+      password: "new-session-password",
+      catalogOrigin: "https://third.test",
+    });
+    expect(secrets.get(opdsCatalogSecretKey(CUSTOM_ID))).toBe("old-password");
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toEqual([
+      { id: CUSTOM_ID, revision: 1, action: "remove-secret" },
+    ]);
+    expect(storage.secretGetItem).not.toHaveBeenCalled();
+    expect(storage.secretSetItem).not.toHaveBeenCalled();
+    expect(storage.secretRemoveItem).not.toHaveBeenCalled();
+  });
+
   it("retains an orphan cleanup marker when deletion uses a partial adapter", async () => {
     const { storage, secrets, persisted } = createStorage();
     const complete = new OpdsCatalogStore(storage, () => CUSTOM_ID);

@@ -315,6 +315,9 @@ class ManagedAssetResponse implements OpdsAssetResponse {
   readonly body: ReadableStream<Uint8Array> | null;
 
   private readonly reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  private readonly cancellation = new AbortController();
+  private state: "open" | "cancelled" | "completed" | "failed" = "open";
+  private cancellationCleanup: Promise<void> | undefined;
   private used = false;
 
   constructor(
@@ -343,7 +346,7 @@ class ManagedAssetResponse implements OpdsAssetResponse {
         pull: async (controller) => {
           this.used = true;
           try {
-            const { done, value } = await lifecycle.race(reader.read());
+            const { done, value } = await this.readNext(reader);
             if (done) {
               controller.close();
               this.finishNormally();
@@ -351,14 +354,14 @@ class ManagedAssetResponse implements OpdsAssetResponse {
             }
             controller.enqueue(value);
           } catch (error) {
-            const mapped = lifecycle.mapError(error);
-            await this.abort(error);
+            const mapped =
+              this.state === "cancelled" ? new OpdsError("cancelled") : lifecycle.mapError(error);
+            if (this.state !== "cancelled") void this.fail(error);
             controller.error(mapped);
           }
         },
         cancel: async (reason) => {
-          this.used = true;
-          await this.abort(reason);
+          await this.transitionToCancelled(reason);
         },
       },
       { highWaterMark: 0 },
@@ -392,12 +395,11 @@ class ManagedAssetResponse implements OpdsAssetResponse {
   }
 
   async cancel(reason?: unknown): Promise<void> {
-    if (disposedTransports.has(this.response)) return;
-    this.used = true;
-    await this.abort(reason);
+    await this.transitionToCancelled(reason);
   }
 
   private async consumeBytes(): Promise<Uint8Array> {
+    this.throwIfCancelled();
     if (this.used || this.body?.locked) {
       throw new TypeError("The response body has already been consumed.");
     }
@@ -428,11 +430,59 @@ class ManagedAssetResponse implements OpdsAssetResponse {
   }
 
   private finishNormally(): void {
+    if (this.state !== "open") return;
+    this.state = "completed";
     disposeResponse(this.response);
     this.lifecycle.dispose();
   }
 
-  private async abort(reason?: unknown): Promise<void> {
+  private async readNext(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+  ): Promise<ReadableStreamReadResult<Uint8Array>> {
+    this.throwIfCancelled();
+    let onCancel: (() => void) | undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      onCancel = () => reject(new OpdsError("cancelled"));
+      this.cancellation.signal.addEventListener("abort", onCancel, { once: true });
+    });
+    try {
+      const result = await Promise.race([this.lifecycle.race(reader.read()), cancelled]);
+      this.throwIfCancelled();
+      return result;
+    } catch (error) {
+      if (this.state === "cancelled") throw new OpdsError("cancelled");
+      throw error;
+    } finally {
+      if (onCancel) this.cancellation.signal.removeEventListener("abort", onCancel);
+    }
+  }
+
+  private throwIfCancelled(): void {
+    if (this.state === "cancelled") throw new OpdsError("cancelled");
+  }
+
+  private transitionToCancelled(reason?: unknown): Promise<void> {
+    if (this.state === "cancelled") {
+      return this.cancellationCleanup ?? Promise.resolve();
+    }
+    if (this.state !== "open" || disposedTransports.has(this.response)) {
+      return Promise.resolve();
+    }
+
+    this.state = "cancelled";
+    this.used = true;
+    this.cancellation.abort();
+    this.cancellationCleanup = this.abortReader(reason);
+    return this.cancellationCleanup;
+  }
+
+  private fail(reason?: unknown): Promise<void> {
+    if (this.state !== "open") return Promise.resolve();
+    this.state = "failed";
+    return this.abortReader(reason);
+  }
+
+  private async abortReader(reason?: unknown): Promise<void> {
     abortResponseTransport(this.response);
     this.lifecycle.dispose();
     try {

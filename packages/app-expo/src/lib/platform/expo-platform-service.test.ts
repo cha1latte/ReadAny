@@ -247,6 +247,23 @@ describe("ExpoPlatformService standards fetch contract", () => {
     expect(signalForCall().aborted).toBe(true);
   });
 
+  it("keeps explicit asset cancellation stable for future consumers", async () => {
+    expoFetch.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: { "Content-Type": "application/epub+zip" },
+      }),
+    );
+    const asset = await new OpdsClient(new ExpoPlatformService()).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    await Promise.all([asset.cancel(), asset.cancel()]);
+
+    expect(signalForCall().aborted).toBe(true);
+    await expect(asset.arrayBuffer()).rejects.toMatchObject({ code: "cancelled" });
+  });
+
   it("reads exact asset bytes when React Native Response cannot wrap a stream", async () => {
     const bytes = Uint8Array.of(1, 0, 255, 127, 64);
     const source = new Response(bytes, {

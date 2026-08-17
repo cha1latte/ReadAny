@@ -578,10 +578,132 @@ describe("OpdsClient assets", () => {
     );
 
     expect(await asset.text()).toBe("asset");
+    await Promise.all([asset.cancel(), asset.cancel()]);
 
     expect(transport.cancelTransport).not.toHaveBeenCalled();
     expect(transport.onDispose).toHaveBeenCalledOnce();
   });
+
+  it("rejects an active multi-chunk read when explicit cancellation resolves the native read as done", async () => {
+    let reads = 0;
+    let resolveSecond: ((result: ReadableStreamReadResult<Uint8Array>) => void) | undefined;
+    let markSecondStarted: (() => void) | undefined;
+    const secondStarted = new Promise<void>((resolve) => {
+      markSecondStarted = resolve;
+    });
+    const nativeReader = {
+      read: vi.fn(() => {
+        reads += 1;
+        if (reads === 1) {
+          return Promise.resolve({ done: false as const, value: Uint8Array.of(1, 2, 3) });
+        }
+        markSecondStarted?.();
+        return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+          resolveSecond = resolve;
+        });
+      }),
+      cancel: vi.fn(async () => {
+        resolveSecond?.({ done: true, value: undefined });
+      }),
+    };
+    const source = response("unused", { headers: {} });
+    Object.defineProperty(source, "body", {
+      value: { getReader: () => nativeReader },
+    });
+    const transport = transportResponse(source);
+    const platform = fakePlatform(() => transport.response);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+    const reading = asset.arrayBuffer();
+    await secondStarted;
+
+    const cancels = [asset.cancel(), asset.cancel(), asset.cancel()];
+
+    await expectOpdsError(reading, "cancelled");
+    await Promise.all(cancels);
+    await asset.cancel();
+    await expectOpdsError(asset.text(), "cancelled");
+    expect(nativeReader.read).toHaveBeenCalledTimes(2);
+    expect(nativeReader.cancel).toHaveBeenCalledOnce();
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+    expect(transport.onDispose).toHaveBeenCalledOnce();
+  });
+
+  it("maps a native read rejection caused by explicit cancellation to cancelled", async () => {
+    let rejectRead: ((error: Error) => void) | undefined;
+    let markReading: (() => void) | undefined;
+    const readingStarted = new Promise<void>((resolve) => {
+      markReading = resolve;
+    });
+    const nativeReader = {
+      read: vi.fn(
+        () =>
+          new Promise<ReadableStreamReadResult<Uint8Array>>((_resolve, reject) => {
+            rejectRead = reject;
+            markReading?.();
+          }),
+      ),
+      cancel: vi.fn(async () => {
+        rejectRead?.(new Error("native request aborted"));
+      }),
+    };
+    const source = response("unused", { headers: {} });
+    Object.defineProperty(source, "body", {
+      value: { getReader: () => nativeReader },
+    });
+    const platform = fakePlatform(() => source);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+    const reading = asset.arrayBuffer();
+    await readingStarted;
+
+    await asset.cancel();
+
+    await expectOpdsError(reading, "cancelled");
+  });
+
+  it("makes cancellation before consumption stable and idempotent", async () => {
+    const nativeReader = {
+      read: vi.fn(),
+      cancel: vi.fn(async () => {}),
+    };
+    const source = response("unused", { headers: {} });
+    Object.defineProperty(source, "body", {
+      value: { getReader: () => nativeReader },
+    });
+    const transport = transportResponse(source);
+    const platform = fakePlatform(() => transport.response);
+    const asset = await new OpdsClient(platform).fetchAsset(
+      "https://catalog.test/book.epub",
+      "https://catalog.test",
+    );
+
+    await Promise.all([asset.cancel(), asset.cancel()]);
+
+    await expectOpdsError(asset.arrayBuffer(), "cancelled");
+    expect(nativeReader.read).not.toHaveBeenCalled();
+    expect(nativeReader.cancel).toHaveBeenCalledOnce();
+    expect(transport.cancelTransport).toHaveBeenCalledOnce();
+  });
+
+  it.each(["arrayBuffer", "text", "json", "blob"] as const)(
+    "makes future %s consumption reject cancelled",
+    async (method) => {
+      const platform = fakePlatform(() => response("asset", { headers: {} }));
+      const asset = await new OpdsClient(platform).fetchAsset(
+        "https://catalog.test/book.epub",
+        "https://catalog.test",
+      );
+
+      await asset.cancel();
+
+      await expectOpdsError(asset[method](), "cancelled");
+    },
+  );
 
   it("aborts the asset transport when its returned body is cancelled", async () => {
     const transport = transportResponse(response("asset", { headers: {} }));
@@ -593,6 +715,7 @@ describe("OpdsClient assets", () => {
 
     await asset.body?.cancel();
 
+    await expectOpdsError(asset.text(), "cancelled");
     expect(transport.cancelTransport).toHaveBeenCalledOnce();
     expect(transport.onDispose).toHaveBeenCalledOnce();
   });

@@ -84,6 +84,7 @@
         "passwordSessionOnly": "密码仅在本次会话中可用",
         "passwordStoredSecurely": "密码已保存到安全存储",
         "passwordUnchanged": "留空可保留已保存的密码",
+        "passwordRequiredForIdentityChange": "请为这些更改重新输入密码",
         "publicHttpBlocked": "公共目录必须使用 HTTPS。",
         "saveFailed": "无法保存目录。",
         "subtitle": "连接图书目录，无需把密码写进网址。",

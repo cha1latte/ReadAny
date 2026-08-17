@@ -84,6 +84,7 @@
         "passwordSessionOnly": "이번 세션에서만 비밀번호 사용 가능",
         "passwordStoredSecurely": "비밀번호가 보안 저장소에 저장됨",
         "passwordUnchanged": "저장된 비밀번호를 유지하려면 비워 두세요",
+        "passwordRequiredForIdentityChange": "이 변경을 위해 비밀번호를 다시 입력하세요",
         "publicHttpBlocked": "공개 카탈로그는 HTTPS를 사용해야 합니다.",
         "saveFailed": "카탈로그를 저장하지 못했습니다.",
         "subtitle": "주소에 비밀번호를 넣지 않고 책 카탈로그에 연결합니다.",

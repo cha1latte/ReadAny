@@ -3,6 +3,7 @@
 import { DOMParser } from "@xmldom/xmldom";
 import { SYMBOL, getFeed } from "foliate-js/opds.js";
 import type { BookFormat } from "../types/book";
+import { classifyOpdsAcquisitionRelation } from "./opds-relations";
 import { sanitizeOpdsDescription } from "./opds-sanitize";
 import type {
   OpdsAcquisition,
@@ -12,15 +13,6 @@ import type {
   OpdsSearchDescriptor,
 } from "./opds-types";
 
-const ACQUISITION_REL = "http://opds-spec.org/acquisition";
-const ACQUISITION_RELS = new Set([
-  "acquisition",
-  "borrow",
-  "buy",
-  "download",
-  "preview",
-  "subscribe",
-]);
 const ATOM_NAMESPACE = "http://www.w3.org/2005/Atom";
 const IMAGE_RELS = new Set([
   "cover",
@@ -108,9 +100,7 @@ function normalizeRel(value: unknown): string[] {
 }
 
 function isAcquisitionRelation(rel: string): boolean {
-  return (
-    ACQUISITION_RELS.has(rel) || rel === ACQUISITION_REL || rel.startsWith(`${ACQUISITION_REL}/`)
-  );
+  return classifyOpdsAcquisitionRelation([rel]) !== undefined;
 }
 
 function isAcquisitionLink(value: unknown): value is UnknownRecord {
@@ -215,7 +205,9 @@ function getBookFormat(type: string | undefined, url: string): BookFormat | null
 function mapAcquisition(value: unknown, documentUrl: string): OpdsAcquisition | undefined {
   const link = mapLink(value, documentUrl);
   if (!link || !isAcquisitionLink(value)) return undefined;
-  return { ...link, format: getBookFormat(link.type, link.url) };
+  const relation = classifyOpdsAcquisitionRelation(link.rel);
+  if (!relation) return undefined;
+  return { ...link, format: getBookFormat(link.type, link.url), relation };
 }
 
 function mapPublication(value: unknown, documentUrl: string): OpdsPublication {
@@ -518,6 +510,19 @@ function parseXml(body: string, documentUrl: string): OpdsFeed {
   ) {
     throw new Error("Invalid OPDS XML document");
   }
+
+  const hasOpdsSemantics = Array.from(root.getElementsByTagName("link")).some((link) => {
+    const rel = (link.getAttribute("rel") ?? "").trim().split(/\s+/).filter(Boolean);
+    const type = (link.getAttribute("type") ?? "").toLowerCase();
+    return (
+      classifyOpdsAcquisitionRelation(rel) !== undefined ||
+      (type.includes("application/atom+xml") &&
+        /(?:^|;)\s*profile\s*=\s*["']?opds-catalog/i.test(type)) ||
+      (rel.includes("search") && type.includes("application/opensearchdescription+xml")) ||
+      rel.includes("http://opds-spec.org/facet")
+    );
+  });
+  if (!hasOpdsSemantics) throw new Error("Invalid OPDS XML document");
 
   try {
     const normalized = getFeed(document as unknown as Document);

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { listSupportedAcquisitions } from "./opds-acquisition";
 import { parseOpdsDocument } from "./opds-parser";
 
 const ATOM = `<?xml version="1.0"?>
@@ -88,6 +89,50 @@ const OPDS2 = JSON.stringify({
 });
 
 describe("parseOpdsDocument", () => {
+  it.each([
+    ["OPDS 2 acquisition", "json", "acquisition", "direct", true],
+    ["OPDS 2 download", "json", "download", "direct", true],
+    ["OPDS 2 borrow", "json", "borrow", "borrow", false],
+    ["OPDS 2 buy", "json", "buy", "buy", false],
+    ["OPDS 2 preview", "json", "preview", "preview", false],
+    ["OPDS 2 subscribe", "json", "subscribe", "subscribe", false],
+    ["OPDS 1 acquisition", "xml", "http://opds-spec.org/acquisition", "direct", true],
+    ["OPDS 1 open access", "xml", "http://opds-spec.org/acquisition/open-access", "direct", true],
+    ["OPDS 1 borrow", "xml", "http://opds-spec.org/acquisition/borrow", "borrow", false],
+    ["OPDS 1 buy", "xml", "http://opds-spec.org/acquisition/buy", "buy", false],
+    ["OPDS 1 sample", "xml", "http://opds-spec.org/acquisition/sample", "sample", false],
+    ["OPDS 1 subscribe", "xml", "http://opds-spec.org/acquisition/subscribe", "subscribe", false],
+  ] as const)(
+    "preserves %s relation semantics through acquisition selection",
+    (_name, version, rel, kind, downloadable) => {
+      const body =
+        version === "json"
+          ? JSON.stringify({
+              metadata: { title: "Catalog" },
+              links: [{ rel: "self", href: "feed.json", type: "application/opds+json" }],
+              publications: [
+                {
+                  metadata: { title: "Book" },
+                  links: [{ rel, href: "book.epub", type: "application/epub+zip" }],
+                },
+              ],
+            })
+          : `<feed xmlns="http://www.w3.org/2005/Atom"><title>Catalog</title><entry><title>Book</title><link rel="${rel}" href="book.epub" type="application/epub+zip" /></entry></feed>`;
+      const feed = parseOpdsDocument(
+        body,
+        version === "json" ? "application/opds+json" : "application/atom+xml;profile=opds-catalog",
+        `https://catalog.test/feed.${version}`,
+      );
+
+      expect(feed.publications[0]?.acquisitions[0]).toMatchObject({
+        relation: { kind, downloadable },
+      });
+      expect(listSupportedAcquisitions(feed.publications[0] ?? ({} as never))).toHaveLength(
+        downloadable ? 1 : 0,
+      );
+    },
+  );
+
   it("normalizes an OPDS 1 Atom acquisition feed", () => {
     const feed = parseOpdsDocument(
       ATOM,
@@ -457,6 +502,18 @@ describe("parseOpdsDocument", () => {
         "application/atom+xml",
         "https://catalog.test/feed.xml",
       ),
+    ).toThrow("Invalid OPDS XML document");
+  });
+
+  it.each([
+    ["empty Atom feed", '<feed xmlns="http://www.w3.org/2005/Atom"><title>News</title></feed>'],
+    [
+      "generic Atom feed",
+      '<feed xmlns="http://www.w3.org/2005/Atom"><title>News</title><entry><title>Story</title><link href="story.html" type="text/html" /></entry></feed>',
+    ],
+  ])("rejects a non-OPDS %s", (_name, body) => {
+    expect(() =>
+      parseOpdsDocument(body, "application/atom+xml", "https://catalog.test/feed.xml"),
     ).toThrow("Invalid OPDS XML document");
   });
 

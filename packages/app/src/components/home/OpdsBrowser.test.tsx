@@ -219,7 +219,21 @@ describe("OpdsBrowser", () => {
       />,
     );
     await screen.findByRole("heading", { name: "Root Shelf" });
+    expect(client.open).toHaveBeenLastCalledWith(
+      "https://catalog.test/opds",
+      undefined,
+      expect.any(AbortSignal),
+      "https://catalog.test",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Child" }));
+    await waitFor(() =>
+      expect(client.open).toHaveBeenLastCalledWith(
+        "https://catalog.test/child",
+        undefined,
+        expect.any(AbortSignal),
+        "https://catalog.test",
+      ),
+    );
     await screen.findByRole("alert");
     await userEvent.click(screen.getByRole("button", { name: "library.opds.back" }));
     expect(screen.queryByRole("alert")).toBeNull();

@@ -4,9 +4,10 @@ import {
   type OpdsCatalog,
   type OpdsCatalogAuth,
   type OpdsCatalogStore,
+  canPreserveOpdsCatalogPassword,
   classifyOpdsUrl,
 } from "@readany/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -24,6 +25,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { createOpdsFormSaveOwner } from "./opds-form-save-owner";
 
 interface OpdsCatalogFormSheetProps {
   visible: boolean;
@@ -31,6 +33,7 @@ interface OpdsCatalogFormSheetProps {
   store: OpdsCatalogStore;
   onClose: () => void;
   onSaved: () => void;
+  onBackgroundSaved?: () => void;
 }
 
 export function OpdsCatalogFormSheet({
@@ -39,6 +42,7 @@ export function OpdsCatalogFormSheet({
   store,
   onClose,
   onSaved,
+  onBackgroundSaved,
 }: OpdsCatalogFormSheetProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -51,30 +55,47 @@ export function OpdsCatalogFormSheet({
   const [password, setPassword] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [renderedOpenGeneration, setRenderedOpenGeneration] = useState(0);
   const [error, setError] = useState<string>();
+  const saveOwner = useRef(createOpdsFormSaveOwner());
+  const wasVisible = useRef(false);
 
   useEffect(() => {
+    const opening = visible && !wasVisible.current;
+    wasVisible.current = visible;
     if (!visible) {
+      saveOwner.current.close();
       setPassword("");
       return;
     }
+    if (!opening) return;
+    const generation = saveOwner.current.open();
+    setRenderedOpenGeneration(generation);
     setName(catalog?.name ?? "");
     setUrl(catalog?.url ?? "");
     setAuth(catalog?.auth ?? "anonymous");
     setUsername(catalog?.username ?? "");
     setPassword("");
     setEnabled(catalog?.enabled ?? true);
-    setSubmitting(false);
     setError(undefined);
   }, [catalog, visible]);
 
+  const hasPassword = (catalog?.passwordStorage ?? "none") !== "none";
+  const preservesPassword = Boolean(
+    catalog &&
+      canPreserveOpdsCatalogPassword(catalog, {
+        url: url.trim(),
+        auth,
+        username: username.trim(),
+      }),
+  );
   const canSubmit =
     name.trim().length > 0 &&
     url.trim().length > 0 &&
     (auth === "anonymous" ||
-      (username.trim().length > 0 &&
-        (password.length > 0 || (catalog?.passwordStorage ?? "none") !== "none"))) &&
+      (username.trim().length > 0 && (password.length > 0 || preservesPassword))) &&
     !submitting;
+  const savingCurrentOpen = saveOwner.current.isSavingCurrent(renderedOpenGeneration);
 
   const s = useMemo(
     () =>
@@ -208,8 +229,11 @@ export function OpdsCatalogFormSheet({
 
   const persist = async () => {
     if (!canSubmit) return;
+    const token = saveOwner.current.start(renderedOpenGeneration);
+    if (!token) return;
     setSubmitting(true);
     setError(undefined);
+    let succeeded = false;
     try {
       const input = {
         name: name.trim(),
@@ -222,12 +246,20 @@ export function OpdsCatalogFormSheet({
       };
       if (catalog) await store.updateCatalog(catalog.id, input);
       else await store.addCatalog(input);
-      setPassword("");
-      onSaved();
+      succeeded = true;
     } catch {
-      setError(t("library.opds.form.saveFailed"));
+      // Ownership is resolved in finally so stale failures cannot touch a reopened form.
     } finally {
-      setSubmitting(false);
+      const outcome = saveOwner.current.finish(token);
+      setSubmitting(saveOwner.current.hasActiveSave());
+      if (succeeded && outcome === "current") {
+        setPassword("");
+        onSaved();
+      } else if (succeeded && outcome === "stale") {
+        onBackgroundSaved?.();
+      } else if (!succeeded && outcome === "current") {
+        setError(t("library.opds.form.saveFailed"));
+      }
     }
   };
 
@@ -258,8 +290,21 @@ export function OpdsCatalogFormSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.overlay} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        if (!savingCurrentOpen) onClose();
+      }}
+    >
+      <Pressable
+        style={s.overlay}
+        disabled={savingCurrentOpen}
+        onPress={() => {
+          if (!savingCurrentOpen) onClose();
+        }}
+      >
         <KeyboardAvoidingView
           style={s.keyboardWrap}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -288,6 +333,7 @@ export function OpdsCatalogFormSheet({
                   placeholder={t("library.opds.form.namePlaceholder")}
                   placeholderTextColor={colors.mutedForeground}
                   accessibilityLabel={t("library.opds.form.name")}
+                  editable={!savingCurrentOpen}
                 />
               </View>
               <View style={s.field}>
@@ -302,6 +348,7 @@ export function OpdsCatalogFormSheet({
                   placeholder="https://catalog.example.com/opds"
                   placeholderTextColor={colors.mutedForeground}
                   accessibilityLabel={t("library.opds.form.url")}
+                  editable={!savingCurrentOpen}
                 />
               </View>
               <View style={s.field}>
@@ -314,6 +361,7 @@ export function OpdsCatalogFormSheet({
                       onPress={() => setAuth(mode)}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: auth === mode }}
+                      disabled={savingCurrentOpen}
                     >
                       <Text style={[s.segmentText, auth === mode && s.segmentTextActive]}>
                         {mode === "anonymous"
@@ -335,6 +383,7 @@ export function OpdsCatalogFormSheet({
                       autoCapitalize="none"
                       autoCorrect={false}
                       accessibilityLabel={t("library.opds.form.username")}
+                      editable={!savingCurrentOpen}
                     />
                   </View>
                   <View style={s.field}>
@@ -347,12 +396,17 @@ export function OpdsCatalogFormSheet({
                       autoCapitalize="none"
                       autoCorrect={false}
                       placeholder={
-                        catalog?.passwordStorage !== "none"
-                          ? t("library.opds.form.passwordUnchanged")
+                        hasPassword
+                          ? t(
+                              preservesPassword
+                                ? "library.opds.form.passwordUnchanged"
+                                : "library.opds.form.passwordRequiredForIdentityChange",
+                            )
                           : undefined
                       }
                       placeholderTextColor={colors.mutedForeground}
                       accessibilityLabel={t("library.opds.form.password")}
+                      editable={!savingCurrentOpen}
                     />
                     {catalog ? (
                       <Text style={s.helper}>
@@ -375,6 +429,7 @@ export function OpdsCatalogFormSheet({
                   value={enabled}
                   onValueChange={setEnabled}
                   accessibilityLabel={t("library.opds.form.enabled")}
+                  disabled={savingCurrentOpen}
                 />
               </View>
               {error ? (
@@ -384,7 +439,12 @@ export function OpdsCatalogFormSheet({
               ) : null}
             </ScrollView>
             <View style={s.footer}>
-              <TouchableOpacity style={[s.button, s.cancelButton]} onPress={onClose}>
+              <TouchableOpacity
+                style={[s.button, s.cancelButton]}
+                onPress={onClose}
+                disabled={savingCurrentOpen}
+                accessibilityState={{ disabled: savingCurrentOpen }}
+              >
                 <Text style={s.cancelText}>{t("library.opds.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity

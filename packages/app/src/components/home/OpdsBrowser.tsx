@@ -188,6 +188,7 @@ export function OpdsBrowser({
       createOpdsCoverCache({
         maxEntries: MAX_COVER_CACHE_ENTRIES,
         maxBytes: MAX_COVER_CACHE_BYTES,
+        maxLoadBytes: MAX_COVER_BYTES,
         load: async (url, signal) => {
           const credentials = await store.getCredentials(catalog.id);
           if (signal.aborted) throw new Error("cancelled");
@@ -220,10 +221,10 @@ export function OpdsBrowser({
   const openUrl = useCallback(
     (url: string, mode: LoadMode) => {
       void startOperation(url, mode, (credentials, signal) =>
-        client.open(url, credentials, signal),
+        client.open(url, credentials, signal, catalogOrigin),
       );
     },
-    [client, startOperation],
+    [catalogOrigin, client, startOperation],
   );
 
   useEffect(() => {
@@ -275,7 +276,7 @@ export function OpdsBrowser({
     if (!descriptor || !trimmed) return;
     const key = `opds-search:${encodeURIComponent(trimmed)}`;
     void startOperation(key, "push", (credentials, signal) =>
-      client.search(descriptor, trimmed, credentials, signal),
+      client.search(descriptor, trimmed, credentials, signal, catalogOrigin),
     );
   };
 

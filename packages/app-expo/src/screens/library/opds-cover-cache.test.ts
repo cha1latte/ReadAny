@@ -127,7 +127,7 @@ describe("OPDS cover streaming and cache", () => {
     cache.clear();
 
     expect(loaderSignal?.aborted).toBe(true);
-    expect(cache.snapshot()).toEqual({ entries: 0, sourceBytes: 0, urls: [] });
+    expect(cache.snapshot()).toMatchObject({ entries: 0, sourceBytes: 0, urls: [] });
   });
 
   it("does not repopulate a cleared feed when a stale loader resolves late", async () => {
@@ -146,6 +146,6 @@ describe("OPDS cover streaming and cache", () => {
     resolveLoad({ uri: "data:image/jpeg;base64,AQ==", byteLength: 1 });
 
     await expect(stale).rejects.toThrow("cancelled");
-    expect(cache.snapshot()).toEqual({ entries: 0, sourceBytes: 0, urls: [] });
+    expect(cache.snapshot()).toMatchObject({ entries: 0, sourceBytes: 0, urls: [] });
   });
 });

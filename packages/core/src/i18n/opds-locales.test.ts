@@ -87,6 +87,7 @@ const REQUIRED_KEYS = [
   "form.namePlaceholder",
   "form.password",
   "form.passwordMissing",
+  "form.passwordRequiredForIdentityChange",
   "form.passwordSessionOnly",
   "form.passwordStoredSecurely",
   "form.passwordUnchanged",

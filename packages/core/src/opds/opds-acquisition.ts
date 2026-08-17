@@ -2,6 +2,7 @@ import type { IPlatformService } from "../services/platform";
 import type { BookFormat, BookMeta } from "../types/book";
 import { normalizeIsbn } from "../utils/book-metadata";
 import { type OpdsAssetResponse, type OpdsClient, OpdsError } from "./opds-client";
+import { classifyOpdsAcquisitionRelation } from "./opds-relations";
 import type { OpdsAcquisition, OpdsCredentials, OpdsPublication } from "./opds-types";
 
 const FORMAT_BY_MEDIA_TYPE: Readonly<Record<string, BookFormat>> = {
@@ -33,7 +34,6 @@ const SUPPORTED_FORMATS = new Set<BookFormat>([
   "umd",
 ]);
 
-const DIRECT_ACQUISITION_REL = "http://opds-spec.org/acquisition";
 /** Hard safety ceiling for the whole-file platform write fallback. */
 export const OPDS_MAX_ACQUISITION_BYTES = 256 * 1024 * 1024;
 
@@ -135,8 +135,9 @@ function getSupportedFormat(acquisition: OpdsAcquisition): BookFormat | undefine
 }
 
 function isDirectAcquisition(acquisition: OpdsAcquisition): boolean {
-  return acquisition.rel.some(
-    (rel) => rel === DIRECT_ACQUISITION_REL || rel.startsWith(`${DIRECT_ACQUISITION_REL}/`),
+  return (
+    (acquisition.relation ?? classifyOpdsAcquisitionRelation(acquisition.rel))?.downloadable ===
+    true
   );
 }
 

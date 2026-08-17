@@ -107,6 +107,65 @@ describe("OpdsCatalogFormDialog", () => {
     expect(onSaved).toHaveBeenCalledOnce();
   });
 
+  it("preserves a stored password for a same-origin path edit", async () => {
+    const updateCatalog = vi.fn(async (_id: string, _update: unknown) => undefined);
+    renderControlledForm({
+      store: { updateCatalog },
+      catalog: {
+        id: "custom",
+        name: "Private",
+        url: "https://catalog.test/opds",
+        auth: "basic",
+        username: "reader",
+        enabled: true,
+        builtIn: false,
+        hidden: false,
+        passwordStorage: "persistent",
+      },
+    });
+
+    const url = screen.getByLabelText("library.opds.form.url");
+    await userEvent.clear(url);
+    await userEvent.type(url, "https://catalog.test/opds/v2");
+    expect(screen.getByPlaceholderText("library.opds.form.passwordUnchanged")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "library.opds.save" }));
+
+    await waitFor(() => expect(updateCatalog).toHaveBeenCalledOnce());
+    expect(updateCatalog.mock.calls[0]?.[1]).not.toHaveProperty("password");
+  });
+
+  it("requires a new password before saving a changed credential identity", async () => {
+    const updateCatalog = vi.fn(async (_id: string, _update: unknown) => undefined);
+    renderControlledForm({
+      store: { updateCatalog },
+      catalog: {
+        id: "custom",
+        name: "Private",
+        url: "https://catalog.test/opds",
+        auth: "basic",
+        username: "reader",
+        enabled: true,
+        builtIn: false,
+        hidden: false,
+        passwordStorage: "persistent",
+      },
+    });
+
+    const url = screen.getByLabelText("library.opds.form.url");
+    await userEvent.clear(url);
+    await userEvent.type(url, "https://other.test/opds");
+    expect(
+      screen.getByPlaceholderText("library.opds.form.passwordRequiredForIdentityChange"),
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "library.opds.save" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await userEvent.type(screen.getByLabelText("library.opds.form.password"), "new-secret");
+    expect(
+      (screen.getByRole("button", { name: "library.opds.save" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
   it("locks every mutable control and dismissal path during a current-generation save", async () => {
     const firstSave = deferred<{ id: string }>();
     const addCatalog = vi.fn(() => firstSave.promise);

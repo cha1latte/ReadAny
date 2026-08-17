@@ -64,6 +64,7 @@ export {
   OPDS_BUILT_IN_CATALOGS,
   OPDS_CATALOG_STORAGE_KEY,
   OpdsCatalogStore,
+  canPreserveOpdsCatalogPassword,
   opdsCatalogSecretKey,
   type OpdsCatalog,
   type OpdsCatalogAuth,
@@ -86,6 +87,11 @@ export {
   type SupportedOpdsAcquisition,
 } from "./opds/opds-acquisition";
 export { parseOpdsDocument } from "./opds/opds-parser";
+export {
+  classifyOpdsAcquisitionRelation,
+  type OpdsAcquisitionRelation,
+  type OpdsAcquisitionRelationKind,
+} from "./opds/opds-relations";
 export { classifyOpdsUrl } from "./opds/opds-security";
 export { createOpdsRuntime } from "./opds/opds-runtime";
 export * from "./opds/opds-view-state";

@@ -14,6 +14,7 @@ import {
   type OpdsCatalog,
   type OpdsCatalogAuth,
   type OpdsCatalogStore,
+  canPreserveOpdsCatalogPassword,
   classifyOpdsUrl,
 } from "@readany/core";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -78,11 +79,19 @@ export function OpdsCatalogFormDialog({
   }, [catalog, open]);
 
   const hasPassword = (catalog?.passwordStorage ?? "none") !== "none";
+  const preservesPassword = Boolean(
+    catalog &&
+      canPreserveOpdsCatalogPassword(catalog, {
+        url: url.trim(),
+        auth,
+        username: username.trim(),
+      }),
+  );
   const canSubmit =
     name.trim().length > 0 &&
     url.trim().length > 0 &&
     (auth === "anonymous" ||
-      (username.trim().length > 0 && (password.length > 0 || hasPassword))) &&
+      (username.trim().length > 0 && (password.length > 0 || preservesPassword))) &&
     !submitting;
   const savingCurrentOpen =
     submitting && activeSave.current?.openGeneration === renderedOpenGeneration;
@@ -272,7 +281,13 @@ export function OpdsCatalogFormDialog({
                   showPasswordLabel={t("library.opds.showPassword")}
                   hidePasswordLabel={t("library.opds.hidePassword")}
                   placeholder={
-                    catalog && hasPassword ? t("library.opds.form.passwordUnchanged") : undefined
+                    catalog && hasPassword
+                      ? t(
+                          preservesPassword
+                            ? "library.opds.form.passwordUnchanged"
+                            : "library.opds.form.passwordRequiredForIdentityChange",
+                        )
+                      : undefined
                   }
                 />
               </label>

@@ -84,6 +84,7 @@
         "passwordSessionOnly": "Mot de passe disponible pour cette session uniquement",
         "passwordStoredSecurely": "Mot de passe enregistré dans le stockage sécurisé",
         "passwordUnchanged": "Laissez vide pour conserver le mot de passe enregistré",
+        "passwordRequiredForIdentityChange": "Saisissez à nouveau le mot de passe pour ces modifications",
         "publicHttpBlocked": "Les catalogues publics doivent utiliser HTTPS.",
         "saveFailed": "Le catalogue n’a pas pu être enregistré.",
         "subtitle": "Connectez un catalogue de livres sans inclure son mot de passe dans l’adresse.",

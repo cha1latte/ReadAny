@@ -55,6 +55,7 @@ interface RequestOptions {
   accept: string;
   responseType: "text" | "arraybuffer";
   credentials?: OpdsCredentials;
+  catalogOrigin?: string;
 }
 
 type OpdsFetchPlatform = Pick<IPlatformService, "fetch">;
@@ -207,13 +208,48 @@ function authError(response: Response): OpdsError | undefined {
   return new OpdsError("unsupported-auth");
 }
 
-function checkUrl(value: string): URL {
+function getConfirmedInsecureOrigin(catalogOrigin?: string): string | undefined {
+  if (!catalogOrigin) return undefined;
+  const classification = classifyOpdsUrl(catalogOrigin);
+  if (!classification.allowed) throw new OpdsError("insecure-url");
+  try {
+    const url = new URL(catalogOrigin);
+    return classification.requiresInsecureConfirmation ? url.origin : undefined;
+  } catch {
+    throw new OpdsError("insecure-url");
+  }
+}
+
+function checkUrl(value: string, confirmedInsecureOrigin?: string): URL {
   const classification = classifyOpdsUrl(value);
   if (!classification.allowed) throw new OpdsError("insecure-url");
   try {
-    return new URL(value);
+    const url = new URL(value);
+    if (classification.requiresInsecureConfirmation && url.origin !== confirmedInsecureOrigin) {
+      throw new OpdsError("insecure-url");
+    }
+    return url;
   } catch {
     throw new OpdsError("insecure-url");
+  }
+}
+
+function canonicalizeAdvertisedSearchUrl(value: string, sourceUrl?: string): string {
+  if (!sourceUrl) return value;
+  let source: URL;
+  try {
+    source = new URL(sourceUrl);
+  } catch {
+    return value;
+  }
+  const classification = classifyOpdsUrl(value);
+  if (source.protocol !== "https:" || classification.reason !== "public-http") return value;
+  try {
+    const upgraded = new URL(value);
+    upgraded.protocol = "https:";
+    return upgraded.href;
+  } catch {
+    return value;
   }
 }
 
@@ -569,7 +605,8 @@ export class OpdsClient {
     lifecycle: RequestLifecycle,
   ): Promise<RequestResult> {
     const authOrigin = getAuthOrigin(options.credentials);
-    let current = checkUrl(url);
+    const confirmedInsecureOrigin = getConfirmedInsecureOrigin(options.catalogOrigin);
+    let current = checkUrl(url, confirmedInsecureOrigin);
 
     for (let redirects = 0; ; redirects += 1) {
       lifecycle.throwIfAborted();
@@ -610,7 +647,7 @@ export class OpdsClient {
       if (!location) throw new OpdsError("invalid-catalog");
       let next: URL;
       try {
-        next = checkUrl(new URL(location, current).href);
+        next = checkUrl(new URL(location, current).href, confirmedInsecureOrigin);
       } catch (error) {
         if (error instanceof OpdsError) throw error;
         throw new OpdsError("insecure-url");
@@ -622,7 +659,12 @@ export class OpdsClient {
     }
   }
 
-  async open(url: string, credentials?: OpdsCredentials, signal?: AbortSignal): Promise<OpdsFeed> {
+  async open(
+    url: string,
+    credentials?: OpdsCredentials,
+    signal?: AbortSignal,
+    catalogOrigin?: string,
+  ): Promise<OpdsFeed> {
     const lifecycle = new RequestLifecycle(signal);
     try {
       const { response, finalUrl } = await this.request(
@@ -631,6 +673,7 @@ export class OpdsClient {
           accept: CATALOG_ACCEPT,
           responseType: "text",
           credentials,
+          catalogOrigin: catalogOrigin ?? credentials?.catalogOrigin,
         },
         lifecycle,
       );
@@ -656,10 +699,15 @@ export class OpdsClient {
     query: string,
     credentials?: OpdsCredentials,
     signal?: AbortSignal,
+    catalogOrigin?: string,
   ): Promise<OpdsFeed> {
+    const requestCatalogOrigin = catalogOrigin ?? credentials?.catalogOrigin;
     if (descriptor.kind === "template") {
-      const searchUrl = await expandTemplate(descriptor, query);
-      return this.open(searchUrl, credentials, signal);
+      const searchUrl = canonicalizeAdvertisedSearchUrl(
+        await expandTemplate(descriptor, query),
+        requestCatalogOrigin,
+      );
+      return this.open(searchUrl, credentials, signal, requestCatalogOrigin);
     }
 
     const lifecycle = new RequestLifecycle(signal);
@@ -671,6 +719,7 @@ export class OpdsClient {
           accept: OPENSEARCH_ACCEPT,
           responseType: "text",
           credentials,
+          catalogOrigin: requestCatalogOrigin,
         },
         lifecycle,
       );
@@ -683,17 +732,18 @@ export class OpdsClient {
         throw new OpdsError("invalid-catalog");
       }
       try {
-        searchUrl = new URL(
-          search.search(new Map([[null, new Map([["searchTerms", query]])]])),
+        searchUrl = canonicalizeAdvertisedSearchUrl(
+          new URL(search.search(new Map([[null, new Map([["searchTerms", query]])]])), finalUrl)
+            .href,
           finalUrl,
-        ).href;
+        );
       } catch {
         throw new OpdsError("invalid-catalog");
       }
     } finally {
       lifecycle.dispose();
     }
-    return this.open(searchUrl, credentials, signal);
+    return this.open(searchUrl, credentials, signal, requestCatalogOrigin);
   }
 
   async fetchAsset(
@@ -717,6 +767,7 @@ export class OpdsClient {
           accept: "*/*",
           responseType: "arraybuffer",
           credentials,
+          catalogOrigin: normalizedCatalogOrigin,
         },
         lifecycle,
       );

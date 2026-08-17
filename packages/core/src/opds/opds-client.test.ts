@@ -119,6 +119,74 @@ async function expectOpdsError(promise: Promise<unknown>, code: OpdsError["code"
 }
 
 describe("OpdsClient catalog requests", () => {
+  it.each([
+    ["navigation", "http://127.0.0.1:8080/feed.xml", "open"],
+    ["different loopback port", "http://localhost:8081/feed.xml", "open"],
+    ["private address", "http://192.168.1.20/feed.xml", "open"],
+    ["local asset", "http://printer.local/cover.jpg", "asset"],
+  ] as const)(
+    "blocks an HTTPS catalog's feed-provided %s target before requesting it",
+    async (_name, target, kind) => {
+      const platform = fakePlatform(() => response(ATOM));
+      const client = new OpdsClient(platform);
+      const request =
+        kind === "asset"
+          ? client.fetchAsset(target, "https://remote.test")
+          : client.open(target, undefined, undefined, "https://remote.test");
+
+      await expectOpdsError(request, "insecure-url");
+      expect(platform.calls).toHaveLength(0);
+    },
+  );
+
+  it("allows confirmed local HTTP only on the catalog's exact origin", async () => {
+    const platform = fakePlatform(() => response(ATOM));
+    const client = new OpdsClient(platform);
+
+    await client.open(
+      "http://localhost:8080/child.xml",
+      undefined,
+      undefined,
+      "http://localhost:8080/root.xml",
+    );
+    await expectOpdsError(
+      client.open(
+        "http://localhost:8081/child.xml",
+        undefined,
+        undefined,
+        "http://localhost:8080/root.xml",
+      ),
+      "insecure-url",
+    );
+    await expectOpdsError(
+      client.open(
+        "http://127.0.0.1:8080/child.xml",
+        undefined,
+        undefined,
+        "http://localhost:8080/root.xml",
+      ),
+      "insecure-url",
+    );
+    expect(platform.calls.map((call) => call.url)).toEqual(["http://localhost:8080/child.xml"]);
+  });
+
+  it("does not let redirects expand a confirmed local HTTP origin", async () => {
+    const platform = fakePlatform(() =>
+      response("", { status: 302, headers: { Location: "http://127.0.0.1:8080/feed.xml" } }),
+    );
+
+    await expectOpdsError(
+      new OpdsClient(platform).open(
+        "http://localhost:8080/feed.xml",
+        undefined,
+        undefined,
+        "http://localhost:8080",
+      ),
+      "insecure-url",
+    );
+    expect(platform.calls).toHaveLength(1);
+  });
+
   it("sends Basic auth only to the configured catalog origin", async () => {
     const platform = fakePlatform(() => response(ATOM));
     const client = new OpdsClient(platform);
@@ -871,6 +939,50 @@ describe("OpdsClient assets", () => {
 });
 
 describe("OpdsClient search", () => {
+  it("upgrades Gutenberg-style public HTTP search templates advertised by HTTPS", async () => {
+    const gutenbergDescriptor = `<?xml version="1.0"?><OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Gutenberg</ShortName><Url type="application/atom+xml;profile=opds-catalog" template="http://m.gutenberg.org/ebooks/search.opds/?query={searchTerms}" /></OpenSearchDescription>`;
+    const platform = fakePlatform((url) => {
+      if (url === "https://www.gutenberg.org/catalog/osd-books.xml") {
+        return response(gutenbergDescriptor, {
+          headers: { "Content-Type": "application/opensearchdescription+xml" },
+        });
+      }
+      if (url === "https://m.gutenberg.org/ebooks/search.opds/?query=alice") return response(ATOM);
+      throw new Error(`Unexpected test URL: ${url}`);
+    });
+
+    await new OpdsClient(platform).search(
+      {
+        kind: "openSearch",
+        descriptorUrl: "https://www.gutenberg.org/catalog/osd-books.xml",
+      },
+      "alice",
+      undefined,
+      undefined,
+      "https://www.gutenberg.org",
+    );
+
+    expect(platform.calls.map((call) => call.url)).toEqual([
+      "https://www.gutenberg.org/catalog/osd-books.xml",
+      "https://m.gutenberg.org/ebooks/search.opds/?query=alice",
+    ]);
+  });
+
+  it("does not upgrade or request a local HTTP search target advertised by HTTPS", async () => {
+    const platform = fakePlatform(() => response(ATOM));
+
+    await expectOpdsError(
+      new OpdsClient(platform).search(
+        { kind: "template", urlTemplate: "http://127.0.0.1:8080/search{?query}" },
+        "books",
+        undefined,
+        undefined,
+        "https://remote.test",
+      ),
+      "insecure-url",
+    );
+    expect(platform.calls).toHaveLength(0);
+  });
   it("fetches an advertised OPDS 1 OpenSearch descriptor and encodes the query", async () => {
     const platform = fakePlatform((url) => {
       if (url === "https://catalog.test/open-search.xml") {

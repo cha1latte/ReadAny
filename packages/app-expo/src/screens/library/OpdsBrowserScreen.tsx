@@ -153,6 +153,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
   const [formatChoice, setFormatChoice] = useState<FormatChoice>();
   const formatHeadingRef = useRef<View>(null);
   const requestSequence = useRef(0);
+  const catalogOrigin = useRef<string | undefined>(undefined);
   const mounted = useRef(true);
   const lifecycleGeneration = useRef(0);
   const requestController = useRef<AbortController | undefined>(undefined);
@@ -208,7 +209,8 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
       startOperation({
         key: url,
         mode,
-        execute: (credentials, signal) => client.open(url, credentials, signal),
+        execute: (credentials, signal) =>
+          client.open(url, credentials, signal, catalogOrigin.current),
       });
     },
     [client, startOperation],
@@ -221,6 +223,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
         if (!mounted.current || lifecycleGeneration.current !== generation) return;
         const catalog = store.getCatalog(catalogId);
         if (!catalog || !catalog.enabled) throw new Error("catalog-unavailable");
+        catalogOrigin.current = new URL(catalog.url).origin;
         setCatalogName(catalog.name);
         setCatalogUrl(catalog.url);
         openUrl(catalog.url, "replace");
@@ -251,6 +254,7 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
     return createOpdsCoverCache({
       maxEntries: MAX_COVER_CACHE_ENTRIES,
       maxBytes: MAX_COVER_CACHE_BYTES,
+      maxLoadBytes: MAX_COVER_BYTES,
       load: async (url, signal) => {
         // Capturing the feed scope makes navigation create a fresh cache and release the old feed.
         void cacheScope;
@@ -337,7 +341,8 @@ export function OpdsBrowserScreen({ navigation, route }: Props) {
     startOperation({
       key,
       mode: "push",
-      execute: (credentials, signal) => client.search(descriptor, trimmed, credentials, signal),
+      execute: (credentials, signal) =>
+        client.search(descriptor, trimmed, credentials, signal, catalogOrigin.current),
     });
   };
 

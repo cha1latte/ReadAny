@@ -49,6 +49,72 @@ function createStorage(initial: string | null = null) {
 }
 
 describe("OpdsCatalogStore", () => {
+  it.each(["persistent", "session-only"] as const)(
+    "preserves a %s Basic password across same-origin path and display edits",
+    async (mode) => {
+      const { storage: fullStorage } = createStorage();
+      const storage =
+        mode === "persistent"
+          ? fullStorage
+          : { kvGetItem: fullStorage.kvGetItem, kvSetItem: fullStorage.kvSetItem };
+      const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+      await store.load();
+      await store.addCatalog({
+        name: "Private",
+        url: "https://catalog.test/opds",
+        auth: "basic",
+        username: "reader",
+        password: "old-password",
+      });
+
+      const updated = await store.updateCatalog(CUSTOM_ID, {
+        name: "Renamed",
+        url: "https://catalog.test/opds/v2",
+      });
+
+      expect(updated.passwordStorage).toBe(mode);
+      await expect(store.getCredentials(CUSTOM_ID)).resolves.toMatchObject({
+        username: "reader",
+        password: "old-password",
+        catalogOrigin: "https://catalog.test",
+      });
+    },
+  );
+
+  it.each([
+    ["origin", { url: "https://other.test/opds" }],
+    ["username", { username: "other-reader" }],
+    ["anonymous to Basic auth", { auth: "basic", username: "reader" }],
+  ] as const)(
+    "rejects a blank password before mutating a changed %s identity",
+    async (_name, update) => {
+      const { storage, persisted } = createStorage();
+      const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
+      await store.load();
+      if (_name === "anonymous to Basic auth") {
+        await store.addCatalog({
+          name: "Catalog",
+          url: "https://catalog.test/opds",
+          auth: "anonymous",
+        });
+      } else {
+        await store.addCatalog({
+          name: "Private",
+          url: "https://catalog.test/opds",
+          auth: "basic",
+          username: "reader",
+          password: "old-password",
+        });
+      }
+      const before = persisted();
+
+      await expect(store.updateCatalog(CUSTOM_ID, update)).rejects.toThrow(
+        "A password is required when changing catalog credentials",
+      );
+      expect(persisted()).toBe(before);
+    },
+  );
+
   it("provides the two stable Gutenberg catalogs with immutable URLs", async () => {
     const { storage } = createStorage();
     const store = new OpdsCatalogStore(storage, () => CUSTOM_ID);
@@ -168,7 +234,7 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.secretSetItem).mockClear();
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("remove failed");
 
     expect(storage.kvSetItem).toHaveBeenCalledTimes(2);
@@ -200,7 +266,7 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.secretGetItem).mockRejectedValueOnce(new Error("secret read failed"));
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("secret read failed");
     expect(storage.kvSetItem).not.toHaveBeenCalled();
     expect(persisted()).toBe(before);
@@ -227,7 +293,7 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.secretSetItem).mockRejectedValueOnce(new Error("restore failed"));
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("Catalog update failed and secret compensation failed");
 
     expect(persisted()).toBe(before);
@@ -260,17 +326,20 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.secretRemoveItem).mockRejectedValueOnce(new Error("remove failed"));
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("Catalog update failed and rollback failed");
 
     expect(store.getCatalog(CUSTOM_ID)).toMatchObject({
       url: "https://other.test/opds",
-      passwordStorage: "none",
+      passwordStorage: "session-only",
     });
     expect(JSON.parse(persisted() ?? "{}").customCatalogs[0].url).toBe("https://other.test/opds");
     expect(storage.secretRemoveItem).toHaveBeenCalledTimes(2);
     expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
-    await expect(store.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+    await expect(store.getCredentials(CUSTOM_ID)).resolves.toMatchObject({
+      password: "new-password",
+      catalogOrigin: "https://other.test",
+    });
   });
 
   it("durably blocks a stale update secret across restart until cleanup succeeds", async () => {
@@ -299,7 +368,7 @@ describe("OpdsCatalogStore", () => {
     });
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("Catalog update failed and rollback failed");
 
     const failedState = JSON.parse(persisted() ?? "{}");
@@ -634,7 +703,7 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.kvSetItem).mockClear();
 
     await expect(
-      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
+      store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds", password: "new-password" }),
     ).rejects.toThrow("Catalog cleanup revision is exhausted");
 
     expect(storage.kvSetItem).not.toHaveBeenCalled();
@@ -964,7 +1033,10 @@ describe("OpdsCatalogStore", () => {
 
     await store.updateCatalog(CUSTOM_ID, { name: "Still private" });
     expect(storage.secretRemoveItem).not.toHaveBeenCalled();
-    await store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" });
+    await store.updateCatalog(CUSTOM_ID, {
+      url: "https://other.test/opds",
+      password: "new-password",
+    });
     expect(storage.secretRemoveItem).toHaveBeenCalledWith(opdsCatalogSecretKey(CUSTOM_ID));
 
     vi.mocked(storage.secretRemoveItem).mockClear();
@@ -1140,7 +1212,7 @@ describe("OpdsCatalogStore", () => {
     expect(added.passwordStorage).toBe("session-only");
   });
 
-  it("durably blocks an old persistent secret when identity changes through a missing adapter", async () => {
+  it("rejects an unsafe blank identity change through a missing secret adapter", async () => {
     const { storage, secrets, persisted } = createStorage();
     const complete = new OpdsCatalogStore(storage, () => CUSTOM_ID);
     await complete.load();
@@ -1160,27 +1232,25 @@ describe("OpdsCatalogStore", () => {
 
     await expect(
       missing.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
-    ).resolves.toMatchObject({ url: "https://other.test/opds", passwordStorage: "none" });
+    ).rejects.toThrow("A password is required when changing catalog credentials");
 
     expect(secrets.get(opdsCatalogSecretKey(CUSTOM_ID))).toBe("old-password");
-    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toEqual([
-      { id: CUSTOM_ID, revision: 1, action: "remove-secret" },
-    ]);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
     await expect(missing.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
     await missing.hideBuiltIn("gutenberg");
     await missing.restoreBuiltIn("gutenberg");
-    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toEqual([
-      { id: CUSTOM_ID, revision: 1, action: "remove-secret" },
-    ]);
+    expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
 
     vi.mocked(storage.secretRemoveItem).mockClear();
     const restored = new OpdsCatalogStore(storage, () => OTHER_ID);
     await restored.load();
 
-    expect(storage.secretRemoveItem).toHaveBeenCalledWith(opdsCatalogSecretKey(CUSTOM_ID));
-    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(false);
+    expect(storage.secretRemoveItem).not.toHaveBeenCalled();
+    expect(secrets.has(opdsCatalogSecretKey(CUSTOM_ID))).toBe(true);
     expect(JSON.parse(persisted() ?? "{}").pendingSecretCleanups).toBeUndefined();
-    await expect(restored.getCredentials(CUSTOM_ID)).resolves.toBeUndefined();
+    await expect(restored.getCredentials(CUSTOM_ID)).resolves.toMatchObject({
+      password: "old-password",
+    });
   });
 
   it("allows safe missing-backend edits and deletion while retaining cleanup", async () => {
@@ -1204,9 +1274,9 @@ describe("OpdsCatalogStore", () => {
     vi.mocked(storage.secretSetItem).mockClear();
     vi.mocked(storage.secretRemoveItem).mockClear();
 
-    await expect(
-      missing.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" }),
-    ).resolves.toMatchObject({ url: "https://other.test/opds" });
+    await expect(missing.updateCatalog(CUSTOM_ID, { auth: "anonymous" })).resolves.toMatchObject({
+      auth: "anonymous",
+    });
     await expect(missing.updateCatalog(CUSTOM_ID, { name: "Renamed" })).resolves.toMatchObject({
       name: "Renamed",
     });
@@ -1252,7 +1322,10 @@ describe("OpdsCatalogStore", () => {
     };
     const missing = new OpdsCatalogStore(missingStorage, () => OTHER_ID);
     await missing.load();
-    await missing.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" });
+    await missing.updateCatalog(CUSTOM_ID, {
+      url: "https://other.test/opds",
+      password: "intermediate-password",
+    });
     vi.mocked(storage.secretGetItem).mockClear();
     vi.mocked(storage.secretSetItem).mockClear();
     vi.mocked(storage.secretRemoveItem).mockClear();
@@ -1426,11 +1499,18 @@ describe("OpdsCatalogStore", () => {
 
     const reading = store.getCredentials(CUSTOM_ID);
     await vi.waitFor(() => expect(storage.secretGetItem).toHaveBeenCalled());
-    await store.updateCatalog(CUSTOM_ID, { url: "https://other.test/opds" });
+    await store.updateCatalog(CUSTOM_ID, {
+      url: "https://other.test/opds",
+      password: "new-password",
+    });
     pendingSecret.resolve("old-password");
 
     await expect(reading).resolves.toBeUndefined();
-    expect(store.getCatalog(CUSTOM_ID)?.passwordStorage).toBe("none");
+    expect(store.getCatalog(CUSTOM_ID)?.passwordStorage).toBe("persistent");
+    await expect(store.getCredentials(CUSTOM_ID)).resolves.toMatchObject({
+      password: "new-password",
+      catalogOrigin: "https://other.test",
+    });
   });
 
   it("does not return or resurrect a secret read that loses a race with deletion", async () => {

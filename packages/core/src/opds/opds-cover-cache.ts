@@ -101,19 +101,23 @@ interface CacheEntry extends OpdsCoverValue {
 
 interface InFlightEntry {
   controller: AbortController;
-  promise: Promise<OpdsCoverValue>;
+  promise: Promise<CacheEntry>;
   waiters: number;
+  releaseReservation(): void;
 }
 
 export function createOpdsCoverCache({
   load,
   maxEntries,
   maxBytes,
+  maxLoadBytes = maxBytes,
   maxConcurrentLoads = 4,
 }: {
   load(url: string, signal: AbortSignal): Promise<OpdsCoverValue>;
   maxEntries: number;
   maxBytes: number;
+  /** Maximum bytes one loader can return; reserved before the transport starts. */
+  maxLoadBytes?: number;
   maxConcurrentLoads?: number;
 }) {
   const entries = new Map<string, CacheEntry>();
@@ -122,6 +126,7 @@ export function createOpdsCoverCache({
   let clock = 0;
   let generation = 0;
   let activeLoads = 0;
+  let reservedBytes = 0;
   const queuedLoads: Array<() => void> = [];
 
   const runQueuedLoads = () => {
@@ -164,6 +169,21 @@ export function createOpdsCoverCache({
     }
   };
 
+  const evictForReservation = (bytes: number) => {
+    while (
+      entries.size + inFlight.size >= maxEntries ||
+      sourceBytes + reservedBytes + bytes > maxBytes
+    ) {
+      const candidate = [...entries.entries()]
+        .filter(([, entry]) => entry.references === 0)
+        .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
+      if (!candidate) return false;
+      entries.delete(candidate[0]);
+      sourceBytes -= candidate[1].byteLength;
+    }
+    return true;
+  };
+
   const lease = (entry: CacheEntry): OpdsCoverLease => {
     entry.references += 1;
     entry.lastUsed = ++clock;
@@ -189,11 +209,39 @@ export function createOpdsCoverCache({
 
       let pending = inFlight.get(url);
       if (!pending) {
+        const reservation = Math.min(maxLoadBytes, maxBytes);
+        if (
+          maxEntries <= 0 ||
+          maxLoadBytes <= 0 ||
+          maxLoadBytes > maxBytes ||
+          !evictForReservation(reservation)
+        ) {
+          throw new Error("cover-cache-full");
+        }
         const controller = new AbortController();
-        const promise = scheduleLoad(url, controller.signal).finally(() => {
-          if (inFlight.get(url)?.promise === promise) inFlight.delete(url);
-        });
-        pending = { controller, promise, waiters: 0 };
+        reservedBytes += reservation;
+        let reservationActive = true;
+        const releaseReservation = () => {
+          if (!reservationActive) return;
+          reservationActive = false;
+          reservedBytes = Math.max(0, reservedBytes - reservation);
+        };
+        const loadGeneration = generation;
+        const promise = scheduleLoad(url, controller.signal)
+          .then((value): CacheEntry => {
+            if (loadGeneration !== generation) throw new Error("cancelled");
+            if (value.byteLength > reservation) throw new Error("cover-too-large");
+            const entry = { ...value, references: 0, lastUsed: ++clock };
+            entries.set(url, entry);
+            sourceBytes += value.byteLength;
+            releaseReservation();
+            return entry;
+          })
+          .finally(() => {
+            releaseReservation();
+            if (inFlight.get(url)?.promise === promise) inFlight.delete(url);
+          });
+        pending = { controller, promise, waiters: 0, releaseReservation };
         inFlight.set(url, pending);
       }
       pending.waiters += 1;
@@ -205,26 +253,10 @@ export function createOpdsCoverCache({
       const onAbort = () => rejectCancelled?.(new Error("cancelled"));
       signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        const value = await Promise.race([pending.promise, cancelled]);
+        const entry = await Promise.race([pending.promise, cancelled]);
         settled = true;
         if (acquisitionGeneration !== generation) throw new Error("cancelled");
-        let entry = entries.get(url);
-        if (!entry && value.byteLength <= maxBytes && maxEntries > 0) {
-          while (entries.size >= maxEntries || sourceBytes + value.byteLength > maxBytes) {
-            const candidate = [...entries.entries()]
-              .filter(([, cached]) => cached.references === 0)
-              .sort(([, left], [, right]) => left.lastUsed - right.lastUsed)[0];
-            if (!candidate) break;
-            entries.delete(candidate[0]);
-            sourceBytes -= candidate[1].byteLength;
-          }
-          if (entries.size < maxEntries && sourceBytes + value.byteLength <= maxBytes) {
-            entry = { ...value, references: 0, lastUsed: ++clock };
-            entries.set(url, entry);
-            sourceBytes += value.byteLength;
-          }
-        }
-        return entry ? lease(entry) : { uri: value.uri, release() {} };
+        return lease(entry);
       } finally {
         signal?.removeEventListener("abort", onAbort);
         pending.waiters = Math.max(0, pending.waiters - 1);
@@ -233,13 +265,24 @@ export function createOpdsCoverCache({
     },
     clear(): void {
       generation += 1;
-      for (const pending of inFlight.values()) pending.controller.abort();
+      for (const pending of inFlight.values()) {
+        pending.controller.abort();
+        pending.releaseReservation();
+      }
       inFlight.clear();
       entries.clear();
       sourceBytes = 0;
+      reservedBytes = 0;
     },
     snapshot() {
-      return { entries: entries.size, sourceBytes, urls: [...entries.keys()] };
+      return {
+        entries: entries.size,
+        sourceBytes,
+        urls: [...entries.keys()],
+        liveEntries: entries.size + inFlight.size,
+        liveBytes: sourceBytes + reservedBytes,
+        reservedBytes,
+      };
     },
   };
 }

@@ -108,6 +108,28 @@ function normalizeUrl(value: unknown): string | undefined {
   }
 }
 
+function urlOrigin(value: string): string | undefined {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+export function canPreserveOpdsCatalogPassword(
+  current: Pick<OpdsCatalog, "url" | "auth" | "username" | "passwordStorage">,
+  next: Pick<OpdsCatalogInput, "url" | "auth" | "username">,
+): boolean {
+  return (
+    current.passwordStorage !== "none" &&
+    current.auth === "basic" &&
+    next.auth === "basic" &&
+    current.username === next.username &&
+    urlOrigin(current.url) !== undefined &&
+    urlOrigin(current.url) === urlOrigin(next.url)
+  );
+}
+
 function normalizeCustomCatalog(value: unknown): CustomCatalogDefinition | undefined {
   if (!isRecord(value)) return undefined;
   const id = typeof value.id === "string" ? value.id : "";
@@ -323,11 +345,14 @@ export class OpdsCatalogStore {
       if (next.auth === "anonymous" && update.password !== undefined) {
         throw new Error("Anonymous catalogs cannot have a password");
       }
-      const credentialChanged =
-        next.url !== current.url ||
-        next.auth !== current.auth ||
-        next.username !== current.username ||
-        update.password !== undefined;
+      const preservesPassword = canPreserveOpdsCatalogPassword(this.toCustomCatalog(current), next);
+      const originChanged = urlOrigin(next.url) !== urlOrigin(current.url);
+      const identityChanged =
+        originChanged || next.auth !== current.auth || next.username !== current.username;
+      if (next.auth === "basic" && identityChanged && !update.password && !preservesPassword) {
+        throw new Error("A password is required when changing catalog credentials");
+      }
+      const credentialChanged = identityChanged || update.password !== undefined;
       const cleanupAlreadyPending = this.pendingSecretCleanups.has(id);
       const previousPersistentPassword =
         credentialChanged && !cleanupAlreadyPending

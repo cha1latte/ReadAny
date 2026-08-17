@@ -84,6 +84,7 @@
         "passwordSessionOnly": "密碼僅在本次工作階段中可用",
         "passwordStoredSecurely": "密碼已儲存到安全儲存空間",
         "passwordUnchanged": "留空即可保留已儲存的密碼",
+        "passwordRequiredForIdentityChange": "請為這些變更重新輸入密碼",
         "publicHttpBlocked": "公共目錄必須使用 HTTPS。",
         "saveFailed": "無法儲存目錄。",
         "subtitle": "連接書籍目錄，無需把密碼寫入網址。",

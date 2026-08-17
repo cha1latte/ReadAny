@@ -1,4 +1,5 @@
 import type { BookFormat } from "../types/book";
+import type { OpdsAcquisitionRelation } from "./opds-relations";
 
 export interface OpdsLink {
   rel: string[];
@@ -9,6 +10,8 @@ export interface OpdsLink {
 
 export interface OpdsAcquisition extends OpdsLink {
   format: BookFormat | null;
+  /** Normalized semantics for parsed links. Optional for legacy callers constructing view models. */
+  relation?: OpdsAcquisitionRelation;
 }
 
 export interface OpdsPublication {

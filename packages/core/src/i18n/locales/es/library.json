@@ -84,6 +84,7 @@
         "passwordSessionOnly": "Contraseña disponible solo durante esta sesión",
         "passwordStoredSecurely": "Contraseña guardada en almacenamiento seguro",
         "passwordUnchanged": "Déjalo en blanco para conservar la contraseña guardada",
+        "passwordRequiredForIdentityChange": "Vuelve a introducir la contraseña para estos cambios",
         "publicHttpBlocked": "Los catálogos públicos deben usar HTTPS.",
         "saveFailed": "No se pudo guardar el catálogo.",
         "subtitle": "Conecta un catálogo de libros sin poner la contraseña en la dirección.",

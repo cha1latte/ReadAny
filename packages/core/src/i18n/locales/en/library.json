@@ -84,6 +84,7 @@
         "passwordSessionOnly": "Password available for this session only",
         "passwordStoredSecurely": "Password saved in secure storage",
         "passwordUnchanged": "Leave blank to keep saved password",
+        "passwordRequiredForIdentityChange": "Re-enter the password for these changes",
         "publicHttpBlocked": "Public catalogs must use HTTPS.",
         "saveFailed": "The catalog could not be saved.",
         "subtitle": "Connect a book catalog without putting its password in the address.",

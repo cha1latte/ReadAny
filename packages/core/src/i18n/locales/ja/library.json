@@ -84,6 +84,7 @@
         "passwordSessionOnly": "パスワードはこのセッションでのみ利用できます",
         "passwordStoredSecurely": "パスワードは安全なストレージに保存されています",
         "passwordUnchanged": "保存済みのパスワードを残す場合は空欄にします",
+        "passwordRequiredForIdentityChange": "この変更にはパスワードを再入力してください",
         "publicHttpBlocked": "公開カタログには HTTPS が必要です。",
         "saveFailed": "カタログを保存できませんでした。",
         "subtitle": "パスワードをアドレスに含めずに書籍カタログへ接続します。",

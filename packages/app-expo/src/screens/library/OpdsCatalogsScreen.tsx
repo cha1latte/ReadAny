@@ -481,6 +481,7 @@ export function OpdsCatalogsScreen({ navigation, route }: Props) {
           setEditing(undefined);
           syncCatalogs();
         }}
+        onBackgroundSaved={syncCatalogs}
       />
     </SafeAreaView>
   );

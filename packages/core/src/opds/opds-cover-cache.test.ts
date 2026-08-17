@@ -38,7 +38,7 @@ describe("shared OPDS cover cache", () => {
     (await cache.acquire("first")).release();
     (await cache.acquire("second")).release();
 
-    expect(cache.snapshot()).toEqual({ entries: 1, sourceBytes: 4, urls: ["second"] });
+    expect(cache.snapshot()).toMatchObject({ entries: 1, sourceBytes: 4, urls: ["second"] });
   });
 
   it("never admits beyond entry or byte bounds while every cached cover is leased", async () => {
@@ -46,16 +46,54 @@ describe("shared OPDS cover cache", () => {
       load: async (url) => ({ uri: url, byteLength: 2 }),
       maxEntries: 12,
       maxBytes: 24,
+      maxLoadBytes: 2,
     });
-    const leases = [];
-    for (let index = 0; index < 20; index += 1) {
-      leases.push(await cache.acquire(`cover-${index}`));
-      const snapshot = cache.snapshot();
-      expect(snapshot.entries).toBeLessThanOrEqual(12);
-      expect(snapshot.sourceBytes).toBeLessThanOrEqual(24);
-    }
+    const leases = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => cache.acquire(`cover-${index}`)),
+    );
+    await expect(cache.acquire("cover-12")).rejects.toThrow("cover-cache-full");
+    expect(cache.snapshot()).toMatchObject({
+      entries: 12,
+      sourceBytes: 24,
+      liveEntries: 12,
+      liveBytes: 24,
+      reservedBytes: 0,
+    });
+    leases[0]?.release();
+    const replacement = await cache.acquire("cover-12");
+    expect(cache.snapshot()).toMatchObject({ liveEntries: 12, liveBytes: 24 });
+    replacement.release();
+    for (const lease of leases) lease.release();
+  });
 
-    expect(cache.snapshot()).toMatchObject({ entries: 12, sourceBytes: 24 });
+  it("reserves the hard live-byte budget before starting distinct loads", async () => {
+    const gate = deferred();
+    const load = vi.fn(async (url: string) => {
+      await gate.promise;
+      return { uri: url, byteLength: 4 };
+    });
+    const cache = createOpdsCoverCache({
+      load,
+      maxEntries: 2,
+      maxBytes: 8,
+      maxLoadBytes: 4,
+      maxConcurrentLoads: 4,
+    });
+
+    const first = cache.acquire("first");
+    const second = cache.acquire("second");
+    await expect(cache.acquire("third")).rejects.toThrow("cover-cache-full");
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(cache.snapshot()).toMatchObject({
+      entries: 0,
+      sourceBytes: 0,
+      liveEntries: 2,
+      liveBytes: 8,
+      reservedBytes: 8,
+    });
+    gate.resolve();
+    const leases = await Promise.all([first, second]);
+    expect(cache.snapshot()).toMatchObject({ liveEntries: 2, liveBytes: 8, reservedBytes: 0 });
     for (const lease of leases) lease.release();
   });
 
@@ -71,8 +109,9 @@ describe("shared OPDS cover cache", () => {
         active -= 1;
         return { uri: url, byteLength: 1 };
       },
-      maxEntries: 12,
-      maxBytes: 24,
+      maxEntries: 20,
+      maxBytes: 20,
+      maxLoadBytes: 1,
       maxConcurrentLoads: 3,
     });
 

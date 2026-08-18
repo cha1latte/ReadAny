@@ -26,7 +26,6 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useStreamingChat } from "@/hooks";
-import { useKeyboardInsets } from "@/hooks/use-keyboard-insets";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { useChatStore } from "@/stores/chat-store";
@@ -81,7 +80,6 @@ export function ChatScreen() {
   const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const keyboardInsets = useKeyboardInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const layout = useResponsiveLayout();
@@ -471,7 +469,7 @@ export function ChatScreen() {
           <KeyboardAvoidingView
             style={s.content}
             behavior="height"
-            enabled={Platform.OS === "android" && keyboardInsets.isVisible}
+            enabled={Platform.OS === "android"}
             keyboardVerticalOffset={insets.top}
           >
             <View style={s.content}>

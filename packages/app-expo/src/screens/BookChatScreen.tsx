@@ -26,6 +26,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useStreamingChat } from "@/hooks";
+import { useKeyboardInsets } from "@/hooks/use-keyboard-insets";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { resolveActiveAIConfig } from "@/lib/ai/resolve-active-ai-config";
 import { useLibraryStore } from "@/stores";
@@ -82,6 +83,7 @@ export function BookChatScreen({ route, navigation }: Props) {
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardInsets = useKeyboardInsets();
   const layout = useResponsiveLayout();
   const isTabletLandscape = layout.isTabletLandscape;
   const sidebarWidth = isTabletLandscape
@@ -531,7 +533,7 @@ export function BookChatScreen({ route, navigation }: Props) {
           <KeyboardAvoidingView
             style={s.content}
             behavior="height"
-            enabled={Platform.OS === "android"}
+            enabled={Platform.OS === "android" && keyboardInsets.isVisible}
             keyboardVerticalOffset={insets.top}
           >
             {selectedText?.trim() ? (

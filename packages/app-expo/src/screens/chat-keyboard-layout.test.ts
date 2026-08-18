@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const chatScreens = ["ChatScreen.tsx", "BookChatScreen.tsx"] as const;
+const screensDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(screensDir, "../../../..");
 
 describe("Android chat keyboard layout", () => {
   for (const screen of chatScreens) {
     it(`${screen} keeps ChatInput inside Android keyboard avoidance`, () => {
-      const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), screen), "utf8");
+      const source = readFileSync(resolve(screensDir, screen), "utf8");
 
       expect(source).toMatch(
         /import\s+\{\s*KeyboardAvoidingView\s*\}\s+from\s+"react-native-keyboard-controller";/,
@@ -18,4 +20,24 @@ describe("Android chat keyboard layout", () => {
       );
     });
   }
+
+  it("clears the controller height style after keyboard dismissal", () => {
+    const rootPackage = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")) as {
+      pnpm?: { patchedDependencies?: Record<string, string> };
+    };
+    expect(rootPackage.pnpm?.patchedDependencies?.["react-native-keyboard-controller@1.18.5"]).toBe(
+      "patches/react-native-keyboard-controller@1.18.5.patch",
+    );
+
+    const controllerSource = readFileSync(
+      resolve(
+        repoRoot,
+        "node_modules/react-native-keyboard-controller/src/components/KeyboardAvoidingView/index.tsx",
+      ),
+      "utf8",
+    );
+    expect(controllerSource).toMatch(
+      /case "height":[\s\S]*?return \{ height: undefined, flex: undefined \};/,
+    );
+  });
 });

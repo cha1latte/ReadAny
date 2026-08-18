@@ -14,43 +14,37 @@ Restore the full-height mobile chat layout immediately after the Android keyboar
 
 ## Root Cause
 
-`ChatScreen` and `BookChatScreen` always enable the `react-native-keyboard-controller` `KeyboardAvoidingView` on Android. Its `height` behavior owns a separate animated keyboard state from ReadAny's React Native `useKeyboardInsets` hook. On the reproduced dismissal path, ReadAny's hook had already transitioned to hidden, but the controller wrapper retained its reduced height.
+`ChatScreen` and `BookChatScreen` correctly keep the `react-native-keyboard-controller` `KeyboardAvoidingView` active throughout the Android keyboard animation. The defect is inside the pinned controller's `height` behavior: while open it emits `{ height, flex: 0 }`, but when closed it emits `{}`.
 
-The result is two keyboard-state owners disagreeing: `ChatInput` renders its keyboard-hidden state while the parent remains keyboard-shortened.
+Reanimated only updates properties present in the next animated-style object. The empty object therefore does not unset the previously applied native `height` and `flex`, leaving the view keyboard-shortened after dismissal.
 
 ## Selected Design
 
-Keep the existing controller wrapper and its proven open-keyboard behavior, but gate its `enabled` prop with the same `useKeyboardInsets().isVisible` state already used by `ChatInput`.
+Keep both screen wrappers unchanged and patch pinned `react-native-keyboard-controller@1.18.5` so the closed/disabled `height` branch emits `{ height: undefined, flex: undefined }`. Reanimated then explicitly clears the stale native properties and the screen's existing `flex: 1` style takes over again.
 
-For both chat screens:
-
-1. Read the React Native keyboard visibility through `useKeyboardInsets`.
-2. Enable the Android controller wrapper only when `Platform.OS === "android" && keyboardInsets.isVisible`.
-3. Leave `behavior="height"` and `keyboardVerticalOffset={insets.top}` unchanged.
-
-When the keyboard closes, `enabled` becomes false and the controller's animated height style is removed, allowing the existing `flex: 1` content style to fill the screen again. When the keyboard opens, the current height-avoidance behavior remains active.
+The patch is registered through pnpm's existing `patchedDependencies` mechanism and applies to the package source used by React Native plus its CommonJS and module builds. This preserves the controller's full opening animation and fixes every ReadAny consumer of its `height` behavior.
 
 ## Alternatives Rejected
 
-### Replace the controller with custom keyboard padding
+### Gate the controller on `useKeyboardInsets().isVisible`
 
-This would eliminate the second state owner, but it would reimplement height calculation and animation already handled by the controller and could regress the recently fixed open-keyboard layout.
+This was rejected after review. Returning `{}` when disabled does not clear the stale Reanimated keys, and Android's React Native hook only becomes visible at `keyboardDidShow`, which would disable avoidance throughout the opening animation.
 
 ### Upgrade `react-native-keyboard-controller`
 
 This expands the change to a dependency upgrade without proof that a newer release fixes this exact stale-state path. It also increases native-build and cross-platform risk for a two-screen bug.
 
-### Use `padding` instead of `height`
+### Replace the controller with React Native's avoiding view
 
-`padding` still consumes the controller's stale progress value. It changes how the empty space is represented without resolving the state disagreement.
+React Native's component clears its height normally, but replacing the controller would discard the open-keyboard behavior already proven on the Pixel and reopen the earlier covered-composer bug.
 
 ## Tests
 
-Update the existing `chat-keyboard-layout.test.ts` contract before production code so it fails until both `ChatScreen` and `BookChatScreen`:
+Update the existing `chat-keyboard-layout.test.ts` contract before the dependency patch so it fails until:
 
-- import and call `useKeyboardInsets`;
-- retain the controller `KeyboardAvoidingView`, `height` behavior, and vertical offset; and
-- gate `enabled` on Android plus live keyboard visibility.
+- both screens retain the controller `KeyboardAvoidingView`, `height` behavior, Android enablement, and vertical offset;
+- root `package.json` registers the pinned controller patch; and
+- the installed controller source explicitly emits `height` and `flex` reset keys in the closed branch.
 
 Run the focused regression through a red-green cycle, then run the complete Expo tests, TypeScript, scoped Biome checks, and `git diff --check`.
 

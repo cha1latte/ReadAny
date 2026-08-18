@@ -4,14 +4,14 @@
 
 **Goal:** Make both Android chat screens immediately reclaim their full height after keyboard dismissal without regressing open-keyboard composer visibility.
 
-**Architecture:** Retain `react-native-keyboard-controller` for the existing open-keyboard height adjustment, but gate it with ReadAny's React Native `useKeyboardInsets().isVisible` state. Deliver the tested fix first through the Shlai fork and preview-release lane, then cherry-pick only the focused source/test commit onto a separate latest-`upstream/main` branch for the official PR.
+**Architecture:** Retain the two existing screen wrappers so the controller owns the complete open-keyboard animation. Patch pinned `react-native-keyboard-controller@1.18.5` through pnpm so its closed `height` branch explicitly clears the Reanimated `height` and `flex` keys, then deliver the verified aggregate diff through the Shlai fork and a separate latest-`upstream/main` branch.
 
 **Tech Stack:** React Native 0.81, Expo 54, TypeScript 5.9, `react-native-keyboard-controller` 1.18.5, Vitest 4, GitHub Actions, GitHub CLI, ADB.
 
 ## Global Constraints
 
 - Preserve package `io.github.cha1latte.readanyshlai.preview` and all installed app data; never uninstall it or clear storage.
-- Keep `behavior="height"` and `keyboardVerticalOffset={insets.top}` so the existing open-keyboard fix remains intact.
+- Keep the screen `KeyboardAvoidingView` calls unchanged so the existing open-keyboard fix remains intact.
 - Apply the behavior to both `ChatScreen` and `BookChatScreen`.
 - Push feature branches only to `origin` (`cha1latte/ReadAny`); never push to `upstream` (`codedogQBY/ReadAny`).
 - The official PR branch must start from the latest `upstream/main` and contain only the focused source/test change.
@@ -22,44 +22,21 @@
 ### Task 1: Add the dismissal regression and minimal layout fix
 
 **Files:**
+- Modify: `package.json`
+- Modify: `pnpm-lock.yaml`
+- Create: `patches/react-native-keyboard-controller@1.18.5.patch`
 - Modify: `packages/app-expo/src/screens/chat-keyboard-layout.test.ts`
-- Modify: `packages/app-expo/src/screens/ChatScreen.tsx`
-- Modify: `packages/app-expo/src/screens/BookChatScreen.tsx`
 
 **Interfaces:**
-- Consumes: the `isVisible` field returned by `useKeyboardInsets()`, `Platform.OS`, and the existing controller `KeyboardAvoidingView` props.
-- Produces: both chat screens set `enabled={Platform.OS === "android" && keyboardInsets.isVisible}` on their controller wrapper.
+- Consumes: pnpm `patchedDependencies`, Reanimated animated-style reset semantics, and the existing controller `KeyboardAvoidingView` calls.
+- Produces: the pinned controller emits `{ height: undefined, flex: undefined }` after keyboard dismissal while both screens retain their current open-keyboard behavior.
 
 - [ ] **Step 1: Write the failing source contract**
 
-Replace `packages/app-expo/src/screens/chat-keyboard-layout.test.ts` with:
+Extend `packages/app-expo/src/screens/chat-keyboard-layout.test.ts` so the two existing screen cases retain their current structural assertion, then add a case that reads root `package.json` and the installed controller source. Assert that `pnpm.patchedDependencies["react-native-keyboard-controller@1.18.5"]` equals `patches/react-native-keyboard-controller@1.18.5.patch`, and that the controller's closed `height` branch returns:
 
 ```ts
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-
-const chatScreens = ["ChatScreen.tsx", "BookChatScreen.tsx"] as const;
-
-describe("Android chat keyboard layout", () => {
-  for (const screen of chatScreens) {
-    it(`${screen} avoids an open keyboard and releases the height after dismissal`, () => {
-      const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), screen), "utf8");
-
-      expect(source).toMatch(
-        /import\s+\{\s*KeyboardAvoidingView\s*\}\s+from\s+"react-native-keyboard-controller";/,
-      );
-      expect(source).toMatch(
-        /import\s+\{\s*useKeyboardInsets\s*\}\s+from\s+"@\/hooks\/use-keyboard-insets";/,
-      );
-      expect(source).toMatch(/const keyboardInsets = useKeyboardInsets\(\);/);
-      expect(source).toMatch(
-        /<KeyboardAvoidingView\b[\s\S]*?behavior="height"[\s\S]*?enabled=\{Platform\.OS === "android" && keyboardInsets\.isVisible\}[\s\S]*?keyboardVerticalOffset=\{insets\.top\}[\s\S]*?<ChatInput\b[\s\S]*?<\/KeyboardAvoidingView>/,
-      );
-    });
-  }
-});
+return { height: undefined, flex: undefined };
 ```
 
 - [ ] **Step 2: Run the focused test and verify the red state**
@@ -70,29 +47,23 @@ Run:
 pnpm --filter @readany/app-expo exec vitest run src/screens/chat-keyboard-layout.test.ts
 ```
 
-Expected: both cases fail because neither screen imports or calls `useKeyboardInsets`, and the wrappers are still enabled for every Android keyboard state.
+Expected: the new patch case fails because the root package has no registered controller patch and the installed closed branch returns `{}`.
 
-- [ ] **Step 3: Gate both wrappers on live keyboard visibility**
+- [ ] **Step 3: Patch the controller's closed height style**
 
-In both screen files, add:
+Register the patch in root `package.json`:
+
+```json
+"react-native-keyboard-controller@1.18.5": "patches/react-native-keyboard-controller@1.18.5.patch"
+```
+
+Patch the source, CommonJS, and module `height` branches so the closed/disabled path explicitly returns:
 
 ```ts
-import { useKeyboardInsets } from "@/hooks/use-keyboard-insets";
+return { height: undefined, flex: undefined };
 ```
 
-Immediately after each existing `const insets = useSafeAreaInsets();`, add:
-
-```ts
-const keyboardInsets = useKeyboardInsets();
-```
-
-In each `KeyboardAvoidingView`, replace the existing `enabled` prop with:
-
-```tsx
-enabled={Platform.OS === "android" && keyboardInsets.isVisible}
-```
-
-Do not change the wrapper's `behavior`, `keyboardVerticalOffset`, children, or styles.
+Regenerate `pnpm-lock.yaml` with `pnpm install --lockfile-only`. Do not change either screen.
 
 - [ ] **Step 4: Run the focused test and verify green**
 
@@ -102,7 +73,7 @@ Run:
 pnpm --filter @readany/app-expo exec vitest run src/screens/chat-keyboard-layout.test.ts
 ```
 
-Expected: one test file passes with two passing cases.
+Expected: one test file passes with the two screen cases plus the controller-reset case.
 
 - [ ] **Step 5: Run the complete local validation lane**
 
@@ -111,22 +82,22 @@ Run:
 ```powershell
 pnpm --filter @readany/app-expo test
 pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
-pnpm exec biome check packages/app-expo/src/screens/chat-keyboard-layout.test.ts packages/app-expo/src/screens/ChatScreen.tsx packages/app-expo/src/screens/BookChatScreen.tsx
+pnpm exec biome check package.json packages/app-expo/src/screens/chat-keyboard-layout.test.ts
 git diff --check origin/main...HEAD
 ```
 
 Expected: all Expo tests, TypeScript, Biome, and whitespace validation pass.
 
-- [ ] **Step 6: Commit only the focused code and test**
+- [ ] **Step 6: Commit only the focused dependency patch and test**
 
 Run:
 
 ```powershell
-git add packages/app-expo/src/screens/chat-keyboard-layout.test.ts packages/app-expo/src/screens/ChatScreen.tsx packages/app-expo/src/screens/BookChatScreen.tsx
-git commit -m "fix(mobile): restore chat height after keyboard dismiss"
+git add package.json pnpm-lock.yaml patches/react-native-keyboard-controller@1.18.5.patch packages/app-expo/src/screens/chat-keyboard-layout.test.ts packages/app-expo/src/screens/ChatScreen.tsx packages/app-expo/src/screens/BookChatScreen.tsx
+git commit -m "fix(mobile): clear stale keyboard avoidance height"
 ```
 
-Expected: the new commit contains exactly the two screen changes and their regression contract.
+Expected: the new commit reverts the rejected screen visibility gate and adds only the pinned controller patch, lock metadata, and regression contract.
 
 ---
 
@@ -223,12 +194,13 @@ Expected after dismissal: the keyboard is absent, the chat content/composer pare
 ### Task 3: Publish the focused official-upstream PR
 
 **Files:**
+- Modify: `package.json`
+- Modify: `pnpm-lock.yaml`
+- Create: `patches/react-native-keyboard-controller@1.18.5.patch`
 - Modify: `packages/app-expo/src/screens/chat-keyboard-layout.test.ts`
-- Modify: `packages/app-expo/src/screens/ChatScreen.tsx`
-- Modify: `packages/app-expo/src/screens/BookChatScreen.tsx`
 
 **Interfaces:**
-- Consumes: latest fetched `upstream/main` and the focused source/test commit from Task 1.
+- Consumes: latest fetched `upstream/main` and the two fork code commits whose combined diff is the focused fix.
 - Produces: `origin/fix/android-chat-dismiss-layout` and a ready-for-review PR into `codedogQBY/ReadAny:main`.
 
 - [ ] **Step 1: Create a separate latest-upstream worktree**
@@ -248,13 +220,15 @@ Expected: the new worktree's parent is the current `upstream/main`, not fork `ma
 Run in the upstream worktree:
 
 ```powershell
-$focusedCommit = git -C D:\dev\ReadAny-chat-layout-fix-worktree log --format=%H --grep '^fix(mobile): restore chat height after keyboard dismiss$' -1
-git cherry-pick $focusedCommit
+$initialCommit = git -C D:\dev\ReadAny-chat-layout-fix-worktree log --format=%H --grep '^fix(mobile): restore chat height after keyboard dismiss$' -1
+$correctiveCommit = git -C D:\dev\ReadAny-chat-layout-fix-worktree log --format=%H --grep '^fix(mobile): clear stale keyboard avoidance height$' -1
+git cherry-pick -n $initialCommit $correctiveCommit
+git commit -m "fix(mobile): restore chat height after keyboard dismiss"
 git diff --stat upstream/main...HEAD
 git log --oneline upstream/main..HEAD
 ```
 
-Expected: one commit ahead, changing only the two screens and `chat-keyboard-layout.test.ts`; no Shlai documentation, branding, workflow, or release files.
+Expected: one commit ahead, containing only the controller patch registration, lock metadata, patch file, and `chat-keyboard-layout.test.ts`; the two screen files match `upstream/main`, and no Shlai documentation, branding, workflow, or release files are present.
 
 - [ ] **Step 3: Verify the upstream branch**
 
@@ -264,7 +238,7 @@ Install dependencies if needed, then run:
 pnpm --filter @readany/app-expo exec vitest run src/screens/chat-keyboard-layout.test.ts
 pnpm --filter @readany/app-expo test
 pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
-pnpm exec biome check packages/app-expo/src/screens/chat-keyboard-layout.test.ts packages/app-expo/src/screens/ChatScreen.tsx packages/app-expo/src/screens/BookChatScreen.tsx
+pnpm exec biome check package.json packages/app-expo/src/screens/chat-keyboard-layout.test.ts
 git diff --check upstream/main...HEAD
 ```
 

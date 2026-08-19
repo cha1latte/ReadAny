@@ -16,18 +16,19 @@ describe("Android chat keyboard layout", () => {
         /import\s+\{\s*KeyboardAvoidingView\s*\}\s+from\s+"react-native-keyboard-controller";/,
       );
       expect(source).toMatch(
-        /<KeyboardAvoidingView\b[\s\S]*?behavior="height"[\s\S]*?enabled=\{Platform\.OS === "android"\}[\s\S]*?keyboardVerticalOffset=\{insets\.top\}[\s\S]*?<ChatInput\b[\s\S]*?<\/KeyboardAvoidingView>/,
+        /<KeyboardAvoidingView\b[\s\S]*?behavior="padding"[\s\S]*?enabled=\{Platform\.OS === "android"\}[\s\S]*?keyboardVerticalOffset=\{insets\.top\}[\s\S]*?<ChatInput\b[\s\S]*?<\/KeyboardAvoidingView>/,
       );
+      expect(source).not.toMatch(/<KeyboardAvoidingView\b[\s\S]*?behavior="height"/);
     });
   }
 
-  it("clears the controller height style after keyboard dismissal", () => {
+  it("does not patch the controller height behavior", () => {
     const rootPackage = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")) as {
       pnpm?: { patchedDependencies?: Record<string, string> };
     };
-    expect(rootPackage.pnpm?.patchedDependencies?.["react-native-keyboard-controller@1.18.5"]).toBe(
-      "patches/react-native-keyboard-controller@1.18.5.patch",
-    );
+    expect(
+      rootPackage.pnpm?.patchedDependencies?.["react-native-keyboard-controller@1.18.5"],
+    ).toBeUndefined();
 
     const controllerSource = readFileSync(
       resolve(
@@ -36,8 +37,6 @@ describe("Android chat keyboard layout", () => {
       ),
       "utf8",
     );
-    expect(controllerSource).toMatch(
-      /case "height":[\s\S]*?return \{ height: undefined, flex: undefined \};/,
-    );
+    expect(controllerSource).toMatch(/case "padding":\s*return \{ paddingBottom: bottom \};/);
   });
 });

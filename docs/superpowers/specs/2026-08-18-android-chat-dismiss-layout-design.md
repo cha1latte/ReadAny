@@ -2,65 +2,52 @@
 
 ## Goal
 
-Restore the full-height mobile chat layout immediately after the Android keyboard closes while preserving the existing behavior that keeps the chat composer above an open keyboard.
+Keep both Android chat composers above an open keyboard and restore the full-height chat layout immediately after dismissal.
 
 ## Reproduction Evidence
 
 - Device: Pixel 9a, 1080 x 2424 at 420 dpi.
-- Installed app: ReadAny Shlai Preview `1.3.6-shlai.2`, Android versionCode `3`.
+- Original app: ReadAny Shlai Preview `1.3.6-shlai.2`, versionCode `3`.
 - Package: `io.github.cha1latte.readanyshlai.preview`.
-- With the keyboard visibly closed, the root surface remained `[0,0][1080,2424]` while the keyboard-avoiding chat content ended at y=1459.
-- The retained 965-pixel reduction matches a stale keyboard-sized layout adjustment and produces the large dead area below the composer.
+- With the keyboard closed, the chat content ended at y=1459, retaining a 965-pixel keyboard-sized dead area.
 
 ## Root Cause
 
-`ChatScreen` and `BookChatScreen` correctly keep the `react-native-keyboard-controller` `KeyboardAvoidingView` active throughout the Android keyboard animation. The defect is inside the pinned controller's `height` behavior: while open it emits `{ height, flex: 0 }`, but when closed it emits `{}`.
+Both chat screens used `react-native-keyboard-controller` with `behavior="height"`. While the keyboard is open, that behavior applies animated `{ height, flex: 0 }`. Its closed branch returns `{}`, so Reanimated leaves the previous native properties in place.
 
-Reanimated only updates properties present in the next animated-style object. The empty object therefore does not unset the previously applied native `height` and `flex`, leaving the view keyboard-shortened after dismissal.
+The first attempted fix changed the closed branch to `{ height: undefined, flex: undefined }`. Real-device testing of `1.3.6-shlai.3` disproved it: the before/open/dismiss bounds returned identically, but clearing the animated `flex` also removed the wrapper's static `flex: 1`. The wrapper therefore remained content-height instead of reclaiming the viewport.
 
 ## Selected Design
 
-Keep both screen wrappers unchanged and patch pinned `react-native-keyboard-controller@1.18.5` so the closed/disabled `height` branch emits `{ height: undefined, flex: undefined }`. Reanimated then explicitly clears the stale native properties and the screen's existing `flex: 1` style takes over again.
+Keep the controller and Android enablement, but switch both screen wrappers from `behavior="height"` to `behavior="padding"`.
 
-The patch is registered through pnpm's existing `patchedDependencies` mechanism and applies to the package source used by React Native plus its CommonJS and module builds. This preserves the controller's full opening animation and fixes every ReadAny consumer of its `height` behavior.
+The controller's padding behavior animates only `paddingBottom`. It never writes `height` or `flex`, so it keeps the composer above the keyboard without creating a native flex override that can survive dismissal. Its closed value is numeric zero, which Reanimated sends explicitly.
 
-## Alternatives Rejected
-
-### Gate the controller on `useKeyboardInsets().isVisible`
-
-This was rejected after review. Returning `{}` when disabled does not clear the stale Reanimated keys, and Android's React Native hook only becomes visible at `keyboardDidShow`, which would disable avoidance throughout the opening animation.
-
-### Upgrade `react-native-keyboard-controller`
-
-This expands the change to a dependency upgrade without proof that a newer release fixes this exact stale-state path. It also increases native-build and cross-platform risk for a two-screen bug.
-
-### Replace the controller with React Native's avoiding view
-
-React Native's component clears its height normally, but replacing the controller would discard the open-keyboard behavior already proven on the Pixel and reopen the earlier covered-composer bug.
+Remove the temporary `react-native-keyboard-controller@1.18.5` pnpm patch and its lockfile metadata.
 
 ## Tests
 
-Update the existing `chat-keyboard-layout.test.ts` contract before the dependency patch so it fails until:
+The focused source contract requires:
 
-- both screens retain the controller `KeyboardAvoidingView`, `height` behavior, Android enablement, and vertical offset;
-- root `package.json` registers the pinned controller patch; and
-- the installed controller source explicitly emits `height` and `flex` reset keys in the closed branch.
+- both chat screens retain the controller wrapper, Android enablement, vertical offset, and `ChatInput` nesting;
+- both wrappers use `behavior="padding"` and not `height`;
+- the temporary controller patch is absent; and
+- the installed controller padding branch returns `paddingBottom: bottom`.
 
-Run the focused regression through a red-green cycle, then run the complete Expo tests, TypeScript, scoped Biome checks, and `git diff --check`.
+Run the focused test red before implementation and green afterward, then run the complete mobile, core, web, TypeScript, build, Biome, and diff validation lanes.
 
 ## Device Verification
 
-Install the next preview APK with `adb install -r` only. Do not uninstall the package, clear storage, or replace the package identity.
+Install the corrected preview with `adb install -r` only. Never uninstall or clear storage.
 
-On the existing selected-text AI Reading Assistant conversation:
-
-1. Confirm saved app state remains present after the update.
-2. Open the keyboard and confirm the composer/actions remain above it.
-3. Dismiss the keyboard and confirm the content/composer parent returns to the full available height with no keyboard-sized dead area.
-4. Capture a screenshot and UI hierarchy bounds as proof.
+1. Confirm package identity, unchanged `firstInstallTime`, saved books, and settings.
+2. Open the selected-text AI Reading Assistant.
+3. Confirm the composer remains above the open keyboard.
+4. Dismiss the keyboard and confirm the content/composer parent returns to full available height with no lower dead area.
+5. Capture screenshots and UI hierarchy bounds before, open, and dismissed.
 
 ## Delivery
 
-- Fork fix: branch from current `cha1latte/ReadAny` `main`, commit, push to `origin`, open a fork PR, wait for required checks, merge to fork `main`, and let the `Shlai Phone Release` workflow publish the next preview release.
-- Phone update: download the exact published APK, verify package/version/signature/checksum, install it in place, and verify preserved app data plus the fixed live layout.
-- Upstream fix: create a separate branch from the latest `codedogQBY/ReadAny` `main`, apply only the focused source/test commit, push that branch to `cha1latte/ReadAny`, and open a ready-for-review PR against official `main` without pushing to the upstream remote.
+- Merge the corrected fork PR only after required checks pass and publish the next Shlai Preview (`1.3.6-shlai.4`).
+- Update the phone in place and prove the live result.
+- Replace the draft upstream PR branch with the focused padding-based source/test diff from latest official `main`, then mark it ready only after checks pass.

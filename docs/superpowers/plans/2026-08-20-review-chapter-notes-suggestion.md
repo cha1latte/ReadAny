@@ -57,8 +57,8 @@ const clients = [
 
 const localizedCopy = {
   en: "Review my notes for this chapter",
-  zh: "点评我对这一章的笔记",
-  "zh-TW": "點評我對這一章的筆記",
+  zh: "点评我对本章的笔记",
+  "zh-TW": "點評我對本章的筆記",
   ja: "この章のメモをレビュー",
   ko: "이 챕터에 대한 내 노트 검토",
   fr: "Relire mes notes sur ce chapitre",
@@ -141,7 +141,7 @@ Add this test beside the existing current-page and chapter routing tests in `rea
 ```ts
 it.each([
   "Review my notes for this chapter",
-  "点评我对这一章的笔记",
+  "点评我对本章的笔记",
 ])("keeps note access for the chapter review suggestion: %s", async (prompt) => {
   let capturedTools: any[] = [];
   createReactAgentMock.mockImplementation((config) => {

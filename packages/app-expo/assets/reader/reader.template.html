@@ -208,6 +208,7 @@
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
     let currentUseBookFonts = true;
+    let currentSmoothReading = false;
     let tapNavigationInFlight = false;
     let tapNavigationResetTimer = null;
     let readerElement = null;
@@ -330,6 +331,21 @@
       } else {
         renderer.removeAttribute('no-continuous-scroll');
         renderer.removeAttribute('flow');
+      }
+    }
+
+    // Smooth reading ("平滑阅读"): one toggle drives both the foliate
+    // `animated` page-turn transition and the `scroll-inertia` finger-flick
+    // physics. The attributes are inert until the renderer handles them, so
+    // this is safe to toggle at any time (load, viewMode change, or live).
+    function syncSmoothReadingAttribute(renderer) {
+      if (!renderer) return;
+      if (currentSmoothReading) {
+        renderer.setAttribute('animated', '');
+        renderer.setAttribute('scroll-inertia', '');
+      } else {
+        renderer.removeAttribute('animated');
+        renderer.removeAttribute('scroll-inertia');
       }
     }
 
@@ -1811,6 +1827,10 @@
       const renderer = view.renderer;
       if (settings.justifyBodyText !== undefined) {
         currentJustifyBodyText = settings.justifyBodyText !== false;
+      }
+      if (settings.smoothReading !== undefined) {
+        currentSmoothReading = settings.smoothReading === true;
+        syncSmoothReadingAttribute(renderer);
       }
       // PDF pages are fixed-layout canvases. Reader font, line-height, custom
       // font and paragraph-spacing rules would move the transparent text layer

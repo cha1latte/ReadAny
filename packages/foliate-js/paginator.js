@@ -1,3 +1,5 @@
+import { PaginatorTouchTracker, hasActiveTextSelection } from './paginator-touch.js'
+
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const debounce = (f, wait, immediate) => {
@@ -974,8 +976,7 @@ export class Paginator extends HTMLElement {
     #mediaQuery = matchMedia('(prefers-color-scheme: dark)')
     #mediaQueryListener
     #scrollBounds
-    #touchState
-    #touchScrolled
+    #touchNavigation = new PaginatorTouchTracker()
     #lastVisibleRange
     #scrollLocked = false
     #isAnimating = false
@@ -1235,6 +1236,7 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
+            doc.addEventListener('selectstart', () => this.#cancelTouchNavigation())
         })
 
         this.addEventListener('relocate', ({ detail }) => {
@@ -2128,24 +2130,21 @@ export class Paginator extends HTMLElement {
         if (dir) return doGoTo()
         this.#scrollToPage(page, 'snap')
     }
+    #hasActiveTextSelection() {
+        return hasActiveTextSelection(this.getContents?.() ?? [])
+    }
+    #cancelTouchNavigation() {
+        const restorePosition = this.#touchNavigation.cancel()
+        if (restorePosition !== null) this.containerPosition = restorePosition
+    }
     #onTouchStart(e) {
         if (this.#navigationLocked) return
-        const contents = this.getContents?.() ?? []
-        for (const { doc } of contents) {
-            const selection = doc?.getSelection?.()
-            if (selection && !selection.isCollapsed && selection.toString().trim()) return
+        if (this.#hasActiveTextSelection()) {
+            this.#cancelTouchNavigation()
+            return
         }
         const touch = e.changedTouches[0]
-        this.#touchState = {
-            x: touch?.screenX, y: touch?.screenY,
-            t: e.timeStamp,
-            vx: 0, xy: 0,
-            dx: 0, dy: 0,
-            dt: 0,
-            startX: touch?.screenX,
-            startY: touch?.screenY,
-            didPreventDefault: false,
-        }
+        this.#touchNavigation.start(touch, e.timeStamp, this.containerPosition)
         // Hint to browser that scrolling will occur for better GPU layer management
         const pv = this.#primaryView
         if (pv?.element) {
@@ -2181,7 +2180,7 @@ export class Paginator extends HTMLElement {
         if (Math.abs(delta) < 0.5) return
 
         e.preventDefault()
-        this.#touchScrolled = true
+        this.#touchNavigation.markScrolled()
 
         const previous = this.containerPosition
         this.containerPosition = previous + delta
@@ -2194,12 +2193,11 @@ export class Paginator extends HTMLElement {
         }
     }
     #onTouchMove(e) {
-        const state = this.#touchState
+        const state = this.#touchNavigation.state
         if (this.#navigationLocked || !state) return
-        const contents = this.getContents?.() ?? []
-        for (const { doc } of contents) {
-            const selection = doc?.getSelection?.()
-            if (selection && !selection.isCollapsed && selection.toString().trim()) return
+        if (this.#hasActiveTextSelection()) {
+            this.#cancelTouchNavigation()
+            return
         }
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
@@ -2213,7 +2211,7 @@ export class Paginator extends HTMLElement {
         // pre-empting them.
         if (this.hasAttribute('no-swipe')) return
         if (e.touches.length > 1) {
-            if (this.#touchScrolled) e.preventDefault()
+            if (this.#touchNavigation.scrolled) e.preventDefault()
             return
         }
         const touch = e.changedTouches[0]
@@ -2245,7 +2243,7 @@ export class Paginator extends HTMLElement {
         state.dx += dx
         state.dy += dy
         state.dt += dt
-        this.#touchScrolled = true
+        this.#touchNavigation.markScrolled()
         if (!this.hasAttribute('animated') || this.hasAttribute('eink')) return
         if (!this.#vertical && Math.abs(state.dx) >= Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dx) > 1)) {
             this.scrollBy(dx, 0)
@@ -2254,13 +2252,17 @@ export class Paginator extends HTMLElement {
         }
     }
     #onTouchEnd() {
+        if (this.#hasActiveTextSelection()) {
+            this.#cancelTouchNavigation()
+            return
+        }
         // Remove will-change hint to free GPU resources
         // if (this.#view?.element) {
         //     this.#view.element.style.willChange = 'auto'
         // }
 
-        if (!this.#touchScrolled) return
-        this.#touchScrolled = false
+        const state = this.#touchNavigation.finish()
+        if (!state) return
         if (this.scrolled || this.#navigationLocked) return
         if (this.hasAttribute('no-swipe')) return
 
@@ -2269,7 +2271,7 @@ export class Paginator extends HTMLElement {
         // anything that doesn't work
         requestAnimationFrame(() => {
             if (globalThis.visualViewport.scale === 1) {
-                const { vx, vy, dx, dy, dt } = this.#touchState
+                const { vx, vy, dx, dy, dt } = state
                 this.snap(vx, vy, dx, dy, dt)
             }
         })

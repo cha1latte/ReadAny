@@ -41,10 +41,51 @@ export class PaginatorTouchTracker {
     return restorePosition;
   }
 
+  takeSelectionStart(currentPosition) {
+    const position = Number.isFinite(this.state?.startPosition)
+      ? this.state.startPosition
+      : currentPosition;
+    this.state = undefined;
+    this.scrolled = false;
+    return position;
+  }
+
   finish() {
     const state = this.scrolled ? (this.state ?? null) : null;
     this.state = undefined;
     this.scrolled = false;
     return state;
+  }
+}
+
+export class SelectionPositionGuard {
+  position;
+  navigating = false;
+
+  get active() {
+    return Number.isFinite(this.position);
+  }
+
+  begin(position) {
+    if (!this.active && Number.isFinite(position)) this.position = position;
+  }
+
+  correctionFor(currentPosition) {
+    if (!this.active || this.navigating || !Number.isFinite(currentPosition)) return null;
+    return Math.abs(currentPosition - this.position) > 0.5 ? this.position : null;
+  }
+
+  beginNavigation() {
+    if (this.active) this.navigating = true;
+  }
+
+  finishNavigation(position) {
+    if (this.active && Number.isFinite(position)) this.position = position;
+    this.navigating = false;
+  }
+
+  end() {
+    this.position = undefined;
+    this.navigating = false;
   }
 }

@@ -1,4 +1,8 @@
-import { PaginatorTouchTracker, hasActiveTextSelection } from './paginator-touch.js'
+import {
+    PaginatorTouchTracker,
+    SelectionPositionGuard,
+    hasActiveTextSelection,
+} from './paginator-touch.js'
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -977,6 +981,7 @@ export class Paginator extends HTMLElement {
     #mediaQueryListener
     #scrollBounds
     #touchNavigation = new PaginatorTouchTracker()
+    #selectionPosition = new SelectionPositionGuard()
     #lastVisibleRange
     #scrollLocked = false
     #isAnimating = false
@@ -1170,6 +1175,11 @@ export class Paginator extends HTMLElement {
             }
         }, 250)
         this.#container.addEventListener('scroll', () => {
+            const restorePosition = this.#selectionPosition.correctionFor(this.containerPosition)
+            if (restorePosition !== null) {
+                this.containerPosition = restorePosition
+                return
+            }
             if (!this.#isAnimating) this.dispatchEvent(new Event('scroll'))
             // Keep the per-view backgrounds glued to the content while a swipe
             // drag scrolls the container (no animation runs then). During the
@@ -1236,7 +1246,7 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
-            doc.addEventListener('selectstart', () => this.#cancelTouchNavigation())
+            doc.addEventListener('selectstart', () => this.#beginTextSelection())
         })
 
         this.addEventListener('relocate', ({ detail }) => {
@@ -1453,6 +1463,7 @@ export class Paginator extends HTMLElement {
                 debugSelectionPaging('edge-hold-fire', holdDetail(hold, performance.now(), {
                     reason: 'hold-timeout',
                 }))
+                this.#selectionPosition.beginNavigation()
                 try {
                     if (direction === 'backward') await this.prev()
                     else await this.next()
@@ -1461,6 +1472,7 @@ export class Paginator extends HTMLElement {
                         error: String(error),
                     }))
                 } finally {
+                    this.#selectionPosition.finishNavigation(this.containerPosition)
                     setSelectionNavigationLock(false)
                 }
             }, SELECTION_EDGE_HOLD_MS)
@@ -1560,6 +1572,9 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('keydown', () => isKeyboardSelecting = true)
             doc.addEventListener('keyup', () => isKeyboardSelecting = false)
             doc.addEventListener('selectionchange', () => {
+                const sel = doc.getSelection()
+                if (!sel.rangeCount || sel.isCollapsed || sel.type !== 'Range')
+                    this.#selectionPosition.end()
                 if (this.scrolled) {
                     debugSelectionPaging('selectionchange-skip', { reason: 'scrolled' })
                     return
@@ -1569,7 +1584,6 @@ export class Paginator extends HTMLElement {
                     debugSelectionPaging('selectionchange-skip', { reason: 'no-last-visible-range' })
                     return
                 }
-                const sel = doc.getSelection()
                 if (!sel.rangeCount) {
                     cancelSelectionEdgeHold('selection-cleared')
                     debugSelectionPaging('selectionchange-skip', { reason: 'no-range-count', type: sel.type })
@@ -2137,10 +2151,20 @@ export class Paginator extends HTMLElement {
         const restorePosition = this.#touchNavigation.cancel()
         if (restorePosition !== null) this.containerPosition = restorePosition
     }
+    #beginTextSelection() {
+        if (this.scrolled) {
+            this.#cancelTouchNavigation()
+            return
+        }
+        const startPosition = this.#touchNavigation.takeSelectionStart(this.containerPosition)
+        this.#selectionPosition.begin(startPosition)
+        const restorePosition = this.#selectionPosition.correctionFor(this.containerPosition)
+        if (restorePosition !== null) this.containerPosition = restorePosition
+    }
     #onTouchStart(e) {
         if (this.#navigationLocked) return
         if (this.#hasActiveTextSelection()) {
-            this.#cancelTouchNavigation()
+            this.#beginTextSelection()
             return
         }
         const touch = e.changedTouches[0]
@@ -2196,7 +2220,7 @@ export class Paginator extends HTMLElement {
         const state = this.#touchNavigation.state
         if (this.#navigationLocked || !state) return
         if (this.#hasActiveTextSelection()) {
-            this.#cancelTouchNavigation()
+            this.#beginTextSelection()
             return
         }
         if (state.pinched) return
@@ -2253,7 +2277,7 @@ export class Paginator extends HTMLElement {
     }
     #onTouchEnd() {
         if (this.#hasActiveTextSelection()) {
-            this.#cancelTouchNavigation()
+            this.#beginTextSelection()
             return
         }
         // Remove will-change hint to free GPU resources

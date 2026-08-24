@@ -74,6 +74,7 @@ describe("native selection position ownership", () => {
   it("restores unowned native selection drift but ignores sub-pixel noise", () => {
     const guard = new SelectionPositionGuard();
     guard.begin(1080);
+    guard.begin(1410);
 
     expect(guard.correctionFor(1410)).toBe(1080);
     expect(guard.correctionFor(1080.4)).toBeNull();
@@ -105,15 +106,25 @@ const paginatorSource = readFileSync(
 );
 
 describe("paginator selection cancellation wiring", () => {
-  it("cancels pending navigation at selection start and delayed selection detection", () => {
+  it("guards native selection drift while preserving explicit edge navigation", () => {
     expect(paginatorSource).toContain(
-      "doc.addEventListener('selectstart', () => this.#cancelTouchNavigation())",
+      "doc.addEventListener('selectstart', () => this.#beginTextSelection())",
     );
     expect(
       paginatorSource.match(
-        /if \(this\.#hasActiveTextSelection\(\)\) \{\s*this\.#cancelTouchNavigation\(\)\s*return\s*\}/g,
+        /if \(this\.#hasActiveTextSelection\(\)\) \{\s*this\.#beginTextSelection\(\)\s*return\s*\}/g,
       ),
     ).toHaveLength(3);
+    expect(paginatorSource).toMatch(
+      /this\.#container\.addEventListener\('scroll', \(\) => \{\s*const restorePosition = this\.#selectionPosition\.correctionFor\(this\.containerPosition\)/,
+    );
+    expect(paginatorSource).toMatch(
+      /#beginTextSelection\(\) \{\s*if \(this\.scrolled\) \{\s*this\.#cancelTouchNavigation\(\)\s*return/,
+    );
+    expect(paginatorSource).toContain("this.#selectionPosition.end()");
+    expect(paginatorSource).toMatch(
+      /this\.#selectionPosition\.beginNavigation\(\)\s*try \{\s*if \(direction === 'backward'\) await this\.prev\(\)\s*else await this\.next\(\)[\s\S]*?finally \{\s*this\.#selectionPosition\.finishNavigation\(this\.containerPosition\)/,
+    );
     expect(paginatorSource).toContain("if (direction === 'backward') await this.prev()");
     expect(paginatorSource).toContain("else await this.next()");
   });

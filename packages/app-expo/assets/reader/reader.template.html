@@ -296,17 +296,29 @@
       }
     }
 
-    function getMobileReflowMaxInlineSize() {
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 393;
-      return Math.ceil(Math.max(720, viewportHeight, viewportWidth));
-    }
-
     function applyMobileReflowRendererSizing(renderer) {
       if (!renderer) return;
       renderer.setAttribute('max-column-count', '1');
       renderer.setAttribute('max-block-size', '1440px');
-      renderer.setAttribute('max-inline-size', getMobileReflowMaxInlineSize() + 'px');
+    }
+
+    // Mobile is always single-page (no spread), so there is no column gutter to
+    // balance — the foliate gap only contributes the page's internal side
+    // padding. Same derivation as the desktop reader: paper = 99% of the window
+    // (breathing room even at margin 0), outer text inset = margin + 0.5%·H.
+    // All against renderer.clientWidth (foliate resolves the gap % against it).
+    function applyMobileReflowMargins(renderer, margin) {
+      if (!renderer) return;
+      const windowWidth =
+        renderer.clientWidth || window.innerWidth || document.documentElement.clientWidth || 393;
+      const paper = windowWidth * 0.99;
+      const g = margin / paper;
+      renderer.setAttribute('margin-top', margin + 'px');
+      renderer.setAttribute('margin-bottom', margin + 'px');
+      renderer.setAttribute('margin-left', '0px');
+      renderer.setAttribute('margin-right', '0px');
+      renderer.setAttribute('gap', g * 100 + '%');
+      renderer.setAttribute('max-inline-size', paper - margin + g * windowWidth + 'px');
     }
 
     function applyRendererFlowMode(renderer) {
@@ -1734,11 +1746,8 @@
         const renderer = el.renderer;
         if (renderer && !el.isFixedLayout) {
           applyMobileReflowRendererSizing(renderer);
-          // Default gap/margin
-          const margin = msg.pageMargin || 16;
-          const gapPercent = Math.max(1, Math.round((margin / 393) * 100));
-          renderer.setAttribute('gap', gapPercent + '%');
-          renderer.setAttribute('margin', margin + 'px');
+          // Default margins (synchronized with the desktop reader formula)
+          applyMobileReflowMargins(renderer, msg.pageMargin || 16);
         } else if (renderer && el.isFixedLayout) {
           const paginatedLayout =
             msg.paginatedLayout === 'single' || msg.paginatedLayout === 'double'
@@ -2000,9 +2009,7 @@
         const BASELINE_FONT_SIZE = 16;
         const layoutScale = currentFontSize / BASELINE_FONT_SIZE;
         const margin = Math.round(settings.pageMargin * layoutScale);
-        const gapPercent = Math.max(1, Math.round((margin / 393) * 100));
-        renderer.setAttribute('gap', gapPercent + '%');
-        renderer.setAttribute('margin', margin + 'px');
+        applyMobileReflowMargins(renderer, margin);
       }
 
       if (view && view.isFixedLayout) {

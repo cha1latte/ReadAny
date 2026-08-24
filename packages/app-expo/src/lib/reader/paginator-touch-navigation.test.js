@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   PaginatorTouchTracker,
+  SelectionPositionGuard,
   hasActiveTextSelection,
 } from "../../../../foliate-js/paginator-touch.js";
 
@@ -34,6 +35,19 @@ describe("paginator touch navigation ownership", () => {
     expect(tracker.cancel()).toBeNull();
   });
 
+  it("retains the aligned touch start when selection takes ownership before swipe movement", () => {
+    const tracker = new PaginatorTouchTracker();
+    tracker.start(touch, 100, 1080);
+
+    expect(tracker.takeSelectionStart(1410)).toBe(1080);
+    expect(tracker.state).toBeUndefined();
+    expect(tracker.scrolled).toBe(false);
+  });
+
+  it("falls back to the current position when selection starts without tracked touch state", () => {
+    expect(new PaginatorTouchTracker().takeSelectionStart(1080)).toBe(1080);
+  });
+
   it("returns the completed swipe state for an ordinary gesture", () => {
     const tracker = new PaginatorTouchTracker();
     const state = tracker.start(touch, 100, 624);
@@ -53,6 +67,35 @@ describe("paginator touch navigation ownership", () => {
         { doc: { getSelection: () => ({ isCollapsed: false, toString: () => "   " }) } },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("native selection position ownership", () => {
+  it("restores unowned native selection drift but ignores sub-pixel noise", () => {
+    const guard = new SelectionPositionGuard();
+    guard.begin(1080);
+
+    expect(guard.correctionFor(1410)).toBe(1080);
+    expect(guard.correctionFor(1080.4)).toBeNull();
+  });
+
+  it("allows explicit edge navigation and rebases protection afterward", () => {
+    const guard = new SelectionPositionGuard();
+    guard.begin(1080);
+    guard.beginNavigation();
+
+    expect(guard.correctionFor(2160)).toBeNull();
+    guard.finishNavigation(2160);
+    expect(guard.correctionFor(2450)).toBe(2160);
+  });
+
+  it("releases position ownership when selection ends", () => {
+    const guard = new SelectionPositionGuard();
+    guard.begin(1080);
+    guard.end();
+
+    expect(guard.active).toBe(false);
+    expect(guard.correctionFor(1410)).toBeNull();
   });
 });
 

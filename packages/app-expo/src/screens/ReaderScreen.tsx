@@ -40,6 +40,7 @@ import { runWithDbRetry } from "@readany/core/db/write-retry";
 import { useChapterTranslation } from "@readany/core/hooks";
 import { useReadingSession } from "@readany/core/hooks/use-reading-session";
 import { createSelectionNoteMutation } from "@readany/core/reader";
+import { resolveCurrentChapterFromToc } from "@readany/core/reader/toc";
 import { getPlatformService } from "@readany/core/services";
 import { getCSSFontFace, useFontStore } from "@readany/core/stores";
 import type { HighlightColor, ReadSettings, TOCItem } from "@readany/core/types";
@@ -358,6 +359,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   } | null>(null);
   const totalBookCharactersRef = useRef<number | null>(null);
   const progressTrackingGuardUntilRef = useRef(0);
+  const lastRelocateRef = useRef<RelocateEvent | null>(null);
 
   const incrementPagesRead = useReadingSessionStore((s) => s.incrementPagesRead);
   const incrementCharactersRead = useReadingSessionStore((s) => s.incrementCharactersRead);
@@ -383,6 +385,25 @@ export function ReaderScreen({ route, navigation }: Props) {
     removeBookmark,
   } = useAnnotationStore();
   const book = useMemo(() => books.find((b) => b.id === bookId), [books, bookId]);
+
+  const syncAIReadingContext = useCallback(
+    (detail: RelocateEvent, tocItems: TOCItem[]) => {
+      readingContextService.updateContext({
+        bookId,
+        bookTitle: book?.meta?.title || "",
+        currentChapter: resolveCurrentChapterFromToc(
+          tocItems,
+          detail.tocItem ?? {},
+          detail.section?.current ?? 0,
+        ),
+        currentPosition: {
+          cfi: detail.cfi || "",
+          percentage: (detail.fraction ?? 0) * 100,
+        },
+      });
+    },
+    [book?.meta?.title, bookId],
+  );
 
   // ── System info (clock/battery/statusBar/SafeArea) ─────────────────────────
   const { readerClock, batteryLevel, isBatteryCharging, stableTopInset, insets } =
@@ -625,6 +646,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       totalBookCharactersRef.current = totalCharacters > 0 ? totalCharacters : null;
     },
     onRelocate: (detail: RelocateEvent) => {
+      lastRelocateRef.current = detail;
       console.log("[ReaderScreen] onRelocate", {
         section: detail.section,
         fraction: detail.fraction,
@@ -768,22 +790,13 @@ export function ReaderScreen({ route, navigation }: Props) {
       }
 
       // Sync reading context for AI tools
-      readingContextService.updateContext({
-        bookId,
-        bookTitle: book?.meta?.title || "",
-        currentChapter: {
-          index: detail.section?.current ?? 0,
-          title: detail.tocItem?.label || "",
-          href: detail.tocItem?.href || "",
-        },
-        currentPosition: {
-          cfi: detail.cfi || "",
-          percentage: (detail.fraction ?? 0) * 100,
-        },
-      });
+      syncAIReadingContext(detail, toc);
     },
     onTocReady: (items: TOCItem[]) => {
       setToc(items);
+      if (lastRelocateRef.current) {
+        syncAIReadingContext(lastRelocateRef.current, items);
+      }
     },
     onSelection: (detail: SelectionEvent) => {
       setSelection(detail);

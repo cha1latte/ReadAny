@@ -32,6 +32,8 @@ export function createScrollToBottomController(
   let scheduleHandle: ScheduleHandle;
   let hasSchedule = false;
   let exhaustionReported = false;
+  let bottomObserved = false;
+  let stableBottomTicks = 0;
 
   const stop = () => {
     pending = false;
@@ -51,6 +53,18 @@ export function createScrollToBottomController(
 
   const attempt = () => {
     if (!pending) return;
+
+    if (bottomObserved) {
+      stableBottomTicks += 1;
+      if (stableBottomTicks >= 2) {
+        stop();
+        return;
+      }
+      options.scrollToEnd();
+      return;
+    }
+
+    stableBottomTicks = 0;
     if (attempts >= maxAttempts) {
       exhaust();
       return;
@@ -70,6 +84,8 @@ export function createScrollToBottomController(
       pending = true;
       attempts = 0;
       exhaustionReported = false;
+      bottomObserved = false;
+      stableBottomTicks = 0;
       attempt();
 
       const handle = schedule(attempt);
@@ -81,12 +97,15 @@ export function createScrollToBottomController(
       }
     },
     observeDistance(distance) {
-      if (pending && Number.isFinite(distance) && distance < bottomThreshold) {
-        cancel();
-      }
+      if (!pending) return;
+      bottomObserved = Number.isFinite(distance) && distance < bottomThreshold;
+      if (!bottomObserved) stableBottomTicks = 0;
     },
     contentSizeChanged() {
-      attempt();
+      if (!pending) return;
+      bottomObserved = false;
+      stableBottomTicks = 0;
+      options.scrollToEnd();
     },
     cancel,
     isPending() {

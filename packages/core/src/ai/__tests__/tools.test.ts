@@ -933,6 +933,77 @@ describe("getAnnotations tool", () => {
     });
   });
 
+  it("matches an explicit chapter number without matching chapter 20", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      {
+        text: "Wanted",
+        chapterTitle: "Chapter 2: Spending Time Apart",
+        color: "yellow",
+      },
+      { text: "Wrong", chapterTitle: "Chapter 20: Later", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "chapter 2",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Wanted"]);
+    expect(result.pagination.highlights.total).toBe(1);
+  });
+
+  it("prefers an exact normalized chapter title over broader chapter-number matches", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      { text: "Exact", chapterTitle: "  Chapter   2  ", color: "yellow" },
+      { text: "Expanded", chapterTitle: "Chapter 2: Spending Time Apart", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "chapter 2",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Exact"]);
+  });
+
+  it("matches a Chinese chapter number with a complete numeric boundary", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      { text: "Wanted", chapterTitle: "第2章 分开一段时间", color: "yellow" },
+      { text: "Wrong", chapterTitle: "第20章 后来", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "第2章",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Wanted"]);
+  });
+
   it("returns later book positions first for recent chapter requests", async () => {
     vi.mocked(getHighlights).mockResolvedValue(
       Array.from({ length: 25 }, (_, index) => ({

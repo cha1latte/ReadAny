@@ -27,13 +27,55 @@ function normalizeChapterTitle(value: unknown): string | undefined {
   return normalized || undefined;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractChapterNumberReference(
+  value: string,
+): { style: "english" | "chinese"; number: string } | undefined {
+  const english = value.match(/\bchapter\s*(\d+)\b/iu)?.[1];
+  if (english) return { style: "english", number: english };
+
+  const chinese = value.match(/(?:第\s*)?([零〇一二两三四五六七八九十百千万\d]{1,8})\s*章/u)?.[1];
+  if (chinese) return { style: "chinese", number: chinese };
+
+  return undefined;
+}
+
+function filterAnnotationsByChapter<T extends { chapterTitle?: string }>(
+  items: T[],
+  normalizedQuery?: string,
+): T[] {
+  if (!normalizedQuery) return items;
+
+  const exact = items.filter(
+    (item) => normalizeChapterTitle(item.chapterTitle) === normalizedQuery,
+  );
+  if (exact.length > 0) return exact;
+
+  const queryReference = extractChapterNumberReference(normalizedQuery);
+  if (queryReference) {
+    return items.filter((item) => {
+      const title = normalizeChapterTitle(item.chapterTitle);
+      if (!title) return false;
+      const titleReference = extractChapterNumberReference(title);
+      return (
+        titleReference?.style === queryReference.style &&
+        titleReference.number === queryReference.number
+      );
+    });
+  }
+
+  const prefix = new RegExp(`^${escapeRegExp(normalizedQuery)}(?:$|\\s|[:：—–-])`, "iu");
+  return items.filter((item) => prefix.test(normalizeChapterTitle(item.chapterTitle) || ""));
+}
+
 function pageAnnotations<T extends { chapterTitle?: string }>(
   items: T[],
   options: { chapterTitle?: string; reverse: boolean; offset: number; limit: number },
 ): { page: T[]; metadata: AnnotationPageMetadata } {
-  const matching = options.chapterTitle
-    ? items.filter((item) => normalizeChapterTitle(item.chapterTitle) === options.chapterTitle)
-    : items;
+  const matching = filterAnnotationsByChapter(items, options.chapterTitle);
   const ordered = options.reverse ? [...matching].reverse() : matching;
   const page = ordered.slice(options.offset, options.offset + options.limit);
 
@@ -63,7 +105,7 @@ export function createGetAnnotationsTool(bookId: string): ToolDefinition {
       chapterTitle: {
         type: "string",
         description:
-          "Optional exact chapter title to filter before pagination. Match is case-insensitive and ignores surrounding/repeated whitespace.",
+          "Optional chapter title or chapter reference to filter before pagination. Exact matches are preferred; matching is case-insensitive and ignores surrounding/repeated whitespace.",
       },
       order: {
         type: "string",

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { PasswordInput } from "../../../components/ui/PasswordInput";
 import { useColors } from "../../../styles/theme";
 import { makeStyles } from "./sync-styles";
@@ -151,12 +151,12 @@ export function S3Form({
           <View style={{ flex: 1 }}>
             <Text style={styles.autoSyncLabel}>{t("settings.syncS3PathStyle")}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.toggle, s3PathStyle && styles.toggleActive]}
-            onPress={onTogglePathStyle}
-          >
-            <View style={[styles.toggleThumb, s3PathStyle && styles.toggleThumbActive]} />
-          </TouchableOpacity>
+          <Switch
+            value={s3PathStyle}
+            onValueChange={onTogglePathStyle}
+            trackColor={{ false: colors.muted, true: colors.primary }}
+            thumbColor={colors.card}
+          />
         </View>
 
         <View style={styles.btnRow}>

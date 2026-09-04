@@ -72,6 +72,8 @@
     "showBottomTimeBattery": "下部時刻＆バッテリー表示",
     "volumeButtonsPageTurn": "音量ボタンでページ送り",
     "volumeButtonsPageTurnDesc": "読書中は音量ボタンでページ送りします",
+    "keepScreenOnWhileReading": "読書中は画面をオンに保つ",
+    "keepScreenOnWhileReadingDesc": "本を開いている間、画面が自動で消えないようにします",
     "followSystemFontScale": "システムフォントサイズに従う",
     "followSystemFontScaleDesc": "OSのアクセシビリティフォントサイズで自動調整",
     "fixedLayoutNotice": "PDFは固定レイアウト形式です。フォントとレイアウト設定は利用できません。",

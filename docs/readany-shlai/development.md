@@ -56,6 +56,12 @@ The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so i
 
 Pull-request APKs are temporary review artifacts. Celia and Decidetto use the permanent prerelease channel documented in [phone-updates.md](phone-updates.md); a successful merge to `main` creates the next verified update for both phones.
 
+## Long-running local builds
+
+Before starting a compile expected to take more than a few minutes, verify the requested behavior, connected-device state, required toolchain versions, build variant, and all proposed workarounds. Reproduce build failures with the smallest relevant configure or build target, and prove a workaround against that target before launching a full application build. Do not use repeated full compiles as a trial-and-error diagnostic loop.
+
+Record the command, process ID, start time, and persistent log paths for any build that may outlive its terminal command. If prerequisites remain unverified or a workaround changes the supported toolchain, stop and report the blocker instead of starting the long build.
+
 ## No secrets in development or previews
 
 Never add a keystore, password, certificate, signing value, or GitHub secret to the repository, pull-request text, issue text, logs, terminal arguments, or preview workflow. Pull-request previews intentionally receive no stable signing secrets. Stable signing is available only through the protected `shlai-production` environment; follow [releasing.md](releasing.md) for that process and its two-encrypted-backup requirement.

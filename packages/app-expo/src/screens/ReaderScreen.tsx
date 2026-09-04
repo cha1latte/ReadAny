@@ -75,6 +75,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
+import { ReaderKeepAwake } from "./reader/ReaderKeepAwake";
 // ── Extracted modules ──
 import { ReaderNoteViewModal } from "./reader/ReaderNoteViewModal";
 
@@ -1521,6 +1522,10 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   return (
     <View style={[s.container, { paddingBottom: insets.bottom }]}>
+      <ReaderKeepAwake
+        enabled={readSettings.keepScreenOnWhileReading === true}
+        isFocused={isFocused}
+      />
       <Animated.View
         style={[s.readerStage, { transform: [{ translateY: readerPullAnim }] }]}
         pointerEvents="box-none"

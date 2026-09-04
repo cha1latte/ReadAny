@@ -72,6 +72,8 @@
     "showBottomTimeBattery": "底部时间与电量",
     "volumeButtonsPageTurn": "音量键翻页",
     "volumeButtonsPageTurnDesc": "开启后阅读时音量键用于上下翻页",
+    "keepScreenOnWhileReading": "阅读时保持屏幕常亮",
+    "keepScreenOnWhileReadingDesc": "打开书籍时防止屏幕自动关闭",
     "followSystemFontScale": "跟随系统字号",
     "followSystemFontScaleDesc": "按系统辅助功能字号自动放大",
     "fixedLayoutNotice": "PDF 为固定布局格式，字体和排版设置不可用。",

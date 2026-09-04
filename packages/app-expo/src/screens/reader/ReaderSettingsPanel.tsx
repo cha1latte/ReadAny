@@ -56,6 +56,7 @@ export function ReaderSettingsPanel({
     pageMargin: settingPageMargin,
     viewMode: settingViewMode,
     volumeButtonsPageTurn,
+    keepScreenOnWhileReading,
     showTopTitleProgress,
     showBottomTimeBattery,
     followSystemFontScale,
@@ -304,6 +305,36 @@ export function ReaderSettingsPanel({
                   ]}
                 >
                   {volumeButtonsPageTurn ? t("settings.enabled") : t("settings.disabled")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {Platform.OS === "android" && (
+            <View style={s.settingRow}>
+              <View style={s.settingLabelBlock}>
+                <Text style={s.settingLabel}>
+                  {t("settings.keepScreenOnWhileReading", "Keep screen on while reading")}
+                </Text>
+                <Text style={s.settingHint}>
+                  {t(
+                    "settings.keepScreenOnWhileReadingDesc",
+                    "Prevent the screen from turning off while a book is open",
+                  )}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[s.settingToggleBtn, !!keepScreenOnWhileReading && s.settingToggleBtnActive]}
+                onPress={() =>
+                  onUpdateSetting("keepScreenOnWhileReading", !keepScreenOnWhileReading)
+                }
+              >
+                <Text
+                  style={[
+                    s.settingToggleText,
+                    !!keepScreenOnWhileReading && s.settingToggleTextActive,
+                  ]}
+                >
+                  {keepScreenOnWhileReading ? t("settings.enabled") : t("settings.disabled")}
                 </Text>
               </TouchableOpacity>
             </View>

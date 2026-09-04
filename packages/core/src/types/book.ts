@@ -96,6 +96,8 @@ export interface ReadSettings extends ViewSettings {
   showTopTitleProgress: boolean;
   showBottomTimeBattery: boolean;
   volumeButtonsPageTurn: boolean;
+  /** Android-only: keep the display awake while the reader screen is focused. */
+  keepScreenOnWhileReading?: boolean;
   defaultHighlightColor?: HighlightColor;
   /**
    * Mobile-only opt-in: when true, the reader scales fontSize by the OS

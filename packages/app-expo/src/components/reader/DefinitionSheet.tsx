@@ -71,17 +71,17 @@ export function DefinitionSheet({
         style={s.backdrop}
         onPress={close}
         accessibilityRole="button"
-        accessibilityLabel={t("reader.dictionary.close")}
+        accessibilityLabel={t("dictionary.close")}
       />
       <View style={[s.container, { paddingBottom: insets.bottom || 16 }]}>
         <View style={s.handle} />
         <View style={s.header}>
-          <Text style={s.title}>{t("reader.dictionary.title")}</Text>
+          <Text style={s.title}>{t("dictionary.title")}</Text>
           <TouchableOpacity
             style={s.closeButton}
             onPress={close}
             accessibilityRole="button"
-            accessibilityLabel={t("reader.dictionary.close")}
+            accessibilityLabel={t("dictionary.close")}
           >
             <XIcon size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -109,37 +109,37 @@ function renderState(
       return (
         <View style={s.loadingWrap} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" color={primaryColor} />
-          <Text style={s.statusText}>{t("reader.dictionary.loadingDefinition")}</Text>
+          <Text style={s.statusText}>{t("dictionary.loadingDefinition")}</Text>
         </View>
       );
     case "unsupported":
-      return <Text style={s.statusText}>{t("reader.dictionary.unsupportedSelection")}</Text>;
+      return <Text style={s.statusText}>{t("dictionary.unsupportedSelection")}</Text>;
     case "missing-pack":
       return <PackDownload state={state} controller={controller} s={s} t={t} />;
     case "downloading":
       return <PackDownload state={state} controller={controller} s={s} t={t} />;
     case "no-match":
-      return <Text style={s.statusText}>{t("reader.dictionary.noDefinitionFound")}</Text>;
+      return <Text style={s.statusText}>{t("dictionary.noDefinitionFound")}</Text>;
     case "error":
       return (
         <View style={s.errorWrap} accessibilityLiveRegion="polite">
-          <Text style={s.errorText}>{t("reader.dictionary.lookupError")}</Text>
+          <Text style={s.errorText}>{t("dictionary.lookupError")}</Text>
           <View style={s.actions}>
             <TouchableOpacity
               style={s.primaryButton}
               onPress={() => void controller.retry()}
               accessibilityRole="button"
-              accessibilityLabel={t("reader.dictionary.retryLookup")}
+              accessibilityLabel={t("dictionary.retryLookup")}
             >
-              <Text style={s.primaryButtonText}>{t("reader.dictionary.retry")}</Text>
+              <Text style={s.primaryButtonText}>{t("dictionary.retry")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={s.secondaryButton}
               onPress={onManageDictionaries}
               accessibilityRole="button"
-              accessibilityLabel={t("reader.dictionary.manageDictionaries")}
+              accessibilityLabel={t("dictionary.manageDictionaries")}
             >
-              <Text style={s.secondaryButtonText}>{t("reader.dictionary.manageDictionaries")}</Text>
+              <Text style={s.secondaryButtonText}>{t("dictionary.manageDictionaries")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -200,14 +200,14 @@ function PackDownload({
 }) {
   const downloading = state.kind === "downloading";
   const descriptor = state.kind === "missing-pack" ? state.descriptor : undefined;
-  const language = t(`reader.dictionary.${state.language === "en" ? "english" : "chinese"}`);
+  const language = t(`dictionary.${state.language === "en" ? "english" : "chinese"}`);
   const progress = downloading ? Math.round(state.progress * 100) : null;
   return (
     <View style={s.downloadWrap} accessibilityLiveRegion="polite">
       <Text style={s.statusText}>
         {downloading
-          ? t("reader.dictionary.downloadingDefinition", { language, progress })
-          : t("reader.dictionary.downloadDefinition", {
+          ? t("dictionary.downloadingDefinition", { language, progress })
+          : t("dictionary.downloadDefinition", {
               language,
               size: formatBytes(descriptor?.sizeBytes ?? 0),
             })}
@@ -219,11 +219,11 @@ function PackDownload({
         accessibilityRole="button"
         accessibilityLabel={
           downloading
-            ? t("reader.dictionary.downloadingAccessibility", { language })
-            : t("reader.dictionary.downloadAccessibility", { language })
+            ? t("dictionary.downloadingAccessibility", { language })
+            : t("dictionary.downloadAccessibility", { language })
         }
       >
-        <Text style={s.primaryButtonText}>{t("reader.dictionary.download")}</Text>
+        <Text style={s.primaryButtonText}>{t("dictionary.download")}</Text>
       </TouchableOpacity>
     </View>
   );

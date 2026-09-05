@@ -1,6 +1,7 @@
+import i18n, { i18nReady } from "@readany/core/i18n";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectionPopover } from "./SelectionPopover";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -8,13 +9,6 @@ import { SelectionPopover } from "./SelectionPopover";
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 vi.mock("expo-clipboard", () => ({ setStringAsync: vi.fn() }));
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, fallback?: string) =>
-      key === "reader.dictionary.define" ? "查詞" : (fallback ?? key),
-  }),
-}));
 
 vi.mock("@/components/ui/Icon", () => ({
   BookOpenIcon: () => null,
@@ -78,6 +72,12 @@ const selection = {
 };
 
 describe("SelectionPopover", () => {
+  beforeEach(async () => {
+    await i18nReady;
+    await act(async () => {
+      await i18n.changeLanguage("zh-TW");
+    });
+  });
   it("passes the selected text to Define and dismisses the selection", async () => {
     const onDefine = vi.fn();
     const onDismiss = vi.fn();

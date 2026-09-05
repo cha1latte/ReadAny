@@ -1,4 +1,5 @@
 import type { DictionaryEntry, DictionaryPackDescriptor } from "@readany/core/dictionary";
+import i18n, { i18nReady } from "@readany/core/i18n";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,60 +30,6 @@ vi.mock("react-native", async () => {
 
 vi.mock("@/components/ui/Icon", () => ({
   XIcon: () => null,
-}));
-
-const locale = vi.hoisted(() => ({ language: "en" as "en" | "zh" }));
-const sheetTranslations: Record<"en" | "zh", Record<string, string>> = {
-  en: {
-    "reader.dictionary.title": "Definition",
-    "reader.dictionary.close": "Close definition",
-    "reader.dictionary.loadingDefinition": "Looking up definitionâ€¦",
-    "reader.dictionary.unsupportedSelection": "This selection is not supported.",
-    "reader.dictionary.noDefinitionFound": "No definition found. Try selecting a single word.",
-    "reader.dictionary.lookupError": "Dictionary lookup failed. Try again.",
-    "reader.dictionary.retry": "Retry",
-    "reader.dictionary.retryLookup": "Retry dictionary lookup",
-    "reader.dictionary.manageDictionaries": "Manage Dictionaries",
-    "reader.dictionary.english": "English",
-    "reader.dictionary.chinese": "Chinese",
-    "reader.dictionary.downloadingDefinition":
-      "Downloading the {{language}} dictionaryâ€¦ {{progress}}%",
-    "reader.dictionary.downloadDefinition":
-      "Download the {{language}} dictionary ({{size}}) to look up definitions offline.",
-    "reader.dictionary.downloadingAccessibility": "Downloading {{language}} dictionary",
-    "reader.dictionary.downloadAccessibility": "Download {{language}} dictionary",
-    "reader.dictionary.download": "Download",
-  },
-  zh: {
-    "reader.dictionary.title": "釋義",
-    "reader.dictionary.close": "關閉釋義",
-    "reader.dictionary.loadingDefinition": "正在查詢釋義â€¦",
-    "reader.dictionary.unsupportedSelection": "不支援這個選取內容。",
-    "reader.dictionary.noDefinitionFound": "找不到釋義。請嘗試只選取一個單字。",
-    "reader.dictionary.lookupError": "字典查詢失敗，請重試。",
-    "reader.dictionary.retry": "重試",
-    "reader.dictionary.retryLookup": "重試字典查詢",
-    "reader.dictionary.manageDictionaries": "管理字典",
-    "reader.dictionary.english": "英語",
-    "reader.dictionary.chinese": "中文",
-    "reader.dictionary.downloadingDefinition": "正在下載{{language}}字典â€¦ {{progress}}%",
-    "reader.dictionary.downloadDefinition": "下載{{language}}字典（{{size}}）即可離線查詢釋義。",
-    "reader.dictionary.downloadingAccessibility": "正在下載{{language}}字典",
-    "reader.dictionary.downloadAccessibility": "下載{{language}}字典",
-    "reader.dictionary.download": "下載",
-  },
-};
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, variables?: Record<string, unknown>) => {
-      let value = sheetTranslations[locale.language][key] ?? key;
-      for (const [name, replacement] of Object.entries(variables ?? {})) {
-        value = value.replaceAll(`{{${name}}}`, String(replacement));
-      }
-      return value;
-    },
-  }),
 }));
 
 vi.mock("@/stores", () => ({
@@ -183,12 +130,17 @@ function pressButton(renderer: TestRenderer.ReactTestRenderer, label: string): v
 }
 
 describe("DefinitionSheet", () => {
-  beforeEach(() => {
-    locale.language = "en";
+  beforeEach(async () => {
+    await i18nReady;
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
   });
 
   it("consumes Traditional Chinese sheet, download-template, and accessibility translations", async () => {
-    locale.language = "zh";
+    await act(async () => {
+      await i18n.changeLanguage("zh-TW");
+    });
     const chineseDescriptor: DictionaryPackDescriptor = {
       ...descriptor,
       language: "zh",

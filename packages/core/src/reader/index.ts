@@ -14,8 +14,9 @@ export {
   getScrollPageOffset,
   navigatePage,
   calculateProgress,
+  getChapterPageProgress,
 } from "./pagination";
-export type { PageDirection } from "./pagination";
+export type { ChapterPageProgress, PageDirection } from "./pagination";
 
 // Progress tracking
 export { createProgressTracker, estimateTimeToFinish } from "./progress";

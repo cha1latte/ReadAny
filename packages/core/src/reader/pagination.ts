@@ -49,3 +49,29 @@ export function calculateProgress(currentPage: number, totalPages: number): numb
   if (totalPages <= 0) return 0;
   return Math.min(1, (currentPage + 1) / totalPages);
 }
+
+export interface ChapterPageProgress {
+  current: number;
+  total: number;
+}
+
+/** Convert the renderer's zero-based chapter page to one-based display progress. */
+export function getChapterPageProgress(
+  rendererPage: number,
+  rendererPages: number,
+): ChapterPageProgress | null {
+  if (
+    !Number.isInteger(rendererPage) ||
+    !Number.isInteger(rendererPages) ||
+    rendererPage < 0 ||
+    rendererPages <= 0 ||
+    rendererPage >= rendererPages
+  ) {
+    return null;
+  }
+
+  return {
+    current: rendererPage + 1,
+    total: rendererPages,
+  };
+}

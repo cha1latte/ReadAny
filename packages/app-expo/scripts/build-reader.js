@@ -25,6 +25,7 @@ async function buildReader() {
     import { EPUB } from "${FOLIATE_DIR.replace(/\\/g, "/")}/epub.js";
     import { extractPDFChapters, makePDFFromURL } from "${FOLIATE_DIR.replace(/\\/g, "/")}/pdf.js";
     import { ReaderExtractionSessions } from "${EXTRACTION_SESSIONS.replace(/\\/g, "/")}";
+    import { getChapterPageProgress } from "${path.resolve(__dirname, "../../core/src/reader/pagination.ts").replace(/\\/g, "/")}";
 
     window.makeBook = makeBook;
     window.Overlayer = Overlayer;
@@ -36,6 +37,7 @@ async function buildReader() {
     window._makePDFFromURL = makePDFFromURL;
     window._extractPDFChapters = extractPDFChapters;
     window.ReaderExtractionSessions = ReaderExtractionSessions;
+    window.getChapterPageProgress = getChapterPageProgress;
 
     if (!customElements.get('foliate-view')) {
       customElements.define('foliate-view', View);

@@ -1637,11 +1637,8 @@
           const rendererPages = view && view.renderer && typeof view.renderer.pages === 'number'
             ? view.renderer.pages
             : null;
-          const actualPage = rendererPage != null && rendererPages != null && rendererPages > 2
-            ? {
-                current: Math.max(1, Math.min(rendererPage, rendererPages - 2)),
-                total: Math.max(1, rendererPages - 2),
-              }
+          const actualPage = rendererPage != null && rendererPages != null
+            ? window.getChapterPageProgress(rendererPage, rendererPages)
             : null;
           postToRN('relocate', {
             fraction: detail.fraction,

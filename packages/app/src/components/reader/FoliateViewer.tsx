@@ -8,6 +8,7 @@ import type { BookDoc, BookFormat } from "@/lib/reader/document-loader";
 import { getDirection, isFixedLayoutBook } from "@/lib/reader/document-loader";
 import { getFontTheme } from "@/lib/reader/font-themes";
 import { registerIframeEventHandlers } from "@/lib/reader/iframe-event-handlers";
+import { getChapterPageProgress } from "@readany/core/reader";
 import type {
   ChapterParagraph,
   ChapterTranslationResult,
@@ -91,10 +92,7 @@ function analyzeCanvasIsLight(canvas: HTMLCanvasElement): boolean {
 }
 
 /** The PDF page canvas is rendered asynchronously (pdf.js); wait until it appears. */
-function waitForPdfPageCanvas(
-  doc: Document,
-  timeoutMs = 5000,
-): Promise<HTMLCanvasElement | null> {
+function waitForPdfPageCanvas(doc: Document, timeoutMs = 5000): Promise<HTMLCanvasElement | null> {
   return new Promise((resolve) => {
     const win = doc.defaultView ?? window;
     const raf =
@@ -830,10 +828,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           isLight = canvas ? analyzeCanvasIsLight(canvas) : true;
           cache.set(index, isLight);
         }
-        doc.documentElement.style.setProperty(
-          "--readany-pdf-filter",
-          isLight ? filter : "none",
-        );
+        doc.documentElement.style.setProperty("--readany-pdf-filter", isLight ? filter : "none");
       },
       [bookKey],
     );
@@ -1528,6 +1523,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     );
 
     // --- Imperative handle for parent ---
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing imperative API intentionally controls its refresh through viewReady.
     useImperativeHandle(
       ref,
       () => ({
@@ -1865,6 +1861,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             const doc = contents[0].doc as Document;
 
             const elements = doc.querySelectorAll(".readany-translation");
+            // biome-ignore lint/complexity/noForEach: Existing translation cleanup is outside this pagination fix.
             elements.forEach((el) => el.remove());
 
             const style = doc.getElementById("readany-chapter-translation-style");
@@ -1885,12 +1882,14 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
             // Update original paragraphs visibility
             const originalParagraphs = doc.querySelectorAll("[data-translate-id]");
+            // biome-ignore lint/complexity/noForEach: Existing translation rendering is outside this pagination fix.
             originalParagraphs.forEach((el) => {
               (el as HTMLElement).setAttribute("data-original-hidden", String(!originalVisible));
             });
 
             // Update translation visibility
             const translations = doc.querySelectorAll(".readany-translation");
+            // biome-ignore lint/complexity/noForEach: Existing translation rendering is outside this pagination fix.
             translations.forEach((el) => {
               const translationEl = el as HTMLElement;
               translationEl.setAttribute("data-hidden", String(!translationVisible));
@@ -1951,6 +1950,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     });
 
     // --- Convert TOC ---
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing memoization contract is outside this pagination fix.
     const convertTOC = useCallback(
       (
         foliaToc: Array<{
@@ -2026,6 +2026,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           try {
             const { useRubyStore } = await import("@readany/core/stores/ruby-store");
             const rubyMode = useRubyStore.getState().getBookRuby(bookKey);
+            // biome-ignore lint/complexity/useOptionalChain: Preserve the existing ruby-mode check in this focused fix.
             if (rubyMode && rubyMode.startsWith("zh")) {
               const { isPinyinDictLoaded } = await import("@/lib/ruby/pinyin-processor");
               // Ensure dict is loaded into memory (may have been downloaded in a previous session)
@@ -2043,7 +2044,16 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
         })();
       },
-      [appTheme, bookKey, viewSettings, onLoaded, onSectionLoad, isFixedLayout, format, applyPdfPageThemeFilter],
+      [
+        appTheme,
+        bookKey,
+        viewSettings,
+        onLoaded,
+        onSectionLoad,
+        isFixedLayout,
+        format,
+        applyPdfPageThemeFilter,
+      ],
     );
     const docLoadHandlerRef = useRef(docLoadHandlerImpl);
     docLoadHandlerRef.current = docLoadHandlerImpl;
@@ -2060,16 +2070,11 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           viewRef.current?.renderer && typeof viewRef.current.renderer.pages === "number"
             ? viewRef.current.renderer.pages
             : null;
-        const detail: RelocateDetail =
-          rendererPage != null && rendererPages != null && rendererPages > 2
-            ? {
-                ...rawDetail,
-                page: {
-                  current: Math.max(1, Math.min(rendererPage, rendererPages - 2)),
-                  total: Math.max(1, rendererPages - 2),
-                },
-              }
-            : rawDetail;
+        const page =
+          rendererPage != null && rendererPages != null
+            ? getChapterPageProgress(rendererPage, rendererPages)
+            : null;
+        const detail: RelocateDetail = page ? { ...rawDetail, page } : rawDetail;
         activeFootnoteKeyRef.current = null;
         setFootnotePreview(null);
         onRelocate?.(detail);
@@ -2320,6 +2325,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     // Track if show-annotation handler fired (suppress pointerup side effects)
     const annotationClickedRef = useRef(false);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing selection listener lifecycle is outside this pagination fix.
     const attachSelectionListener = useCallback(
       (doc: Document) => {
         // Avoid double-registering
@@ -2774,6 +2780,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     });
 
     // --- Open book ---
+    // biome-ignore lint/correctness/useExhaustiveDependencies: This guarded effect intentionally opens the reader only once.
     useEffect(() => {
       if (isViewCreated.current) return;
       isViewCreated.current = true;
@@ -2821,7 +2828,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           const primaryColor =
             getComputedStyle(document.documentElement).getPropertyValue("--primary")?.trim() ||
             "#3b82f6";
+          // biome-ignore lint/suspicious/noExplicitAny: Existing untyped Foliate search API is outside this pagination fix.
           if ((view as any).setSearchIndicator) {
+            // biome-ignore lint/suspicious/noExplicitAny: Existing untyped Foliate search API is outside this pagination fix.
             (view as any).setSearchIndicator("outline", { color: primaryColor });
           }
 
@@ -2916,6 +2925,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     }, []);
 
     // --- Apply view settings changes ---
+    // biome-ignore lint/correctness/useExhaustiveDependencies: This effect intentionally tracks only settings that require restyling.
     useEffect(() => {
       const view = viewRef.current;
       if (!view?.renderer) return;
@@ -2961,6 +2971,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     }, [viewSettings, isFixedLayout, appTheme]);
 
     // --- Apply reflow layout changes ---
+    // biome-ignore lint/correctness/useExhaustiveDependencies: This effect intentionally tracks only settings that require repagination.
     useEffect(() => {
       const view = viewRef.current;
       if (!view?.renderer) return;
@@ -3019,6 +3030,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     );
 
     return (
+      // biome-ignore lint/a11y/useKeyWithClickEvents: Keyboard navigation is handled by the reader shortcuts, not this pointer shell.
       <div
         ref={containerRef}
         className="foliate-viewer h-full w-full focus:outline-none"
@@ -3061,6 +3073,7 @@ function syncRemoteFontStylesInDocument(doc: Document, urls: string[] | undefine
   if (!head) return;
   const nextUrls = Array.from(new Set((urls || []).filter(Boolean)));
 
+  // biome-ignore lint/complexity/noForEach: Existing font-link cleanup is outside this pagination fix.
   Array.from(doc.querySelectorAll(`link[${REMOTE_FONT_LINK_ATTR}]`)).forEach((node) => {
     const href = (node as HTMLLinkElement).href;
     if (!nextUrls.some((url) => href.includes(url))) {
@@ -3137,9 +3150,9 @@ function normalizeBrOnlyParagraphs(doc: Document) {
   const body = doc.body;
   if (!body || body.querySelectorAll("p").length > 2) return;
 
-  const containers: Element[] = Array.from(body.querySelectorAll("div, section, article, main")).filter(
-    shouldNormalizeBrParagraphContainer,
-  );
+  const containers: Element[] = Array.from(
+    body.querySelectorAll("div, section, article, main"),
+  ).filter(shouldNormalizeBrParagraphContainer);
   if (shouldNormalizeBrParagraphContainer(body)) containers.push(body);
 
   for (const container of containers) {

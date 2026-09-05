@@ -51,36 +51,35 @@ function DictionaryPackRow({
   const colors = useColors();
   const styles = makeStyles(colors);
   const { t } = useTranslation();
-  const name = t(`reader.dictionary.${language === "en" ? "english" : "chinese"}`);
-  const actionLabel = (action: string) =>
-    t("reader.dictionary.actionLabel", { action, language: name });
+  const name = t(`dictionary.${language === "en" ? "english" : "chinese"}`);
+  const actionLabel = (action: string) => t("dictionary.actionLabel", { action, language: name });
   const descriptorSize = descriptor ? formatBytes(descriptor.sizeBytes) : null;
   const unavailable = !descriptor && pack.state === "not-installed";
 
   const status = (() => {
-    if (unavailable) return t("reader.dictionary.unavailable");
+    if (unavailable) return t("dictionary.unavailable");
 
     switch (pack.state) {
       case "downloading":
-        return t("reader.dictionary.downloading", {
+        return t("dictionary.downloading", {
           progress: Math.round(pack.progress * 100),
         });
       case "installed":
-        return t("reader.dictionary.installedStatus", {
-          installed: t("reader.dictionary.installed"),
+        return t("dictionary.installedStatus", {
+          installed: t("dictionary.installed"),
           size: formatBytes(pack.sizeBytes),
-          version: t("reader.dictionary.version", { version: pack.version }),
+          version: t("dictionary.version", { version: pack.version }),
         });
       case "update-available":
-        return t("reader.dictionary.updateStatus", {
+        return t("dictionary.updateStatus", {
           availableVersion: pack.availableVersion,
           installedVersion: pack.installedVersion,
-          updateAvailable: t("reader.dictionary.updateAvailable"),
+          updateAvailable: t("dictionary.updateAvailable"),
         });
       case "error":
-        return t("reader.dictionary.packError", { language: name });
+        return t("dictionary.packError", { language: name });
       default:
-        return t("reader.dictionary.notDownloaded");
+        return t("dictionary.notDownloaded");
     }
   })();
 
@@ -90,23 +89,21 @@ function DictionaryPackRow({
         <Text style={styles.packName}>{name}</Text>
         <Text style={styles.statusText}>{status}</Text>
         {(pack.state === "not-installed" || pack.state === "update-available") && descriptorSize ? (
-          <Text style={styles.metaText}>
-            {t("reader.dictionary.size", { size: descriptorSize })}
-          </Text>
+          <Text style={styles.metaText}>{t("dictionary.size", { size: descriptorSize })}</Text>
         ) : null}
         {descriptor ? (
           <View style={styles.licenseLine}>
             <TouchableOpacity
-              accessibilityLabel={t("reader.dictionary.attributionLabel", { language: name })}
+              accessibilityLabel={t("dictionary.attributionLabel", { language: name })}
               accessibilityRole="button"
               onPress={() => void Linking.openURL(descriptor.attributionUrl)}
             >
-              <Text style={styles.linkText}>{t("reader.dictionary.attribution")}</Text>
+              <Text style={styles.linkText}>{t("dictionary.attribution")}</Text>
             </TouchableOpacity>
             <Text style={styles.metaText}>
               {"· "}
-              {t("reader.dictionary.licenseDetail", {
-                label: t("reader.dictionary.license"),
+              {t("dictionary.licenseDetail", {
+                label: t("dictionary.license"),
                 license: descriptor.license,
               })}
             </Text>
@@ -117,36 +114,36 @@ function DictionaryPackRow({
       <View style={styles.actions}>
         {pack.state === "not-installed" && !unavailable ? (
           <ActionButton
-            accessibilityLabel={actionLabel(t("reader.dictionary.download"))}
-            label={t("reader.dictionary.download")}
+            accessibilityLabel={actionLabel(t("dictionary.download"))}
+            label={t("dictionary.download")}
             onPress={() => onInstall(language)}
           />
         ) : null}
         {pack.state === "downloading" ? (
           <ActivityIndicator
-            accessibilityLabel={t("reader.dictionary.statusLabel", { language: name, status })}
+            accessibilityLabel={t("dictionary.statusLabel", { language: name, status })}
             color={colors.primary}
           />
         ) : null}
         {pack.state === "installed" ? (
           <ActionButton
             destructive
-            accessibilityLabel={actionLabel(t("reader.dictionary.remove"))}
-            label={t("reader.dictionary.remove")}
+            accessibilityLabel={actionLabel(t("dictionary.remove"))}
+            label={t("dictionary.remove")}
             onPress={() => onRemove(language)}
           />
         ) : null}
         {pack.state === "update-available" ? (
           <>
             <ActionButton
-              accessibilityLabel={actionLabel(t("reader.dictionary.update"))}
-              label={t("reader.dictionary.update")}
+              accessibilityLabel={actionLabel(t("dictionary.update"))}
+              label={t("dictionary.update")}
               onPress={() => onInstall(language)}
             />
             <ActionButton
               destructive
-              accessibilityLabel={actionLabel(t("reader.dictionary.remove"))}
-              label={t("reader.dictionary.remove")}
+              accessibilityLabel={actionLabel(t("dictionary.remove"))}
+              label={t("dictionary.remove")}
               onPress={() => onRemove(language)}
             />
           </>
@@ -156,19 +153,17 @@ function DictionaryPackRow({
             {descriptor ? (
               <ActionButton
                 accessibilityLabel={actionLabel(
-                  t(pack.hasActivePack ? "reader.dictionary.repair" : "reader.dictionary.retry"),
+                  t(pack.hasActivePack ? "dictionary.repair" : "dictionary.retry"),
                 )}
-                label={t(
-                  pack.hasActivePack ? "reader.dictionary.repair" : "reader.dictionary.retry",
-                )}
+                label={t(pack.hasActivePack ? "dictionary.repair" : "dictionary.retry")}
                 onPress={() => onRetry(language)}
               />
             ) : null}
             {pack.hasActivePack ? (
               <ActionButton
                 destructive
-                accessibilityLabel={actionLabel(t("reader.dictionary.remove"))}
-                label={t("reader.dictionary.remove")}
+                accessibilityLabel={actionLabel(t("dictionary.remove"))}
+                label={t("dictionary.remove")}
                 onPress={() => onRemove(language)}
               />
             ) : null}
@@ -242,16 +237,16 @@ export function DictionarySettingsScreen({
   };
 
   const handleRemove = (language: DictionaryLanguage) => {
-    const languageName = t(`reader.dictionary.${language === "en" ? "english" : "chinese"}`);
+    const languageName = t(`dictionary.${language === "en" ? "english" : "chinese"}`);
     Alert.alert(
-      t("reader.dictionary.removeTitle", { language: languageName }),
-      t("reader.dictionary.removeMessage", {
+      t("dictionary.removeTitle", { language: languageName }),
+      t("dictionary.removeMessage", {
         language: languageName,
       }),
       [
-        { text: t("reader.dictionary.cancel"), style: "cancel" },
+        { text: t("dictionary.cancel"), style: "cancel" },
         {
-          text: t("reader.dictionary.remove"),
+          text: t("dictionary.remove"),
           style: "destructive",
           onPress: () =>
             void remove(language).catch((error) =>
@@ -268,8 +263,8 @@ export function DictionarySettingsScreen({
       edges={["top"]}
     >
       <SettingsHeader
-        title={t("reader.dictionary.dictionaries")}
-        subtitle={t("reader.dictionary.offlinePrivacy")}
+        title={t("dictionary.dictionaries")}
+        subtitle={t("dictionary.offlinePrivacy")}
       />
       <KeyboardAwareScrollView
         style={styles.scroll}
@@ -278,7 +273,7 @@ export function DictionarySettingsScreen({
         <View
           style={[styles.contentColumn, { width: "100%", maxWidth: layout.centeredContentWidth }]}
         >
-          <Text style={styles.sectionTitle}>{t("reader.dictionary.manageDictionaries")}</Text>
+          <Text style={styles.sectionTitle}>{t("dictionary.manageDictionaries")}</Text>
           <View style={styles.listCard}>
             {languages.map((language, index) => (
               <View

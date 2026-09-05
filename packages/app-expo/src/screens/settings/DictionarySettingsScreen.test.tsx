@@ -1,8 +1,9 @@
 import type { DictionaryStoreState } from "@/stores/dictionary-store";
 import type { DictionaryManifest } from "@readany/core/dictionary";
+import i18n, { i18nReady } from "@readany/core/i18n";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 import { DictionarySettingsScreen } from "./DictionarySettingsScreen";
 
@@ -37,15 +38,6 @@ vi.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, values?: Record<string, string | number>) =>
-      (translations[key] ?? key).replace(/{{(\w+)}}/g, (_match, valueKey: string) =>
-        String(values?.[valueKey] ?? _match),
-      ),
-  }),
-}));
-
 vi.mock("@/stores", () => ({
   useDictionaryStore: () => {
     throw new Error("DictionarySettingsScreen tests inject their dictionary store");
@@ -74,41 +66,10 @@ vi.mock("@/styles/theme", () => ({
     primaryForeground: "primaryForeground",
   }),
 }));
-vi.mock("./SettingsHeader", () => ({ SettingsHeader: () => null }));
-
-const translations: Record<string, string> = {
-  "reader.dictionary.actionLabel": "{{action}} {{language}} dictionary",
-  "reader.dictionary.attribution": "Attribution",
-  "reader.dictionary.attributionLabel": "{{language}} dictionary attribution",
-  "reader.dictionary.cancel": "Cancel",
-  "reader.dictionary.chinese": "Chinese",
-  "reader.dictionary.dictionaries": "Dictionaries",
-  "reader.dictionary.download": "Download",
-  "reader.dictionary.downloading": "Downloading {{progress}}%",
-  "reader.dictionary.english": "English",
-  "reader.dictionary.error": "Error",
-  "reader.dictionary.installed": "Installed",
-  "reader.dictionary.installedStatus": "{{installed}} · {{version}} · {{size}}",
-  "reader.dictionary.license": "License",
-  "reader.dictionary.licenseDetail": "{{label}}: {{license}}",
-  "reader.dictionary.manageDictionaries": "Manage Dictionaries",
-  "reader.dictionary.notDownloaded": "Not downloaded",
-  "reader.dictionary.offlinePrivacy": "Definitions work offline and never use AI.",
-  "reader.dictionary.packError": "{{language}} dictionary couldn't be prepared. Try again.",
-  "reader.dictionary.remove": "Remove",
-  "reader.dictionary.removeMessage": "Remove the {{language}} dictionary from this device?",
-  "reader.dictionary.removeTitle": "Remove {{language}} dictionary?",
-  "reader.dictionary.repair": "Repair",
-  "reader.dictionary.retry": "Retry",
-  "reader.dictionary.size": "Size {{size}}",
-  "reader.dictionary.statusLabel": "{{language}} dictionary status: {{status}}",
-  "reader.dictionary.unavailable": "Unavailable",
-  "reader.dictionary.update": "Update",
-  "reader.dictionary.updateAvailable": "Update available",
-  "reader.dictionary.updateStatus":
-    "{{updateAvailable}} · {{installedVersion}} → {{availableVersion}}",
-  "reader.dictionary.version": "Version {{version}}",
-};
+vi.mock("./SettingsHeader", () => ({
+  SettingsHeader: ({ title, subtitle }: { title: string; subtitle: string }) =>
+    React.createElement("Text", {}, title, subtitle),
+}));
 
 const descriptors: DictionaryManifest["packs"] = {
   en: {
@@ -183,6 +144,35 @@ function press(renderer: TestRenderer.ReactTestRenderer, label: string): void {
 }
 
 describe("DictionarySettingsScreen", () => {
+  beforeEach(async () => {
+    await i18nReady;
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+  });
+  it.each([
+    ["en", "Dictionaries", "English", "Download English dictionary"],
+    ["zh-TW", "字典", "英語", "英語字典下載"],
+    ["fr", "Dictionaries", "English", "Download English dictionary"],
+  ])(
+    "renders real resources with English fallback in %s",
+    async (language, title, name, action) => {
+      await act(async () => {
+        await i18n.changeLanguage(language);
+      });
+      const { store } = makeStore();
+      let renderer!: TestRenderer.ReactTestRenderer;
+      await act(async () => {
+        renderer = TestRenderer.create(<DictionarySettingsScreen dictionaryStore={store} />);
+      });
+      expect(textContent(renderer)).toContain(title);
+      expect(textContent(renderer)).toContain(name);
+      expect(renderer.root.findByProps({ accessibilityLabel: action })).toBeTruthy();
+      expect(JSON.stringify(renderer.toJSON())).not.toMatch(/(?:reader\.)?dictionary\./);
+      await act(async () => renderer.unmount());
+    },
+  );
+
   it("renders both language rows after exactly one initial remote-first refresh", async () => {
     const calls: string[] = [];
     let resolveInitialization!: () => void;
@@ -291,7 +281,7 @@ describe("DictionarySettingsScreen", () => {
   it("shows a localized per-pack error, logs its detail, retries only that language, and opens attribution", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { store, actions } = makeStore({
-      en: { state: "error", message: "offline", hasActivePack: false },
+      en: { state: "error", message: "network unavailable", hasActivePack: false },
     });
     let renderer!: TestRenderer.ReactTestRenderer;
 
@@ -299,9 +289,9 @@ describe("DictionarySettingsScreen", () => {
       renderer = TestRenderer.create(<DictionarySettingsScreen dictionaryStore={store} />);
     });
     expect(textContent(renderer)).toContain("English dictionary couldn't be prepared. Try again.");
-    expect(textContent(renderer)).not.toContain("offline");
+    expect(textContent(renderer)).not.toContain("network unavailable");
     expect(warn).toHaveBeenCalledWith("[DictionarySettings] dictionary pack error", {
-      error: "offline",
+      error: "network unavailable",
       language: "en",
     });
     await act(async () => {

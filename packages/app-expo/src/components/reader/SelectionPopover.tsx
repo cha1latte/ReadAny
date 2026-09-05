@@ -267,7 +267,7 @@ export function SelectionPopover({
               style={s.iconBtn}
               onPress={handleDefine}
               accessibilityRole="button"
-              accessibilityLabel={t("reader.dictionary.define")}
+              accessibilityLabel={t("dictionary.define")}
             >
               <BookOpenIcon size={18} color={colors.foreground} />
             </TouchableOpacity>

@@ -1,18 +1,21 @@
 const { getAppVariantConfig } = require("./scripts/app-variant");
+const { getShlaiVersionConfig } = require("./scripts/shlai-version");
 
 const variant = getAppVariantConfig();
+const release = getShlaiVersionConfig();
+const isPreview = variant.key === "preview";
 
 module.exports = {
   expo: {
     name: variant.name,
-    slug: "readany",
-    version: "1.3.6",
+    slug: "readany-shlai",
+    version: release.version,
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: "./assets/shlai/icon.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     splash: {
-      image: "./assets/splash-icon.png",
+      image: "./assets/shlai/splash-icon.png",
       resizeMode: "contain",
       backgroundColor: "#05042B",
     },
@@ -22,18 +25,17 @@ module.exports = {
       buildNumber: "2",
       infoPlist: {
         UIBackgroundModes: ["audio"],
-        NSCameraUsageDescription:
-          "ReadAny uses the camera to scan sync and configuration QR codes.",
-        NSLocalNetworkUsageDescription:
-          "ReadAny uses the local network to connect to sync devices and the development server while debugging.",
+        NSCameraUsageDescription: `${variant.name} uses the camera to scan sync and configuration QR codes.`,
+        NSLocalNetworkUsageDescription: `${variant.name} uses the local network to connect to sync devices and the development server while debugging.`,
         ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
+        foregroundImage: "./assets/shlai/adaptive-icon.png",
         backgroundColor: "#05042B",
       },
+      versionCode: release.versionCode,
       softwareKeyboardLayoutMode: "resize",
       package: variant.androidPackage,
       permissions: [
@@ -41,15 +43,20 @@ module.exports = {
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        ...(isPreview ? ["android.permission.REQUEST_INSTALL_PACKAGES"] : []),
       ],
     },
     plugins: [
-      [
-        "expo-dev-client",
-        {
-          launchMode: "launcher",
-        },
-      ],
+      ...(variant.key === "development"
+        ? [
+            [
+              "expo-dev-client",
+              {
+                launchMode: "launcher",
+              },
+            ],
+          ]
+        : []),
       [
         "expo-av",
         {
@@ -72,7 +79,7 @@ module.exports = {
       [
         "expo-image-picker",
         {
-          photosPermission: "ReadAny uses your photo library to choose custom book covers.",
+          photosPermission: `${variant.name} uses your photo library to choose custom book covers.`,
         },
       ],
       "expo-secure-store",
@@ -84,16 +91,23 @@ module.exports = {
       [
         "expo-camera",
         {
-          cameraPermission: "Allow ReadAny to use your camera to scan sync QR codes.",
+          cameraPermission: `Allow ${variant.name} to use your camera to scan sync QR codes.`,
         },
       ],
     ],
     scheme: variant.scheme,
     extra: {
       appVariant: variant.key,
-      eas: {
-        projectId: "e9c65825-d965-4d58-a3af-46406ee8a9ae",
-      },
+      shlaiRevision: release.revision,
+      upstreamRepository: "codedogQBY/ReadAny",
+      forkRepository: "cha1latte/ReadAny",
+      releaseApiUrl: isPreview
+        ? "https://api.github.com/repos/cha1latte/ReadAny/releases?per_page=100"
+        : "https://api.github.com/repos/cha1latte/ReadAny/releases/latest",
+      releaseTagPrefix: isPreview ? "shlai-preview-v" : "shlai-v",
+      releaseMode: isPreview ? "canonical-prerelease-list" : "single",
+      releaseAssetName: isPreview ? "ReadAny-Shlai-Preview.apk" : "ReadAny-Shlai.apk",
+      ...(isPreview ? { releaseChecksumAssetName: "ReadAny-Shlai-Preview.apk.sha256" } : {}),
     },
   },
 };

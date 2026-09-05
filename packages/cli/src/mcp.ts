@@ -1,41 +1,41 @@
 import { stdin as input, stdout as output } from "node:process";
 import type { Readable, Writable } from "node:stream";
-import type { CommandResult } from "./result.js";
-import { failure, success } from "./result.js";
-import type { AccessProfile, PermissionScope } from "./profiles.js";
-import { getMinimumProfileForScopes, parseAccessProfile, profileHasScope } from "./profiles.js";
-import { isRagSearchMode } from "./rag-config.js";
-import { listTools } from "./tool-registry.js";
-import type { ReadAnyTool } from "./tool-registry.js";
 import {
+  createEpubDraftForBook,
   diffEpubDraftWorkspace,
   discardEpubDraftWorkspace,
-  exportEpubDraftWorkspace,
   exportBookNotesWorkspace,
+  exportEpubDraftWorkspace,
   exportKnowledgeWorkspace,
   getBookById,
   getEpubDraftHistory,
-  getReaderContextSnapshot,
   getIndexedChapter,
+  getReaderContextSnapshot,
+  inspectEpubBook,
   listBookmarks,
-  listIndexedChapters,
   listBooks,
   listHighlights,
+  listIndexedChapters,
   listNotes,
   listSkills,
-  createEpubDraftForBook,
-  inspectEpubBook,
   patchEpubChapter,
   patchEpubChapters,
   patchEpubMetadata,
   readEpubChapter,
   rebuildEpubTocWorkspace,
-  searchRag,
   searchBooks,
   searchKnowledgeWorkspace,
+  searchRag,
   undoEpubDraftWorkspace,
   validateEpubDraftWorkspace,
 } from "./data.js";
+import type { AccessProfile, PermissionScope } from "./profiles.js";
+import { getMinimumProfileForScopes, parseAccessProfile, profileHasScope } from "./profiles.js";
+import { isRagSearchMode } from "./rag-config.js";
+import type { CommandResult } from "./result.js";
+import { failure, success } from "./result.js";
+import { listTools } from "./tool-registry.js";
+import type { ReadAnyTool } from "./tool-registry.js";
 
 type JsonRpcRequest = {
   jsonrpc?: "2.0";

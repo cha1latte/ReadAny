@@ -13,6 +13,7 @@ import { getBookProgressPercent } from "../utils/book-progress";
 type ReadingQuestionCategory =
   | "general_chat"
   | "library_request"
+  | "annotation_request"
   | "current_selection"
   | "current_page_context"
   | "current_chapter_context"
@@ -42,6 +43,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     buildMemorySection(ctx.memorySummary),
     buildSemanticSection(ctx.semanticContext),
     buildRouteSection(ctx.questionCategory, ctx.selectionActive, ctx.routeHint),
+    buildAnnotationRequestSection(ctx.questionCategory),
     buildTurnAvailableToolsSection(ctx.allowedToolNames),
     buildToolsSection(
       ctx.enabledSkills,
@@ -61,6 +63,20 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   ];
 
   return sections.filter(Boolean).join("\n\n---\n\n");
+}
+
+function buildAnnotationRequestSection(category?: ReadingQuestionCategory): string {
+  if (category !== "annotation_request") return "";
+
+  return [
+    "## Annotation Request Contract",
+    "- The application fetched the user's annotations before model generation.",
+    "- Treat the matching getAnnotations tool result as current user data and answer from it directly.",
+    "- When that result is present, never claim annotation access is unavailable or ask the user to paste annotations that were already returned.",
+    "- User-authored notes and highlights are not book-content citations: do not call addCitation or invent [N] markers for them.",
+    "- If pagination.hasMore is true and more annotations are needed, call getAnnotations with the next offset. Otherwise, stop retrieving and answer.",
+    "- If separately retrieved book text is used to compare against the annotations, follow the normal citation rules for that book text only.",
+  ].join("\n");
 }
 
 function buildMemorySection(memorySummary?: string): string {
@@ -289,7 +305,7 @@ function buildToolsSection(
   if (hasBookContext) {
     pushTool(
       "getAnnotations",
-      "- **getAnnotations**: Get user's highlights and notes (params: type)",
+      "- **getAnnotations**: Get user's highlights and notes. Pass chapterTitle for the current chapter; use order=reverse_book for recent/later chapters (params: type, chapterTitle, order, offset, limit)",
     );
     if (isVectorized && canUse("addCitation")) {
       const citationSourceHint = canUse("ragSearch")
@@ -558,7 +574,7 @@ function buildWorkflowSection(
       "- For a specific chapter request, call resolveChapterReference first. If matched=false, present the candidates or ask for clarification instead of guessing chapterIndex.",
     );
     steps.push(
-      "- For chapter lookup failures, chapter search gets at most three chances in one turn. The first uses the user's original wording, the second may use one simplified query, and the third is the last chance. After that, STOP and tell the user: 未能可靠定位章节，请补充更准确的章节名",
+      "- For chapter lookup failures, chapter search gets at most three chances in one turn. The first uses the user's original wording, the second may use one simplified query, and the third is the last chance. After that, STOP and explain in the user's language that the chapter could not be identified reliably and ask for a more specific chapter title.",
     );
   }
   steps.push(

@@ -357,6 +357,27 @@ describe("ragToc tool", () => {
     ]);
   });
 
+  it("reuses cached original-book chapters across repeated generic TOC reads", async () => {
+    vi.mocked(getChunks).mockResolvedValue([
+      makeChunk({ chapterIndex: 1, chapterTitle: "Section 2" }),
+      makeChunk({ chapterIndex: 2, chapterTitle: "Section 3" }),
+    ] as any);
+    vi.mocked(getBook).mockResolvedValue(makeBook({ isVectorized: true }) as any);
+    const getChapters = vi.fn(async () => [
+      { index: 0, title: "Chapter 1", content: "chapter one" },
+      { index: 1, title: "Chapter 2", content: "chapter two" },
+    ]);
+    setFallbackContentProvider({ getChapters });
+
+    const tools = getAvailableTools({ bookId: "book-1", isVectorized: true, enabledSkills: [] });
+    const tool = findTool(tools, "ragToc");
+
+    await tool.execute({});
+    await tool.execute({});
+
+    expect(getChapters).toHaveBeenCalledTimes(1);
+  });
+
   it("returns visible diagnostics when generic section fallback fails", async () => {
     vi.mocked(getChunks).mockResolvedValue([
       makeChunk({ chapterIndex: 1, chapterTitle: "Section 2" }),
@@ -873,6 +894,147 @@ describe("getAnnotations tool", () => {
     expect(result.highlights[0].text).toBe("Important text");
     expect(result.notes).toHaveLength(1);
     expect(result.notes[0].title).toBe("Note 1");
+    expect(result.pagination).toEqual({
+      highlights: { total: 1, returned: 1, offset: 0, limit: 20, hasMore: false },
+      notes: { total: 1, returned: 1, offset: 0, limit: 20, hasMore: false },
+    });
+  });
+
+  it("filters current-chapter annotations before applying the limit", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      ...Array.from({ length: 20 }, (_, index) => ({
+        text: `Early ${index}`,
+        chapterTitle: "Chapter 1",
+        color: "yellow",
+      })),
+      {
+        text: "Current note",
+        note: "Visible",
+        chapterTitle: "Spending Time Apart",
+        color: "green",
+      },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({ bookId: "book-1", isVectorized: true, enabledSkills: [] });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: " spending time apart ",
+    })) as any;
+
+    expect(result.highlights).toEqual([
+      expect.objectContaining({ text: "Current note", note: "Visible" }),
+    ]);
+    expect(result.pagination.highlights).toMatchObject({
+      total: 1,
+      returned: 1,
+      hasMore: false,
+    });
+  });
+
+  it("matches an explicit chapter number without matching chapter 20", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      {
+        text: "Wanted",
+        chapterTitle: "Chapter 2: Spending Time Apart",
+        color: "yellow",
+      },
+      { text: "Wrong", chapterTitle: "Chapter 20: Later", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "chapter 2",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Wanted"]);
+    expect(result.pagination.highlights.total).toBe(1);
+  });
+
+  it("prefers an exact normalized chapter title over broader chapter-number matches", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      { text: "Exact", chapterTitle: "  Chapter   2  ", color: "yellow" },
+      { text: "Expanded", chapterTitle: "Chapter 2: Spending Time Apart", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "chapter 2",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Exact"]);
+  });
+
+  it("matches a Chinese chapter number with a complete numeric boundary", async () => {
+    vi.mocked(getHighlights).mockResolvedValue([
+      { text: "Wanted", chapterTitle: "第2章 分开一段时间", color: "yellow" },
+      { text: "Wrong", chapterTitle: "第20章 后来", color: "blue" },
+    ] as any);
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({
+      bookId: "book-1",
+      isVectorized: true,
+      enabledSkills: [],
+    });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      chapterTitle: "第2章",
+      limit: 50,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual(["Wanted"]);
+  });
+
+  it("returns later book positions first for recent chapter requests", async () => {
+    vi.mocked(getHighlights).mockResolvedValue(
+      Array.from({ length: 25 }, (_, index) => ({
+        text: `Position ${index + 1}`,
+        chapterTitle: `Chapter ${index + 1}`,
+        color: "yellow",
+      })) as any,
+    );
+    vi.mocked(getNotes).mockResolvedValue([]);
+
+    const tools = getAvailableTools({ bookId: "book-1", isVectorized: true, enabledSkills: [] });
+    const tool = findTool(tools, "getAnnotations");
+    const result = (await tool.execute({
+      type: "highlights",
+      order: "reverse_book",
+      offset: 0,
+      limit: 3,
+    })) as any;
+
+    expect(result.highlights.map((item: any) => item.text)).toEqual([
+      "Position 25",
+      "Position 24",
+      "Position 23",
+    ]);
+    expect(result.pagination.highlights).toEqual({
+      total: 25,
+      returned: 3,
+      offset: 0,
+      limit: 3,
+      hasMore: true,
+    });
   });
 
   it("should return only highlights when type is 'highlights'", async () => {

@@ -1,14 +1,10 @@
-import { useCallback, useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import {
-  Linking,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+  createUpdateInstallOwner,
+  installShlaiPreviewUpdateWithExpo,
+} from "@/lib/shlai-apk-installer";
+import { getShlaiReleaseConfig } from "@/lib/shlai-release";
+import { selectReleaseAsset } from "@/lib/shlai-release-asset";
+import { useUpdateStore } from "@/stores/update-store";
 import {
   type ThemeColors,
   fontSize,
@@ -18,7 +14,9 @@ import {
   useColors,
   withOpacity,
 } from "@/styles/theme";
-import { useUpdateStore } from "@/stores/update-store";
+import { useCallback, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { Linking, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
  * Themed update dialog — shown when a new version is detected.
@@ -31,17 +29,28 @@ export function UpdateDialog() {
   const checkResult = useUpdateStore((s) => s.checkResult);
   const hideDialog = useUpdateStore((s) => s.hideDialog);
   const dismissVersion = useUpdateStore((s) => s.dismissVersion);
+  const installState = useUpdateStore((s) => s.installState);
+  const setInstallState = useUpdateStore((s) => s.setInstallState);
+  const installOwner = useRef(createUpdateInstallOwner()).current;
+  const releaseConfig = getShlaiReleaseConfig();
 
   const release = checkResult?.release;
   const version = release?.version ?? checkResult?.latestVersion;
 
-  const apkUrl = useMemo(() => {
-    if (!release?.assets) return null;
-    const apk = release.assets.find((a) => a.name.endsWith(".apk"));
-    return apk?.downloadUrl ?? null;
-  }, [release]);
+  const apkAsset = useMemo(
+    () => selectReleaseAsset(release?.assets, releaseConfig?.assetName ?? ""),
+    [release, releaseConfig?.assetName],
+  );
+  const checksumAsset = useMemo(
+    () => selectReleaseAsset(release?.assets, releaseConfig?.checksumAssetName ?? ""),
+    [release, releaseConfig?.checksumAssetName],
+  );
 
-  const downloadUrl = apkUrl ?? release?.htmlUrl ?? null;
+  const downloadUrl = apkAsset?.downloadUrl ?? release?.htmlUrl ?? null;
+  const busy =
+    installState.status === "downloading" ||
+    installState.status === "verifying" ||
+    installState.status === "opening-installer";
 
   const notes = useMemo(() => {
     if (!release?.notes) return "";
@@ -55,20 +64,56 @@ export function UpdateDialog() {
     return plain.length > 200 ? `${plain.slice(0, 200)}...` : plain;
   }, [release]);
 
-  const handleDownload = useCallback(() => {
-    if (downloadUrl) {
-      Linking.openURL(downloadUrl);
+  const handleDownload = useCallback(async () => {
+    if (!releaseConfig || !release) return;
+    if (releaseConfig.releaseMode === "single") {
+      if (downloadUrl) await Linking.openURL(downloadUrl);
+      hideDialog();
+      return;
     }
-    hideDialog();
-  }, [downloadUrl, hideDialog]);
+    if (!apkAsset || !checksumAsset) {
+      setInstallState({ status: "error", message: "Required update files are missing." });
+      return;
+    }
+    await installOwner.run(async () => {
+      try {
+        await installShlaiPreviewUpdateWithExpo(
+          {
+            tag: `${releaseConfig.tagPrefix}${release.version}`,
+            apkAsset,
+            checksumAsset,
+          },
+          setInstallState,
+        );
+        setInstallState({ status: "idle" });
+        hideDialog();
+      } catch (error) {
+        setInstallState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Update installation failed.",
+        });
+      }
+    });
+  }, [
+    apkAsset,
+    checksumAsset,
+    downloadUrl,
+    hideDialog,
+    installOwner,
+    release,
+    releaseConfig,
+    setInstallState,
+  ]);
 
   const handleLater = useCallback(() => {
+    if (busy) return;
+    setInstallState({ status: "idle" });
     if (version) {
       dismissVersion(version);
     } else {
       hideDialog();
     }
-  }, [version, dismissVersion, hideDialog]);
+  }, [version, dismissVersion, hideDialog, busy, setInstallState]);
 
   if (!dialogVisible || !checkResult?.hasUpdate) return null;
 
@@ -81,9 +126,7 @@ export function UpdateDialog() {
           {/* Version badge */}
           <View style={s.badgeRow}>
             <View style={[s.badge, { backgroundColor: withOpacity(colors.primary, 0.12) }]}>
-              <Text style={[s.badgeText, { color: colors.primary }]}>
-                v{version}
-              </Text>
+              <Text style={[s.badgeText, { color: colors.primary }]}>v{version}</Text>
             </View>
           </View>
 
@@ -91,9 +134,7 @@ export function UpdateDialog() {
           <Text style={s.title}>{t("settings.updateAvailable")}</Text>
 
           {/* Description */}
-          <Text style={s.description}>
-            {t("settings.newVersionAvailable", { version })}
-          </Text>
+          <Text style={s.description}>{t("settings.newVersionAvailable", { version })}</Text>
 
           {/* Release notes */}
           {notes.length > 0 && (
@@ -104,18 +145,38 @@ export function UpdateDialog() {
             </View>
           )}
 
+          {installState.status === "error" && (
+            <Text style={s.errorText}>{installState.message}</Text>
+          )}
+
+          {installState.status === "downloading" && (
+            <Text style={s.progressText}>
+              {installState.progress === null
+                ? t("settings.updateDownloading", "Downloading…")
+                : `${t("settings.updateDownloading", "Downloading…")} ${Math.round(installState.progress * 100)}%`}
+            </Text>
+          )}
+
           {/* Actions */}
           <View style={s.actions}>
             <TouchableOpacity
-              style={s.primaryBtn}
+              style={[s.primaryBtn, busy && s.disabledBtn]}
               onPress={handleDownload}
+              disabled={busy}
               activeOpacity={0.8}
             >
-              <Text style={s.primaryBtnText}>{t("settings.downloadUpdate")}</Text>
+              <Text style={s.primaryBtnText}>
+                {installState.status === "verifying"
+                  ? t("settings.updateVerifying", "Verifying…")
+                  : installState.status === "opening-installer"
+                    ? t("settings.updateOpeningInstaller", "Opening installer…")
+                    : t("settings.downloadUpdate")}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={s.secondaryBtn}
               onPress={handleLater}
+              disabled={busy}
               activeOpacity={0.7}
             >
               <Text style={s.secondaryBtnText}>{t("settings.later")}</Text>
@@ -197,6 +258,19 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
       color: colors.primaryForeground,
+    },
+    disabledBtn: { opacity: 0.6 },
+    progressText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.xs,
+      textAlign: "center",
+      marginBottom: spacing.md,
+    },
+    errorText: {
+      color: colors.destructive,
+      fontSize: fontSize.xs,
+      textAlign: "center",
+      marginBottom: spacing.md,
     },
     secondaryBtn: {
       borderRadius: radius.xl,

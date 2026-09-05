@@ -1,6 +1,8 @@
+import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
+import { getShlaiReleaseConfig, shouldShowPublicUpdateControls } from "@/lib/shlai-release";
+import { useUpdateStore } from "@/stores/update-store";
 import { getPlatformService } from "@readany/core/services";
 import { checkForUpdate } from "@readany/core/update";
-import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AppIcon from "../../../assets/shlai/icon.png";
 import {
   type ThemeColors,
   fontSize,
@@ -23,9 +26,7 @@ import {
   spacing,
   useColors,
 } from "../../styles/theme";
-import { useUpdateStore } from "@/stores/update-store";
 import { SettingsHeader } from "./SettingsHeader";
-import AppIcon from "../../../assets/icon.png";
 
 const TECH_STACK = [
   { label: "Expo SDK 55", descKey: "about.nativeContainer" },
@@ -35,11 +36,12 @@ const TECH_STACK = [
 ];
 
 const LINKS = [
-  {
-    label: "GitHub",
-    url: "https://github.com/codedogQBY/ReadAny",
-  },
+  { label: "ReadAny Shlai source", url: "https://github.com/cha1latte/ReadAny" },
+  { label: "Official ReadAny", url: "https://github.com/codedogQBY/ReadAny" },
+  { label: "Report a Shlai issue", url: "https://github.com/cha1latte/ReadAny/issues" },
 ];
+
+const FORK_NOTICE = "Unofficial GPL-3.0-or-later fork of ReadAny maintained by Chai.";
 
 export default function AboutScreen() {
   const colors = useColors();
@@ -48,6 +50,7 @@ export default function AboutScreen() {
   const layout = useResponsiveLayout();
   const [version, setVersion] = useState("1.0.0");
   const [checking, setChecking] = useState(false);
+  const releaseConfig = getShlaiReleaseConfig();
 
   const checkResult = useUpdateStore((s) => s.checkResult);
   const setCheckResult = useUpdateStore((s) => s.setCheckResult);
@@ -58,11 +61,12 @@ export default function AboutScreen() {
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
+    if (!releaseConfig) return;
     setChecking(true);
     try {
       const platform = getPlatformService();
       const v = await platform.getAppVersion();
-      const result = await checkForUpdate(v, platform, true);
+      const result = await checkForUpdate(v, platform, true, releaseConfig);
       setCheckResult(result);
       if (result.hasUpdate && result.release) {
         showDialog();
@@ -74,7 +78,7 @@ export default function AboutScreen() {
     } finally {
       setChecking(false);
     }
-  }, [t, setCheckResult, showDialog]);
+  }, [t, setCheckResult, showDialog, releaseConfig]);
 
   return (
     <SafeAreaView
@@ -83,46 +87,56 @@ export default function AboutScreen() {
     >
       <SettingsHeader title={t("about.title", "关于")} />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { alignItems: "center" }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { alignItems: "center" }]}
+      >
         <View style={{ width: "100%", maxWidth: layout.centeredContentWidth }}>
           {/* Logo & Version */}
           <View style={styles.logoSection}>
             <View style={styles.logoBadge}>
-              <Image source={AppIcon} style={{ width: 80, height: 80, borderRadius: 18 }} resizeMode="contain" />
+              <Image
+                source={AppIcon}
+                style={{ width: 80, height: 80, borderRadius: 18 }}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.appName}>ReadAny</Text>
+            <Text style={styles.appName}>ReadAny Shlai</Text>
             <Text style={styles.version}>v{version}</Text>
             <Text style={styles.desc}>
-              {t("about.desc", "一个跨平台的智能电子书阅读器，支持 AI 对话、TTS 朗读、多语言翻译")}
+              {t("about.desc", "ReadAny 的非官方 Android 分支，支持 AI 对话、TTS 朗读和多语言翻译")}
             </Text>
+            <Text style={styles.forkNotice}>{FORK_NOTICE}</Text>
           </View>
 
           {/* Check for Updates */}
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.updateBtn}
-              onPress={handleCheckUpdate}
-              disabled={checking}
-              activeOpacity={0.7}
-            >
-              {checking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
-              <Text style={styles.updateBtnText}>
-                {checking ? t("settings.updateChecking") : t("settings.checkUpdate")}
-              </Text>
-            </TouchableOpacity>
-            {checkResult?.hasUpdate && checkResult.release && (
+          {shouldShowPublicUpdateControls(releaseConfig) && (
+            <View style={styles.section}>
               <TouchableOpacity
-                style={styles.updateBanner}
-                onPress={() => showDialog()}
+                style={styles.updateBtn}
+                onPress={handleCheckUpdate}
+                disabled={checking}
                 activeOpacity={0.7}
               >
-                <Text style={styles.updateBannerText}>
-                  {t("settings.newVersionAvailable", { version: checkResult.latestVersion })}
+                {checking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
+                <Text style={styles.updateBtnText}>
+                  {checking ? t("settings.updateChecking") : t("settings.checkUpdate")}
                 </Text>
-                <Text style={styles.linkArrow}>→</Text>
               </TouchableOpacity>
-            )}
-          </View>
+              {checkResult?.hasUpdate && checkResult.release && (
+                <TouchableOpacity
+                  style={styles.updateBanner}
+                  onPress={() => showDialog()}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.updateBannerText}>
+                    {t("settings.newVersionAvailable", { version: checkResult.latestVersion })}
+                  </Text>
+                  <Text style={styles.linkArrow}>→</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Tech Stack */}
           <View style={styles.section}>
@@ -152,18 +166,10 @@ export default function AboutScreen() {
                   <Text style={styles.linkArrow}>→</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity
-                style={styles.linkItem}
-                onPress={() => Linking.openURL("https://github.com/codedogQBY/ReadAny/issues")}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.linkText}>{t("about.feedback", "问题反馈")}</Text>
-                <Text style={styles.linkArrow}>→</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.madeBy}>{t("about.madeBy", "Made with love by codedogQBY")}</Text>
+          <Text style={styles.madeBy}>ReadAny Shlai by Chai · Based on ReadAny</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -209,6 +215,13 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: "center",
       lineHeight: 20,
       marginTop: 12,
+    },
+    forkNotice: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: "center",
+      lineHeight: 18,
+      marginTop: 8,
     },
     section: {
       paddingHorizontal: spacing.lg,

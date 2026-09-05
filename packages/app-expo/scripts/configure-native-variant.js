@@ -10,9 +10,9 @@ function findIosNativePaths() {
     return null;
   }
 
-  const projectEntry = fs.readdirSync(iosRoot, { withFileTypes: true }).find(
-    (entry) => entry.isDirectory() && entry.name.endsWith(".xcodeproj"),
-  );
+  const projectEntry = fs
+    .readdirSync(iosRoot, { withFileTypes: true })
+    .find((entry) => entry.isDirectory() && entry.name.endsWith(".xcodeproj"));
   if (!projectEntry) {
     return null;
   }
@@ -66,17 +66,17 @@ function syncIosInfoPlist(variant, iosInfoPlistPath) {
   );
   plist = replaceAll(
     plist,
-    /<string>readany(?:-(?:dev|preview))?<\/string>/g,
+    /<string>(?:readany|readany-shlai)(?:-(?:dev|preview))?<\/string>/g,
     `<string>${variant.scheme}</string>`,
   );
   plist = replaceAll(
     plist,
-    /<string>com\.readany\.app(?:\.(?:dev|preview))?<\/string>/g,
+    /<string>(?:com\.readany\.app|io\.github\.cha1latte\.readanyshlai)(?:\.(?:dev|preview))?<\/string>/g,
     `<string>${variant.bundleIdentifier}</string>`,
   );
   plist = replaceAll(
     plist,
-    /<string>exp\+readany(?:-(?:dev|preview))?<\/string>/g,
+    /<string>exp\+(?:readany|readany-shlai)(?:-(?:dev|preview))?<\/string>/g,
     `<string>exp+${variant.scheme}</string>`,
   );
   fs.writeFileSync(iosInfoPlistPath, plist);
@@ -86,9 +86,7 @@ function syncIosInfoPlist(variant, iosInfoPlistPath) {
 function main() {
   const variant = getAppVariantConfig();
   const nativePaths = findIosNativePaths();
-  const syncedProject = nativePaths
-    ? syncIosProject(variant, nativePaths.projectPath)
-    : false;
+  const syncedProject = nativePaths ? syncIosProject(variant, nativePaths.projectPath) : false;
   const syncedInfoPlist = nativePaths
     ? syncIosInfoPlist(variant, nativePaths.infoPlistPath)
     : false;

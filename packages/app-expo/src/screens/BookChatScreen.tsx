@@ -345,6 +345,7 @@ export function BookChatScreen({ route, navigation }: Props) {
       t("chat.suggestions.summarizeChapter"),
       t("chat.suggestions.explainConcepts"),
       t("chat.suggestions.analyzeAuthor"),
+      t("chat.suggestions.reviewChapterNotes"),
     ],
     [t],
   );
@@ -530,7 +531,7 @@ export function BookChatScreen({ route, navigation }: Props) {
 
           <KeyboardAvoidingView
             style={s.content}
-            behavior="height"
+            behavior="padding"
             enabled={Platform.OS === "android"}
             keyboardVerticalOffset={insets.top}
           >

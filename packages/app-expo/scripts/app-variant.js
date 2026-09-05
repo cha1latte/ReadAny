@@ -1,24 +1,24 @@
 const APP_VARIANTS = {
   development: {
     key: "development",
-    name: "ReadAny Dev",
-    bundleIdentifier: "com.readany.app.dev",
-    androidPackage: "com.readany.app.dev",
-    scheme: "readany-dev",
+    name: "ReadAny Shlai Dev",
+    bundleIdentifier: "io.github.cha1latte.readanyshlai.dev",
+    androidPackage: "io.github.cha1latte.readanyshlai.dev",
+    scheme: "readany-shlai-dev",
   },
   preview: {
     key: "preview",
-    name: "ReadAny Preview",
-    bundleIdentifier: "com.readany.app.preview",
-    androidPackage: "com.readany.app.preview",
-    scheme: "readany-preview",
+    name: "ReadAny Shlai Preview",
+    bundleIdentifier: "io.github.cha1latte.readanyshlai.preview",
+    androidPackage: "io.github.cha1latte.readanyshlai.preview",
+    scheme: "readany-shlai-preview",
   },
   production: {
     key: "production",
-    name: "ReadAny",
-    bundleIdentifier: "com.readany.app",
-    androidPackage: "com.readany.app",
-    scheme: "readany",
+    name: "ReadAny Shlai",
+    bundleIdentifier: "io.github.cha1latte.readanyshlai",
+    androidPackage: "io.github.cha1latte.readanyshlai",
+    scheme: "readany-shlai",
   },
 };
 

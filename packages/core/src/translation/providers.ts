@@ -359,7 +359,7 @@ async function deeplTranslateOfficial(
   requestBaseUrl: string,
 ): Promise<string[]> {
   const params = new URLSearchParams();
-  texts.forEach((text) => params.append("text", text));
+  for (const text of texts) params.append("text", text);
   params.append("target_lang", targetLang.toUpperCase().replace("-", "_"));
   if (sourceLang !== "AUTO") {
     params.append("source_lang", sourceLang.toUpperCase());

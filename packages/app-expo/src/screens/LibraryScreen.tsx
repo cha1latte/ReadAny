@@ -23,6 +23,7 @@ import { SyncButton } from "@/components/ui/SyncButton";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { openMobileBook } from "@/lib/library/open-mobile-book";
 import { setCallback, setExtractorRef } from "@/lib/rag/auto-vectorize-service";
+import { getBookExtractionErrorMessageKeys } from "@/lib/rag/extractor-error";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { WebDavConnectSheet } from "@/screens/library/WebDavConnectSheet";
 import { WebDavImportSourceSheet } from "@/screens/library/WebDavImportSourceSheet";
@@ -43,13 +44,11 @@ import {
   type WebDavImportSource,
   getPlatformService,
 } from "@readany/core";
-import { setFallbackContentProvider } from "@readany/core/ai";
 import { onLibraryChanged } from "@readany/core/events/library-events";
 import { useSyncStore } from "@readany/core/stores";
 import { SYNC_SECRET_KEYS } from "@readany/core/sync/sync-backend";
 import type { Book, BookGroup, SortField } from "@readany/core/types";
 import * as DocumentPicker from "expo-document-picker";
-import { File as ExpoFile } from "expo-file-system";
 /**
  * LibraryScreen — matching Tauri mobile LibraryPage exactly.
  * Features: header search/sort/import, tag filter, vectorization progress banner,
@@ -79,17 +78,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { TagManagementSheet } from "./library/TagManagementSheet";
 import { useBookDownload } from "./library/useBookDownload";
 import { useVectorizationQueue } from "./library/useVectorizationQueue";
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = "";
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-
-  return btoa(binary);
-}
 
 const BOOK_PNG = require("../../assets/book.png");
 const BOOK_DARK_PNG = require("../../assets/book-dark.png");
@@ -232,9 +220,8 @@ export function LibraryScreen() {
     onSuccess: () => {},
   });
 
-  const { vectorQueue, vectorizingBookId, vectorProgress, handleVectorize } = useVectorizationQueue(
-    { extractorRef, nav },
-  );
+  const { vectorQueue, vectorizingBookId, vectorProgress, handleVectorize, cancelVectorize } =
+    useVectorizationQueue({ extractorRef, nav });
 
   const openSearch = useCallback(() => {
     setShowSearch(true);
@@ -259,55 +246,27 @@ export function LibraryScreen() {
 
   useEffect(() => {
     setExtractorRef(extractorRef.current);
-    setFallbackContentProvider({
-      async getChapters(book) {
-        if (!extractorRef.current) throw new Error("Mobile fallback extractor is not ready");
-        const platform = getPlatformService();
-        const appData = await platform.getAppDataDir();
-        const filePath =
-          book.filePath.startsWith("/") ||
-          book.filePath.startsWith("file://") ||
-          book.filePath.startsWith("asset://") ||
-          book.filePath.startsWith("http")
-            ? book.filePath
-            : await platform.joinPath(appData, book.filePath);
-        if (/^https?:\/\//i.test(filePath)) {
-          throw new Error("Mobile original-file search requires a local book file");
-        }
-
-        const file = new ExpoFile(filePath);
-        if (!file.exists) throw new Error("Book file is not available on this device");
-
-        const bytes = await platform.readFile(filePath);
-        const mimeTypes: Record<string, string> = {
-          epub: "application/epub+zip",
-          pdf: "application/pdf",
-          mobi: "application/x-mobipocket-ebook",
-          azw: "application/vnd.amazon.ebook",
-          azw3: "application/vnd.amazon.ebook",
-          cbz: "application/vnd.comicbook+zip",
-          cbr: "application/vnd.comicbook+zip",
-          fb2: "application/x-fictionbook+xml",
-          fbz: "application/x-zip-compressed-fb2",
-          txt: "text/plain",
-        };
-        return extractorRef.current.extractChapters(
-          bytesToBase64(bytes),
-          mimeTypes[String(book.format || "").toLowerCase()] || "application/epub+zip",
-        );
-      },
-    });
     setCallback((bookId, progress) => {
       console.log(
         `[AutoVectorize] Book ${bookId}: ${progress.status} (${Math.round(progress.progress * 100)}%)`,
       );
+      if (progress.status === "error") {
+        if (progress.errorCategory) {
+          const keys = getBookExtractionErrorMessageKeys(progress.errorCategory);
+          Alert.alert(t(keys.title), t(keys.description));
+        } else {
+          Alert.alert(
+            t("vectorize.vectorizationFailedTitle"),
+            t("vectorize.vectorizationFailedDesc"),
+          );
+        }
+      }
     });
     return () => {
       setExtractorRef(null);
-      setFallbackContentProvider(null);
       setCallback(null);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     return onLibraryChanged((deletedTags) => loadBooks(deletedTags));
@@ -537,6 +496,11 @@ export function LibraryScreen() {
     setTemporaryWebDavOpen(true);
   }, []);
 
+  const handleOpenOpdsCatalogs = useCallback(() => {
+    setSourceSheetOpen(false);
+    nav.navigate("OpdsCatalogs");
+  }, [nav]);
+
   const handleConnectTemporaryWebDav = useCallback(
     async (source: WebDavImportSource) => {
       const { WebDavImportService } = await import("@readany/core");
@@ -754,6 +718,7 @@ export function LibraryScreen() {
             onShowDetails={handleShowDetails}
             onManageTags={handleManageTags}
             onVectorize={handleVectorize}
+            onCancelVectorize={cancelVectorize}
             isVectorizing={vectorizingBookId === item.book.id}
             isQueued={vectorQueue.some((b) => b.id === item.book.id)}
             vectorProgress={vectorizingBookId === item.book.id ? vectorProgress : null}
@@ -774,6 +739,7 @@ export function LibraryScreen() {
       handleShowDetails,
       handleOpen,
       handleVectorize,
+      cancelVectorize,
       removeBook,
       s.gridItem,
       selectedBookIds,
@@ -1166,6 +1132,7 @@ export function LibraryScreen() {
         onPickLocal={handlePickLocalFromSourceMenu}
         onPickSavedWebDav={() => void handleOpenSavedWebDav()}
         onPickTemporaryWebDav={handleOpenTemporaryWebDav}
+        onPickOpds={handleOpenOpdsCatalogs}
       />
       <WebDavConnectSheet
         visible={temporaryWebDavOpen}

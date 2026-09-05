@@ -1,7 +1,7 @@
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
 import { beforeAll, describe, expect, it } from "vitest";
 import { seedLibrary } from "../scripts/agent-smoke.mjs";
 

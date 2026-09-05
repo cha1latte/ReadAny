@@ -3,14 +3,19 @@
  * Keep this file as a single import point for backward compatibility.
  */
 import type { ThemeColors } from "@/styles/theme";
+import { createNoteTooltipTheme } from "./note-tooltip-theme";
 import { makeToolbarStyles } from "./styles/reader-base-styles";
-import { makeSheetStyles } from "./styles/reader-sheet-styles";
 import { makeNoteStyles } from "./styles/reader-note-styles";
+import { makeSheetStyles } from "./styles/reader-sheet-styles";
 
-export { TOOLTIP_FG, TOOLTIP_MUTED, noteTooltipMdStyles } from "./styles/reader-note-styles";
+export const noteTooltipMdStyles = {} as ReturnType<typeof createNoteTooltipTheme>["markdown"];
 
-export const makeStyles = (colors: ThemeColors) => ({
-  ...makeToolbarStyles(colors),
-  ...makeSheetStyles(colors),
-  ...makeNoteStyles(colors),
-});
+export const makeStyles = (colors: ThemeColors) => {
+  Object.assign(noteTooltipMdStyles, createNoteTooltipTheme(colors).markdown);
+
+  return {
+    ...makeToolbarStyles(colors),
+    ...makeSheetStyles(colors),
+    ...makeNoteStyles(colors),
+  };
+};

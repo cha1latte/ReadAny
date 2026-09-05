@@ -92,7 +92,7 @@ export function AnimatedSplash({ onFinish }: Props) {
       cancelAnimation(ghostFloat);
       cancelAnimation(bookTilt);
     };
-  }, []);
+  }, [bookTilt, containerOpacity, ghostFloat, ghostOpacity, ghostY, handleFinish, titleOpacity]);
 
   // ─── Animated styles ───
 
@@ -125,7 +125,7 @@ export function AnimatedSplash({ onFinish }: Props) {
         <Animated.View style={ghostStyle}>
           <Animated.View style={bookStyle}>
             <Image
-              source={require("../../../assets/splash-icon.png")}
+              source={require("../../../assets/shlai/splash-icon.png")}
               style={{ width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: LOGO_SIZE * 0.18 }}
               resizeMode="contain"
             />
@@ -134,7 +134,7 @@ export function AnimatedSplash({ onFinish }: Props) {
       </View>
 
       {/* Title */}
-      <Animated.Text style={[styles.title, titleStyle]}>ReadAny</Animated.Text>
+      <Animated.Text style={[styles.title, titleStyle]}>ReadAny Shlai</Animated.Text>
       <Animated.Text style={[styles.subtitle, titleStyle]}>Read Any, Understand More</Animated.Text>
     </Animated.View>
   );

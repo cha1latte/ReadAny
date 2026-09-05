@@ -1,8 +1,8 @@
-import Database from "better-sqlite3";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildStoreOnlyZip, type ZipEntry } from "@readany/core/utils/store-only-zip";
+import { type ZipEntry, buildStoreOnlyZip } from "@readany/core/utils/store-only-zip";
+import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { ensureCoreInitialized, resetCoreForTests } from "./data.js";
 import { handleMcpRequest } from "./mcp.js";
@@ -63,7 +63,9 @@ function buildSimplePdf(pages: string[]): Uint8Array {
   for (const text of pages) {
     const escaped = text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
     const stream = `BT /F1 18 Tf 72 720 Td (${escaped}) Tj ET`;
-    const contentId = addObject(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);
+    const contentId = addObject(
+      `<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`,
+    );
     const pageId = addObject(
       `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
     );
@@ -98,13 +100,15 @@ async function createEnv() {
     ...process.env,
     READANY_HOME: dataRoot,
     AGENT_HOME: join(root, "agent"),
-  } as NodeJS.ProcessEnv;
+  };
 }
 
-async function seedBook(env: NodeJS.ProcessEnv): Promise<void> {
+async function seedBook(
+  env: NodeJS.ProcessEnv & { READANY_HOME: string } & { READANY_HOME: string },
+): Promise<void> {
   await resetCoreForTests();
   await ensureCoreInitialized(env);
-  const db = new Database(join(env.READANY_HOME!, "readany.db"));
+  const db = new Database(join(env.READANY_HOME, "readany.db"));
   db.exec(`
     INSERT INTO books (
       id, file_path, format, title, author, publisher, language, isbn, description,
@@ -147,9 +151,9 @@ async function seedBook(env: NodeJS.ProcessEnv): Promise<void> {
     );
   `);
   db.close();
-  await writeFile(join(env.READANY_HOME!, "books", "mcp.epub"), buildInspectableEpub());
+  await writeFile(join(env.READANY_HOME, "books", "mcp.epub"), buildInspectableEpub());
 
-  const localDb = new Database(join(env.READANY_HOME!, "readany_local.db"));
+  const localDb = new Database(join(env.READANY_HOME, "readany_local.db"));
   localDb.exec(`
     INSERT INTO chunks (
       id, book_id, chapter_index, chapter_title, content, token_count,
@@ -176,7 +180,11 @@ async function seedBook(env: NodeJS.ProcessEnv): Promise<void> {
 
 describe("mcp", () => {
   it("returns server capabilities during initialize", async () => {
-    const response = await handleMcpRequest({ method: "initialize" }, "readonly", await createEnv());
+    const response = await handleMcpRequest(
+      { method: "initialize" },
+      "readonly",
+      await createEnv(),
+    );
     expect(response).toMatchObject({
       capabilities: { tools: {} },
       serverInfo: { name: "readany" },
@@ -184,7 +192,11 @@ describe("mcp", () => {
   });
 
   it("lists implemented readonly tools only", async () => {
-    const response = await handleMcpRequest({ method: "tools/list" }, "readonly", await createEnv());
+    const response = await handleMcpRequest(
+      { method: "tools/list" },
+      "readonly",
+      await createEnv(),
+    );
     expect(response).toMatchObject({
       tools: [
         { name: "books.list" },
@@ -219,7 +231,11 @@ describe("mcp", () => {
   });
 
   it("includes safety metadata in tools/list for external agents", async () => {
-    const response = await handleMcpRequest({ method: "tools/list" }, "readonly", await createEnv());
+    const response = await handleMcpRequest(
+      { method: "tools/list" },
+      "readonly",
+      await createEnv(),
+    );
     const tools = (response as { tools: Array<Record<string, unknown>> }).tools;
 
     expect(tools.find((tool) => tool.name === "books.search")).toMatchObject({
@@ -261,7 +277,11 @@ describe("mcp", () => {
   });
 
   it("exposes safety metadata for every registered MCP tool", async () => {
-    const response = await handleMcpRequest({ method: "tools/list" }, "readonly", await createEnv());
+    const response = await handleMcpRequest(
+      { method: "tools/list" },
+      "readonly",
+      await createEnv(),
+    );
     const exposedTools = new Map(
       (response as { tools: Array<Record<string, unknown>> }).tools.map((tool) => [
         tool.name,
@@ -422,9 +442,9 @@ describe("mcp", () => {
   it("reads the latest reader context snapshot", async () => {
     const env = await createEnv();
     await seedBook(env);
-    await mkdir(join(env.READANY_HOME!, "readany-store"), { recursive: true });
+    await mkdir(join(env.READANY_HOME, "readany-store"), { recursive: true });
     await writeFile(
-      join(env.READANY_HOME!, "readany-store", "reader-context.json"),
+      join(env.READANY_HOME, "readany-store", "reader-context.json"),
       JSON.stringify({
         bookId: "mcp-book",
         bookTitle: "MCP for Readers",
@@ -498,7 +518,7 @@ describe("mcp", () => {
   it("gates notes.export by publisher profile and writes an export file", async () => {
     const env = await createEnv();
     await seedBook(env);
-    const outputPath = join(env.READANY_HOME!, "exports", "mcp-notes.md");
+    const outputPath = join(env.READANY_HOME, "exports", "mcp-notes.md");
 
     const readonlyResponse = await handleMcpRequest(
       {
@@ -555,7 +575,7 @@ describe("mcp", () => {
   it("gates knowledge.export by publisher profile and writes an export file", async () => {
     const env = await createEnv();
     await seedBook(env);
-    const outputPath = join(env.READANY_HOME!, "exports", "knowledge.md");
+    const outputPath = join(env.READANY_HOME, "exports", "knowledge.md");
 
     const readonlyResponse = await handleMcpRequest(
       {
@@ -651,8 +671,7 @@ describe("mcp", () => {
           arguments: {
             draftId,
             chapterId: "chapter-1",
-            xhtml:
-              `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>MCP Undo</h1><p>Undo this chapter patch.</p></body></html>`,
+            xhtml: `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>MCP Undo</h1><p>Undo this chapter patch.</p></body></html>`,
           },
         },
       },
@@ -786,7 +805,7 @@ describe("mcp", () => {
   it("gates epub.draft.create by editor profile and creates a draft", async () => {
     const env = await createEnv();
     await seedBook(env);
-    const sourcePath = join(env.READANY_HOME!, "books", "mcp.epub");
+    const sourcePath = join(env.READANY_HOME, "books", "mcp.epub");
     const sourceBefore = await readFile(sourcePath);
 
     const readonlyResponse = await handleMcpRequest(
@@ -837,7 +856,7 @@ describe("mcp", () => {
       },
     });
     expect(await readFile(sourcePath)).toEqual(sourceBefore);
-    expect(await readFile(join(env.READANY_HOME!, parsed.data.draft.draftFilePath))).toEqual(
+    expect(await readFile(join(env.READANY_HOME, parsed.data.draft.draftFilePath))).toEqual(
       sourceBefore,
     );
   });
@@ -1004,8 +1023,7 @@ describe("mcp", () => {
           arguments: {
             draftId,
             chapterId: "chapter-1",
-            xhtml:
-              `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Agent Updated</h1><p>Patched by MCP.</p></body></html>`,
+            xhtml: `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Agent Updated</h1><p>Patched by MCP.</p></body></html>`,
           },
         },
       },
@@ -1027,8 +1045,7 @@ describe("mcp", () => {
           arguments: {
             draftId,
             chapterId: "chapter-1",
-            xhtml:
-              `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Agent Updated</h1><p>Patched by MCP.</p></body></html>`,
+            xhtml: `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Agent Updated</h1><p>Patched by MCP.</p></body></html>`,
           },
         },
       },
@@ -1397,8 +1414,7 @@ describe("mcp", () => {
           arguments: {
             draftId,
             chapterId: "chapter-1",
-            xhtml:
-              `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Diffed Agent Access</h1><p>MCP diff changed this chapter.</p></body></html>`,
+            xhtml: `<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Diffed Agent Access</h1><p>MCP diff changed this chapter.</p></body></html>`,
           },
         },
       },
@@ -1489,7 +1505,8 @@ describe("mcp", () => {
       env,
     );
     expect(publisherResponse).toMatchObject({ isError: false });
-    const publisherText = (publisherResponse as { content: Array<{ text: string }> }).content[0].text;
+    const publisherText = (publisherResponse as { content: Array<{ text: string }> }).content[0]
+      .text;
     expect(JSON.parse(publisherText)).toMatchObject({
       ok: true,
       data: {
@@ -1508,7 +1525,7 @@ describe("mcp", () => {
   it("gates epub.export by publisher profile and writes a new EPUB", async () => {
     const env = await createEnv();
     await seedBook(env);
-    const sourcePath = join(env.READANY_HOME!, "books", "mcp.epub");
+    const sourcePath = join(env.READANY_HOME, "books", "mcp.epub");
     const sourceBytes = await readFile(sourcePath);
     const createResponse = await handleMcpRequest(
       {
@@ -1521,7 +1538,7 @@ describe("mcp", () => {
     const createText = (createResponse as { content: Array<{ text: string }> }).content[0].text;
     const draftId = (JSON.parse(createText) as { data: { draft: { draftId: string } } }).data.draft
       .draftId;
-    const outputPath = join(env.READANY_HOME!, "..", "exports", "mcp-export.epub");
+    const outputPath = join(env.READANY_HOME, "..", "exports", "mcp-export.epub");
 
     const editorResponse = await handleMcpRequest(
       {
@@ -1547,7 +1564,8 @@ describe("mcp", () => {
       env,
     );
     expect(publisherResponse).toMatchObject({ isError: false });
-    const publisherText = (publisherResponse as { content: Array<{ text: string }> }).content[0].text;
+    const publisherText = (publisherResponse as { content: Array<{ text: string }> }).content[0]
+      .text;
     expect(JSON.parse(publisherText)).toMatchObject({
       ok: true,
       data: {
@@ -1580,7 +1598,6 @@ describe("mcp", () => {
       ok: false,
       error: { code: "command_failed" },
     });
-
   });
 
   it("refuses to export invalid drafts through MCP without writing output", async () => {
@@ -1595,10 +1612,12 @@ describe("mcp", () => {
       env,
     );
     const createText = (createResponse as { content: Array<{ text: string }> }).content[0].text;
-    const draft = (JSON.parse(createText) as {
-      data: { draft: { draftId: string; draftFilePath: string } };
-    }).data.draft;
-    await writeFile(join(env.READANY_HOME!, draft.draftFilePath), buildInvalidMissingResourceEpub());
+    const draft = (
+      JSON.parse(createText) as {
+        data: { draft: { draftId: string; draftFilePath: string } };
+      }
+    ).data.draft;
+    await writeFile(join(env.READANY_HOME, draft.draftFilePath), buildInvalidMissingResourceEpub());
 
     const validateResponse = await handleMcpRequest(
       {
@@ -1625,7 +1644,7 @@ describe("mcp", () => {
       },
     });
 
-    const outputPath = join(env.READANY_HOME!, "..", "exports", "invalid-mcp-export.epub");
+    const outputPath = join(env.READANY_HOME, "..", "exports", "invalid-mcp-export.epub");
     const exportResponse = await handleMcpRequest(
       {
         method: "tools/call",
@@ -1709,7 +1728,6 @@ describe("mcp", () => {
     });
     expect(String(chapterText)).toMatch(/discarded/i);
   });
-
 
   it("calls rag.search with readonly profile", async () => {
     const env = await createEnv();
@@ -1815,7 +1833,7 @@ describe("mcp", () => {
     const env = await createEnv();
     await resetCoreForTests();
     await ensureCoreInitialized(env);
-    const db = new Database(join(env.READANY_HOME!, "readany.db"));
+    const db = new Database(join(env.READANY_HOME, "readany.db"));
     db.exec(`
       INSERT INTO books (
         id, file_path, format, title, author, publisher, language, isbn, description,
@@ -1830,7 +1848,7 @@ describe("mcp", () => {
       );
     `);
     db.close();
-    await writeFile(join(env.READANY_HOME!, "books", "fallback.epub"), buildInspectableEpub());
+    await writeFile(join(env.READANY_HOME, "books", "fallback.epub"), buildInspectableEpub());
 
     const listResponse = await handleMcpRequest(
       {
@@ -1895,7 +1913,7 @@ describe("mcp", () => {
     const env = await createEnv();
     await resetCoreForTests();
     await ensureCoreInitialized(env);
-    const db = new Database(join(env.READANY_HOME!, "readany.db"));
+    const db = new Database(join(env.READANY_HOME, "readany.db"));
     db.exec(`
       INSERT INTO books (
         id, file_path, format, title, author, publisher, language, isbn, description,
@@ -1911,7 +1929,7 @@ describe("mcp", () => {
     `);
     db.close();
     await writeFile(
-      join(env.READANY_HOME!, "books", "pdf-fallback.pdf"),
+      join(env.READANY_HOME, "books", "pdf-fallback.pdf"),
       buildSimplePdf(["PDF fallback agents", "Second page for fallback"]),
     );
 
@@ -2191,7 +2209,7 @@ describe("mcp", () => {
         additionalProperties: false,
       },
     } as const;
-    (READANY_TOOLS as unknown as typeof temporaryTool[]).push(temporaryTool);
+    (READANY_TOOLS as unknown as (typeof temporaryTool)[]).push(temporaryTool);
 
     try {
       const response = await handleMcpRequest(
@@ -2210,7 +2228,7 @@ describe("mcp", () => {
         error: { code: "permission_denied" },
       });
     } finally {
-      (READANY_TOOLS as unknown as typeof temporaryTool[]).pop();
+      (READANY_TOOLS as unknown as (typeof temporaryTool)[]).pop();
     }
   });
 });

@@ -73,11 +73,13 @@ type ProfileMenuIcon = (props: {
 type ProfileMenuRoute = Extract<
   keyof RootStackParamList,
   | "AppearanceSettings"
+  | "ReadingSettings"
   | "FontSettings"
   | "SyncSettings"
   | "AISettings"
   | "TTSSettings"
   | "TranslationSettings"
+  | "DictionarySettings"
   | "Skills"
   | "VectorModelSettings"
   | "Feedback"
@@ -101,9 +103,6 @@ type ProfileMenuItem =
       action: () => void;
       disabled?: boolean;
     };
-
-const ICP_NUMBER = "粤ICP备2025444251号-2A";
-const ICP_URL = "https://beian.miit.gov.cn/";
 
 function StatCard({
   icon,
@@ -430,6 +429,11 @@ export function ProfileScreen() {
             route: "AppearanceSettings" as const,
           },
           {
+            icon: BookOpenIcon,
+            label: t("settings.reading_title", "Reading"),
+            route: "ReadingSettings" as const,
+          },
+          {
             icon: TypeIcon,
             label: t("fonts.title", "字体"),
             route: "FontSettings" as const,
@@ -463,6 +467,11 @@ export function ProfileScreen() {
             icon: LanguagesIcon,
             label: t("settings.translationTab", "翻译"),
             route: "TranslationSettings" as const,
+          },
+          {
+            icon: BookOpenIcon,
+            label: t("dictionary.dictionaries", "Dictionaries"),
+            route: "DictionarySettings" as const,
           },
           { icon: PuzzleIcon, label: t("skills.title", "技能"), route: "Skills" as const },
           {
@@ -641,15 +650,6 @@ export function ProfileScreen() {
         <Text style={s.version} maxFontSizeMultiplier={1.4}>
           {t("profile.version", { version: Constants.expoConfig?.version ?? "1.0.0" })}
         </Text>
-        <TouchableOpacity
-          style={s.icpLink}
-          onPress={() => Linking.openURL(ICP_URL)}
-          activeOpacity={0.7}
-        >
-          <Text style={s.icpText} maxFontSizeMultiplier={1.4}>
-            {ICP_NUMBER}
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -842,16 +842,5 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
       marginTop: 16,
       marginBottom: 2,
-    },
-    icpLink: {
-      alignSelf: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-    },
-    icpText: {
-      textAlign: "center",
-      fontSize: fontSize.xs,
-      lineHeight: fontSize.xs * 1.6,
-      color: colors.mutedForeground,
     },
   });

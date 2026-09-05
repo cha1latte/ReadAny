@@ -7,13 +7,17 @@ import { FullScreenNotesScreen } from "@/screens/FullScreenNotesScreen";
 import { ReaderScreen } from "@/screens/ReaderScreen";
 import SkillsScreen from "@/screens/SkillsScreen";
 import StatsScreen from "@/screens/StatsScreen";
+import { OpdsBrowserScreen } from "@/screens/library/OpdsBrowserScreen";
+import { OpdsCatalogsScreen } from "@/screens/library/OpdsCatalogsScreen";
 import { WebDavImportBrowserScreen } from "@/screens/library/WebDavImportBrowserScreen";
 import AISettingsScreen from "@/screens/settings/AISettingsScreen";
 import AboutScreen from "@/screens/settings/AboutScreen";
 import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScreen";
+import { DictionarySettingsScreen } from "@/screens/settings/DictionarySettingsScreen";
 import FeedbackDetailScreen from "@/screens/settings/FeedbackDetailScreen";
 import FeedbackScreen from "@/screens/settings/FeedbackScreen";
 import FontSettingsScreen from "@/screens/settings/FontSettingsScreen";
+import ReadingSettingsScreen from "@/screens/settings/ReadingSettingsScreen";
 import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
 import TranslationSettingsScreen from "@/screens/settings/TranslationSettingsScreen";
@@ -37,9 +41,11 @@ export type RootStackParamList = {
   Skills: undefined;
   VectorModelSettings: undefined;
   AppearanceSettings: undefined;
+  ReadingSettings: undefined;
   AISettings: undefined;
   TTSSettings: undefined;
   TranslationSettings: undefined;
+  DictionarySettings: undefined;
   SyncSettings: undefined;
   About: undefined;
   Feedback: undefined;
@@ -47,6 +53,8 @@ export type RootStackParamList = {
   FullScreenNotes: { bookId: string };
   FontSettings: undefined;
   WebDavImportBrowser: { source: WebDavImportSource };
+  OpdsCatalogs: { editCatalogId?: string } | undefined;
+  OpdsBrowser: { catalogId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -102,9 +110,11 @@ export function RootNavigator() {
               options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen name="AppearanceSettings" component={AppearanceSettingsScreen} />
+            <Stack.Screen name="ReadingSettings" component={ReadingSettingsScreen} />
             <Stack.Screen name="AISettings" component={AISettingsScreen} />
             <Stack.Screen name="TTSSettings" component={TTSSettingsScreen} />
             <Stack.Screen name="TranslationSettings" component={TranslationSettingsScreen} />
+            <Stack.Screen name="DictionarySettings" component={DictionarySettingsScreen} />
             <Stack.Screen name="SyncSettings" component={SyncSettingsScreen} />
             <Stack.Screen name="About" component={AboutScreen} />
             <Stack.Screen name="Feedback" component={FeedbackScreen} />
@@ -121,6 +131,16 @@ export function RootNavigator() {
             <Stack.Screen
               name="WebDavImportBrowser"
               component={WebDavImportBrowserScreen}
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="OpdsCatalogs"
+              component={OpdsCatalogsScreen}
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="OpdsBrowser"
+              component={OpdsBrowserScreen}
               options={{ animation: "slide_from_right" }}
             />
             <Stack.Screen

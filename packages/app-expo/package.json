@@ -7,17 +7,14 @@
     "entryPoint": "./index.js",
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": [
-          "react-native-tcp-socket",
-          "react-native-track-player"
-        ],
+        "exclude": ["react-native-tcp-socket", "react-native-track-player"],
         "listUnknownPackages": false
       }
     }
   },
   "scripts": {
-    "start": "APP_VARIANT=development pnpm run build:reader && APP_VARIANT=development node scripts/configure-native-variant.js && APP_VARIANT=development expo start --dev-client --scheme readany-dev",
-    "start:clear": "APP_VARIANT=development pnpm run build:reader && APP_VARIANT=development node scripts/configure-native-variant.js && APP_VARIANT=development expo start --dev-client --scheme readany-dev --clear",
+    "start": "APP_VARIANT=development pnpm run build:reader && APP_VARIANT=development node scripts/configure-native-variant.js && APP_VARIANT=development expo start --dev-client --scheme readany-shlai-dev",
+    "start:clear": "APP_VARIANT=development pnpm run build:reader && APP_VARIANT=development node scripts/configure-native-variant.js && APP_VARIANT=development expo start --dev-client --scheme readany-shlai-dev --clear",
     "start:dev": "pnpm run start",
     "start:dev:clear": "pnpm run start:clear",
     "preandroid": "pnpm run build:reader",
@@ -34,12 +31,10 @@
     "lint": "biome check .",
     "test": "vitest run",
     "eas-build-pre-install": "bash scripts/eas-install-ios-build-tools.sh",
-    "eas-build-post-install": "pnpm run build:reader && node scripts/configure-native-variant.js",
+    "eas-build-post-install": "pnpm run build:reader && node scripts/configure-native-variant.js && node scripts/configure-standalone-autolinking.js package.json",
     "eas:device:create": "pnpm exec eas device:create",
-    "eas:build:android": "APP_VARIANT=production pnpm exec eas build --profile production --platform android",
     "eas:build:android:dev": "APP_VARIANT=development pnpm exec eas build --profile development --platform android",
     "eas:build:android:preview": "APP_VARIANT=preview pnpm exec eas build --profile preview --platform android",
-    "eas:build:ios": "APP_VARIANT=production pnpm exec eas build --profile production --platform ios",
     "eas:build:ios:dev": "APP_VARIANT=development pnpm exec eas build --profile development --platform ios",
     "eas:build:ios:simulator": "APP_VARIANT=development pnpm exec eas build --profile development-simulator --platform ios",
     "eas:build:ios:preview": "APP_VARIANT=preview pnpm exec eas build --profile preview --platform ios"
@@ -73,7 +68,9 @@
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
+    "expo-keep-awake": "~15.0.8",
     "expo-image-picker": "~17.0.11",
+    "expo-intent-launcher": "~13.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-media-library": "~18.2.0",
@@ -115,12 +112,15 @@
     "@babel/core": "^7.25.0",
     "@types/pako": "^2.0.4",
     "@types/react": "^19.1.17",
+    "@types/react-test-renderer": "19.1.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-plugin-transform-import-meta": "^2.3.2",
     "eas-cli": "^18.11.0",
     "esbuild": "^0.27.3",
     "react-native-svg-transformer": "^1.5.3",
+    "react-test-renderer": "19.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "yaml": "2.8.2"
   }
 }

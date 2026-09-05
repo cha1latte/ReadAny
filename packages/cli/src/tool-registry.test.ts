@@ -17,8 +17,8 @@ function extractFencedToolListAfter(content: string, marker: string): string[] {
   const markerIndex = content.indexOf(marker);
   expect(markerIndex).toBeGreaterThanOrEqual(0);
   const match = content.slice(markerIndex).match(/```text\r?\n([\s\S]*?)\r?\n```/);
-  expect(match).toBeTruthy();
-  return match![1].split(/\r?\n/).filter(Boolean);
+  if (!match) throw new Error(`Missing fenced tool list after ${marker}`);
+  return match[1].split(/\r?\n/).filter(Boolean);
 }
 
 describe("tool registry", () => {
@@ -88,8 +88,7 @@ describe("tool registry", () => {
     expect(
       listTools().every(
         (tool) =>
-          tool.inputSchema.type === "object" &&
-          tool.inputSchema.additionalProperties === false,
+          tool.inputSchema.type === "object" && tool.inputSchema.additionalProperties === false,
       ),
     ).toBe(true);
   });
@@ -179,12 +178,10 @@ describe("tool registry", () => {
       readRepoFile("docs/readany-cli/05-command-and-tool-spec.md"),
     ]);
 
-    expect(
-      extractBacktickedToolListAfter(readme, "MCP 当前只暴露真实实现的工具"),
-    ).toEqual(registeredTools);
-    expect(extractBacktickedToolListAfter(playbook, "MCP 当前只暴露")).toEqual(
+    expect(extractBacktickedToolListAfter(readme, "MCP 当前只暴露真实实现的工具")).toEqual(
       registeredTools,
     );
+    expect(extractBacktickedToolListAfter(playbook, "MCP 当前只暴露")).toEqual(registeredTools);
     expect(extractFencedToolListAfter(commandSpec, "当前 `tools/list` 只允许返回")).toEqual(
       registeredTools,
     );

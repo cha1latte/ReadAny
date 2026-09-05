@@ -1,9 +1,9 @@
+import { logAIEndpointDebug, summarizeDebugText } from "@readany/core/ai/request-debug";
 /**
  * Settings store — global reading settings, AI config, translation config
  */
 import type { AIConfig, AIEndpoint, ReadSettings } from "@readany/core/types";
 import type { TranslationConfig, TranslationTargetLang } from "@readany/core/types/translation";
-import { logAIEndpointDebug, summarizeDebugText } from "@readany/core/ai/request-debug";
 import {
   buildProviderModelsUrl,
   providerRequiresApiKey,
@@ -417,233 +417,241 @@ function normalizeImportedAIConfig(importedConfig: AIConfig, currentConfig: AICo
 }
 
 export const useSettingsStore = create<SettingsState>()(
-  withPersist("settings", (set, get, api) => {
-    // Load API keys from secure storage and merge with current endpoints
-    const loadApiKeys = async () => {
-      const state = get();
+  withPersist(
+    "settings",
+    (set, get, api) => {
+      // Load API keys from secure storage and merge with current endpoints
+      const loadApiKeys = async () => {
+        const state = get();
 
-      // 如果已经加载过，不再重复加载
-      if (state._apiKeysLoaded) {
-        return;
-      }
-
-      const endpointsWithKeys = await Promise.all(
-        state.aiConfig.endpoints.map(async (ep) => {
-          const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
-          return { ...ep, apiKey: apiKey || "" };
-        }),
-      );
-
-      set({
-        aiConfig: { ...state.aiConfig, endpoints: endpointsWithKeys },
-        _apiKeysLoaded: true,
-      });
-    };
-
-    return {
-      readSettings: defaultReadSettings,
-      translationConfig: defaultTranslationConfig,
-      aiConfig: defaultAIConfig,
-      settingsUpdatedAt: 0,
-      hasCompletedOnboarding: false,
-      showOnboardingGuide: true,
-      _hasHydrated: false,
-      _apiKeysLoaded: false,
-
-      loadApiKeys,
-
-      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
-      setShowOnboardingGuide: (show: boolean) => set({ showOnboardingGuide: show }),
-
-      updateReadSettings: (updates) =>
-        set((state) => ({
-          readSettings: { ...state.readSettings, ...updates },
-          settingsUpdatedAt: Date.now(),
-        })),
-
-      updateTranslationConfig: (updates) =>
-        set((state) => ({
-          translationConfig: { ...state.translationConfig, ...updates },
-          settingsUpdatedAt: Date.now(),
-        })),
-
-      updateAIConfig: (updates) =>
-        set((state) => ({
-          aiConfig: { ...state.aiConfig, ...updates },
-        })),
-
-      addEndpoint: async (endpoint) => {
-        // Save API key to secure storage
-        if (endpoint.apiKey) {
-          await saveSecure(getApiKeyStorageKey(endpoint.id), endpoint.apiKey);
+        // 如果已经加载过，不再重复加载
+        if (state._apiKeysLoaded) {
+          return;
         }
-        // Add endpoint to state (apiKey will be loaded from secure storage)
-        set((state) => ({
-          aiConfig: {
-            ...state.aiConfig,
-            endpoints: [
-              ...state.aiConfig.endpoints,
-              { ...endpoint, apiKey: endpoint.apiKey || "" },
-            ],
-          },
-        }));
-      },
 
-      updateEndpoint: async (id, updates) => {
-        // If apiKey is being updated, save it to secure storage
-        if (updates.apiKey !== undefined) {
-          await saveSecure(getApiKeyStorageKey(id), updates.apiKey);
-        }
-        set((state) => ({
-          aiConfig: {
-            ...state.aiConfig,
-            endpoints: state.aiConfig.endpoints.map((ep) =>
-              ep.id === id ? { ...ep, ...updates } : ep,
-            ),
-          },
-        }));
-      },
-
-      removeEndpoint: async (id) => {
-        // Delete API key from secure storage
-        await deleteSecure(getApiKeyStorageKey(id));
-        set((state) => {
-          const newEndpoints = state.aiConfig.endpoints.filter((ep) => ep.id !== id);
-          const newActiveId =
-            state.aiConfig.activeEndpointId === id
-              ? newEndpoints[0]?.id || ""
-              : state.aiConfig.activeEndpointId;
-          return {
-            aiConfig: {
-              ...state.aiConfig,
-              endpoints: newEndpoints,
-              activeEndpointId: newActiveId,
-              activeModel: state.aiConfig.activeEndpointId === id ? "" : state.aiConfig.activeModel,
-            },
-          };
-        });
-      },
-
-      setActiveEndpoint: (id) =>
-        set((state) => ({
-          aiConfig: {
-            ...state.aiConfig,
-            activeEndpointId: id,
-          },
-        })),
-
-      setActiveModel: (model) =>
-        set((state) => ({
-          aiConfig: { ...state.aiConfig, activeModel: model },
-        })),
-
-      importAIConfig: async (config) => {
-        const currentState = get();
-        const normalizedConfig = normalizeImportedAIConfig(config, currentState.aiConfig);
-        const importedEndpointIds = new Set(
-          normalizedConfig.endpoints.map((endpoint) => endpoint.id),
+        const endpointsWithKeys = await Promise.all(
+          state.aiConfig.endpoints.map(async (ep) => {
+            const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
+            return { ...ep, apiKey: apiKey || "" };
+          }),
         );
 
-        await Promise.all([
-          ...currentState.aiConfig.endpoints
-            .filter((endpoint) => !importedEndpointIds.has(endpoint.id))
-            .map((endpoint) => deleteSecure(getApiKeyStorageKey(endpoint.id))),
-          ...normalizedConfig.endpoints.map((endpoint) =>
-            endpoint.apiKey
-              ? saveSecure(getApiKeyStorageKey(endpoint.id), endpoint.apiKey)
-              : deleteSecure(getApiKeyStorageKey(endpoint.id)),
-          ),
-        ]);
-
         set({
-          aiConfig: normalizedConfig,
+          aiConfig: { ...state.aiConfig, endpoints: endpointsWithKeys },
           _apiKeysLoaded: true,
         });
-      },
+      };
 
-      getActiveEndpoint: async () => {
-        const state = get();
-        const ep = state.aiConfig.endpoints.find((ep) => ep.id === state.aiConfig.activeEndpointId);
-        if (!ep) return undefined;
-        // Load the actual API key from secure storage
-        const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
-        return { ...ep, apiKey: apiKey || "" };
-      },
+      return {
+        readSettings: defaultReadSettings,
+        translationConfig: defaultTranslationConfig,
+        aiConfig: defaultAIConfig,
+        settingsUpdatedAt: 0,
+        hasCompletedOnboarding: false,
+        showOnboardingGuide: true,
+        _hasHydrated: false,
+        _apiKeysLoaded: false,
 
-      getEndpointById: async (id: string) => {
-        const state = get();
-        const ep = state.aiConfig.endpoints.find((ep) => ep.id === id);
-        if (!ep) return undefined;
-        // Load the actual API key from secure storage
-        const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
-        return { ...ep, apiKey: apiKey || "" };
-      },
+        loadApiKeys,
 
-      fetchModels: async (endpointId) => {
-        const state = get();
-        const endpoint = state.aiConfig.endpoints.find((ep) => ep.id === endpointId);
-        if (!endpoint) return [];
+        completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+        setShowOnboardingGuide: (show: boolean) => set({ showOnboardingGuide: show }),
 
-        // Load the actual API key from secure storage
-        const apiKey = await loadSecure(getApiKeyStorageKey(endpointId));
-        const endpointWithKey = { ...endpoint, apiKey: apiKey || "" };
+        updateReadSettings: (updates) =>
+          set((state) => ({
+            readSettings: { ...state.readSettings, ...updates },
+            settingsUpdatedAt: Date.now(),
+          })),
 
-        set((s) => ({
-          aiConfig: {
-            ...s.aiConfig,
-            endpoints: s.aiConfig.endpoints.map((ep) =>
-              ep.id === endpointId ? { ...ep, modelsFetching: true } : ep,
+        updateTranslationConfig: (updates) =>
+          set((state) => ({
+            translationConfig: { ...state.translationConfig, ...updates },
+            settingsUpdatedAt: Date.now(),
+          })),
+
+        updateAIConfig: (updates) =>
+          set((state) => ({
+            aiConfig: { ...state.aiConfig, ...updates },
+          })),
+
+        addEndpoint: async (endpoint) => {
+          // Save API key to secure storage
+          if (endpoint.apiKey) {
+            await saveSecure(getApiKeyStorageKey(endpoint.id), endpoint.apiKey);
+          }
+          // Add endpoint to state (apiKey will be loaded from secure storage)
+          set((state) => ({
+            aiConfig: {
+              ...state.aiConfig,
+              endpoints: [
+                ...state.aiConfig.endpoints,
+                { ...endpoint, apiKey: endpoint.apiKey || "" },
+              ],
+            },
+          }));
+        },
+
+        updateEndpoint: async (id, updates) => {
+          // If apiKey is being updated, save it to secure storage
+          if (updates.apiKey !== undefined) {
+            await saveSecure(getApiKeyStorageKey(id), updates.apiKey);
+          }
+          set((state) => ({
+            aiConfig: {
+              ...state.aiConfig,
+              endpoints: state.aiConfig.endpoints.map((ep) =>
+                ep.id === id ? { ...ep, ...updates } : ep,
+              ),
+            },
+          }));
+        },
+
+        removeEndpoint: async (id) => {
+          // Delete API key from secure storage
+          await deleteSecure(getApiKeyStorageKey(id));
+          set((state) => {
+            const newEndpoints = state.aiConfig.endpoints.filter((ep) => ep.id !== id);
+            const newActiveId =
+              state.aiConfig.activeEndpointId === id
+                ? newEndpoints[0]?.id || ""
+                : state.aiConfig.activeEndpointId;
+            return {
+              aiConfig: {
+                ...state.aiConfig,
+                endpoints: newEndpoints,
+                activeEndpointId: newActiveId,
+                activeModel:
+                  state.aiConfig.activeEndpointId === id ? "" : state.aiConfig.activeModel,
+              },
+            };
+          });
+        },
+
+        setActiveEndpoint: (id) =>
+          set((state) => ({
+            aiConfig: {
+              ...state.aiConfig,
+              activeEndpointId: id,
+            },
+          })),
+
+        setActiveModel: (model) =>
+          set((state) => ({
+            aiConfig: { ...state.aiConfig, activeModel: model },
+          })),
+
+        importAIConfig: async (config) => {
+          const currentState = get();
+          const normalizedConfig = normalizeImportedAIConfig(config, currentState.aiConfig);
+          const importedEndpointIds = new Set(
+            normalizedConfig.endpoints.map((endpoint) => endpoint.id),
+          );
+
+          await Promise.all([
+            ...currentState.aiConfig.endpoints
+              .filter((endpoint) => !importedEndpointIds.has(endpoint.id))
+              .map((endpoint) => deleteSecure(getApiKeyStorageKey(endpoint.id))),
+            ...normalizedConfig.endpoints.map((endpoint) =>
+              endpoint.apiKey
+                ? saveSecure(getApiKeyStorageKey(endpoint.id), endpoint.apiKey)
+                : deleteSecure(getApiKeyStorageKey(endpoint.id)),
             ),
-          },
-        }));
+          ]);
 
-        try {
-          const models = await fetchModelsFromEndpoint(endpointWithKey);
+          set({
+            aiConfig: normalizedConfig,
+            _apiKeysLoaded: true,
+          });
+        },
+
+        getActiveEndpoint: async () => {
+          const state = get();
+          const ep = state.aiConfig.endpoints.find(
+            (ep) => ep.id === state.aiConfig.activeEndpointId,
+          );
+          if (!ep) return undefined;
+          // Load the actual API key from secure storage
+          const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
+          return { ...ep, apiKey: apiKey || "" };
+        },
+
+        getEndpointById: async (id: string) => {
+          const state = get();
+          const ep = state.aiConfig.endpoints.find((ep) => ep.id === id);
+          if (!ep) return undefined;
+          // Load the actual API key from secure storage
+          const apiKey = await loadSecure(getApiKeyStorageKey(ep.id));
+          return { ...ep, apiKey: apiKey || "" };
+        },
+
+        fetchModels: async (endpointId) => {
+          const state = get();
+          const endpoint = state.aiConfig.endpoints.find((ep) => ep.id === endpointId);
+          if (!endpoint) return [];
+
+          // Load the actual API key from secure storage
+          const apiKey = await loadSecure(getApiKeyStorageKey(endpointId));
+          const endpointWithKey = { ...endpoint, apiKey: apiKey || "" };
+
           set((s) => ({
             aiConfig: {
               ...s.aiConfig,
               endpoints: s.aiConfig.endpoints.map((ep) =>
-                ep.id === endpointId
-                  ? { ...ep, models, modelsFetched: true, modelsFetching: false }
-                  : ep,
+                ep.id === endpointId ? { ...ep, modelsFetching: true } : ep,
               ),
             },
           }));
-          return models;
-        } catch (err) {
-          console.error("Failed to fetch models:", err);
-          set((s) => ({
-            aiConfig: {
-              ...s.aiConfig,
-              endpoints: s.aiConfig.endpoints.map((ep) =>
-                ep.id === endpointId ? { ...ep, modelsFetching: false } : ep,
-              ),
-            },
-          }));
-          throw err;
-        }
-      },
 
-      setTranslationLang: (lang) =>
-        set((state) => ({
-          translationConfig: { ...state.translationConfig, targetLang: lang },
-        })),
+          try {
+            const models = await fetchModelsFromEndpoint(endpointWithKey);
+            set((s) => ({
+              aiConfig: {
+                ...s.aiConfig,
+                endpoints: s.aiConfig.endpoints.map((ep) =>
+                  ep.id === endpointId
+                    ? { ...ep, models, modelsFetched: true, modelsFetching: false }
+                    : ep,
+                ),
+              },
+            }));
+            return models;
+          } catch (err) {
+            console.error("Failed to fetch models:", err);
+            set((s) => ({
+              aiConfig: {
+                ...s.aiConfig,
+                endpoints: s.aiConfig.endpoints.map((ep) =>
+                  ep.id === endpointId ? { ...ep, modelsFetching: false } : ep,
+                ),
+              },
+            }));
+            throw err;
+          }
+        },
 
-      resetToDefaults: async () => {
-        // Delete all API keys from secure storage
-        const state = get();
-        await Promise.all(
-          state.aiConfig.endpoints.map((ep) => deleteSecure(getApiKeyStorageKey(ep.id))),
-        );
-        set({
-          readSettings: defaultReadSettings,
-          translationConfig: defaultTranslationConfig,
-          aiConfig: defaultAIConfig,
-          _apiKeysLoaded: false,
-        });
-      },
-    };
-  }, undefined, migrateSettingsState),
+        setTranslationLang: (lang) =>
+          set((state) => ({
+            translationConfig: { ...state.translationConfig, targetLang: lang },
+          })),
+
+        resetToDefaults: async () => {
+          // Delete all API keys from secure storage
+          const state = get();
+          await Promise.all(
+            state.aiConfig.endpoints.map((ep) => deleteSecure(getApiKeyStorageKey(ep.id))),
+          );
+          set({
+            readSettings: defaultReadSettings,
+            translationConfig: defaultTranslationConfig,
+            aiConfig: defaultAIConfig,
+            _apiKeysLoaded: false,
+          });
+        },
+      };
+    },
+    undefined,
+    migrateSettingsState,
+  ),
 );
 
 // 在应用启动时加载 API keys

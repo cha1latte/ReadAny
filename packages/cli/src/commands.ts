@@ -1,15 +1,15 @@
 import { lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { CLI_VERSION } from "./version.js";
-import { getCliPaths, resolveExecutablePath } from "./paths.js";
-import { isAccessProfile, parseAccessProfile, profileHasScope } from "./profiles.js";
-import { failure, success, type CommandResult } from "./result.js";
 import { runDoctor } from "./doctor.js";
-import { installCli, uninstallCli, type InstallMode, type InstallOptions } from "./install.js";
-import { getSkillStatus, installSkill, uninstallSkill, updateSkill } from "./skill.js";
+import { type InstallMode, type InstallOptions, installCli, uninstallCli } from "./install.js";
+import { getCliPaths, resolveExecutablePath } from "./paths.js";
+import { parseAccessProfile, profileHasScope } from "./profiles.js";
 import { isRagSearchMode } from "./rag-config.js";
+import { type CommandResult, failure, success } from "./result.js";
+import { getSkillStatus, installSkill, uninstallSkill, updateSkill } from "./skill.js";
 import { listTools } from "./tool-registry.js";
+import { CLI_VERSION } from "./version.js";
 
 export type ParsedCommand = {
   name: string;

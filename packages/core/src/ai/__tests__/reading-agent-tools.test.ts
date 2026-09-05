@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { AIConfig } from "../../types";
+import type { ReadingContext } from "../../types/chat";
 import { isOutputLimitTermination, streamReadingAgent } from "../agents/reading-agent";
 import type { ToolDefinition } from "../tools";
 import { getAvailableTools } from "../tools";
@@ -17,7 +18,9 @@ vi.mock("../llm-provider", () => ({
   })),
 }));
 
-const getReadingContextSnapshotMock = vi.hoisted(() => vi.fn(() => null));
+const getReadingContextSnapshotMock = vi.hoisted(() =>
+  vi.fn<() => ReadingContext | null>(() => null),
+);
 
 vi.mock("../reading-context-service", () => ({
   getReadingContextSnapshot: getReadingContextSnapshotMock,
@@ -88,7 +91,9 @@ describe("streamReadingAgent tool registration", () => {
       events.push(event);
     }
 
-    expect(events).toEqual([{ type: "token", content: "内容过长，请分段提问。" }]);
+    expect(events).toEqual([
+      { type: "token", content: "That message is too long. Please send it in smaller parts." },
+    ]);
     expect(createReactAgentMock).not.toHaveBeenCalled();
   });
 
@@ -257,6 +262,90 @@ describe("streamReadingAgent tool registration", () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     await pending;
+  });
+
+  it("stops calling original-file tools after the fallback source fails in a turn", async () => {
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          // no-op stream
+        },
+      })),
+    });
+    const fallbackSearch = vi.fn(async () => ({
+      error: "Timed out reading original book content",
+      sourceUnavailable: true,
+    }));
+    const fallbackToc = vi.fn(async () => ({ chapters: [] }));
+    const getCurrentChapter = vi.fn(async () => ({ title: "Chapter 1" }));
+    const tools: ToolDefinition[] = [
+      {
+        name: "fallbackSearch",
+        description: "Search the original book",
+        parameters: {},
+        execute: fallbackSearch,
+      },
+      {
+        name: "fallbackToc",
+        description: "Read the original table of contents",
+        parameters: {},
+        execute: fallbackToc,
+      },
+      {
+        name: "getCurrentChapter",
+        description: "Read the current chapter metadata",
+        parameters: {},
+        execute: getCurrentChapter,
+      },
+    ];
+
+    for await (const _event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: false,
+        getAvailableTools: () => tools,
+      },
+      "Analyze this book",
+    )) {
+      // drain stream
+    }
+
+    const call = createReactAgentMock.mock.calls[createReactAgentMock.mock.calls.length - 1]?.[0];
+    const registeredTools = call.tools as Array<{
+      name: string;
+      func: (input: unknown) => Promise<string>;
+    }>;
+    const execute = (name: string) => {
+      const tool = registeredTools.find((candidate) => candidate.name === name);
+      if (!tool) throw new Error(`Expected ${name} to be registered`);
+      return tool.func({});
+    };
+
+    await expect(execute("fallbackSearch")).resolves.toBe(
+      JSON.stringify({
+        error: "Timed out reading original book content",
+        sourceUnavailable: true,
+        stopFallbackToolCalls: true,
+      }),
+    );
+    await expect(execute("fallbackToc")).resolves.toBe(
+      JSON.stringify({
+        error: "Timed out reading original book content",
+        sourceUnavailable: true,
+        stopFallbackToolCalls: true,
+      }),
+    );
+    await expect(execute("getCurrentChapter")).resolves.toBe(
+      JSON.stringify({ title: "Chapter 1" }),
+    );
+
+    expect(fallbackSearch).toHaveBeenCalledTimes(1);
+    expect(fallbackToc).not.toHaveBeenCalled();
+    expect(getCurrentChapter).toHaveBeenCalledTimes(1);
   });
 
   it("keeps tool-call turn text out of the final response before addCitation completes", async () => {
@@ -572,8 +661,264 @@ describe("streamReadingAgent tool registration", () => {
 
     const fourth = JSON.parse(await wrappedResolveTool.func({ query: "张三疯那一章讲了什么" }));
     expect(fourth.attemptLimitReached).toBe(true);
-    expect(fourth.notice).toBe("未能可靠定位章节，请补充更准确的章节名");
+    expect(fourth.notice).toBe(
+      "I couldn't reliably identify that chapter. Please give me a more specific chapter title.",
+    );
     expect(fourth.attemptedQueries).toEqual(["张三疯那一章讲了什么", "张三疯", "张三疯"]);
+  });
+
+  it.each([
+    ["Review my notes for this chapter", "Spending Time Apart"],
+    ["点评我对本章的笔记", "Spending Time Apart"],
+    ["点评我对这一章的笔记", "Spending Time Apart"],
+    ["Please review my notes from chapter 2", "chapter 2"],
+    ["look at my notes", undefined],
+  ])("prefetches annotations before the model answers: %s", async (prompt, chapterTitle) => {
+    getReadingContextSnapshotMock.mockReturnValue({
+      bookId: "book-1",
+      bookTitle: "Test Book",
+      currentChapter: {
+        index: 1,
+        title: "Spending Time Apart",
+        href: "chapter-2.xhtml",
+      },
+      currentPosition: { cfi: "epubcfi(/6/4!/4/2)", percentage: 0.2 },
+      surroundingText: "",
+      recentHighlights: [],
+      operationType: "reading",
+      timestamp: Date.now(),
+    });
+    const annotationResult = {
+      highlights: [
+        {
+          text: "Time apart can strengthen desire.",
+          note: "Distance creates room to want.",
+          chapterTitle: "Spending Time Apart",
+          color: "yellow",
+        },
+      ],
+      notes: [],
+      pagination: {
+        highlights: { total: 1, returned: 1, offset: 0, limit: 50, hasMore: false },
+        notes: { total: 0, returned: 0, offset: 0, limit: 50, hasMore: false },
+      },
+    };
+    const getAnnotations = vi.fn(async () => annotationResult);
+    const annotationTool: ToolDefinition = {
+      name: "getAnnotations",
+      description: "Get user annotations",
+      parameters: {
+        type: { type: "string", description: "annotation type" },
+        chapterTitle: { type: "string", description: "chapter title" },
+        order: { type: "string", description: "sort order" },
+        offset: { type: "number", description: "offset" },
+        limit: { type: "number", description: "limit" },
+      },
+      execute: getAnnotations,
+    };
+    let capturedAgentInput:
+      | {
+          messages: Array<{
+            _getType: () => string;
+            content: unknown;
+            tool_calls?: Array<{ id?: string }>;
+            tool_call_id?: string;
+          }>;
+        }
+      | undefined;
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn((input) => {
+        capturedAgentInput = input;
+        return {
+          [Symbol.asyncIterator]: async function* () {
+            // no-op stream
+          },
+        };
+      }),
+    });
+
+    const events = [];
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools: () => [annotationTool],
+      },
+      prompt,
+    )) {
+      events.push(event);
+    }
+
+    const expectedArgs = {
+      type: "all",
+      order: "book",
+      offset: 0,
+      limit: 50,
+      ...(chapterTitle ? { chapterTitle } : {}),
+    };
+    expect(getAnnotations).toHaveBeenCalledOnce();
+    expect(getAnnotations).toHaveBeenCalledWith(expectedArgs);
+    expect(events.slice(0, 2)).toEqual([
+      { type: "tool_call", name: "getAnnotations", args: expectedArgs },
+      { type: "tool_result", name: "getAnnotations", result: annotationResult },
+    ]);
+
+    expect(capturedAgentInput).toBeDefined();
+    const messages = capturedAgentInput?.messages ?? [];
+    const humanMessage = messages[messages.length - 3];
+    const aiMessage = messages[messages.length - 2];
+    const toolMessage = messages[messages.length - 1];
+    expect(humanMessage?._getType()).toBe("human");
+    expect(humanMessage?.content).toBe(prompt);
+    expect(aiMessage?._getType()).toBe("ai");
+    expect(aiMessage?.tool_calls).toEqual([
+      expect.objectContaining({ name: "getAnnotations", args: expectedArgs, type: "tool_call" }),
+    ]);
+    expect(toolMessage?._getType()).toBe("tool");
+    expect(toolMessage?.tool_call_id).toBe(aiMessage?.tool_calls?.[0]?.id);
+    expect(toolMessage?.content).toBe(JSON.stringify(annotationResult));
+  });
+
+  it("does not run annotation preflight for a normal chapter summary", async () => {
+    const getAnnotations = vi.fn(async () => ({ highlights: [], notes: [], pagination: {} }));
+    const tools: ToolDefinition[] = [
+      {
+        name: "getAnnotations",
+        description: "Get user annotations",
+        parameters: {},
+        execute: getAnnotations,
+      },
+      {
+        name: "resolveChapterReference",
+        description: "Resolve chapter references",
+        parameters: {},
+        execute: vi.fn(async () => ({ matched: true })),
+      },
+    ];
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          // no-op stream
+        },
+      })),
+    });
+
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools: () => tools,
+      },
+      "summarize chapter 2",
+    )) {
+      void event;
+    }
+
+    expect(getAnnotations).not.toHaveBeenCalled();
+  });
+
+  it("keeps indexed content retrieval available when comparing annotations with the book", async () => {
+    const tools: ToolDefinition[] = [
+      {
+        name: "getAnnotations",
+        description: "Get user annotations",
+        parameters: {},
+        execute: vi.fn(async () => ({ highlights: [], notes: [], pagination: {} })),
+      },
+      {
+        name: "ragSearch",
+        description: "Search book content",
+        parameters: {},
+        execute: vi.fn(async () => ({ results: [] })),
+      },
+      {
+        name: "ragContext",
+        description: "Get book context",
+        parameters: {},
+        execute: vi.fn(async () => ({ chunks: [] })),
+      },
+      {
+        name: "addCitation",
+        description: "Register citations",
+        parameters: {},
+        execute: vi.fn(async () => ({ type: "citation" })),
+      },
+    ];
+    let capturedTools: Array<{ name: string }> = [];
+    createReactAgentMock.mockImplementation((config) => {
+      capturedTools = config.tools;
+      return {
+        streamEvents: vi.fn(() => ({
+          [Symbol.asyncIterator]: async function* () {
+            // no-op stream
+          },
+        })),
+      };
+    });
+
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools: () => tools,
+      },
+      "Compare my notes with the chapter text",
+    )) {
+      void event;
+    }
+
+    expect(capturedTools.map((tool) => tool.name)).toEqual([
+      "getAnnotations",
+      "ragSearch",
+      "ragContext",
+      "addCitation",
+    ]);
+  });
+
+  it("returns the retrieval-limit guardrail in the active UI language", async () => {
+    createReactAgentMock.mockReturnValue({
+      streamEvents: vi.fn(() => ({
+        [Symbol.asyncIterator]() {
+          return {
+            next: vi.fn().mockRejectedValue(new Error("Recursion limit of 24 reached")),
+          };
+        },
+      })),
+    });
+
+    const events = [];
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools,
+      },
+      "Analyze the themes across this book",
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toContainEqual({
+      type: "token",
+      content:
+        "I couldn't complete that retrieval reliably. Please try a more specific question or retry.",
+    });
   });
 
   it("keeps RAG fallback available for current-page questions on indexed books", async () => {
@@ -722,6 +1067,138 @@ describe("streamReadingAgent tool registration", () => {
     expect(toolNames).not.toContain("ragSearch");
     expect(toolNames).not.toContain("ragContext");
     expect(toolNames).not.toContain("summarize");
+  });
+
+  it("keeps the citation budget available after the non-citation budget is exhausted", async () => {
+    const search = vi.fn(async (args) => ({ query: args.query }));
+    const addCitation = vi.fn(async (args) => ({
+      type: "citation",
+      citationIndex: args.citationIndex,
+    }));
+    const tools: ToolDefinition[] = [
+      {
+        name: "ragSearch",
+        description: "Search book content",
+        parameters: { query: { type: "string", description: "query", required: true } },
+        execute: search,
+      },
+      {
+        name: "addCitation",
+        description: "Register a citation",
+        parameters: {
+          citationIndex: { type: "number", description: "citation index", required: true },
+        },
+        execute: addCitation,
+      },
+    ];
+    let capturedTools: any[] = [];
+    createReactAgentMock.mockImplementation((config) => {
+      capturedTools = config.tools;
+      return {
+        streamEvents: vi.fn(() => ({
+          [Symbol.asyncIterator]: async function* () {
+            // no-op stream
+          },
+        })),
+      };
+    });
+
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools: () => tools,
+      },
+      "Analyze themes across this book",
+    )) {
+      void event;
+    }
+
+    const wrappedSearch = capturedTools.find((tool) => tool.name === "ragSearch");
+    const wrappedCitation = capturedTools.find((tool) => tool.name === "addCitation");
+    for (let index = 0; index < 12; index += 1) {
+      const result = JSON.parse(await wrappedSearch.func({ query: `query-${index}` }));
+      expect(result.stopToolCalls).toBeUndefined();
+    }
+    const blockedSearch = JSON.parse(await wrappedSearch.func({ query: "query-12" }));
+    expect(blockedSearch.stopToolCalls).toBe(true);
+
+    for (let index = 1; index <= 16; index += 1) {
+      const result = JSON.parse(await wrappedCitation.func({ citationIndex: index }));
+      expect(result).toEqual({ type: "citation", citationIndex: index });
+    }
+    expect(addCitation).toHaveBeenCalledTimes(16);
+
+    const blockedCitation = JSON.parse(await wrappedCitation.func({ citationIndex: 17 }));
+    expect(blockedCitation).toMatchObject({
+      citationLimitReached: true,
+      stopCitationCalls: true,
+    });
+    expect(blockedCitation.instruction).toContain("Finish the answer now");
+  });
+
+  it("does not let citation calls consume the non-citation budget", async () => {
+    const search = vi.fn(async (args) => ({ query: args.query }));
+    const addCitation = vi.fn(async (args) => ({
+      type: "citation",
+      citationIndex: args.citationIndex,
+    }));
+    const tools: ToolDefinition[] = [
+      {
+        name: "ragSearch",
+        description: "Search book content",
+        parameters: { query: { type: "string", description: "query", required: true } },
+        execute: search,
+      },
+      {
+        name: "addCitation",
+        description: "Register a citation",
+        parameters: {
+          citationIndex: { type: "number", description: "citation index", required: true },
+        },
+        execute: addCitation,
+      },
+    ];
+    let capturedTools: any[] = [];
+    createReactAgentMock.mockImplementation((config) => {
+      capturedTools = config.tools;
+      return {
+        streamEvents: vi.fn(() => ({
+          [Symbol.asyncIterator]: async function* () {
+            // no-op stream
+          },
+        })),
+      };
+    });
+
+    for await (const event of streamReadingAgent(
+      {
+        aiConfig: makeAIConfig(),
+        book: null,
+        bookId: "book-1",
+        semanticContext: null,
+        enabledSkills: [],
+        isVectorized: true,
+        getAvailableTools: () => tools,
+      },
+      "Analyze themes across this book",
+    )) {
+      void event;
+    }
+
+    const wrappedSearch = capturedTools.find((tool) => tool.name === "ragSearch");
+    const wrappedCitation = capturedTools.find((tool) => tool.name === "addCitation");
+    for (let index = 1; index <= 16; index += 1) {
+      await wrappedCitation.func({ citationIndex: index });
+    }
+
+    const result = JSON.parse(await wrappedSearch.func({ query: "still available" }));
+    expect(result).toEqual({ query: "still available" });
+    expect(search).toHaveBeenCalledOnce();
   });
 
   it("reuses duplicate search requests within the same turn", async () => {

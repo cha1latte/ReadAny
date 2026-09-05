@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { PasswordInput } from "../../../components/ui/PasswordInput";
 import { useColors } from "../../../styles/theme";
 import { makeStyles } from "./sync-styles";
@@ -105,12 +105,12 @@ export function WebDavForm({
             <Text style={styles.autoSyncLabel}>{t("settings.syncAllowInsecure")}</Text>
             <Text style={styles.autoSyncDesc}>{t("settings.syncAllowInsecureDescMobile")}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.toggle, allowInsecure && styles.toggleActive]}
-            onPress={onToggleAllowInsecure}
-          >
-            <View style={[styles.toggleThumb, allowInsecure && styles.toggleThumbActive]} />
-          </TouchableOpacity>
+          <Switch
+            value={allowInsecure}
+            onValueChange={onToggleAllowInsecure}
+            trackColor={{ false: colors.muted, true: colors.primary }}
+            thumbColor={colors.card}
+          />
         </View>
 
         <View style={styles.btnRow}>
@@ -138,9 +138,7 @@ export function WebDavForm({
           <Text style={styles.successText}>{t("settings.syncTestSuccess")}</Text>
         )}
         {testResult === "error" && (
-          <Text style={styles.errorText}>
-            {t("settings.syncTestFailed", { error: testError })}
-          </Text>
+          <Text style={styles.errorText}>{t("settings.syncTestFailed", { error: testError })}</Text>
         )}
       </View>
     </View>

@@ -4,25 +4,63 @@
 import { XIcon } from "@/components/ui/Icon";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useColors } from "@/styles/theme";
-import type { ReadSettings } from "@readany/core/types";
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
-import { makeStyles } from "./reader-styles";
 import { useFontStore } from "@readany/core/stores";
-import { useRubyStore, type RubyMode } from "@readany/core/stores/ruby-store";
-import { useCallback, useState } from "react";
+import { type RubyMode, useRubyStore } from "@readany/core/stores/ruby-store";
+import type { ReadSettings } from "@readany/core/types";
+import { type ReactNode, useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { makeStyles } from "./reader-styles";
 
 interface Props {
   visible: boolean;
   readSettings: ReadSettings;
   bookId?: string;
+  embedded?: boolean;
   onClose: () => void;
   onUpdateSetting: <K extends keyof ReadSettings>(key: K, value: ReadSettings[K]) => void;
   onRubyModeChange?: (mode: RubyMode) => void;
 }
 
-export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, onUpdateSetting, onRubyModeChange }: Props) {
+function ReaderSettingsContainer({
+  children,
+  embedded,
+  visible,
+  onClose,
+}: {
+  children: ReactNode;
+  embedded: boolean;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  if (embedded) return <View style={{ flex: 1 }}>{children}</View>;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {children}
+    </Modal>
+  );
+}
+
+export function ReaderSettingsPanel({
+  visible,
+  readSettings,
+  bookId,
+  embedded = false,
+  onClose,
+  onUpdateSetting,
+  onRubyModeChange,
+}: Props) {
   const colors = useColors();
   const s = makeStyles(colors);
   const insets = useSafeAreaInsets();
@@ -41,34 +79,44 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
     viewMode: settingViewMode,
     volumeButtonsPageTurn,
     smoothReading,
+    keepScreenOnWhileReading,
     showTopTitleProgress,
     showBottomTimeBattery,
     followSystemFontScale,
   } = readSettings;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable style={s.modalBackdrop} onPress={onClose} />
+    <ReaderSettingsContainer embedded={embedded} visible={visible} onClose={onClose}>
+      {!embedded && <Pressable style={s.modalBackdrop} onPress={onClose} />}
       <View
-        style={[
-          s.bottomSheet,
-          { paddingBottom: insets.bottom || 16 },
-          layout.isTablet && {
-            width: "100%",
-          },
-        ]}
+        style={
+          embedded
+            ? {
+                flex: 1,
+                width: "100%",
+                maxWidth: layout.centeredContentWidth,
+                alignSelf: "center",
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: insets.bottom || 16,
+              }
+            : [
+                s.bottomSheet,
+                { paddingBottom: insets.bottom || 16 },
+                layout.isTablet && {
+                  width: "100%",
+                },
+              ]
+        }
       >
-        <View style={s.sheetHeader}>
-          <Text style={s.sheetTitle}>{t("reader.settings", "阅读设置")}</Text>
-          <TouchableOpacity onPress={onClose}>
-            <XIcon size={18} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
+        {!embedded && (
+          <View style={s.sheetHeader}>
+            <Text style={s.sheetTitle}>{t("reader.settings", "阅读设置")}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <XIcon size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        )}
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Font Size */}
           <View style={s.settingRow}>
@@ -144,14 +192,9 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
           {/* Body Text Justification */}
           <View style={s.settingRow}>
             <View style={s.settingLabelBlock}>
-              <Text style={s.settingLabel}>
-                {t("reader.justifyBodyText", "Justify body text")}
-              </Text>
+              <Text style={s.settingLabel}>{t("reader.justifyBodyText", "Justify body text")}</Text>
               <Text style={s.settingHint}>
-                {t(
-                  "reader.justifyBodyTextDesc",
-                  "Align ordinary prose to both page edges",
-                )}
+                {t("reader.justifyBodyTextDesc", "Align ordinary prose to both page edges")}
               </Text>
             </View>
             <TouchableOpacity
@@ -213,7 +256,9 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
                     style={[s.themeBtn, selectedFontId === font.id && s.themeBtnActive]}
                     onPress={() => setSelectedFont(font.id)}
                   >
-                    <Text style={[s.themeBtnText, selectedFontId === font.id && s.themeBtnTextActive]}>
+                    <Text
+                      style={[s.themeBtnText, selectedFontId === font.id && s.themeBtnTextActive]}
+                    >
                       {font.name}
                     </Text>
                   </TouchableOpacity>
@@ -228,11 +273,21 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
               <Text style={s.settingHint}>{t("reader.useBookFontsDesc")}</Text>
             </View>
             <TouchableOpacity
-              style={[s.settingToggleBtn, readSettings.useBookFonts !== false && s.settingToggleBtnActive]}
+              style={[
+                s.settingToggleBtn,
+                readSettings.useBookFonts !== false && s.settingToggleBtnActive,
+              ]}
               onPress={() => onUpdateSetting("useBookFonts", readSettings.useBookFonts === false)}
             >
-              <Text style={[s.settingToggleText, readSettings.useBookFonts !== false && s.settingToggleTextActive]}>
-                {readSettings.useBookFonts !== false ? t("settings.enabled") : t("settings.disabled")}
+              <Text
+                style={[
+                  s.settingToggleText,
+                  readSettings.useBookFonts !== false && s.settingToggleTextActive,
+                ]}
+              >
+                {readSettings.useBookFonts !== false
+                  ? t("settings.enabled")
+                  : t("settings.disabled")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -245,7 +300,10 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
                 onPress={() => onUpdateSetting("viewMode", "paginated")}
               >
                 <Text
-                  style={[s.viewModeBtnText, settingViewMode === "paginated" && s.viewModeBtnTextActive]}
+                  style={[
+                    s.viewModeBtnText,
+                    settingViewMode === "paginated" && s.viewModeBtnTextActive,
+                  ]}
                 >
                   {t("reader.paginated", "翻页")}
                 </Text>
@@ -255,7 +313,10 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
                 onPress={() => onUpdateSetting("viewMode", "scroll")}
               >
                 <Text
-                  style={[s.viewModeBtnText, settingViewMode === "scroll" && s.viewModeBtnTextActive]}
+                  style={[
+                    s.viewModeBtnText,
+                    settingViewMode === "scroll" && s.viewModeBtnTextActive,
+                  ]}
                 >
                   {t("reader.scrollMode", "滚动")}
                 </Text>
@@ -267,7 +328,10 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
             <View style={s.settingLabelBlock}>
               <Text style={s.settingLabel}>{t("settings.smoothReading")}</Text>
               <Text style={s.settingHint}>
-                {t("settings.smoothReadingDesc", "开启翻页过渡动画与滚动惯性，关闭可提升低性能设备流畅度")}
+                {t(
+                  "settings.smoothReadingDesc",
+                  "开启翻页过渡动画与滚动惯性，关闭可提升低性能设备流畅度",
+                )}
               </Text>
             </View>
             <TouchableOpacity
@@ -291,8 +355,43 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
                 style={[s.settingToggleBtn, !!volumeButtonsPageTurn && s.settingToggleBtnActive]}
                 onPress={() => onUpdateSetting("volumeButtonsPageTurn", !volumeButtonsPageTurn)}
               >
-                <Text style={[s.settingToggleText, !!volumeButtonsPageTurn && s.settingToggleTextActive]}>
+                <Text
+                  style={[
+                    s.settingToggleText,
+                    !!volumeButtonsPageTurn && s.settingToggleTextActive,
+                  ]}
+                >
                   {volumeButtonsPageTurn ? t("settings.enabled") : t("settings.disabled")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {Platform.OS === "android" && (
+            <View style={s.settingRow}>
+              <View style={s.settingLabelBlock}>
+                <Text style={s.settingLabel}>
+                  {t("settings.keepScreenOnWhileReading", "Keep screen on while reading")}
+                </Text>
+                <Text style={s.settingHint}>
+                  {t(
+                    "settings.keepScreenOnWhileReadingDesc",
+                    "Prevent the screen from turning off while a book is open",
+                  )}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[s.settingToggleBtn, !!keepScreenOnWhileReading && s.settingToggleBtnActive]}
+                onPress={() =>
+                  onUpdateSetting("keepScreenOnWhileReading", !keepScreenOnWhileReading)
+                }
+              >
+                <Text
+                  style={[
+                    s.settingToggleText,
+                    !!keepScreenOnWhileReading && s.settingToggleTextActive,
+                  ]}
+                >
+                  {keepScreenOnWhileReading ? t("settings.enabled") : t("settings.disabled")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -300,10 +399,20 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
           <View style={s.settingRow}>
             <Text style={s.settingLabel}>{t("settings.showTopTitleProgress")}</Text>
             <TouchableOpacity
-              style={[s.settingToggleBtn, showTopTitleProgress !== false && s.settingToggleBtnActive]}
-              onPress={() => onUpdateSetting("showTopTitleProgress", !(showTopTitleProgress !== false))}
+              style={[
+                s.settingToggleBtn,
+                showTopTitleProgress !== false && s.settingToggleBtnActive,
+              ]}
+              onPress={() =>
+                onUpdateSetting("showTopTitleProgress", !(showTopTitleProgress !== false))
+              }
             >
-              <Text style={[s.settingToggleText, showTopTitleProgress !== false && s.settingToggleTextActive]}>
+              <Text
+                style={[
+                  s.settingToggleText,
+                  showTopTitleProgress !== false && s.settingToggleTextActive,
+                ]}
+              >
                 {showTopTitleProgress !== false ? t("settings.enabled") : t("settings.disabled")}
               </Text>
             </TouchableOpacity>
@@ -311,10 +420,20 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
           <View style={s.settingRow}>
             <Text style={s.settingLabel}>{t("settings.showBottomTimeBattery")}</Text>
             <TouchableOpacity
-              style={[s.settingToggleBtn, showBottomTimeBattery !== false && s.settingToggleBtnActive]}
-              onPress={() => onUpdateSetting("showBottomTimeBattery", !(showBottomTimeBattery !== false))}
+              style={[
+                s.settingToggleBtn,
+                showBottomTimeBattery !== false && s.settingToggleBtnActive,
+              ]}
+              onPress={() =>
+                onUpdateSetting("showBottomTimeBattery", !(showBottomTimeBattery !== false))
+              }
             >
-              <Text style={[s.settingToggleText, showBottomTimeBattery !== false && s.settingToggleTextActive]}>
+              <Text
+                style={[
+                  s.settingToggleText,
+                  showBottomTimeBattery !== false && s.settingToggleTextActive,
+                ]}
+              >
                 {showBottomTimeBattery !== false ? t("settings.enabled") : t("settings.disabled")}
               </Text>
             </TouchableOpacity>
@@ -351,7 +470,7 @@ export function ReaderSettingsPanel({ visible, readSettings, bookId, onClose, on
           )}
         </ScrollView>
       </View>
-    </Modal>
+    </ReaderSettingsContainer>
   );
 }
 
@@ -413,7 +532,14 @@ function RubySettingsRow({
 
   return (
     <View style={[s.settingRow, { flexDirection: "column", alignItems: "stretch", gap: 10 }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
         <View style={{ flex: 1 }}>
           <Text style={s.settingLabel}>{t("ruby.title", "注音")}</Text>
           <Text style={[s.settingLabel, { fontSize: 11, opacity: 0.6, marginTop: 2 }]}>
@@ -438,10 +564,7 @@ function RubySettingsRow({
             )}
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={s.settingToggleBtn}
-            onPress={handleDelete}
-          >
+          <TouchableOpacity style={s.settingToggleBtn} onPress={handleDelete}>
             <Text style={s.settingToggleText}>{t("common.delete", "删除")}</Text>
           </TouchableOpacity>
         )}
@@ -454,9 +577,7 @@ function RubySettingsRow({
               style={[s.viewModeBtn, currentMode === m.value && s.viewModeBtnActive]}
               onPress={() => handleModeChange(m.value)}
             >
-              <Text
-                style={[s.viewModeBtnText, currentMode === m.value && s.viewModeBtnTextActive]}
-              >
+              <Text style={[s.viewModeBtnText, currentMode === m.value && s.viewModeBtnTextActive]}>
                 {m.label}
               </Text>
             </TouchableOpacity>

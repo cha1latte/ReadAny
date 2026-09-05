@@ -12,20 +12,20 @@ import { setEmbeddingWorkerFactory, setStreamingFetch } from "@readany/core/ai";
 import { onLibraryChanged } from "@readany/core/events/library-events";
 import { installFeedbackLogCapture, setFeedbackWorkerUrl } from "@readany/core/feedback";
 import {
-  createBuiltinEmbeddingService,
   EmbeddingService,
-  normalizeEmbeddingEndpoint,
   clearSearchConfiguration,
   configureSearch,
+  createBuiltinEmbeddingService,
+  normalizeEmbeddingEndpoint,
   setVectorDB,
 } from "@readany/core/rag";
 import { setPlatformService } from "@readany/core/services";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { setTheme as setTauriTheme } from "@tauri-apps/api/app";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
+import { registerDesktopFallbackContentProvider } from "./lib/rag/fallback-content-provider";
 import { syncLegacyDesktopLibraryRootConfig } from "./lib/storage/desktop-library-root";
 import { TauriVectorDB } from "./lib/tauri-vector-db";
-import { registerDesktopFallbackContentProvider } from "./lib/rag/fallback-content-provider";
 import { useLibraryStore } from "./stores/library-store";
 import { flushAllWrites } from "./stores/persist";
 import { useVectorModelStore } from "./stores/vector-model-store";
@@ -46,7 +46,8 @@ new MutationObserver(syncSystemTheme).observe(document.documentElement, {
 });
 
 const FEEDBACK_WORKER_FALLBACK = "https://feedback.readany.top";
-const feedbackWorkerUrl = import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
+const feedbackWorkerUrl =
+  import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
 setFeedbackWorkerUrl(feedbackWorkerUrl);
 
 // Register platform service before any database/core operations

@@ -100,6 +100,14 @@ export interface ReadSettings extends ViewSettings {
   keepScreenOnWhileReading?: boolean;
   defaultHighlightColor?: HighlightColor;
   /**
+   * Mobile-only opt-in: smooth reading — enables the foliate `animated`
+   * page-turn transition and the `scroll-inertia` finger-flick physics.
+   * Default false so existing users keep the current (performance-first)
+   * rendering path. Optional so existing persisted settings deserialize
+   * cleanly.
+   */
+  smoothReading?: boolean;
+  /**
    * Mobile-only opt-in: when true, the reader scales fontSize by the OS
    * accessibility font scale (PixelRatio.getFontScale()) before rendering.
    * Default false so existing users see no behavior change. Optional so

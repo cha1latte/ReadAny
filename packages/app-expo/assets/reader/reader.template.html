@@ -208,6 +208,7 @@
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
     let currentUseBookFonts = true;
+    let currentSmoothReading = false;
     let tapNavigationInFlight = false;
     let tapNavigationResetTimer = null;
     let readerElement = null;
@@ -296,17 +297,29 @@
       }
     }
 
-    function getMobileReflowMaxInlineSize() {
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 393;
-      return Math.ceil(Math.max(720, viewportHeight, viewportWidth));
-    }
-
     function applyMobileReflowRendererSizing(renderer) {
       if (!renderer) return;
       renderer.setAttribute('max-column-count', '1');
       renderer.setAttribute('max-block-size', '1440px');
-      renderer.setAttribute('max-inline-size', getMobileReflowMaxInlineSize() + 'px');
+    }
+
+    // Mobile is always single-page (no spread), so there is no column gutter to
+    // balance — the foliate gap only contributes the page's internal side
+    // padding. Same derivation as the desktop reader: paper = 99% of the window
+    // (breathing room even at margin 0), outer text inset = margin + 0.5%·H.
+    // All against renderer.clientWidth (foliate resolves the gap % against it).
+    function applyMobileReflowMargins(renderer, margin) {
+      if (!renderer) return;
+      const windowWidth =
+        renderer.clientWidth || window.innerWidth || document.documentElement.clientWidth || 393;
+      const paper = windowWidth * 0.99;
+      const g = margin / paper;
+      renderer.setAttribute('margin-top', margin + 'px');
+      renderer.setAttribute('margin-bottom', margin + 'px');
+      renderer.setAttribute('margin-left', '0px');
+      renderer.setAttribute('margin-right', '0px');
+      renderer.setAttribute('gap', g * 100 + '%');
+      renderer.setAttribute('max-inline-size', paper - margin + g * windowWidth + 'px');
     }
 
     function applyRendererFlowMode(renderer) {
@@ -331,6 +344,21 @@
       } else {
         renderer.removeAttribute('no-continuous-scroll');
         renderer.removeAttribute('flow');
+      }
+    }
+
+    // Smooth reading ("平滑阅读"): one toggle drives both the foliate
+    // `animated` page-turn transition and the `scroll-inertia` finger-flick
+    // physics. The attributes are inert until the renderer handles them, so
+    // this is safe to toggle at any time (load, viewMode change, or live).
+    function syncSmoothReadingAttribute(renderer) {
+      if (!renderer) return;
+      if (currentSmoothReading) {
+        renderer.setAttribute('animated', '');
+        renderer.setAttribute('scroll-inertia', '');
+      } else {
+        renderer.removeAttribute('animated');
+        renderer.removeAttribute('scroll-inertia');
       }
     }
 
@@ -1776,11 +1804,8 @@
         const renderer = el.renderer;
         if (renderer && !el.isFixedLayout) {
           applyMobileReflowRendererSizing(renderer);
-          // Default gap/margin
-          const margin = msg.pageMargin || 16;
-          const gapPercent = Math.max(1, Math.round((margin / 393) * 100));
-          renderer.setAttribute('gap', gapPercent + '%');
-          renderer.setAttribute('margin', margin + 'px');
+          // Default margins (synchronized with the desktop reader formula)
+          applyMobileReflowMargins(renderer, msg.pageMargin || 16);
         } else if (renderer && el.isFixedLayout) {
           const paginatedLayout =
             msg.paginatedLayout === 'single' || msg.paginatedLayout === 'double'
@@ -1870,6 +1895,10 @@
       const renderer = view.renderer;
       if (settings.justifyBodyText !== undefined) {
         currentJustifyBodyText = settings.justifyBodyText !== false;
+      }
+      if (settings.smoothReading !== undefined) {
+        currentSmoothReading = settings.smoothReading === true;
+        syncSmoothReadingAttribute(renderer);
       }
       // PDF pages are fixed-layout canvases. Reader font, line-height, custom
       // font and paragraph-spacing rules would move the transparent text layer
@@ -2039,9 +2068,7 @@
         const BASELINE_FONT_SIZE = 16;
         const layoutScale = currentFontSize / BASELINE_FONT_SIZE;
         const margin = Math.round(settings.pageMargin * layoutScale);
-        const gapPercent = Math.max(1, Math.round((margin / 393) * 100));
-        renderer.setAttribute('gap', gapPercent + '%');
-        renderer.setAttribute('margin', margin + 'px');
+        applyMobileReflowMargins(renderer, margin);
       }
 
       if (view && view.isFixedLayout) {
@@ -2364,10 +2391,6 @@ html, body {
   background-color: ${bg} !important;
   color: ${fg} !important;
 }
-p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label, a {
-  color: inherit !important;
-}
-a { color: ${primary} !important; }
 ::selection { background: rgba(59, 130, 246, 0.3) !important; }
 /* __end_theme_colors__ */`;
       return themeBlock + '\n' + cleaned;
@@ -2500,6 +2523,31 @@ a { color: ${primary} !important; }
       return childStyle.writingMode === 'vertical-rl' || childStyle.writingMode === 'vertical-lr';
     }
 
+    function getColorLuminance(color) {
+      const match = color && color.match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);
+      if (!match) return 1;
+      const channels = match.slice(1, 4).map((value) => Number(value) / 255);
+      return channels.reduce((sum, channel) => sum + channel, 0) / channels.length;
+    }
+
+    // EPUBs often hard-code black/dark-gray body text. In dark mode, only
+    // brighten simple text leaves with transparent backgrounds; preserve
+    // links, code, media, and nested/colorful markup authored by the book.
+    function compensateDarkText(doc, foreground, background) {
+      const darkTheme = getColorLuminance(background) < 0.35;
+      const candidates = doc.querySelectorAll('p, div, span, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label');
+      for (const element of candidates) {
+        element.style.removeProperty('--readany-dark-text-color');
+        if (!darkTheme || /^(a|code|pre|kbd|samp)$/i.test(element.tagName)) continue;
+        if (!Array.from(element.childNodes).some((node) => node.nodeType === 3 && node.nodeValue.trim())) continue;
+        const computed = doc.defaultView.getComputedStyle(element);
+        if (computed.backgroundColor !== 'rgba(0, 0, 0, 0)' && computed.backgroundColor !== 'transparent') continue;
+        if (getColorLuminance(computed.color) >= 0.22) continue;
+        element.style.setProperty('--readany-dark-text-color', foreground);
+        element.style.setProperty('color', 'var(--readany-dark-text-color)', 'important');
+      }
+    }
+
     function applyDocStyles(doc) {
       if (currentBookIsPdf) {
         const styleId = '__readany_pdf_styles__';
@@ -2537,12 +2585,11 @@ a { color: ${primary} !important; }
           -webkit-user-drag: none !important;
           touch-action: manipulation !important;
         }
-        p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label { color: inherit !important; }
-        a { color: ${primary} !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
         ${verticalDoc ? getVerticalWritingCompatibilityStyles() : ''}
       `;
       doc.head.appendChild(style);
+      compensateDarkText(doc, fg, bg);
       if (lastRendererStyles) {
         const themedStyles = injectThemeIntoStyles(
           lastRendererStyles,

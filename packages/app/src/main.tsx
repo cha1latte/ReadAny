@@ -12,27 +12,42 @@ import { setEmbeddingWorkerFactory, setStreamingFetch } from "@readany/core/ai";
 import { onLibraryChanged } from "@readany/core/events/library-events";
 import { installFeedbackLogCapture, setFeedbackWorkerUrl } from "@readany/core/feedback";
 import {
-  createBuiltinEmbeddingService,
   EmbeddingService,
-  normalizeEmbeddingEndpoint,
   clearSearchConfiguration,
   configureSearch,
+  createBuiltinEmbeddingService,
+  normalizeEmbeddingEndpoint,
   setVectorDB,
 } from "@readany/core/rag";
 import { setPlatformService } from "@readany/core/services";
+import { setTheme as setTauriTheme } from "@tauri-apps/api/app";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
+import { registerDesktopFallbackContentProvider } from "./lib/rag/fallback-content-provider";
 import { syncLegacyDesktopLibraryRootConfig } from "./lib/storage/desktop-library-root";
 import { TauriVectorDB } from "./lib/tauri-vector-db";
-import { registerDesktopFallbackContentProvider } from "./lib/rag/fallback-content-provider";
 import { useLibraryStore } from "./stores/library-store";
 import { flushAllWrites } from "./stores/persist";
 import { useVectorModelStore } from "./stores/vector-model-store";
 
 installFeedbackLogCapture();
 
+// Keep the WebView color scheme in sync with the app theme so book CSS that
+// relies on light-dark() / @media(prefers-color-scheme) follows the app theme
+// instead of the OS scheme (e.g. sepia maps to a light scheme, so borders/text
+// in light-mode colors stay visible instead of the OS dark-mode colors).
+function syncSystemTheme() {
+  const theme = document.documentElement.getAttribute("data-theme");
+  void setTauriTheme(theme === "dark" ? "dark" : "light").catch(() => {});
+}
+new MutationObserver(syncSystemTheme).observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ["data-theme"],
+});
+
 const FEEDBACK_WORKER_FALLBACK = "https://feedback.readany.top";
-const feedbackWorkerUrl = import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
+const feedbackWorkerUrl =
+  import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
 setFeedbackWorkerUrl(feedbackWorkerUrl);
 
 // Register platform service before any database/core operations
@@ -121,6 +136,10 @@ i18nReady.then(() => {
     // Default to sepia theme
     document.documentElement.setAttribute("data-theme", "sepia");
   }
+
+  // Apply the restored theme to the WebView color scheme (observer above also
+  // keeps it in sync on any later theme switch).
+  syncSystemTheme();
 
   // Restore saved language from platform KV storage
   initI18nLanguage().catch(console.error);

@@ -60,6 +60,21 @@ describe("paginator touch navigation ownership", () => {
     expect(tracker.scrolled).toBe(false);
   });
 
+  it("retains inertia samples only for a completed scroll gesture", () => {
+    const tracker = new PaginatorTouchTracker();
+    const state = tracker.start(touch, 100, 624);
+    state.scrollSamples.push({ velocity: 0.5, time: 116 });
+    tracker.markScrolled();
+    expect(tracker.finish().scrollSamples).toEqual([{ velocity: 0.5, time: 116 }]);
+
+    const next = tracker.start(touch, 200, 800);
+    expect(next.scrollSamples).toEqual([]);
+    next.scrollSamples.push({ velocity: 1, time: 216 });
+    tracker.markScrolled();
+    expect(tracker.cancel()).toBe(800);
+    expect(tracker.finish()).toBeNull();
+  });
+
   it("ignores collapsed and whitespace-only selections", () => {
     expect(
       hasActiveTextSelection([
@@ -119,7 +134,7 @@ describe("paginator selection cancellation wiring", () => {
       /this\.#container\.addEventListener\('scroll', \(\) => \{\s*const restorePosition = this\.#selectionPosition\.correctionFor\(this\.containerPosition\)/,
     );
     expect(paginatorSource).toMatch(
-      /#beginTextSelection\(\) \{\s*if \(this\.scrolled\) \{\s*this\.#cancelTouchNavigation\(\)\s*return/,
+      /#beginTextSelection\(\) \{\s*this\.#cancelScrollInertia\(\)\s*if \(this\.scrolled\) \{\s*this\.#cancelTouchNavigation\(\)\s*return/,
     );
     expect(paginatorSource).toContain("this.#selectionPosition.end()");
     expect(paginatorSource).toMatch(

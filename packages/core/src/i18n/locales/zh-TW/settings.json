@@ -72,6 +72,8 @@
     "showBottomTimeBattery": "底部時間與電量",
     "volumeButtonsPageTurn": "音量鍵翻頁",
     "volumeButtonsPageTurnDesc": "開啟後閱讀時音量鍵用於上下翻頁",
+    "smoothReading": "平滑閱讀",
+    "smoothReadingDesc": "開啟翻頁過渡動畫與滾動慣性，關閉可提升低效能裝置流暢度",
     "keepScreenOnWhileReading": "閱讀時保持螢幕開啟",
     "keepScreenOnWhileReadingDesc": "開啟書籍時防止螢幕自動關閉",
     "followSystemFontScale": "跟隨系統字型大小",

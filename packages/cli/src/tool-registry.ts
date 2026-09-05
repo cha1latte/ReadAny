@@ -78,7 +78,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "chapters.list",
-    description: "List chapters for a ReadAny book from indexed chunks, or fallback EPUB/PDF structure when no chunks exist.",
+    description:
+      "List chapters for a ReadAny book from indexed chunks, or fallback EPUB/PDF structure when no chunks exist.",
     scopes: ["content.read"],
     risk: "low",
     inputSchema: {
@@ -96,7 +97,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "chapters.get",
-    description: "Read a chapter from indexed chunks, or fallback EPUB/PDF content when no chunks exist.",
+    description:
+      "Read a chapter from indexed chunks, or fallback EPUB/PDF content when no chunks exist.",
     scopes: ["content.read"],
     risk: "low",
     inputSchema: {
@@ -115,13 +117,15 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
         chunkStart: {
           type: "number",
           minimum: 1,
-          description: "1-based chunk offset within an indexed chapter. Ignored for fallback EPUB/PDF reads.",
+          description:
+            "1-based chunk offset within an indexed chapter. Ignored for fallback EPUB/PDF reads.",
         },
         chunkCount: {
           type: "number",
           minimum: 1,
           maximum: 200,
-          description: "Maximum number of indexed chunks to return. Ignored for fallback EPUB/PDF reads.",
+          description:
+            "Maximum number of indexed chunks to return. Ignored for fallback EPUB/PDF reads.",
         },
         contentLimit: {
           type: "number",
@@ -136,7 +140,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "context.get",
-    description: "Read the latest desktop reader context snapshot, including current book, chapter, position, selection, surrounding text, and recent highlights when available.",
+    description:
+      "Read the latest desktop reader context snapshot, including current book, chapter, position, selection, surrounding text, and recent highlights when available.",
     scopes: ["content.read"],
     risk: "low",
     inputSchema: {
@@ -223,7 +228,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "notes.export",
-    description: "Export notes and highlights for one book to a markdown, JSON, Obsidian, or Notion file.",
+    description:
+      "Export notes and highlights for one book to a markdown, JSON, Obsidian, or Notion file.",
     scopes: ["epub.export"],
     risk: "high",
     inputSchema: {
@@ -237,7 +243,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
         outputPath: {
           type: "string",
           minLength: 1,
-          description: "Output file path to write. Existing files are not overwritten unless overwrite is true.",
+          description:
+            "Output file path to write. Existing files are not overwritten unless overwrite is true.",
         },
         format: {
           type: "string",
@@ -255,7 +262,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "knowledge.export",
-    description: "Export the ReadAny library knowledge graph, including book metadata, notes, and highlights, to a file.",
+    description:
+      "Export the ReadAny library knowledge graph, including book metadata, notes, and highlights, to a file.",
     scopes: ["epub.export"],
     risk: "high",
     inputSchema: {
@@ -264,7 +272,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
         outputPath: {
           type: "string",
           minLength: 1,
-          description: "Output file path to write. Existing files are not overwritten unless overwrite is true.",
+          description:
+            "Output file path to write. Existing files are not overwritten unless overwrite is true.",
         },
         format: {
           type: "string",
@@ -300,7 +309,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "knowledge.search",
-    description: "Search ReadAny book metadata, notes, and highlights with bounded snippets and source references.",
+    description:
+      "Search ReadAny book metadata, notes, and highlights with bounded snippets and source references.",
     scopes: ["knowledge.read"],
     risk: "low",
     inputSchema: {
@@ -412,43 +422,6 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
         },
       },
       required: ["query", "bookId"],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: "audit.list",
-    description: "List recent ReadAny CLI/MCP audit entries without tool arguments or content payloads.",
-    scopes: ["stats.read"],
-    risk: "low",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: {
-          type: "number",
-          minimum: 1,
-          maximum: 200,
-          description: "Maximum number of audit entries to return.",
-        },
-        source: {
-          type: "string",
-          enum: ["cli", "mcp"],
-          description: "Optional audit source filter.",
-        },
-        ok: {
-          type: "boolean",
-          description: "Optional success/failure filter.",
-        },
-        actionPrefix: {
-          type: "string",
-          minLength: 1,
-          description: "Optional action prefix filter, such as tools/call or epub export.",
-        },
-        date: {
-          type: "string",
-          minLength: 10,
-          description: "Optional YYYY-MM-DD audit log date.",
-        },
-      },
       additionalProperties: false,
     },
   },
@@ -710,7 +683,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
   },
   {
     name: "epub.undo",
-    description: "Undo one EPUB draft patch operation when no later edit changed the same resource.",
+    description:
+      "Undo one EPUB draft patch operation when no later edit changed the same resource.",
     scopes: ["epub.draft"],
     risk: "medium",
     inputSchema: {
@@ -765,7 +739,8 @@ export const READANY_TOOLS: readonly ReadAnyTool[] = [
         outputPath: {
           type: "string",
           minLength: 1,
-          description: "Destination EPUB path. Existing files are rejected unless overwrite is true.",
+          description:
+            "Destination EPUB path. Existing files are rejected unless overwrite is true.",
         },
         overwrite: {
           type: "boolean",

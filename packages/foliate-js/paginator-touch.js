@@ -20,6 +20,8 @@ export class PaginatorTouchTracker {
       dx: 0,
       dy: 0,
       dt: 0,
+      scrollVelocity: 0,
+      scrollSamples: [],
       startX: touch?.screenX,
       startY: touch?.screenY,
       startPosition,

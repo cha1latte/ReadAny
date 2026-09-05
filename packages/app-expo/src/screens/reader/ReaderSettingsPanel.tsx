@@ -7,7 +7,7 @@ import { useColors } from "@/styles/theme";
 import { useFontStore } from "@readany/core/stores";
 import { type RubyMode, useRubyStore } from "@readany/core/stores/ruby-store";
 import type { ReadSettings } from "@readany/core/types";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -26,15 +26,37 @@ interface Props {
   visible: boolean;
   readSettings: ReadSettings;
   bookId?: string;
+  embedded?: boolean;
   onClose: () => void;
   onUpdateSetting: <K extends keyof ReadSettings>(key: K, value: ReadSettings[K]) => void;
   onRubyModeChange?: (mode: RubyMode) => void;
+}
+
+function ReaderSettingsContainer({
+  children,
+  embedded,
+  visible,
+  onClose,
+}: {
+  children: ReactNode;
+  embedded: boolean;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  if (embedded) return <View style={{ flex: 1 }}>{children}</View>;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {children}
+    </Modal>
+  );
 }
 
 export function ReaderSettingsPanel({
   visible,
   readSettings,
   bookId,
+  embedded = false,
   onClose,
   onUpdateSetting,
   onRubyModeChange,
@@ -63,23 +85,37 @@ export function ReaderSettingsPanel({
   } = readSettings;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.modalBackdrop} onPress={onClose} />
+    <ReaderSettingsContainer embedded={embedded} visible={visible} onClose={onClose}>
+      {!embedded && <Pressable style={s.modalBackdrop} onPress={onClose} />}
       <View
-        style={[
-          s.bottomSheet,
-          { paddingBottom: insets.bottom || 16 },
-          layout.isTablet && {
-            width: "100%",
-          },
-        ]}
+        style={
+          embedded
+            ? {
+                flex: 1,
+                width: "100%",
+                maxWidth: layout.centeredContentWidth,
+                alignSelf: "center",
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: insets.bottom || 16,
+              }
+            : [
+                s.bottomSheet,
+                { paddingBottom: insets.bottom || 16 },
+                layout.isTablet && {
+                  width: "100%",
+                },
+              ]
+        }
       >
-        <View style={s.sheetHeader}>
-          <Text style={s.sheetTitle}>{t("reader.settings", "阅读设置")}</Text>
-          <TouchableOpacity onPress={onClose}>
-            <XIcon size={18} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
+        {!embedded && (
+          <View style={s.sheetHeader}>
+            <Text style={s.sheetTitle}>{t("reader.settings", "阅读设置")}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <XIcon size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        )}
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Font Size */}
           <View style={s.settingRow}>
@@ -413,7 +449,7 @@ export function ReaderSettingsPanel({
           )}
         </ScrollView>
       </View>
-    </Modal>
+    </ReaderSettingsContainer>
   );
 }
 

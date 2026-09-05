@@ -772,6 +772,23 @@ interface FootnotePreview {
   bottom?: number;
 }
 
+type FoliateTOCItem = { id?: number; label?: string; href?: string; subitems?: FoliateTOCItem[] };
+
+function convertTOC(toc: FoliateTOCItem[], level = 0): TOCItem[] {
+  return toc.map((item, index) => ({
+    id: String(item.id ?? `toc-${level}-${index}`),
+    title: item.label || `Chapter ${index + 1}`,
+    level,
+    href: item.href,
+    index,
+    subitems: item.subitems?.length ? convertTOC(item.subitems, level + 1) : undefined,
+  }));
+}
+
+interface SearchIndicatorView extends FoliateView {
+  setSearchIndicator?: (type: "outline", options: { color: string }) => void;
+}
+
 export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>(
   function FoliateViewer(
     {
@@ -795,7 +812,6 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<FoliateView | null>(null);
-    const isViewCreated = useRef(false);
     // PDF theme-filter state: per-book per-page light decision + doc -> index mapping
     const pdfPageLightCacheRef = useRef<Map<string, Map<number, boolean>>>(new Map());
     const pdfDocIndexRef = useRef<WeakMap<Document, number>>(new WeakMap());
@@ -872,6 +888,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     // Track app theme for reader styling
     const [appTheme, setAppTheme] = useState<AppTheme>(() => getAppTheme());
     const pendingStyleUpdateRef = useRef(false);
+    const attachSelectionListenerRef = useRef<(doc: Document) => void>(() => {});
+    const readerStateRef = useRef({ viewSettings, appTheme, isFixedLayout, onTocReady, onError });
+    readerStateRef.current = { viewSettings, appTheme, isFixedLayout, onTocReady, onError };
     const ttsHighlightStateRef = useRef<{ cfi: string | null; color: string }>({
       cfi: null,
       color: "rgba(96, 165, 250, 0.35)",
@@ -1523,7 +1542,6 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     );
 
     // --- Imperative handle for parent ---
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing imperative API intentionally controls its refresh through viewReady.
     useImperativeHandle(
       ref,
       () => ({
@@ -1861,8 +1879,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             const doc = contents[0].doc as Document;
 
             const elements = doc.querySelectorAll(".readany-translation");
-            // biome-ignore lint/complexity/noForEach: Existing translation cleanup is outside this pagination fix.
-            elements.forEach((el) => el.remove());
+            for (const el of elements) el.remove();
 
             const style = doc.getElementById("readany-chapter-translation-style");
             style?.remove();
@@ -1882,15 +1899,13 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
             // Update original paragraphs visibility
             const originalParagraphs = doc.querySelectorAll("[data-translate-id]");
-            // biome-ignore lint/complexity/noForEach: Existing translation rendering is outside this pagination fix.
-            originalParagraphs.forEach((el) => {
-              (el as HTMLElement).setAttribute("data-original-hidden", String(!originalVisible));
-            });
+            for (const el of originalParagraphs) {
+              el.setAttribute("data-original-hidden", String(!originalVisible));
+            }
 
             // Update translation visibility
             const translations = doc.querySelectorAll(".readany-translation");
-            // biome-ignore lint/complexity/noForEach: Existing translation rendering is outside this pagination fix.
-            translations.forEach((el) => {
+            for (const el of translations) {
               const translationEl = el as HTMLElement;
               translationEl.setAttribute("data-hidden", String(!translationVisible));
               // If only translation is visible (no original), apply solo style
@@ -1898,7 +1913,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                 "data-solo",
                 String(!originalVisible && translationVisible),
               );
-            });
+            }
           } catch (err) {
             console.error("[applyChapterTranslationVisibility] Error:", err);
           }
@@ -1936,7 +1951,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
         },
       }),
-      [viewReady],
+      [goNextByMode, goPrevByMode, getVisibleTTSSegments, getTTSSegmentContext, clearTTSHighlight],
     );
 
     // --- Hooks ---
@@ -1948,42 +1963,6 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       onToggleToc,
       onToggleChat,
     });
-
-    // --- Convert TOC ---
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing memoization contract is outside this pagination fix.
-    const convertTOC = useCallback(
-      (
-        foliaToc: Array<{
-          id?: number;
-          label?: string;
-          href?: string;
-          subitems?: unknown[];
-        }>,
-        level = 0,
-      ): TOCItem[] => {
-        if (!foliaToc) return [];
-        return foliaToc.map((item, i) => ({
-          id: String(item.id ?? `toc-${level}-${i}`),
-          title: item.label || `Chapter ${i + 1}`,
-          level,
-          href: item.href,
-          index: i,
-          subitems:
-            item.subitems && Array.isArray(item.subitems) && item.subitems.length > 0
-              ? convertTOC(
-                  item.subitems as Array<{
-                    id?: number;
-                    label?: string;
-                    href?: string;
-                    subitems?: unknown[];
-                  }>,
-                  level + 1,
-                )
-              : undefined,
-        }));
-      },
-      [clearTTSHighlight, ensureDesktopTTS, getVisibleTTSSegments],
-    );
 
     // --- Section load handler ---
     // Use stable ref-based handler so openBook can register it once and it always
@@ -2003,7 +1982,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         registerIframeEventHandlers(bookKey, detail.doc);
 
         // Attach selection listener
-        attachSelectionListener(detail.doc);
+        attachSelectionListenerRef.current(detail.doc);
 
         setLoading(false);
         onLoaded?.();
@@ -2026,8 +2005,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           try {
             const { useRubyStore } = await import("@readany/core/stores/ruby-store");
             const rubyMode = useRubyStore.getState().getBookRuby(bookKey);
-            // biome-ignore lint/complexity/useOptionalChain: Preserve the existing ruby-mode check in this focused fix.
-            if (rubyMode && rubyMode.startsWith("zh")) {
+            if (rubyMode?.startsWith("zh")) {
               const { isPinyinDictLoaded } = await import("@/lib/ruby/pinyin-processor");
               // Ensure dict is loaded into memory (may have been downloaded in a previous session)
               if (!isPinyinDictLoaded()) {
@@ -2325,14 +2303,12 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     // Track if show-annotation handler fired (suppress pointerup side effects)
     const annotationClickedRef = useRef(false);
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Existing selection listener lifecycle is outside this pagination fix.
+    const selectionCleanupsRef = useRef(new Map<Document, () => void>());
     const attachSelectionListener = useCallback(
       (doc: Document) => {
-        // Avoid double-registering
-        // biome-ignore lint: runtime flag on Document
-        if ((doc as any).__readany_selection_registered) return;
-        // biome-ignore lint: runtime flag on Document
-        (doc as any).__readany_selection_registered = true;
+        if (selectionCleanupsRef.current.has(doc)) return;
+        let disposed = false;
+        const pointerUpTimers = new Set<ReturnType<typeof setTimeout>>();
 
         let originalScrollLeft = 0;
         let pageDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2458,7 +2434,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           const view = viewRef.current;
           return !!(
             view &&
-            !isFixedLayout &&
+            !readerStateRef.current.isFixedLayout &&
             view.renderer &&
             view.renderer.getAttribute &&
             view.renderer.getAttribute("flow") === "paginated"
@@ -2523,7 +2499,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             clickMetrics,
           });
 
-          setTimeout(() => {
+          const timer = setTimeout(() => {
+            pointerUpTimers.delete(timer);
+            if (disposed) return;
             // If show-annotation handler already handled this click, skip
             if (annotationClickedRef.current) {
               annotationClickedRef.current = false;
@@ -2573,6 +2551,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
               }
             }
           }, 10);
+          pointerUpTimers.add(timer);
         };
 
         const handleSelectStart = () => {
@@ -2682,9 +2661,26 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         doc.addEventListener("pointermove", handlePointerMove, { passive: true });
         doc.addEventListener("selectstart", handleSelectStart);
         doc.addEventListener("selectionchange", handleSelectionChange);
+        const cleanup = () => {
+          disposed = true;
+          clearCrossPageSelectionState();
+          for (const timer of pointerUpTimers) clearTimeout(timer);
+          pointerUpTimers.clear();
+          doc.removeEventListener("pointerdown", handlePointerDown);
+          doc.removeEventListener("pointerup", handlePointerUp);
+          doc.removeEventListener("pointermove", handlePointerMove);
+          doc.removeEventListener("selectstart", handleSelectStart);
+          doc.removeEventListener("selectionchange", handleSelectionChange);
+          doc.defaultView?.removeEventListener("pagehide", cleanup);
+          selectionCleanupsRef.current.delete(doc);
+        };
+        selectionCleanupsRef.current.set(doc, cleanup);
+        doc.defaultView?.addEventListener("pagehide", cleanup, { once: true });
       },
       [bookKey],
     );
+
+    attachSelectionListenerRef.current = attachSelectionListener;
 
     const getSelectionFromView = useCallback(
       (targetDoc?: Document | null): BookSelection | null => {
@@ -2779,11 +2775,32 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       onLink: linkHandler,
     });
 
+    // Location updates seed the next book; they do not restart the active reader.
+    const initialLocationRef = useRef(lastLocation);
+    initialLocationRef.current = lastLocation;
+
     // --- Open book ---
-    // biome-ignore lint/correctness/useExhaustiveDependencies: This guarded effect intentionally opens the reader only once.
     useEffect(() => {
-      if (isViewCreated.current) return;
-      isViewCreated.current = true;
+      let cancelled = false;
+      let ownedView: FoliateView | null = null;
+      const selectionCleanups = selectionCleanupsRef.current;
+      setLoading(true);
+      setViewReady(false);
+      const lastLocation = initialLocationRef.current;
+      const disposeView = (view: FoliateView) => {
+        view.removeEventListener("load", docLoadHandler);
+        view.removeEventListener("relocate", relocateHandler);
+        view.removeEventListener("draw-annotation", drawAnnotationHandler);
+        view.removeEventListener("delete-annotation", deleteAnnotationHandler);
+        view.removeEventListener("show-annotation", showAnnotationHandler);
+        view.removeEventListener("link", linkHandler);
+        try {
+          view.close();
+        } catch {
+          /* Ignore teardown errors. */
+        }
+        view.remove();
+      };
 
       const openBook = async () => {
         // Reset PDF theme-filter caches when (re)opening a book
@@ -2791,8 +2808,11 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         pdfDocIndexRef.current = new WeakMap();
         try {
           await import("foliate-js/view.js");
+          if (cancelled) return;
+          const { viewSettings } = readerStateRef.current;
 
           const view = wrappedFoliateView(document.createElement("foliate-view"));
+          ownedView = view;
           view.id = `foliate-view-${bookKey}`;
           view.style.width = "100%";
           view.style.height = "100%";
@@ -2822,17 +2842,17 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
           // Open the pre-parsed BookDoc
           await view.open(bookDoc);
+          if (cancelled) {
+            disposeView(view);
+            return;
+          }
           viewRef.current = view;
 
           // Set search indicator color (use primary theme color instead of red)
           const primaryColor =
             getComputedStyle(document.documentElement).getPropertyValue("--primary")?.trim() ||
             "#3b82f6";
-          // biome-ignore lint/suspicious/noExplicitAny: Existing untyped Foliate search API is outside this pagination fix.
-          if ((view as any).setSearchIndicator) {
-            // biome-ignore lint/suspicious/noExplicitAny: Existing untyped Foliate search API is outside this pagination fix.
-            (view as any).setSearchIndicator("outline", { color: primaryColor });
-          }
+          (view as SearchIndicatorView).setSearchIndicator?.("outline", { color: primaryColor });
 
           console.log("[FoliateViewer] Book opened:", {
             format,
@@ -2845,11 +2865,16 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           // Extract and emit TOC
           if (view.book?.toc) {
             const toc = convertTOC(view.book.toc);
-            onTocReady?.(toc);
+            readerStateRef.current.onTocReady?.(toc);
           }
 
           // Apply renderer settings
-          applyRendererSettings(view, viewSettings, isFixedLayout, appTheme);
+          applyRendererSettings(
+            view,
+            readerStateRef.current.viewSettings,
+            isFixedLayout,
+            readerStateRef.current.appTheme,
+          );
 
           // IMPORTANT: Register event listeners BEFORE navigation to avoid race condition.
           // React's useFoliateEvents relies on viewReady state, but setState + re-render
@@ -2872,6 +2897,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             try {
               await view.init({ lastLocation });
             } catch (initErr) {
+              if (cancelled) return;
               console.warn(
                 "[FoliateViewer] Failed to init with lastLocation, falling back to start:",
                 initErr,
@@ -2880,6 +2906,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             }
           } else {
             await view.goToFraction(0);
+            if (cancelled) return;
 
             // If the first section is empty (e.g., blank title page with linear="no"),
             // auto-advance to the first section with actual content
@@ -2887,6 +2914,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
               const sections = bookDoc.sections ?? [];
               if (sections.length > 1) {
                 const firstDoc = await sections[0].createDocument?.();
+                if (cancelled) return;
                 const textContent = firstDoc?.body?.textContent?.trim() ?? "";
                 if (textContent.length < 10) {
                   // First section is effectively empty, go to next
@@ -2900,8 +2928,11 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             }
           }
         } catch (err) {
+          if (cancelled) return;
           console.error("[FoliateViewer] Failed to open book:", err);
-          onError?.(err instanceof Error ? err : new Error("Failed to open book"));
+          readerStateRef.current.onError?.(
+            err instanceof Error ? err : new Error("Failed to open book"),
+          );
           setLoading(false);
         }
       };
@@ -2909,47 +2940,56 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       openBook();
 
       return () => {
-        const view = viewRef.current;
-        if (view) {
-          try {
-            view.close();
-          } catch {
-            /* ignore */
-          }
-          view.remove();
-          viewRef.current = null;
-          setViewReady(false);
+        cancelled = true;
+        for (const cleanup of selectionCleanups.values()) cleanup();
+        if (ownedView) {
+          disposeView(ownedView);
+          if (viewRef.current === ownedView) viewRef.current = null;
         }
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [
+      bookDoc,
+      bookKey,
+      format,
+      isFixedLayout,
+      docLoadHandler,
+      relocateHandler,
+      drawAnnotationHandler,
+      deleteAnnotationHandler,
+      showAnnotationHandler,
+      linkHandler,
+    ]);
+
+    // Observe complete settings, but only reflow when the relevant values change.
+    const appliedStyleRef = useRef<unknown[]>([]);
+    const appliedLayoutRef = useRef<unknown[]>([]);
 
     // --- Apply view settings changes ---
-    // biome-ignore lint/correctness/useExhaustiveDependencies: This effect intentionally tracks only settings that require restyling.
     useEffect(() => {
+      const values = [
+        viewReady,
+        viewSettings.fontSize,
+        viewSettings.lineHeight,
+        viewSettings.fontTheme,
+        viewSettings.customFontFamily,
+        viewSettings.customFontFaceCSS,
+        viewSettings.customFontCssUrls,
+        viewSettings.useBookFonts,
+        viewSettings.paragraphSpacing,
+        isFixedLayout,
+        appTheme,
+      ];
+      if (values.every((value, index) => Object.is(value, appliedStyleRef.current[index]))) return;
+      appliedStyleRef.current = values;
       const view = viewRef.current;
-      if (!view?.renderer) return;
-      // Fixed layout (PDF/CBZ): don't override font/size/lineHeight
-      if (isFixedLayout) return;
-      // Skip if container is hidden (inactive tab) to avoid blocking main thread
-      // with expensive iframe re-layout. Styles will be applied when tab becomes visible.
+      if (!viewReady || !view?.renderer || isFixedLayout) return;
       if (containerRef.current && containerRef.current.offsetParent === null) {
         pendingStyleUpdateRef.current = true;
         return;
       }
+      pendingStyleUpdateRef.current = false;
       applyRendererStyles(view, viewSettings, false, appTheme);
-    }, [
-      viewSettings.fontSize,
-      viewSettings.lineHeight,
-      viewSettings.fontTheme,
-      viewSettings.customFontFamily,
-      viewSettings.customFontFaceCSS,
-      viewSettings.customFontCssUrls,
-      viewSettings.useBookFonts,
-      viewSettings.paragraphSpacing,
-      isFixedLayout,
-      appTheme,
-    ]);
+    }, [viewReady, viewSettings, isFixedLayout, appTheme]);
 
     // --- Apply pending style updates when tab becomes visible ---
     useEffect(() => {
@@ -2971,19 +3011,22 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     }, [viewSettings, isFixedLayout, appTheme]);
 
     // --- Apply reflow layout changes ---
-    // biome-ignore lint/correctness/useExhaustiveDependencies: This effect intentionally tracks only settings that require repagination.
     useEffect(() => {
+      const values = [
+        viewReady,
+        viewSettings.viewMode,
+        viewSettings.paginatedLayout,
+        viewSettings.fixedLayoutZoom,
+        viewSettings.pageMargin,
+        isFixedLayout,
+        appTheme,
+      ];
+      if (values.every((value, index) => Object.is(value, appliedLayoutRef.current[index]))) return;
+      appliedLayoutRef.current = values;
       const view = viewRef.current;
-      if (!view?.renderer) return;
+      if (!viewReady || !view?.renderer) return;
       applyRendererSettings(view, viewSettings, isFixedLayout, appTheme);
-    }, [
-      viewSettings.viewMode,
-      viewSettings.paginatedLayout,
-      viewSettings.fixedLayoutZoom,
-      viewSettings.pageMargin,
-      isFixedLayout,
-      appTheme,
-    ]);
+    }, [viewReady, viewSettings, isFixedLayout, appTheme]);
 
     // Re-scale the content area when the window resizes (max-inline-size is
     // computed from renderer.clientWidth at book-open).
@@ -3039,13 +3082,42 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     );
 
     return (
-      // biome-ignore lint/a11y/useKeyWithClickEvents: Keyboard navigation is handled by the reader shortcuts, not this pointer shell.
       <div
         ref={containerRef}
-        className="foliate-viewer h-full w-full focus:outline-none"
+        className="foliate-viewer h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || event.key !== "Enter") return;
+          event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          handleViewerShellClick({
+            target: event.currentTarget,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+            screenX: 0,
+            screenY: 0,
+          });
+        }}
         onClick={handleViewerShellClick}
       >
+        <button
+          type="button"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-background focus:p-2"
+          onClick={() => {
+            const container = containerRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            handleViewerShellClick({
+              target: container,
+              clientX: rect.left + rect.width / 2,
+              clientY: rect.top + rect.height / 2,
+              screenX: 0,
+              screenY: 0,
+            });
+          }}
+        >
+          Toggle reader controls
+        </button>
         {footnotePreview && (
           <button
             type="button"
@@ -3082,13 +3154,12 @@ function syncRemoteFontStylesInDocument(doc: Document, urls: string[] | undefine
   if (!head) return;
   const nextUrls = Array.from(new Set((urls || []).filter(Boolean)));
 
-  // biome-ignore lint/complexity/noForEach: Existing font-link cleanup is outside this pagination fix.
-  Array.from(doc.querySelectorAll(`link[${REMOTE_FONT_LINK_ATTR}]`)).forEach((node) => {
+  for (const node of doc.querySelectorAll(`link[${REMOTE_FONT_LINK_ATTR}]`)) {
     const href = (node as HTMLLinkElement).href;
     if (!nextUrls.some((url) => href.includes(url))) {
       node.remove();
     }
-  });
+  }
 
   for (const url of nextUrls) {
     const existing = Array.from(doc.querySelectorAll(`link[${REMOTE_FONT_LINK_ATTR}]`)).find(

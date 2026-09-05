@@ -28,6 +28,7 @@ jobs:
           node-version: 20.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter app test
       - run: pnpm --filter @readany/core test
       - run: pnpm --filter @readany/app-expo test
       - run: pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json

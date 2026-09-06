@@ -19,7 +19,8 @@ The app reads manifest updates from the official repository after this feature
 is merged and falls back to its bundled manifest when offline. Maintainers can
 move assets by updating the manifest URLs while preserving the verified hashes.
 An alternate manifest can be selected at build time with
-`EXPO_PUBLIC_DICTIONARY_MANIFEST_URL`. No binary packs are checked into this PR.
+`EXPO_PUBLIC_DICTIONARY_MANIFEST_URL` (mobile) or `VITE_DICTIONARY_MANIFEST_URL`
+(desktop). The published packs are available in the [contributor release](https://github.com/cha1latte/ReadAny/releases/tag/dictionary-packs-v1) for maintainers to migrate.
 
 WordNet gives strong ordinary English vocabulary in a compact download, but has
 less slang, newer language, proper-name coverage, and obscure material than the
@@ -103,3 +104,32 @@ pnpm --filter @readany/cli dictionary:build -- --language zh --input ./dictionar
 Before publication, each descriptor must exactly match an independent local
 file-size and SHA-256 check. `manifest.json` and the app's bundled manifest must
 remain byte-identical and must pass the shared strict manifest parser.
+
+## Desktop and mobile integration
+
+Both apps use the same bundled manifest in
+`packages/core/src/dictionary/dictionary-manifest.json`, selection normalization,
+lookup SQL, validation, pack lifecycle, and store logic. Mobile uses Expo SQLite
+and filesystem adapters. Desktop stores packs under the Tauri app-data directory's
+`dictionaries` folder and runs read-only SQLite queries in a blocking native task.
+Each native query closes its file handle, and the desktop adapter waits for pending
+queries before pack replacement or removal.
+
+On desktop, select an English or Chinese word and choose **Define**. A missing
+pack prompts for an explicit download. **Settings > Dictionaries** supports
+downloading, updating, repairing, and removing packs. Installed lookups work offline.
+
+Desktop checks: `pnpm --filter app test:dictionary`, `pnpm --filter app exec tsc --noEmit`,
+and `cargo test --locked dictionary::tests` from `packages/app/src-tauri`.
+
+Desktop pack downloads stream directly from the existing native HTTP client into
+a buffered file writer, with progress events limited to ten per second. The UI
+shows a separate verification phase before activating a pack. Both apps refresh
+the catalog and installed-pack status when the Dictionaries settings page opens.
+
+A local Windows debug-preview comparison on 2026-09-06 measured the same English
+pack (29,069,312 bytes) at 13.67 seconds through the original JavaScript chunk loop
+and 1.58 seconds through native streaming. One full checksum/schema verification
+pass took 0.59 and 0.61 seconds respectively. Progress callbacks fell from 1,776 to
+13. Both files matched the published SHA-256. These are single-run measurements
+on the same machine and connection, not a guaranteed download time.

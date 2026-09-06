@@ -68,7 +68,10 @@ describe("dictionary configuration", () => {
       import.meta.dirname,
       "../../../../dictionary-packs/manifest.json",
     );
-    const bundledPath = resolve(import.meta.dirname, "dictionary-manifest.json");
+    const bundledPath = resolve(
+      import.meta.dirname,
+      "../../../core/src/dictionary/dictionary-manifest.json",
+    );
 
     await expect(readFile(bundledPath)).resolves.toEqual(await readFile(canonicalPath));
   });

@@ -60,6 +60,8 @@ function DictionaryPackRow({
     if (unavailable) return t("dictionary.unavailable");
 
     switch (pack.state) {
+      case "verifying":
+        return t("dictionary.verifying");
       case "downloading":
         return t("dictionary.downloading", {
           progress: Math.round(pack.progress * 100),
@@ -119,7 +121,7 @@ function DictionaryPackRow({
             onPress={() => onInstall(language)}
           />
         ) : null}
-        {pack.state === "downloading" ? (
+        {pack.state === "downloading" || pack.state === "verifying" ? (
           <ActivityIndicator
             accessibilityLabel={t("dictionary.statusLabel", { language: name, status })}
             color={colors.primary}
@@ -262,10 +264,7 @@ export function DictionarySettingsScreen({
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
-      <SettingsHeader
-        title={t("dictionary.dictionaries")}
-        subtitle={t("dictionary.offlinePrivacy")}
-      />
+      <SettingsHeader title={t("dictionary.dictionaries")} />
       <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { alignItems: "center" }]}

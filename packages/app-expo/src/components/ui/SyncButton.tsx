@@ -6,16 +6,16 @@ import { Animated, Easing, TouchableOpacity } from "react-native";
 interface SyncButtonProps {
   size?: number;
   color?: string;
+  animationEnabled?: boolean;
 }
 
-export function SyncButton({ size = 20, color }: SyncButtonProps) {
+export function SyncButton({ size = 20, color, animationEnabled = true }: SyncButtonProps) {
   const syncNow = useSyncStore((s) => s.syncNow);
   const status = useSyncStore((s) => s.status);
   const backendType = useSyncStore((s) => s.backendType);
   const loadConfig = useSyncStore((s) => s.loadConfig);
 
   const spinAnim = useRef(new Animated.Value(0)).current;
-  const spinRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const isBusy = status !== "idle" && status !== "error";
 
@@ -26,7 +26,7 @@ export function SyncButton({ size = 20, color }: SyncButtonProps) {
   }, [backendType, loadConfig]);
 
   useEffect(() => {
-    if (isBusy) {
+    if (isBusy && animationEnabled && backendType) {
       spinAnim.setValue(0);
       const anim = Animated.loop(
         Animated.timing(spinAnim, {
@@ -36,13 +36,11 @@ export function SyncButton({ size = 20, color }: SyncButtonProps) {
           useNativeDriver: true,
         }),
       );
-      spinRef.current = anim;
       anim.start();
-    } else {
-      spinRef.current?.stop();
-      spinAnim.setValue(0);
+      return () => anim.stop();
     }
-  }, [isBusy, spinAnim]);
+    spinAnim.setValue(0);
+  }, [isBusy, animationEnabled, backendType, spinAnim]);
 
   const handlePress = useCallback(() => {
     if (isBusy) return;

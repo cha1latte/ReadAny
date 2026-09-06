@@ -60,7 +60,6 @@ import {
   Animated,
   AppState,
   type AppStateStatus,
-  Easing,
   Modal,
   Platform,
   Pressable,
@@ -74,6 +73,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
+import { useReaderControls } from "./reader/useReaderControls";
 
 import { ReaderKeepAwake } from "./reader/ReaderKeepAwake";
 // ── Extracted modules ──
@@ -152,7 +152,7 @@ const NOTE_TOOLTIP_TOP_THRESHOLD = 180;
 import { useRubyStore } from "@readany/core/stores/ruby-store";
 import { ReaderSettingsPanel } from "./reader/ReaderSettingsPanel";
 import { ReaderTOCPanel } from "./reader/ReaderTOCPanel";
-import { CONTROLS_TIMEOUT, SCREEN_HEIGHT, SCREEN_WIDTH } from "./reader/reader-constants";
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from "./reader/reader-constants";
 import { BatteryIcon, ListIcon, SettingsIcon } from "./reader/reader-icons";
 import { makeStyles, noteTooltipMdStyles } from "./reader/reader-styles";
 import { useReaderBookmark } from "./reader/useReaderBookmark";
@@ -217,7 +217,18 @@ export function ReaderScreen({ route, navigation }: Props) {
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showControls, setShowControls] = useState(false);
+  const {
+    showControls,
+    setShowControls,
+    topControlsTranslate,
+    topControlsOpacity,
+    bottomControlsTranslate,
+    bottomControlsOpacity,
+    auxToolsTranslate,
+    auxToolsOpacity,
+    toggleControls,
+  } = useReaderControls();
+  const ttsLyricLayoutCache = useRef(new Map<string, { y: number; height: number }>());
   const [showTOC, setShowTOC] = useState(false);
   const [tocActiveTab, setTocActiveTab] = useState<"toc" | "bookmarks">("toc");
   const [showSettings, setShowSettings] = useState(false);
@@ -341,9 +352,6 @@ export function ReaderScreen({ route, navigation }: Props) {
     [customFonts, selectedFontId, fontServerUrl],
   );
 
-  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const TOOLBAR_HIDE_OFFSET = 100;
-  const toolbarAnim = useRef(new Animated.Value(TOOLBAR_HIDE_OFFSET)).current;
   const readerPullAnim = useRef(new Animated.Value(0)).current;
   const lastCfiRef = useRef<string>("");
   const progressRef = useRef(0);
@@ -558,31 +566,6 @@ export function ReaderScreen({ route, navigation }: Props) {
     };
     loadAsset();
   }, []);
-
-  // Controls toggle — declared before bridge so onTap can reference it without TS error
-  const toggleControls = useCallback(() => {
-    const willShow = !showControls;
-    setShowControls(willShow);
-    Animated.timing(toolbarAnim, {
-      toValue: willShow ? 0 : TOOLBAR_HIDE_OFFSET,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-
-    if (willShow) {
-      if (controlsTimer.current) clearTimeout(controlsTimer.current);
-      controlsTimer.current = setTimeout(() => {
-        setShowControls(false);
-        Animated.timing(toolbarAnim, {
-          toValue: TOOLBAR_HIDE_OFFSET,
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
-      }, CONTROLS_TIMEOUT);
-    }
-  }, [showControls, toolbarAnim]);
 
   // Reader bridge
   const bridge = useReaderBridge({
@@ -816,11 +799,11 @@ export function ReaderScreen({ route, navigation }: Props) {
       setSelection(null);
       readingContextService.clearSelection();
     },
+    onActivity: () => sendEvent({ type: "activity" }),
     onTap: () => {
       if (noteTooltipVisibleRef.current || Date.now() < suppressReaderTapUntilRef.current) {
         return;
       }
-      sendEvent({ type: "activity" });
       if (selection) {
         setSelection(null);
         return;
@@ -1385,6 +1368,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     loading,
     navigation,
     openTTS,
+    setShowControls,
     tts.resolvedTTSSegmentCfi,
     tts.ttsDisplaySegments,
     webViewReady,
@@ -1460,30 +1444,6 @@ export function ReaderScreen({ route, navigation }: Props) {
   const bottomDockIconSize = isWideLayout ? 24 : 22;
   const topToolbarIconSize = isWideLayout ? 24 : 22;
   const percent = Math.round(progress * 100);
-  const topControlsTranslate = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET],
-    outputRange: [0, -10],
-  });
-  const topControlsOpacity = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET * 0.5, TOOLBAR_HIDE_OFFSET],
-    outputRange: [1, 0.28, 0],
-  });
-  const bottomControlsTranslate = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET],
-    outputRange: [0, 12],
-  });
-  const bottomControlsOpacity = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET * 0.5, TOOLBAR_HIDE_OFFSET],
-    outputRange: [1, 0.28, 0],
-  });
-  const auxToolsTranslate = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET],
-    outputRange: [0, 14],
-  });
-  const auxToolsOpacity = toolbarAnim.interpolate({
-    inputRange: [0, TOOLBAR_HIDE_OFFSET * 0.55, TOOLBAR_HIDE_OFFSET],
-    outputRange: [1, 0.24, 0],
-  });
 
   const isPanelOpen = showTOC || showSettings || showSearch || showNotebook || showTranslation;
   const existingSelectionHighlight = selection
@@ -1647,7 +1607,7 @@ export function ReaderScreen({ route, navigation }: Props) {
                   { flexDirection: "row", alignItems: "center", gap: 6 },
                 ]}
               >
-                <SyncButton size={16} color={colors.foreground} />
+                <SyncButton size={16} color={colors.foreground} animationEnabled={showControls} />
                 <Text style={s.topToolbarMetaText}>
                   {currentPage > 0 && totalPages > 0
                     ? `${currentPage}/${totalPages}`
@@ -1943,12 +1903,6 @@ export function ReaderScreen({ route, navigation }: Props) {
                 onPress={() => {
                   setShowSearch(true);
                   setShowControls(false);
-                  Animated.timing(toolbarAnim, {
-                    toValue: TOOLBAR_HIDE_OFFSET,
-                    duration: 180,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                  }).start();
                 }}
               >
                 <SearchIcon size={bottomDockIconSize} color={colors.foreground} />
@@ -2041,12 +1995,6 @@ export function ReaderScreen({ route, navigation }: Props) {
                 setShowSearch(false);
                 search.clearSearch();
                 setShowControls(true);
-                Animated.timing(toolbarAnim, {
-                  toValue: 0,
-                  duration: 180,
-                  easing: Easing.out(Easing.cubic),
-                  useNativeDriver: true,
-                }).start();
               }}
             >
               <XIcon size={16} color={colors.mutedForeground} />
@@ -2056,143 +2004,151 @@ export function ReaderScreen({ route, navigation }: Props) {
       )}
 
       {/* ─── TOC & Bookmarks Panel ─── */}
-      <ReaderTOCPanel
-        visible={showTOC}
-        activeTab={tocActiveTab}
-        toc={toc}
-        bookmarks={bookBookmarks}
-        currentChapter={currentChapter}
-        onClose={() => setShowTOC(false)}
-        onTabChange={setTocActiveTab}
-        onSelectTocItem={goToTocItem}
-        onGoToBookmark={(cfi) => {
-          goToCFISafely(cfi);
-          setShowTOC(false);
-        }}
-        onDeleteBookmark={(id) => removeBookmark(id)}
-      />
+      {showTOC && (
+        <ReaderTOCPanel
+          visible={showTOC}
+          activeTab={tocActiveTab}
+          toc={toc}
+          bookmarks={bookBookmarks}
+          currentChapter={currentChapter}
+          onClose={() => setShowTOC(false)}
+          onTabChange={setTocActiveTab}
+          onSelectTocItem={goToTocItem}
+          onGoToBookmark={(cfi) => {
+            goToCFISafely(cfi);
+            setShowTOC(false);
+          }}
+          onDeleteBookmark={(id) => removeBookmark(id)}
+        />
+      )}
 
       {/* ─── Settings Panel ─── */}
-      <ReaderSettingsPanel
-        visible={showSettings}
-        readSettings={readSettings}
-        bookId={bookId}
-        onClose={() => setShowSettings(false)}
-        onUpdateSetting={updateSetting}
-        onRubyModeChange={async (mode) => {
-          if (mode) {
-            // Load dicts into WebView if not already done
-            try {
-              const { readDictStrings } = await import("@/lib/ruby/dict-service-mobile");
-              const { wordDict, charDict } = await readDictStrings();
-              if (wordDict || charDict) {
-                bridge.setRubyDicts(wordDict, charDict);
-                // Small delay to let WebView process the dict
-                setTimeout(() => bridge.injectRuby(mode), 100);
+      {showSettings && (
+        <ReaderSettingsPanel
+          visible={showSettings}
+          readSettings={readSettings}
+          bookId={bookId}
+          onClose={() => setShowSettings(false)}
+          onUpdateSetting={updateSetting}
+          onRubyModeChange={async (mode) => {
+            if (mode) {
+              // Load dicts into WebView if not already done
+              try {
+                const { readDictStrings } = await import("@/lib/ruby/dict-service-mobile");
+                const { wordDict, charDict } = await readDictStrings();
+                if (wordDict || charDict) {
+                  bridge.setRubyDicts(wordDict, charDict);
+                  // Small delay to let WebView process the dict
+                  setTimeout(() => bridge.injectRuby(mode), 100);
+                }
+              } catch (err) {
+                console.error("[ReaderScreen] Ruby dict load failed:", err);
               }
-            } catch (err) {
-              console.error("[ReaderScreen] Ruby dict load failed:", err);
+            } else {
+              bridge.removeRuby();
             }
-          } else {
-            bridge.removeRuby();
-          }
-        }}
-      />
+          }}
+        />
+      )}
 
       {/* ─── Notebook Panel ─── */}
-      <Modal
-        visible={showNotebook}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNotebook(false)}
-      >
-        <Pressable style={s.modalBackdrop} onPress={() => setShowNotebook(false)} />
-        <View
-          style={[
-            s.bottomSheet,
-            { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
-          ]}
+      {showNotebook && (
+        <Modal
+          visible={showNotebook}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowNotebook(false)}
         >
-          <View style={s.sheetHeader}>
-            <Text style={s.sheetTitle}>{t("reader.notebook", "笔记本")}</Text>
-            <TouchableOpacity onPress={() => setShowNotebook(false)}>
-              <XIcon size={18} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-          {highlights.length > 0 ? (
-            <ScrollView showsVerticalScrollIndicator={false} style={s.sheetScroll}>
-              {highlights.map((h) => (
-                <View key={h.id} style={s.highlightItem}>
-                  <View
-                    style={[
-                      s.highlightColorDot,
-                      {
-                        backgroundColor:
-                          h.color === "yellow"
-                            ? "#facc15"
-                            : h.color === "green"
-                              ? "#4ade80"
-                              : h.color === "blue"
-                                ? "#60a5fa"
-                                : h.color === "pink"
-                                  ? "#ec4899"
-                                  : h.color === "red"
-                                    ? "#f87171"
-                                    : "#a78bfa",
-                      },
-                    ]}
-                  />
-                  <View style={s.highlightContent}>
-                    <Text style={s.highlightText} numberOfLines={3}>
-                      {h.text}
-                    </Text>
-                    {h.note && <Text style={s.highlightNote}>{h.note}</Text>}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={s.notebookPlaceholder}>
-              <NotebookPenIcon size={40} color={colors.mutedForeground} />
-              <Text style={s.notebookPlaceholderText}>
-                {t("reader.notebookHint", "在阅读时选中文字来创建笔记和高亮")}
-              </Text>
+          <Pressable style={s.modalBackdrop} onPress={() => setShowNotebook(false)} />
+          <View
+            style={[
+              s.bottomSheet,
+              { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
+            ]}
+          >
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t("reader.notebook", "笔记本")}</Text>
+              <TouchableOpacity onPress={() => setShowNotebook(false)}>
+                <XIcon size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-      </Modal>
+            {highlights.length > 0 ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={s.sheetScroll}>
+                {highlights.map((h) => (
+                  <View key={h.id} style={s.highlightItem}>
+                    <View
+                      style={[
+                        s.highlightColorDot,
+                        {
+                          backgroundColor:
+                            h.color === "yellow"
+                              ? "#facc15"
+                              : h.color === "green"
+                                ? "#4ade80"
+                                : h.color === "blue"
+                                  ? "#60a5fa"
+                                  : h.color === "pink"
+                                    ? "#ec4899"
+                                    : h.color === "red"
+                                      ? "#f87171"
+                                      : "#a78bfa",
+                        },
+                      ]}
+                    />
+                    <View style={s.highlightContent}>
+                      <Text style={s.highlightText} numberOfLines={3}>
+                        {h.text}
+                      </Text>
+                      {h.note && <Text style={s.highlightNote}>{h.note}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={s.notebookPlaceholder}>
+                <NotebookPenIcon size={40} color={colors.mutedForeground} />
+                <Text style={s.notebookPlaceholderText}>
+                  {t("reader.notebookHint", "在阅读时选中文字来创建笔记和高亮")}
+                </Text>
+              </View>
+            )}
+          </View>
+        </Modal>
+      )}
 
       {/* ─── Note View Modal ─── */}
-      <ReaderNoteViewModal
-        highlight={noteViewHighlight}
-        editing={noteViewEditing}
-        editContent={noteViewContent}
-        bookId={bookId}
-        onClose={() => {
-          setNoteViewHighlight(null);
-          setNoteViewEditing(false);
-        }}
-        onStartEdit={() => {
-          setNoteViewContent(noteViewHighlight?.note || "");
-          setNoteViewEditing(true);
-        }}
-        onCancelEdit={() => {
-          setNoteViewEditing(false);
-          setNoteViewContent(noteViewHighlight?.note || "");
-        }}
-        onContentChange={setNoteViewContent}
-        onSave={(highlight, newNote) => {
-          bridge.removeAnnotation({ value: highlight.cfi });
-          bridge.addAnnotation({
-            value: highlight.cfi,
-            type: "highlight",
-            color: highlight.color,
-            note: newNote,
-          });
-          setNoteViewHighlight({ ...highlight, note: newNote });
-          setNoteViewEditing(false);
-        }}
-      />
+      {noteViewHighlight && (
+        <ReaderNoteViewModal
+          highlight={noteViewHighlight}
+          editing={noteViewEditing}
+          editContent={noteViewContent}
+          bookId={bookId}
+          onClose={() => {
+            setNoteViewHighlight(null);
+            setNoteViewEditing(false);
+          }}
+          onStartEdit={() => {
+            setNoteViewContent(noteViewHighlight?.note || "");
+            setNoteViewEditing(true);
+          }}
+          onCancelEdit={() => {
+            setNoteViewEditing(false);
+            setNoteViewContent(noteViewHighlight?.note || "");
+          }}
+          onContentChange={setNoteViewContent}
+          onSave={(highlight, newNote) => {
+            bridge.removeAnnotation({ value: highlight.cfi });
+            bridge.addAnnotation({
+              value: highlight.cfi,
+              type: "highlight",
+              color: highlight.color,
+              note: newNote,
+            });
+            setNoteViewHighlight({ ...highlight, note: newNote });
+            setNoteViewEditing(false);
+          }}
+        />
+      )}
 
       {/* ─── Translation Panel ─── */}
       {showTranslation && translationText && (
@@ -2205,67 +2161,74 @@ export function ReaderScreen({ route, navigation }: Props) {
         />
       )}
 
-      <DefinitionSheet
-        visible={showDefinition}
-        text={definitionText}
-        onClose={() => {
-          setShowDefinition(false);
-          setDefinitionText("");
-        }}
-        onManageDictionaries={() => {
-          setShowDefinition(false);
-          setDefinitionText("");
-          navigation.navigate("DictionarySettings" as never);
-        }}
-      />
+      {showDefinition && (
+        <DefinitionSheet
+          visible={showDefinition}
+          text={definitionText}
+          onClose={() => {
+            setShowDefinition(false);
+            setDefinitionText("");
+          }}
+          onManageDictionaries={() => {
+            setShowDefinition(false);
+            setDefinitionText("");
+            navigation.navigate("DictionarySettings" as never);
+          }}
+        />
+      )}
 
       {/* ─── Chapter Translation Sheet ─── */}
-      <ChapterTranslationSheet
-        visible={showChapterTranslation}
-        onClose={() => setShowChapterTranslation(false)}
-        state={chapterTranslation.state}
-        onStart={chapterTranslation.startTranslation}
-        onCancel={chapterTranslation.cancelTranslation}
-        onToggleOriginalVisible={chapterTranslation.toggleOriginalVisible}
-        onToggleTranslationVisible={chapterTranslation.toggleTranslationVisible}
-        onReset={chapterTranslation.reset}
-      />
+      {showChapterTranslation && (
+        <ChapterTranslationSheet
+          visible={showChapterTranslation}
+          onClose={() => setShowChapterTranslation(false)}
+          state={chapterTranslation.state}
+          onStart={chapterTranslation.startTranslation}
+          onCancel={chapterTranslation.cancelTranslation}
+          onToggleOriginalVisible={chapterTranslation.toggleOriginalVisible}
+          onToggleTranslationVisible={chapterTranslation.toggleTranslationVisible}
+          onReset={chapterTranslation.reset}
+        />
+      )}
 
-      <TTSPage
-        visible={showTTS}
-        bookTitle={bookTitle || book?.meta.title || ""}
-        chapterTitle={currentChapter}
-        coverUri={tts.ttsCoverUri}
-        playState={ttsPlayState}
-        currentText={tts.currentTTSSegment?.text || tts.ttsLastText}
-        config={ttsConfig}
-        readingProgress={progress}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        sourceLabel={tts.ttsSourceLabel}
-        continuousEnabled={tts.ttsContinuousEnabled}
-        narrationSegments={tts.ttsDisplaySegments}
-        prevNarrationSegments={tts.ttsPrevPageSegments}
-        currentSegmentCfi={tts.resolvedTTSSegmentCfi}
-        currentSegmentText={tts.currentTTSSegment?.text || null}
-        currentChunkIndex={tts.localTTSChunkIndex}
-        totalChunks={tts.ttsDisplaySegments.length}
-        onClose={() => setShowTTS(false)}
-        onReturnToReading={tts.handleTTSReturnToReading}
-        onReplay={tts.handleTTSReplay}
-        onPlayPause={tts.handleTTSPlayPause}
-        onJumpToSegment={tts.handleJumpToTTSSegment}
-        onJumpToLyricSegment={tts.handleJumpToTTSLyricSegment}
-        onLoadMoreAbove={tts.handleLoadMoreAboveTTSLyrics}
-        onLoadMoreBelow={tts.handleLoadMoreBelowTTSLyrics}
-        onStop={tts.handleTTSStop}
-        onAdjustRate={tts.handleAdjustTTSRate}
-        onAdjustPitch={tts.handleAdjustTTSPitch}
-        onToggleContinuous={tts.handleToggleTTSContinuous}
-        onUpdateConfig={tts.handleUpdateTTSConfig}
-        onPrevChapter={toc.length > 0 ? tts.handleTTSPrevChapter : undefined}
-        onNextChapter={toc.length > 0 ? tts.handleTTSNextChapter : undefined}
-      />
+      {showTTS && (
+        <TTSPage
+          visible={showTTS}
+          lyricLayoutCache={ttsLyricLayoutCache.current}
+          bookTitle={bookTitle || book?.meta.title || ""}
+          chapterTitle={currentChapter}
+          coverUri={tts.ttsCoverUri}
+          playState={ttsPlayState}
+          currentText={tts.currentTTSSegment?.text || tts.ttsLastText}
+          config={ttsConfig}
+          readingProgress={progress}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          sourceLabel={tts.ttsSourceLabel}
+          continuousEnabled={tts.ttsContinuousEnabled}
+          narrationSegments={tts.ttsDisplaySegments}
+          prevNarrationSegments={tts.ttsPrevPageSegments}
+          currentSegmentCfi={tts.resolvedTTSSegmentCfi}
+          currentSegmentText={tts.currentTTSSegment?.text || null}
+          currentChunkIndex={tts.localTTSChunkIndex}
+          totalChunks={tts.ttsDisplaySegments.length}
+          onClose={() => setShowTTS(false)}
+          onReturnToReading={tts.handleTTSReturnToReading}
+          onReplay={tts.handleTTSReplay}
+          onPlayPause={tts.handleTTSPlayPause}
+          onJumpToSegment={tts.handleJumpToTTSSegment}
+          onJumpToLyricSegment={tts.handleJumpToTTSLyricSegment}
+          onLoadMoreAbove={tts.handleLoadMoreAboveTTSLyrics}
+          onLoadMoreBelow={tts.handleLoadMoreBelowTTSLyrics}
+          onStop={tts.handleTTSStop}
+          onAdjustRate={tts.handleAdjustTTSRate}
+          onAdjustPitch={tts.handleAdjustTTSPitch}
+          onToggleContinuous={tts.handleToggleTTSContinuous}
+          onUpdateConfig={tts.handleUpdateTTSConfig}
+          onPrevChapter={toc.length > 0 ? tts.handleTTSPrevChapter : undefined}
+          onNextChapter={toc.length > 0 ? tts.handleTTSNextChapter : undefined}
+        />
+      )}
     </View>
   );
 }

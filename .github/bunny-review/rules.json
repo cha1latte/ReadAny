@@ -1,0 +1,141 @@
+{
+  "review_focus": [
+    "correctness",
+    "user-visible regressions",
+    "security and privacy",
+    "architecture boundaries",
+    "platform adapter contracts",
+    "failure paths",
+    "missing focused proof",
+    "CI and deployment failures",
+    "KISS and YAGNI",
+    "practical SOLID contracts",
+    "single source of truth"
+  ],
+  "severity_policy": {
+    "blocking": "The PR should not merge because the changed behavior is broken, unsafe, or violates a hard architecture boundary.",
+    "high": "A likely production or data-loss regression, security/privacy issue, or serious cross-platform contract risk.",
+    "medium": "A concrete bug, edge case, maintainability trap, or missing proof tied directly to changed behavior.",
+    "low": "A small but actionable correctness, proof, or maintainability risk tied to changed behavior.",
+    "nitpick": "Optional changed-line polish with no behavior risk, such as readability, naming, tiny duplication, stale comments, dead code, type clarity, or local consistency."
+  },
+  "nitpick_policy": {
+    "max_count": 2,
+    "line_scope": "changed-line only",
+    "risk": "No behavior-risk requirement; use for optional polish only."
+  },
+  "control_warn_types": {
+    "Proof Gap": "Important changed behavior lacks focused proof.",
+    "Review Limitation": "Bunny lacked full packet/context to prove a suspected issue.",
+    "CI Timing": "Expected checks were missing, pending, or not yet observable when posted.",
+    "Non-blocking Coverage": "Useful coverage or context note that should not block merge by itself."
+  },
+  "path_instructions": [
+    {
+      "name": "Architecture, KISS, YAGNI, and SOLID",
+      "prefixes": ["packages/", "scripts/", ".github/", "website/"],
+      "guidance": ["docs/readany-shlai/code-quality.md"],
+      "checks": [
+        "Keep dependency direction from platform apps toward shared core; core must not import app internals or concrete native APIs.",
+        "Preserve a single authoritative owner for persisted state; flag divergent writable copies and stale async writes.",
+        "Prefer the smallest implementation satisfying current requirements; flag speculative configuration, registries, wrappers, and dependencies only with a concrete cost.",
+        "Apply SOLID through existing responsibilities, provider seams, substitutable adapter contracts, focused capabilities, and platform-service boundaries; do not require classes or DI frameworks.",
+        "Do not demand abstractions solely to remove similar-looking code, arbitrary size limits, or broad rewrites of untouched code.",
+        "A quality finding must explain the changed-line problem and smallest useful fix; put optional polish in nitpicks and uncertain design concerns in open questions."
+      ]
+    },
+    {
+      "name": "Shared core and platform adapters",
+      "prefixes": [
+        "packages/core/",
+        "packages/app/src/lib/",
+        "packages/app-expo/src/lib/",
+        "packages/cli/"
+      ],
+      "guidance": ["docs/readany-shlai/development.md"],
+      "checks": [
+        "Core business logic uses IPlatformService instead of direct Tauri/Expo APIs; inspect all affected adapter implementations when changing the interface.",
+        "Core contains shared hooks and Zustand stores; do not impose a React-free rule copied from another repository.",
+        "Preserve native transport abort/dispose behavior, data-root selection, and platform-specific error contracts."
+      ]
+    },
+    {
+      "name": "Reader, import, persistence, and sync",
+      "prefixes": [
+        "packages/core/src/",
+        "packages/foliate-js/",
+        "packages/app/src/components/reader/",
+        "packages/app-expo/src/"
+      ],
+      "guidance": ["docs/readany-shlai/development.md"],
+      "checks": [
+        "Preserve EPUB/PDF locations, chapter boundaries, annotations, reading progress, and statistics across reopen and pagination.",
+        "Check import eligibility, deduplication, file/database consistency, partial failures, and migration compatibility.",
+        "Sync must preserve tombstones and conflict resolution; failed transfers must not report success or discard local data.",
+        "Book resources and WebView messages are untrusted input; validate paths, payloads, and session identity at boundaries."
+      ]
+    },
+    {
+      "name": "AI, translation, and audio",
+      "prefixes": [
+        "packages/core/src/ai/",
+        "packages/core/src/rag/",
+        "packages/core/src/translation/",
+        "packages/core/src/tts/",
+        "packages/app/src/lib/tts/",
+        "packages/app-expo/src/lib/platform/",
+        "patches/"
+      ],
+      "guidance": ["docs/readany-shlai/development.md"],
+      "checks": [
+        "Check streaming cancellation, provider configuration, source attribution, and content/credential privacy.",
+        "Audio playback cursor, queue, pause/resume, and callbacks must stay associated with the current book and session.",
+        "Native lifecycle and dependency patches must preserve background playback and resource cleanup."
+      ]
+    },
+    {
+      "name": "Desktop native boundary",
+      "prefixes": ["packages/app/src-tauri/"],
+      "guidance": ["docs/readany-shlai/development.md"],
+      "checks": [
+        "Check command inputs, filesystem scope, capabilities, persistent data paths, and desktop update behavior.",
+        "Keep shared platform contracts consistent with Rust command results and cancellation/error semantics."
+      ]
+    },
+    {
+      "name": "Shlai builds, identities, and updates",
+      "prefixes": [
+        ".github/",
+        "scripts/",
+        "eas.json",
+        "packages/app-expo/app.config",
+        "packages/app-expo/eas",
+        "packages/app-expo/scripts/",
+        "packages/app-expo/src/config/",
+        "packages/app-expo/src/lib/shlai-",
+        "packages/app-expo/modules/"
+      ],
+      "guidance": [
+        "docs/readany-shlai/development.md",
+        "docs/readany-shlai/releasing.md",
+        "docs/readany-shlai/phone-updates.md"
+      ],
+      "checks": [
+        "Keep upstream, dev, preview, and stable app identities and storage separate.",
+        "PR APK builds stay secret-free; stable signing remains in the minimal shlai-production job after an unsigned build.",
+        "Preserve canonical version/tag validation, monotonically increasing versionCode, signer verification, and channel-specific update assets.",
+        "Pin workflow actions to reviewed commit SHAs. Privileged Bunny tooling comes from main and inspects PR files as data without executing them.",
+        "Bunny is advisory and does not replace Validate, Preview APK, owner approval, or workflow approval for fork builds."
+      ]
+    },
+    {
+      "name": "Documentation and upstream synchronization",
+      "prefixes": ["README", "docs/", ".github/workflows/shlai-upstream-sync.yml"],
+      "guidance": ["docs/readany-shlai/development.md", "docs/readany-shlai/upstream-sync.md"],
+      "checks": [
+        "Keep Shlai behavior and release instructions distinct from official ReadAny.",
+        "Upstream synchronization preserves branding, package identity, signing boundaries, attribution, and the reviewable PR process."
+      ]
+    }
+  ]
+}

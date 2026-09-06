@@ -36,6 +36,8 @@ If the in-app check is unavailable, use the first-install release page again and
 
 Make each change on a branch based on `cha1latte/ReadAny:main`, push it, and open a pull request into `cha1latte/ReadAny:main`. Wait for **Shlai Pull Request** validation and test its temporary APK. After Celia approves and merges the pull request, the **Shlai Phone Release** workflow validates the merged commit again, builds the shared APK, verifies its identity/version/signature/checksum, and publishes the next prerelease.
 
+Bunny tooling, preview CI wiring, and documentation-only changes use the narrow [preview build scope](development.md#preview-apks) allowlist. Those changes still validate, but skip APK construction and prerelease publication both on the PR and after merge. Any app/dependency change requires a build. A manual **Shlai Phone Release** dispatch on `main` always requests the full build and release process.
+
 Only a successful build from `cha1latte/ReadAny:main` publishes a shared phone update. Every job also checks the exact repository identity, so a branch, an open pull request, a failed workflow, or a build from another repository publishes nothing. APK verification happens in a read-only job; the final write-capable publishing job runs no third-party actions and accepts only those verified bytes.
 
 Never use a pull-request artifact as Decidetto's permanent installation. It is temporary, expires after 14 days, and is only for reviewing that pull request. The permanent shared channel is the APK on <https://github.com/cha1latte/ReadAny/releases>.

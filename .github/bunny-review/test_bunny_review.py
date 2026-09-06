@@ -132,11 +132,63 @@ class ReviewTests(unittest.TestCase):
             self.assertTrue((repo / path).is_file(), path)
 
     def test_fallback_summary_keeps_voice_without_claiming_a_model_pass(self):
-        with patch.object(bunny, "diff_shortstat", return_value="1 file changed"):
+        voice = {"character": "Test", "captions": {"summary_prefix": "Configured summary:", "summary_unavailable": "The model summary was unavailable."}}
+        with patch.object(bunny, "load_voice", return_value=voice), patch.object(bunny, "diff_shortstat", return_value="1 file changed"):
             summary = bunny.fallback_change_summary("base", ["file.ts"])[0]
-        self.assertIn("opening scene", summary)
+        self.assertIn("Configured summary:", summary)
         self.assertIn("model summary was unavailable", summary)
-        self.assertNotIn("Wah", summary)
+
+    def test_checked_in_voice_configuration_is_valid(self):
+        voice = bunny.load_voice()
+        self.assertTrue(voice["character"].strip())
+
+    def test_character_swap_reaches_all_model_passes_and_rendered_captions(self):
+        voice_path = self.root / "voice.json"
+        voice_path.write_text(json.dumps({
+            "character": "GLaDOS", "instructions": ["Use dry technical wit."],
+            "captions": {"summary_heading": "Test Results"},
+        }), encoding="utf-8")
+        review = {"change_summary": ["The PR updates review documentation."]}
+        with patch.object(bunny, "VOICE_PATH", voice_path), patch.object(bunny, "model_call", return_value="FINAL_REVIEW {}") as model, patch.object(bunny, "extract_json_or_repair", return_value=review), patch.object(bunny, "commit_subject", return_value="fixture"), contextlib.redirect_stdout(io.StringIO()):
+            prompt = bunny.review_prompt()
+            bunny.three_pass_review(None, prompt, "Diff fixture", {})
+            body = bunny.render_walkthrough(review, [], [], [], "", "a" * 40)
+            self.assertEqual(bunny.caption("completed"), bunny.DEFAULT_CAPTIONS["completed"])
+        self.assertEqual(model.call_count, 3)
+        for call in model.call_args_list:
+            system = call.args[1][0]["content"]
+            self.assertIn("Character: GLaDOS", system)
+            self.assertIn("Use dry technical wit.", system)
+            self.assertIn("blocking|high|medium|low", system)
+            self.assertNotIn("Ghostface", system)
+        self.assertIn("Test Results", body)
+        self.assertIn("Bunny Merge Signal: Ready", body)
+        self.assertIn(bunny.BUNNY_MARKER, body)
+        self.assertNotIn("Scene", body)
+        self.assertNotIn("loose ends", body)
+
+    def test_invalid_voice_configuration_is_rejected(self):
+        voice_path = self.root / "voice.json"
+        invalid = [
+            [], {"character": ""}, {"character": "Test\nInjected heading"},
+            {"character": "Test", "instructions": "not an array"},
+            {"character": "Test", "examples": [123]},
+            {"character": "Test", "unknown": "typo"},
+            {"character": "Test", "captions": {"unknown": "typo"}},
+            {"character": "Test", "captions": {"completed": "line one\nline two"}},
+        ]
+        for config in invalid:
+            voice_path.write_text(json.dumps(config), encoding="utf-8")
+            with self.subTest(config=config), patch.object(bunny, "VOICE_PATH", voice_path), self.assertRaises(ValueError):
+                bunny.load_voice()
+
+    def test_voice_comes_from_executing_tooling_not_pr_working_directory(self):
+        original = bunny.load_voice()
+        untrusted = self.root / ".github" / "bunny-review"
+        untrusted.mkdir(parents=True)
+        (untrusted / "voice.json").write_text('{"character":"Untrusted override"}', encoding="utf-8")
+        with patch.object(bunny, "REPO_ROOT", self.root), patch.dict(os.environ, {"BUNNY_REVIEW_PROMPT_PATH": str(untrusted / "reviewer-prompt.md")}):
+            self.assertEqual(bunny.load_voice(), original)
 
 
 if __name__ == "__main__":

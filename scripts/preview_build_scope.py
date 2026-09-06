@@ -7,6 +7,7 @@ import subprocess
 
 
 AUTOMATION_FILES = {
+    "AGENTS.md",
     ".gitignore",
     ".github/workflows/bunny-review.yml",
     ".github/workflows/bunny-review-auto.yml",

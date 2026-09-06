@@ -139,6 +139,7 @@ export function AboutSettings() {
               {appVersion || "..."}
             </span>
             <button
+              type="button"
               onClick={handleCheckUpdate}
               disabled={status === "checking" || status === "downloading"}
               className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"

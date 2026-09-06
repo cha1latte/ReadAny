@@ -598,6 +598,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   >(new Map());
 
   // Reset rendered highlights tracking when book changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: bookId intentionally triggers resetting renderer refs for a new book.
   useEffect(() => {
     renderedHighlightsRef.current.clear();
     setFoliateReady(false);
@@ -1077,12 +1078,13 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   useEffect(() => {
     if (!book?.filePath || isInitializedRef.current) return;
     isInitializedRef.current = true;
+    const filePath = book.filePath;
 
     const initBook = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const { bookDoc, format } = await loadAndParseBook(book.filePath!);
+        const { bookDoc, format } = await loadAndParseBook(filePath);
         setBookDoc(bookDoc);
         setBookFormat(format);
       } catch (err) {
@@ -1105,6 +1107,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     });
   }, [bookId, loadAnnotations]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: changing book, tab, or format starts a new progress-tracking session.
   useEffect(() => {
     sessionProgressRef.current = null;
     latestProgressRef.current = null;
@@ -1240,7 +1243,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     } finally {
       setIsReimporting(false);
     }
-  }, [bookId, isReimporting, t]);
+  }, [book, bookId, isReimporting, t]);
 
   const handleCloseMissingBookTab = useCallback(() => {
     closeAppTab(tabId);
@@ -1379,6 +1382,8 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       setChapter,
       throttledSaveProgress,
       translationReady,
+      incrementCharactersRead,
+      incrementPagesRead,
     ],
   );
 
@@ -1465,19 +1470,19 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       const { originalVisible, translationVisible } = chapterTranslation.state;
       // Translation elements
       const translationEls = doc.querySelectorAll(".readany-translation");
-      translationEls.forEach((el) => {
+      for (const el of translationEls) {
         (el as HTMLElement).setAttribute("data-hidden", String(!translationVisible));
         // When original is hidden, show translation in original style
         (el as HTMLElement).setAttribute(
           "data-solo",
           String(!originalVisible && translationVisible),
         );
-      });
+      }
       // Original text elements
       const originalEls = doc.querySelectorAll("[data-translate-id]");
-      originalEls.forEach((el) => {
+      for (const el of originalEls) {
         (el as HTMLElement).setAttribute("data-original-hidden", String(!originalVisible));
-      });
+      }
     } catch {
       // Ignore
     }
@@ -1593,7 +1598,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // --- Selection actions ---
   const handleHighlight = useCallback(
     (color: HighlightColor = viewSettings.defaultHighlightColor ?? "yellow") => {
-      if (selection && selection.cfi) {
+      if (selection?.cfi) {
         updateReadSettings({ defaultHighlightColor: color });
         const existingHighlight = selection.highlightId
           ? highlights.find((h) => h.id === selection.highlightId)
@@ -1657,7 +1662,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
   // Handle note button - open notebook panel with pending note
   const handleNote = useCallback(() => {
-    if (selection && selection.cfi) {
+    if (selection?.cfi) {
       // Check if this selection is already highlighted
       const existingHighlight = highlights.find(
         (h) => h.bookId === bookId && h.cfi === selection.cfi,
@@ -2260,6 +2265,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       );
     },
     [
+      t,
       handleTTSPageEnd,
       ttsContinuousEnabled,
       ttsPlay,
@@ -2317,6 +2323,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     },
     [
       filterDistinctTTSSegments,
+      goToCFISafely,
       handleTTSPageEnd,
       ttsContinuousEnabled,
       ttsPlay,
@@ -2751,7 +2758,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         navigateToCfi(results[0].cfi);
       }
     },
-    [navigateToCfi, setSearchResults, setSearchIndex],
+    [navigateToCfi],
   );
 
   const navigateSearchResult = useCallback(
@@ -3179,7 +3186,9 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         {/* Settings overlay */}
         {showSettings && (
           <>
-            <div
+            <button
+              type="button"
+              aria-label={t("common.close")}
               className="absolute inset-0 z-40 bg-black/20"
               onClick={() => setShowSettings(false)}
             />

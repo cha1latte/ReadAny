@@ -112,41 +112,39 @@ export function ChapterTranslationMenu({
         )}
 
         {/* ── translating: progress + cancel ── */}
-        {state.status === "translating" && (() => {
-          const { translatedChars, totalChars } = state.progress;
-          const pct = totalChars > 0 ? Math.round((translatedChars / totalChars) * 100) : 0;
-          return (
-            <>
-              <div className="px-2 py-2 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
-                  <span className="text-xs text-muted-foreground">
-                    {t("translation.translatingProgress", {
+        {state.status === "translating" &&
+          (() => {
+            const { translatedChars, totalChars } = state.progress;
+            const pct = totalChars > 0 ? Math.round((translatedChars / totalChars) * 100) : 0;
+            return (
+              <>
+                <div className="px-2 py-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                    <span className="text-xs text-muted-foreground">
+                      {t("translation.translatingProgress", {
+                        count: Math.round(translatedChars / 100),
+                        total: Math.round(totalChars / 100),
+                      })}
+                    </span>
+                  </div>
+                  <Progress
+                    className="h-1.5"
+                    value={pct}
+                    aria-label={t("translation.translatingProgress", {
                       count: Math.round(translatedChars / 100),
                       total: Math.round(totalChars / 100),
                     })}
-                  </span>
+                  />
                 </div>
-                <Progress
-                  className="h-1.5"
-                  value={pct}
-                  aria-label={t("translation.translatingProgress", {
-                    count: Math.round(translatedChars / 100),
-                    total: Math.round(totalChars / 100),
-                  })}
-                />
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="gap-2 text-xs text-destructive"
-                onSelect={onCancel}
-              >
-                <X className="h-3.5 w-3.5" />
-                {t("translation.cancelTranslation")}
-              </DropdownMenuItem>
-            </>
-          );
-        })()}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-xs text-destructive" onSelect={onCancel}>
+                  <X className="h-3.5 w-3.5" />
+                  {t("translation.cancelTranslation")}
+                </DropdownMenuItem>
+              </>
+            );
+          })()}
 
         {/* ── complete: toggle original / translation + clear ── */}
         {state.status === "complete" && (

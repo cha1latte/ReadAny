@@ -758,7 +758,7 @@ export function SyncSettings() {
               <div className="mt-2 w-48">
                 <Progress
                   className="h-1.5"
-                  value={progress.phase === "database" ? undefined : progressPercent() ?? 0}
+                  value={progress.phase === "database" ? undefined : (progressPercent() ?? 0)}
                   aria-label={progressLabel() ?? t("settings.syncStatus")}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">{progressLabel()}</p>

@@ -22,6 +22,7 @@ class PreviewBuildScopeTests(unittest.TestCase):
             ".github/bunny-review/bunny_review.py", ".github/workflows/bunny-review.yml",
             ".github/workflows/shlai-pr.yml", ".github/workflows/shlai-phone-release.yml",
             "scripts/preview_build_scope.py", "docs/readany-shlai/bunny-review.md", ".gitignore",
+            "AGENTS.md", ".github/bunny-review/voice.json",
         ]))
 
     def test_mixed_changes_and_unknown_configuration_build(self):

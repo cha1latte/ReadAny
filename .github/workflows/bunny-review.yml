@@ -84,6 +84,7 @@ jobs:
             git show "origin/$PR_BASE_REF:.github/bunny-review/bunny_review.py" > /tmp/bunny-review-tool/.github/bunny-review/bunny_review.py
             git show "origin/$PR_BASE_REF:.github/bunny-review/requirements.txt" > /tmp/bunny-review-tool/.github/bunny-review/requirements.txt
             git show "origin/$PR_BASE_REF:.github/bunny-review/reviewer-prompt.md" > /tmp/bunny-review-tool/.github/bunny-review/reviewer-prompt.md
+            git show "origin/$PR_BASE_REF:.github/bunny-review/voice.json" > /tmp/bunny-review-tool/.github/bunny-review/voice.json
             git show "origin/$PR_BASE_REF:.github/bunny-review/rules.json" > /tmp/bunny-review-tool/.github/bunny-review/rules.json
             git show "origin/$PR_BASE_REF:.github/bunny-review/ci-checks.json" > /tmp/bunny-review-tool/.github/bunny-review/ci-checks.json
           else

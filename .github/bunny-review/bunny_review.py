@@ -13,6 +13,25 @@ import time
 from dataclasses import dataclass
 
 REPO_ROOT = pathlib.Path.cwd().resolve()
+# Resolve beside the executing tooling, never against the PR working directory.
+VOICE_PATH = pathlib.Path(__file__).resolve().with_name("voice.json")
+DEFAULT_CAPTIONS = {
+    "summary_heading": "Change Summary",
+    "findings_heading": "Findings",
+    "no_findings": "No actionable defects found.",
+    "ready_with_notes": "No actionable defects found; non-blocking notes remain.",
+    "ready": "No actionable defects found. Expected CI controls passed.",
+    "incomplete_label": "Review incomplete.",
+    "blocking_label": "Action required.",
+    "notes_label": "Notes remain.",
+    "clean_label": "No defects found.",
+    "empty_diff": "No changed files in the selected review range.",
+    "summary_prefix": "This PR changes",
+    "summary_unavailable": "The detailed model summary was unavailable.",
+    "no_model_pass": "No model pass ran; source inspection is incomplete.",
+    "running": "Reviewer workflow is running.",
+    "completed": "Review posted. Findings are recorded below.",
+}
 BUNNY_MARKER = "<!-- bunny-review:walkthrough -->"
 COMMAND_STATUS_MARKER = "<!-- bunny-review:command-status -->"
 FINDING_MARKER_RE = re.compile(r"<!-- bunny-review:finding=([0-9a-f]{16}) -->")
@@ -370,6 +389,45 @@ def bunny_prompt_path():
 
 def bunny_skill_dir():
     return bunny_prompt_path().parent
+
+
+def load_voice():
+    voice = json.loads(VOICE_PATH.read_text("utf-8"))
+    if not isinstance(voice, dict):
+        raise ValueError("voice.json must contain an object")
+    if set(voice) - {"character", "instructions", "examples", "captions"}:
+        raise ValueError("voice.json contains unknown fields")
+    character = voice.get("character")
+    if not isinstance(character, str) or not character.strip() or "\n" in character or "\r" in character:
+        raise ValueError("voice.json character must be a nonempty single-line string")
+    for key in ("instructions", "examples"):
+        values = voice.get(key, [])
+        if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+            raise ValueError(f"voice.json {key} must be an array of strings")
+    captions = voice.get("captions", {})
+    if not isinstance(captions, dict) or set(captions) - DEFAULT_CAPTIONS.keys():
+        raise ValueError("voice.json captions must contain only supported caption keys")
+    if any(not isinstance(value, str) or not value.strip() or "\n" in value or "\r" in value for value in captions.values()):
+        raise ValueError("voice.json captions must be nonempty single-line strings")
+    return voice
+
+
+def caption(key):
+    return load_voice().get("captions", {}).get(key, DEFAULT_CAPTIONS[key])
+
+
+def review_prompt():
+    voice = load_voice()
+    sections = [
+        bunny_prompt_path().read_text("utf-8"),
+        "## Configured voice (presentation only)",
+        f"Character: {voice['character']}",
+        *voice.get("instructions", []),
+    ]
+    if voice.get("examples"):
+        sections.extend(["### Voice examples", *voice["examples"]])
+    print(f"Bunny voice: {voice['character']}", flush=True)
+    return "\n\n".join(sections)
 
 
 def load_rules():
@@ -1098,7 +1156,7 @@ def warn_is_blocking_proof_gap(item):
 
 def finding_summary(findings):
     if not findings:
-        return "No bad machinery found."
+        return caption("no_findings")
     counts = {}
     for finding in findings:
         severity = str(finding.severity or "unknown").lower()
@@ -1173,13 +1231,13 @@ def merge_signal(review_obj, findings, nitpicks, pre_merge):
             "label": "READY WITH NOTES",
             "title": "Ready With Notes",
             "admonition": "WARNING",
-            "detail": "No bad machinery found, but non-blocking notes remain on the counter.",
+            "detail": caption("ready_with_notes"),
         }
     return {
         "label": "READY",
         "title": "Ready",
         "admonition": "TIP",
-        "detail": "Aha, no bad machinery found for this head. Expected CI controls paid out clean.",
+        "detail": caption("ready"),
     }
 
 
@@ -1234,7 +1292,7 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!CAUTION]",
-                "> **Loot uncounted.** Bunny Review did not complete, so no model findings are available.",
+                f"> **{caption('incomplete_label')}** Bunny Review did not complete, so no model findings are available.",
                 "> Repair the failed review control or rerun Bunny before treating this PR as reviewed.",
             ]
         )
@@ -1242,7 +1300,7 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!CAUTION]",
-                f"> **Bad payout.** {summary}",
+                f"> **{caption('blocking_label')}** {summary}",
                 "> Repair blocking/high findings and failed controls before merge.",
             ]
         )
@@ -1250,14 +1308,14 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!WARNING]",
-                f"> **Anomalies remain.** {summary}",
+                f"> **{caption('notes_label')}** {summary}",
                 "> Examine the findings and warning rows before merge.",
             ]
         )
     return "\n".join(
         [
             "> [!TIP]",
-            "> **Jackpot stays clean.** Bunny found no actionable defects in the checked mechanism.",
+            f"> **{caption('clean_label')}** Bunny found no actionable defects in the inspected code.",
         ]
     )
 
@@ -1573,7 +1631,7 @@ def ci_status_to_pre_merge_checks(ci_status):
                 "name": "CI Status",
                 "status": "fail",
                 "type": "CI Timing",
-                "detail": "One or more expected CI controls failed or were cancelled; this payout is not fit for merge.",
+                "detail": "One or more expected CI controls failed or were cancelled; resolve those checks before merge.",
             }
         ]
     if "warning:" in lowered or "still running" in lowered:
@@ -1640,7 +1698,7 @@ def diff_shortstat(base):
 def fallback_change_summary(base, files):
     if not files:
         return [
-            "The line is quiet: no changed files in the selected review range, so there is no new scene to inspect.",
+            caption("empty_diff"),
         ]
     file_word = "file" if len(files) == 1 else "files"
     area = changed_file_area(files)
@@ -1648,8 +1706,8 @@ def fallback_change_summary(base, files):
     stat = diff_shortstat(base)
     stat_note = f"; {stat}" if stat else ""
     return [
-        f"The opening scene changes {len(files)} {file_word}{area_note}{stat_note}. "
-        "That is the visible footprint of this diff; the detailed model summary was unavailable.",
+        f"{caption('summary_prefix')} {len(files)} {file_word}{area_note}{stat_note}. "
+        f"{caption('summary_unavailable')}",
     ]
 
 
@@ -1734,10 +1792,10 @@ def render_walkthrough(
         "",
         render_review_metadata(review_obj, head_sha),
         "",
-        "### 🧭 Loot Summary",
+        f"### 🧭 {caption('summary_heading')}",
     ])
     body.extend([f"- {line}" for line in summary[:2]] or ["- No change summary produced."])
-    body.extend(["", "### 🔎 Bad Machinery"])
+    body.extend(["", f"### 🔎 {caption('findings_heading')}"])
     if findings:
         body.extend(
             [
@@ -1763,7 +1821,7 @@ def render_walkthrough(
                 ]
             )
         else:
-            body.extend(["", "> [!TIP]", "> No bad machinery found."])
+            body.extend(["", "> [!TIP]", f"> {caption('no_findings')}"])
     if resolved:
         body.extend(["", "### ✅ Resolved Since Last Review"])
         for item in resolved[:5]:
@@ -1787,7 +1845,7 @@ def render_walkthrough(
     else:
         body.append("- None recorded.")
     agent_prompt = render_agent_prompt_details(
-        findings, "🤖 Copy prompt for Bunny's busted-machine findings"
+        findings, "🤖 Copy prompt for Bunny's reported findings"
     )
     if agent_prompt:
         body.extend(["", agent_prompt])
@@ -1903,7 +1961,7 @@ def write_skipped_review(title, body, *, status="unknown", metadata=None):
         "nitpicks": [],
         "pre_merge_checks": [{"name": title, "status": status, "detail": body}],
         "open_questions": [],
-        "what_i_checked": ["No model pass ran; the source has not had its close-up."],
+        "what_i_checked": [caption("no_model_pass")],
     }
     if metadata:
         review_obj.update(metadata)
@@ -2275,7 +2333,7 @@ def produce_review(args):
         base_url=os.environ.get("LLM_BASE_URL") or None,
         max_retries=MODEL_MAX_RETRIES,
     )
-    skill = bunny_prompt_path().read_text("utf-8")
+    skill = review_prompt()
     prior_contract_state = prior_review_contract_state(pr_num)
     prior_contract_context = (
         format_contract_entries_for_prompt(prior_contract_state)
@@ -2478,7 +2536,7 @@ def patch_command_status_running(pr_num, head_sha, mode):
             "## 🐰 Bunny Review Running",
             "",
             "> [!NOTE]",
-            "> Reviewer workflow is running. Bunny is taking a closer look at the failure paths.",
+            f"> {caption('running')}",
             "",
             f"- **Mode:** `{mode or 'unknown'}`",
             f"- **{commit_line(head_sha)}**",
@@ -2494,7 +2552,7 @@ def patch_command_status_complete(pr_num, head_sha):
             "## ✅ Bunny Review Completed",
             "",
             "> [!TIP]",
-            "> Review posted. Bunny has traced the scene and recorded the findings.",
+            f"> {caption('completed')}",
             "",
             f"- **{commit_line(head_sha)}**",
         ]

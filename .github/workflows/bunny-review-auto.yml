@@ -13,7 +13,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bunny-review-auto-dispatch-${{ github.event.pull_request.number }}
+  # Metadata-only edits must not cancel a push/ready event before it dispatches.
+  group: bunny-review-auto-dispatch-${{ github.event.pull_request.number }}-${{ github.event.action == 'edited' && !github.event.changes.base.ref.from && 'metadata' || 'review' }}
   cancel-in-progress: true
 
 jobs:

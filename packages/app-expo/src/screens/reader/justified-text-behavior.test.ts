@@ -2,11 +2,17 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+interface BookPolicy {
+  decision: "pending" | "apply" | "preserve";
+}
 
 const source = readFileSync(resolve(__dirname, "../../../assets/reader/justified-text.js"), "utf8");
 function fixture() {
+  document.documentElement.replaceChildren();
   document.documentElement.innerHTML = `<html><head><style>
+    body, p { text-align: left; }
     #publisher { text-align: left !important; }
     .center { text-align: center; }
   </style></head><body>
@@ -24,7 +30,8 @@ function fixture() {
   const api = (
     context as {
       ReadAnyJustifiedText: {
-        apply: (doc: Document, enabled: boolean, unsupported: boolean) => void;
+        apply: (doc: Document, enabled: boolean, unsupported: boolean, policy?: BookPolicy) => void;
+        createBookPolicy: () => BookPolicy;
       };
     }
   ).ReadAnyJustifiedText;
@@ -97,6 +104,72 @@ describe("reader-side justified text helper", () => {
       expect(doc.documentElement.outerHTML).toBe(original);
     } finally {
       mutations.disconnect();
+    }
+  });
+  it("preserves the whole book if the opening chapter contains justified prose", () => {
+    const { api, doc } = fixture();
+    doc.body.insertAdjacentHTML("beforeend", '<p style="text-align:justify">Publisher prose</p>');
+    const policy = api.createBookPolicy();
+    const original = doc.documentElement.outerHTML;
+    const mutations = new MutationObserver(() => {});
+    mutations.observe(doc.documentElement, { attributes: true, childList: true, subtree: true });
+    api.apply(doc, true, false, policy);
+    expect(policy.decision).toBe("preserve");
+    expect(mutations.takeRecords()).toHaveLength(0);
+    mutations.disconnect();
+    expect(doc.documentElement.outerHTML).toBe(original);
+
+    doc.body.innerHTML = '<p style="text-align:left">Later prose</p>';
+    const computed = vi.spyOn(window, "getComputedStyle");
+    const scan = vi.spyOn(doc, "querySelectorAll");
+    try {
+      api.apply(doc, true, false, policy);
+      api.apply(doc, false, false, policy);
+      expect(computed).not.toHaveBeenCalled();
+      expect(scan).not.toHaveBeenCalled();
+      expect(doc.body.innerHTML).toBe('<p style="text-align:left">Later prose</p>');
+    } finally {
+      computed.mockRestore();
+      scan.mockRestore();
+    }
+  });
+
+  it("decides once using the opening chapter and resets for another book", () => {
+    const { api, doc } = fixture();
+    const policy = api.createBookPolicy();
+    api.apply(doc, false, false, policy);
+    expect(policy.decision).toBe("pending");
+    api.apply(doc, true, true, policy);
+    expect(policy.decision).toBe("pending");
+    api.apply(doc, true, false, policy);
+    expect(policy.decision).toBe("apply");
+    doc.body.innerHTML =
+      '<p style="text-align:justify">Later justified prose</p><p id="later" style="text-align:left">Later left prose</p>';
+    api.apply(doc, true, false, policy);
+    expect(policy.decision).toBe("apply");
+    expect(doc.getElementById("later")?.style.textAlign).toBe("justify");
+    expect(api.createBookPolicy().decision).toBe("pending");
+  });
+
+  it("does not treat headings, captions, code, empty blocks or wrappers as justified prose", () => {
+    const { api, doc } = fixture();
+    doc.body.innerHTML =
+      '<h1 style="text-align:justify">Heading</h1><figcaption style="text-align:justify">Caption</figcaption><pre style="text-align:justify">Code</pre><p style="text-align:justify"> </p><div style="text-align:justify"><p style="text-align:left">Actual prose</p></div>';
+    const policy = api.createBookPolicy();
+    api.apply(doc, true, false, policy);
+    expect(policy.decision).toBe("apply");
+  });
+
+  it("reuses the normal style pass for detection instead of scanning twice", () => {
+    const { api, doc } = fixture();
+    const computed = vi.spyOn(window, "getComputedStyle");
+    try {
+      api.apply(doc, true, false, api.createBookPolicy());
+      const elements = computed.mock.calls.map(([element]) => element);
+      expect(elements.length).toBeGreaterThan(0);
+      expect(new Set(elements).size).toBe(elements.length);
+    } finally {
+      computed.mockRestore();
     }
   });
 });

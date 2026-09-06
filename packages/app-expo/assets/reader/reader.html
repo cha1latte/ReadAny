@@ -168,13 +168,8 @@
   const EXCLUDED_ANCESTORS =
     "pre, code, kbd, samp, table, caption, figcaption, form, button, input, textarea, select, svg, math";
 
-  function shouldJustify(element, unsupportedLayout, view) {
-    if (!element || unsupportedLayout || element.closest(EXCLUDED_ANCESTORS)) return false;
-    const computed = view.getComputedStyle(element);
-    return ["block", "list-item", "flow-root"].includes(computed.display);
-  }
-
-  function apply(doc, enabled, unsupportedLayout) {
+  function apply(doc, enabled, unsupportedLayout, policy) {
+    if (policy?.decision === "preserve") return;
     if (!doc || !doc.body || !doc.defaultView) return;
 
     for (const element of doc.querySelectorAll(`[${MARKER}]`)) {
@@ -195,17 +190,44 @@
     // Snapshot all publisher alignments before changing any inherited styles.
     // Centered blocks need an explicit override too, so a justified parent
     // cannot change their originally inherited centering.
-    const elements = [doc.body, ...doc.body.querySelectorAll("*")]
-      .filter(
-        (element) =>
-          shouldJustify(element, unsupportedLayout, doc.defaultView) ||
-          element.matches(EXCLUDED_ANCESTORS),
-      )
-      .map((element) => ({
-        element,
-        alignment: doc.defaultView.getComputedStyle(element).textAlign.toLowerCase() || "start",
-        excluded: Boolean(element.closest(EXCLUDED_ANCESTORS)),
-      }));
+    const elements = [];
+    const inspecting = policy?.decision === "pending";
+    const styles = new Map();
+    const computedStyle = (element) => {
+      if (!styles.has(element)) styles.set(element, doc.defaultView.getComputedStyle(element));
+      return styles.get(element);
+    };
+    for (const element of [doc.body, ...doc.body.querySelectorAll("*")]) {
+      const excluded = Boolean(element.closest(EXCLUDED_ANCESTORS));
+      if (excluded && !element.matches(EXCLUDED_ANCESTORS)) continue;
+      const computed = computedStyle(element);
+      if (!excluded && !["block", "list-item", "flow-root"].includes(computed.display)) continue;
+      const alignment = computed.textAlign.toLowerCase() || "start";
+      if (
+        inspecting &&
+        alignment === "justify" &&
+        !excluded &&
+        !element.closest("h1, h2, h3, h4, h5, h6, nav")
+      ) {
+        // Check text in this block, not a wrapper whose child paragraphs
+        // may override its alignment. Reuse the same computed-style reads.
+        const hasText = Array.from(element.childNodes).some((node) => {
+          if (node.nodeType === 3) return Boolean(node.textContent.trim());
+          return (
+            node.nodeType === 1 &&
+            !node.closest(EXCLUDED_ANCESTORS) &&
+            computedStyle(node).display === "inline" &&
+            Boolean(node.textContent.trim())
+          );
+        });
+        if (hasText) {
+          policy.decision = "preserve";
+          return;
+        }
+      }
+      elements.push({ element, alignment, excluded });
+    }
+    if (inspecting) policy.decision = "apply";
     for (const { element, alignment, excluded } of elements) {
       // Publisher justification already has the desired effect, including when inherited.
       if (alignment === "justify") continue;
@@ -224,7 +246,11 @@
     }
   }
 
-  root.ReadAnyJustifiedText = { apply, shouldJustify };
+  function createBookPolicy() {
+    return { decision: "pending" };
+  }
+
+  root.ReadAnyJustifiedText = { apply, createBookPolicy };
 })(globalThis);
 
 </script>
@@ -270,6 +296,7 @@
     let currentLineHeight = 1.6;
     let currentParagraphSpacing = 8;
     let currentJustifyBodyText = true;
+    let currentJustificationPolicy = null;
     let currentFontTheme = 'default';
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
@@ -1542,6 +1569,7 @@
       const fileName = getBookFileName(msg);
       const mimeType = getBookMimeType(msg);
       currentBookIsPdf = isPDFBookMessage(msg);
+      currentJustificationPolicy = null;
       pdfPageLightCache = {};
       pdfDocIndexMap = new WeakMap();
       bookTextMetricsJobId += 1;
@@ -1671,6 +1699,7 @@
           : await loadBook();
         getExtractionSessions().throwIfCancelled(msg.requestId);
         currentBook = book;
+        currentJustificationPolicy = globalThis.ReadAnyJustifiedText.createBookPolicy();
         attachBookTransformHandler(book);
 
         const el = document.createElement('foliate-view');
@@ -1687,7 +1716,7 @@
             currentSectionUsesVerticalWriting = !el.isFixedLayout && isVerticalDoc(doc);
             applyRendererFlowMode(el.renderer);
           }
-          applyDocStyles(doc);
+          applyDocStyles(doc, primary !== false);
           if (currentBookIsPdf && typeof index === 'number') {
             pdfDocIndexMap.set(doc, index);
             applyPdfPageThemeFilter(doc, index);
@@ -2285,13 +2314,34 @@
 
     function syncJustifiedTextForAllDocs() {
       const fixedLayout = Boolean(view?.isFixedLayout);
-      for (const content of getRendererContents()) {
+      const policy = currentJustificationPolicy;
+      if (!policy || currentBookIsPdf || fixedLayout) return;
+      if (policy.decision === 'preserve') return;
+      const contents = getRendererContents();
+      if (policy.decision === 'pending') {
+        const sample = contents.find((content) => content.index === currentSectionIndex) || contents[0];
+        if (!sample?.doc) return;
+        globalThis.ReadAnyJustifiedText?.apply(
+          sample.doc, currentJustifyBodyText, isVerticalDoc(sample.doc), policy,
+        );
+        if (policy.decision !== 'apply') return;
+        // The sample was already styled by the same pass that made the decision.
+        for (const content of contents) {
+          if (!content?.doc || content.doc === sample.doc) continue;
+          globalThis.ReadAnyJustifiedText?.apply(
+            content.doc, currentJustifyBodyText, isVerticalDoc(content.doc), policy,
+          );
+        }
+        return;
+      }
+      for (const content of contents) {
         if (!content?.doc) continue;
-        const unsupportedLayout = fixedLayout || isVerticalDoc(content.doc);
+        const unsupportedLayout = isVerticalDoc(content.doc);
         globalThis.ReadAnyJustifiedText?.apply(
           content.doc,
           currentJustifyBodyText,
           unsupportedLayout,
+          policy,
         );
       }
     }
@@ -2614,7 +2664,7 @@ html, body {
       }
     }
 
-    function applyDocStyles(doc) {
+    function applyDocStyles(doc, isPrimary = true) {
       if (currentBookIsPdf) {
         const styleId = '__readany_pdf_styles__';
         let style = doc.getElementById(styleId);
@@ -2631,11 +2681,15 @@ html, body {
       }
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
-      globalThis.ReadAnyJustifiedText?.apply(
-        doc,
-        currentJustifyBodyText,
-        verticalDoc || Boolean(view?.isFixedLayout),
-      );
+      if (currentJustificationPolicy &&
+          (isPrimary || currentJustificationPolicy.decision !== 'pending')) {
+        globalThis.ReadAnyJustifiedText?.apply(
+          doc,
+          currentJustifyBodyText,
+          verticalDoc || Boolean(view?.isFixedLayout),
+          currentJustificationPolicy,
+        );
+      }
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.webkitUserDrag = 'none';

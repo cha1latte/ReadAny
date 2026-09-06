@@ -204,6 +204,7 @@
     let currentLineHeight = 1.6;
     let currentParagraphSpacing = 8;
     let currentJustifyBodyText = true;
+    let currentJustificationPolicy = null;
     let currentFontTheme = 'default';
     let currentCustomFontFaceCSS = '';
     let currentCustomFontFamily = '';
@@ -1476,6 +1477,7 @@
       const fileName = getBookFileName(msg);
       const mimeType = getBookMimeType(msg);
       currentBookIsPdf = isPDFBookMessage(msg);
+      currentJustificationPolicy = null;
       pdfPageLightCache = {};
       pdfDocIndexMap = new WeakMap();
       bookTextMetricsJobId += 1;
@@ -1605,6 +1607,7 @@
           : await loadBook();
         getExtractionSessions().throwIfCancelled(msg.requestId);
         currentBook = book;
+        currentJustificationPolicy = globalThis.ReadAnyJustifiedText.createBookPolicy();
         attachBookTransformHandler(book);
 
         const el = document.createElement('foliate-view');
@@ -1621,7 +1624,7 @@
             currentSectionUsesVerticalWriting = !el.isFixedLayout && isVerticalDoc(doc);
             applyRendererFlowMode(el.renderer);
           }
-          applyDocStyles(doc);
+          applyDocStyles(doc, primary !== false);
           if (currentBookIsPdf && typeof index === 'number') {
             pdfDocIndexMap.set(doc, index);
             applyPdfPageThemeFilter(doc, index);
@@ -2219,13 +2222,34 @@
 
     function syncJustifiedTextForAllDocs() {
       const fixedLayout = Boolean(view?.isFixedLayout);
-      for (const content of getRendererContents()) {
+      const policy = currentJustificationPolicy;
+      if (!policy || currentBookIsPdf || fixedLayout) return;
+      if (policy.decision === 'preserve') return;
+      const contents = getRendererContents();
+      if (policy.decision === 'pending') {
+        const sample = contents.find((content) => content.index === currentSectionIndex) || contents[0];
+        if (!sample?.doc) return;
+        globalThis.ReadAnyJustifiedText?.apply(
+          sample.doc, currentJustifyBodyText, isVerticalDoc(sample.doc), policy,
+        );
+        if (policy.decision !== 'apply') return;
+        // The sample was already styled by the same pass that made the decision.
+        for (const content of contents) {
+          if (!content?.doc || content.doc === sample.doc) continue;
+          globalThis.ReadAnyJustifiedText?.apply(
+            content.doc, currentJustifyBodyText, isVerticalDoc(content.doc), policy,
+          );
+        }
+        return;
+      }
+      for (const content of contents) {
         if (!content?.doc) continue;
-        const unsupportedLayout = fixedLayout || isVerticalDoc(content.doc);
+        const unsupportedLayout = isVerticalDoc(content.doc);
         globalThis.ReadAnyJustifiedText?.apply(
           content.doc,
           currentJustifyBodyText,
           unsupportedLayout,
+          policy,
         );
       }
     }
@@ -2548,7 +2572,7 @@ html, body {
       }
     }
 
-    function applyDocStyles(doc) {
+    function applyDocStyles(doc, isPrimary = true) {
       if (currentBookIsPdf) {
         const styleId = '__readany_pdf_styles__';
         let style = doc.getElementById(styleId);
@@ -2565,11 +2589,15 @@ html, body {
       }
       syncCustomFontStylesForDoc(doc, currentCustomFontFaceCSS);
       const verticalDoc = isVerticalDoc(doc);
-      globalThis.ReadAnyJustifiedText?.apply(
-        doc,
-        currentJustifyBodyText,
-        verticalDoc || Boolean(view?.isFixedLayout),
-      );
+      if (currentJustificationPolicy &&
+          (isPrimary || currentJustificationPolicy.decision !== 'pending')) {
+        globalThis.ReadAnyJustifiedText?.apply(
+          doc,
+          currentJustifyBodyText,
+          verticalDoc || Boolean(view?.isFixedLayout),
+          currentJustificationPolicy,
+        );
+      }
       if (!verticalDoc) {
         for (const img of doc.querySelectorAll('img')) {
           img.style.webkitUserDrag = 'none';

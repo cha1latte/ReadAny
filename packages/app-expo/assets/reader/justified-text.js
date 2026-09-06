@@ -1,8 +1,11 @@
 (function installReadAnyJustifiedText(root) {
   const MARKER = "data-readany-justify-body";
   const originals = new WeakMap();
-  const EXCLUDED_ANCESTORS =
-    "pre, code, kbd, samp, table, caption, figcaption, form, button, input, textarea, select, svg, math";
+  const EXCLUDED_TAGS = new Set(
+    "pre code kbd samp table caption figcaption form button input textarea select svg math h1 h2 h3 h4 h5 h6 nav ul ol dl blockquote".split(
+      " ",
+    ),
+  );
 
   function apply(doc, enabled, unsupportedLayout, policy) {
     if (policy?.decision === "preserve") return;
@@ -29,56 +32,69 @@
     const elements = [];
     const inspecting = policy?.decision === "pending";
     const styles = new Map();
+    const excludedElements = new Set();
     const computedStyle = (element) => {
       if (!styles.has(element)) styles.set(element, doc.defaultView.getComputedStyle(element));
       return styles.get(element);
     };
     for (const element of [doc.body, ...doc.body.querySelectorAll("*")]) {
-      const excluded = Boolean(element.closest(EXCLUDED_ANCESTORS));
-      if (excluded && !element.matches(EXCLUDED_ANCESTORS)) continue;
+      // DOM order lets descendants reuse their parent's exclusion decision.
+      const excludedRoot = EXCLUDED_TAGS.has(element.localName);
+      const excluded = excludedRoot || excludedElements.has(element.parentElement);
+      if (excluded) {
+        excludedElements.add(element);
+        if (!excludedRoot) continue;
+      }
       const computed = computedStyle(element);
-      if (!excluded && !["block", "list-item", "flow-root"].includes(computed.display)) continue;
-      const alignment = computed.textAlign.toLowerCase() || "start";
       if (
-        inspecting &&
-        alignment === "justify" &&
-        !excluded &&
-        !element.closest("h1, h2, h3, h4, h5, h6, nav")
-      ) {
-        // Check text in this block, not a wrapper whose child paragraphs
-        // may override its alignment. Reuse the same computed-style reads.
-        const hasText = Array.from(element.childNodes).some((node) => {
-          if (node.nodeType === 3) return Boolean(node.textContent.trim());
-          return (
-            node.nodeType === 1 &&
-            !node.closest(EXCLUDED_ANCESTORS) &&
-            computedStyle(node).display === "inline" &&
-            Boolean(node.textContent.trim())
-          );
-        });
-        if (hasText) {
-          policy.decision = "preserve";
-          return;
+        !["block", "list-item", "flow-root", "table", "table-caption", "inline-block"].includes(
+          computed.display,
+        )
+      )
+        continue;
+      const alignment = computed.textAlign.toLowerCase() || "start";
+      // Only text belonging to this block makes it prose. Structural wrappers
+      // retain their alignment; their child paragraphs are considered separately.
+      let prose = false;
+      if (!excluded) {
+        for (let node = element.firstChild; node; node = node.nextSibling) {
+          if (
+            (node.nodeType === 3 && node.textContent.trim()) ||
+            (node.nodeType === 1 &&
+              computedStyle(node).display === "inline" &&
+              !EXCLUDED_TAGS.has(node.localName) &&
+              node.textContent.trim())
+          ) {
+            prose = true;
+            break;
+          }
         }
       }
-      elements.push({ element, alignment, excluded });
+      if (inspecting && alignment === "justify" && prose) {
+        policy.decision = "preserve";
+        return;
+      }
+      elements.push({ element, alignment, prose });
     }
     if (inspecting) policy.decision = "apply";
-    for (const { element, alignment, excluded } of elements) {
+    for (const { element, alignment, prose } of elements) {
       // Publisher justification already has the desired effect, including when inherited.
       if (alignment === "justify") continue;
+      const centered = ["center", "-webkit-center"].includes(alignment);
+      // In an eligible book, right/end prose is intentionally justified too.
+      // Only centering is exempt; the book policy preserves all alignments
+      // when publisher justification was found in the opening chapter.
+      const target = prose && !centered ? "justify" : alignment;
+      // Preserve non-prose/centered blocks without writes unless a modified
+      // ancestor could change their inherited alignment.
+      if (target === alignment && !element.parentElement?.closest(`[${MARKER}]`)) continue;
       originals.set(element, {
         value: element.style.getPropertyValue("text-align"),
         priority: element.style.getPropertyPriority("text-align"),
         hadStyle: element.hasAttribute("style"),
       });
       element.setAttribute(MARKER, "true");
-      const centered = ["center", "-webkit-center"].includes(alignment);
-      element.style.setProperty(
-        "text-align",
-        excluded ? alignment : centered ? "center" : "justify",
-        "important",
-      );
+      element.style.setProperty("text-align", target, "important");
     }
   }
 

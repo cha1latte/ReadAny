@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,7 +9,10 @@ interface BookPolicy {
   decision: "pending" | "apply" | "preserve";
 }
 
-const source = readFileSync(resolve(__dirname, "../../../assets/reader/justified-text.js"), "utf8");
+const source = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../../../assets/reader/justified-text.js"),
+  "utf8",
+);
 function fixture() {
   document.documentElement.replaceChildren();
   document.documentElement.innerHTML = `<html><head><style>
@@ -172,4 +176,41 @@ describe("reader-side justified text helper", () => {
       computed.mockRestore();
     }
   });
+  it("preserves headings, navigation, lists, captions and structural wrappers", () => {
+    const { api, doc, alignment } = fixture();
+    doc.body.innerHTML =
+      '<h1 id="heading" style="text-align:left">Heading</h1><nav id="nav" style="text-align:right"><p>Contents</p></nav><ul id="list" style="text-align:left"><li>Item</li></ul><blockquote id="quote" style="text-align:right">Quotation</blockquote><figcaption id="caption" style="text-align:left">Caption</figcaption><div id="wrapper" style="text-align:left"><p id="nested">Prose</p></div><div id="div-prose" style="text-align:left">Div prose<br>More prose</div>';
+    const preserved = ["heading", "nav", "list", "quote", "caption", "wrapper"];
+    const before = preserved.map(alignment);
+    api.apply(doc, true, false, api.createBookPolicy());
+    expect(preserved.map(alignment)).toEqual(before);
+    for (const id of preserved) {
+      expect(doc.getElementById(id)?.hasAttribute("data-readany-justify-body")).toBe(false);
+    }
+    expect(alignment("nested")).toBe("justify");
+    expect(alignment("div-prose")).toBe("justify");
+  });
+
+  it.each(["right", "end"])(
+    "justifies %s prose unless the opening chapter exempts the book",
+    (authored) => {
+      const { api, doc, alignment } = fixture();
+      doc.body.innerHTML = `<p id="prose" dir="rtl" style="text-align:${authored}">Body prose</p>`;
+      const policy = api.createBookPolicy();
+      for (let i = 0; i < 2; i++) {
+        api.apply(doc, true, false, policy);
+        expect(alignment("prose")).toBe("justify");
+        api.apply(doc, false, false, policy);
+        expect(alignment("prose")).toBe(authored);
+      }
+      doc.body.insertAdjacentHTML(
+        "beforeend",
+        '<p style="text-align:justify">Publisher-justified prose</p>',
+      );
+      const exempt = api.createBookPolicy();
+      api.apply(doc, true, false, exempt);
+      expect(exempt.decision).toBe("preserve");
+      expect(alignment("prose")).toBe(authored);
+    },
+  );
 });

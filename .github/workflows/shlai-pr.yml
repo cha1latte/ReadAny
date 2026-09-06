@@ -28,6 +28,8 @@ jobs:
           node-version: 24.15.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Check Bunny reviewer contracts
+        run: python3 -I -m unittest discover -s .github/bunny-review -p 'test_*.py' -v
       - run: pnpm --filter app test
       - run: pnpm --filter @readany/core test
       - run: pnpm --filter @readany/app-expo test

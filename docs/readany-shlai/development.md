@@ -42,6 +42,8 @@ gh pr create --repo cha1latte/ReadAny --base main --head <friend-login>:feature/
 
 Wait for `Validate` and `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. Merging into `main` publishes the next shared preview phone update after a second successful validation/build; it does not publish a stable-production release. See [phone-updates.md](phone-updates.md).
 
+[Bunny Review](bunny-review.md) adds automated review comments with a Ghostface-inspired voice. Its [architecture and code-quality guards](code-quality.md) cover platform boundaries, data integrity, and practical KISS/YAGNI/SOLID concerns. Bunny remains advisory; the existing checks and owner merge decision still apply.
+
 ## Workflow approvals
 
 GitHub places `pull_request` workflows created by automation using `GITHUB_TOKEN` into an approval-required state, and it can require the same approval for a first pull request from a fork. When an automated upstream-sync PR or a first-time fork PR shows **Approve workflows**, Celia clicks it in the pull request's Checks/Actions view; GitHub then runs the normal `Validate` and `Preview APK` jobs. Do not add a PAT, `workflow_dispatch` workaround, or bootstrap push: these workflows are triggered by `pull_request`, not only by default-branch pushes.

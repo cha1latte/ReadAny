@@ -1,0 +1,12 @@
+{
+  "expected_checks": [
+    {
+      "name": "Validate",
+      "required": "always"
+    },
+    {
+      "name": "Preview APK",
+      "required": "always"
+    }
+  ]
+}

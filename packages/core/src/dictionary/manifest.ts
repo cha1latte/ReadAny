@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { DictionaryManifest } from "./types";
 
-const MAX_DICTIONARY_PACK_BYTES = 150 * 1024 * 1024;
+export const MAX_DICTIONARY_PACK_BYTES = 150 * 1024 * 1024;
 const SEMVER =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*)|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:(?:0|[1-9]\d*)|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 

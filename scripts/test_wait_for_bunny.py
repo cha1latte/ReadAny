@@ -39,8 +39,8 @@ class BunnyGateTests(unittest.TestCase):
         def api(path):
             if "/pulls/" in path:
                 return next(pulls) if pulls else PR
-            self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/status")
-            return next(states)
+            self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/statuses")
+            return next(states)["statuses"]
         def sleep(seconds):
             ticks[0] += seconds
         with contextlib.redirect_stdout(io.StringIO()):
@@ -116,7 +116,7 @@ class BunnyGateTests(unittest.TestCase):
         events = iter(["none", "new-event"])
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertFalse(gate.wait_for_bunny(
-                REPO, "28", SHA, api=lambda path: PR if "/pulls/" in path else status(),
+                REPO, "28", SHA, api=lambda path: PR if "/pulls/" in path else status()["statuses"],
                 retarget=lambda *_: next(events)))
 
     def test_trusted_context_is_captured_before_review(self):
@@ -141,7 +141,7 @@ class BunnyGateTests(unittest.TestCase):
                 if args[2] == "graphql":
                     response = {"data": {"repository": {"pullRequest": {"timelineItems": {"nodes": []}}}}}
                 else:
-                    response = PR if "/pulls/" in args[2] else status("failure")
+                    response = PR if "/pulls/" in args[2] else status("failure")["statuses"]
                 return subprocess.CompletedProcess(args, 0, stdout=json.dumps(response))
             previous = Path.cwd()
             try:

@@ -40,7 +40,9 @@ git push -u origin feature/reader-font-size
 gh pr create --repo cha1latte/ReadAny --base main --head <friend-login>:feature/reader-font-size --fill
 ```
 
-Wait for `Validate` and `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. Merging into `main` publishes the next shared preview phone update after a second successful validation/build; it does not publish a stable-production release. See [phone-updates.md](phone-updates.md).
+Wait for `Validate` and, when built, `Preview APK`, then review the preview artifact. Friend reviews and comments are advisory; Celia manually approves and merges after the checks are green. App/build changes merged into `main` publish the next shared preview phone update after a second successful validation/build; they do not publish a stable-production release. See [phone-updates.md](phone-updates.md).
+
+[Bunny Review](bunny-review.md) adds automated review comments with a Ghostface-inspired voice. Its [architecture and code-quality guards](code-quality.md) cover platform boundaries, data integrity, and practical KISS/YAGNI/SOLID concerns. Bunny remains advisory; the existing checks and owner merge decision still apply.
 
 ## Workflow approvals
 
@@ -50,11 +52,13 @@ GitHub places `pull_request` workflows created by automation using `GITHUB_TOKEN
 
 Every pull request to `main` runs the secret-free **Shlai Pull Request** workflow. After its `Preview APK` job succeeds, open that workflow run in GitHub Actions and download the artifact named `ReadAny-Shlai-Preview-<PR number>`. The downloaded ZIP contains `ReadAny-Shlai-Preview-<PR number>.apk`; extract it and install that APK for review. It is a self-contained release-mode preview with bundled JavaScript and no Expo development launcher or Metro dependency. Preview artifacts are retained for 14 days.
 
+PRs that change only Bunny tooling, the PR/phone-preview CI wiring and its scope checker, `AGENTS.md`, `.gitignore`, or Markdown files under `docs/` still run `Validate` but skip `Preview APK`. The same rule prevents an APK build and phone prerelease after merging those changes. `scripts/preview_build_scope.py` owns the exact allowlist. Any other changed path, including app code, dependencies, or build configuration, requires an APK; deleted and renamed paths count too. Manual workflow dispatch always builds. Inspect the **Determine preview build scope** summary to see the decision, and manually dispatch a build when changing build steps inside an allowlisted workflow requires APK verification.
+
 The GitHub workflows and the variant-aware EAS post-install hook temporarily add package-level Expo autolinking exclusions for `expo-dev-client`, `expo-dev-launcher`, and their menu modules before native generation. This keeps development-client builds untouched while preventing every supported preview and stable Android APK from opening a blank launcher screen. Android release builds also use a bounded 4 GB Gradle heap so R8 can finish on hosted runners.
 
 The preview is a separate app (`io.github.cha1latte.readanyshlai.preview`), so it can be installed alongside official ReadAny and stable ReadAny Shlai without changing either app's data.
 
-Pull-request APKs are temporary review artifacts. Celia and Decidetto use the permanent prerelease channel documented in [phone-updates.md](phone-updates.md); a successful merge to `main` creates the next verified update for both phones.
+Pull-request APKs are temporary review artifacts. Celia and Decidetto use the permanent prerelease channel documented in [phone-updates.md](phone-updates.md); a successful app/build merge to `main` creates the next verified update for both phones.
 
 ## Long-running local builds
 

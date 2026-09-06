@@ -5,6 +5,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
   <title>ReadAny Reader</title>
+  <script>
+    // Extraction hosts load this document without opening a visible book.
+    if (location.hash === '#readany-extractor') {
+      document.documentElement.setAttribute('data-readany-extractor', '');
+    }
+  </script>
   <style>
     * {
       margin: 0;
@@ -85,6 +91,7 @@
       z-index: 100;
     }
 
+    html[data-readany-extractor] #loading,
     #loading.hidden {
       display: none;
     }
@@ -2646,6 +2653,9 @@ html, body {
       let tapState = null;
 
       doc.addEventListener('touchstart', (e) => {
+        // Report once per real gesture, including page turns and scrolling.
+        // Layout relocations and synthetic events must not extend reading time.
+        if (e.isTrusted) postToRN('activity', {});
         if (bookmarkPullGestureActive) {
           tapState = null;
           return;

@@ -88,10 +88,11 @@ export class ExtractorRequestBoundary<Result, Context = unknown> {
     return true;
   }
 
-  rejectAll(): void {
+  rejectAll(error?: Error): void {
     for (const requestId of [...this.requests.keys()]) {
       const pending = this.take(requestId);
-      if (pending) pending.reject(pending.disposeError?.() ?? new Error("Extractor disposed"));
+      if (pending)
+        pending.reject(error ?? pending.disposeError?.() ?? new Error("Extractor disposed"));
     }
   }
 

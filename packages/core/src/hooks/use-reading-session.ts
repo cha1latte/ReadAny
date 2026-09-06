@@ -62,14 +62,13 @@ export function setSessionEventSource(source: SessionEventSource): void {
 }
 
 export function useReadingSession(bookId: string | null, tabId?: string) {
-  const {
-    startSession,
-    pauseSession,
-    resumeSession,
-    stopSession,
-    updateActiveTime,
-    saveCurrentSession,
-  } = useReadingSessionStore();
+  // Session ticks update currentSession every second; the reader only needs actions.
+  const startSession = useReadingSessionStore((s) => s.startSession);
+  const pauseSession = useReadingSessionStore((s) => s.pauseSession);
+  const resumeSession = useReadingSessionStore((s) => s.resumeSession);
+  const stopSession = useReadingSessionStore((s) => s.stopSession);
+  const updateActiveTime = useReadingSessionStore((s) => s.updateActiveTime);
+  const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const isTabActive = tabId ? activeTabId === tabId : true;
 

@@ -1,3 +1,4 @@
+import { TTSSleepTimerSheet } from "@/components/tts/TTSSleepTimerSheet";
 import {
   ChevronDownIcon,
   ClockIcon,
@@ -11,11 +12,12 @@ import {
   SkipForwardIcon,
   SquareIcon,
 } from "@/components/ui/Icon";
-import { useColors, radius } from "@/styles/theme";
+import { useTTSStore } from "@/stores";
+import { radius, useColors } from "@/styles/theme";
 import {
-  buildNarrationPreview,
   type TTSConfig,
   type TTSPlayState,
+  buildNarrationPreview,
   getTTSVoiceLabel,
 } from "@readany/core/tts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,10 +34,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookCoverImage } from "./tts/BookCoverImage";
-import { makeStyles, SH } from "./tts/tts-page-styles";
 import { VoicePickerModal } from "./tts/VoicePickerModal";
-import { TTSSleepTimerSheet } from "@/components/tts/TTSSleepTimerSheet";
-import { useTTSStore } from "@/stores";
+import { SH, makeStyles } from "./tts/tts-page-styles";
 
 // ── Local constants ───────────────────────────────────────────────────────────
 const THUMB_W = 48;
@@ -45,6 +45,8 @@ const THUMB_H = Math.round(THUMB_W * (41 / 28)); // ≈ 70
 
 interface TTSPageProps {
   visible: boolean;
+  /** Retain measured lyric positions while the control view is unmounted. */
+  lyricLayoutCache?: Map<string, { y: number; height: number }>;
   bookTitle: string;
   chapterTitle: string;
   coverUri?: string;
@@ -96,6 +98,7 @@ function clampPct(p: number) {
 
 export function TTSPage({
   visible,
+  lyricLayoutCache,
   bookTitle,
   chapterTitle,
   coverUri,
@@ -136,7 +139,9 @@ export function TTSPage({
   const sleepTimerEndsAt = useTTSStore((s) => s.sleepTimerEndsAt);
   const [now, setNow] = useState(Date.now());
   const lyricScrollRef = useRef<ScrollView>(null);
-  const lyricLayoutRef = useRef(new Map<string, { y: number; height: number }>());
+  const lyricLayoutRef = useRef(
+    lyricLayoutCache ?? new Map<string, { y: number; height: number }>(),
+  );
   const lastCenteredSignatureRef = useRef<string | null>(null);
   const userScrollingRef = useRef(false);
   const userScrollUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,7 +199,7 @@ export function TTSPage({
     return currentText ? [{ id: "fallback:current-text", text: currentText, cfi: null }] : [];
   }, [currentText, narrationSegments, prevNarrationSegments]);
   const lyricSegmentIdsKey = useMemo(
-    () => lyricSegments.map((segment) => segment.id).join("|"),
+    () => JSON.stringify(lyricSegments.map((segment) => segment.id)),
     [lyricSegments],
   );
 
@@ -390,7 +395,7 @@ export function TTSPage({
 
   useEffect(() => {
     // Keep layout entries that still exist in the current segment list; evict stale ones.
-    const currentIds = new Set(lyricSegments.map((s) => s.id));
+    const currentIds = new Set<string>(JSON.parse(lyricSegmentIdsKey));
     for (const key of lyricLayoutRef.current.keys()) {
       if (!currentIds.has(key)) {
         lyricLayoutRef.current.delete(key);
@@ -424,9 +429,8 @@ export function TTSPage({
         centerLyricIndex(targetIndex, true);
       }, 80);
       return () => clearTimeout(timer);
-    } else {
-      pendingCenterRef.current = targetIndex;
     }
+    pendingCenterRef.current = targetIndex;
   }, [
     centerLyricIndex,
     currentChunkIndex,

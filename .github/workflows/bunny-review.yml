@@ -75,10 +75,12 @@ jobs:
           [ "$BASE" = "main" ] || { echo "::error::Bunny only reviews PRs targeting main"; exit 1; }
           echo "PR_BASE_REF=$BASE" >> "$GITHUB_ENV"
           git fetch --force origin "$BASE:refs/remotes/origin/$BASE"
+          echo "PR_BASE_SHA=$(git rev-parse origin/main)" >> "$GITHUB_ENV"
 
       - name: Preserve review tooling from base branch
         run: |
           mkdir -p /tmp/bunny-review-tool/.github/bunny-review
+          git show "$PR_BASE_SHA:scripts/wait_for_bunny.py" > /tmp/bunny-review-tool/wait_for_bunny.py
           if git cat-file -e "origin/$PR_BASE_REF:.github/bunny-review/bunny_review.py"; then
             # PR head is the review target; reviewer tooling always comes from the trusted base branch.
             git show "origin/$PR_BASE_REF:.github/bunny-review/bunny_review.py" > /tmp/bunny-review-tool/.github/bunny-review/bunny_review.py
@@ -105,6 +107,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Bind approval to reviewed PR context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ env.PR_NUM }}
+        run: python -I /tmp/bunny-review-tool/wait_for_bunny.py --review-context
+
       - name: Mark Bunny status in progress
         env:
           GH_TOKEN: ${{ github.token }}
@@ -114,7 +122,7 @@ jobs:
             "repos/${{ github.repository }}/statuses/$PR_HEAD_SHA" \
             -f state="pending" \
             -f context="Bunny Review" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#${BUNNY_APPROVAL_CONTEXT:-}" \
             -f description="The trusted Bunny reviewer is inspecting this pull request." >/dev/null
 
       - name: Install dependencies
@@ -302,5 +310,5 @@ jobs:
             "repos/${{ github.repository }}/statuses/$PR_HEAD_SHA" \
             -f state="$STATE" \
             -f context="Bunny Review" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#${BUNNY_APPROVAL_CONTEXT:-}" \
             -f description="$DESCRIPTION" >/dev/null

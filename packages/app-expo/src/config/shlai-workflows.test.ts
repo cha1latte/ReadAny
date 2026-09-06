@@ -266,16 +266,44 @@ const expectPreviewWorkflowContract = (source: string) => {
   expect(workflow.permissions).toEqual({ contents: "read" });
 
   const jobs = workflow.jobs ?? {};
-  expect(Object.keys(jobs)).toEqual(["validate", "preview"]);
+  expect(Object.keys(jobs)).toEqual(["validate", "bunny_gate", "preview"]);
   const validate = jobs.validate;
   const preview = jobs.preview;
   expect(validate?.name).toBe("Validate");
   expect(preview?.name).toBe("Preview APK");
-  expect(preview?.needs).toBe("validate");
+  expect(preview?.needs).toEqual(["validate", "bunny_gate"]);
+  expect(preview?.if).toBe(
+    "needs.validate.outputs.apk_required == 'true' && needs.bunny_gate.outputs.approved == 'true'",
+  );
+  const gate = jobs.bunny_gate;
+  expect(gate?.needs).toBe("validate");
+  expect(gate?.permissions).toEqual({
+    contents: "read",
+    "pull-requests": "read",
+    statuses: "read",
+  });
+  expect(gate?.outputs).toEqual({ approved: "${{ steps.bunny.outputs.approved }}" });
+  expect(gate?.steps?.find((step) => step.uses?.startsWith("actions/checkout@"))?.with).toEqual({
+    ref: "${{ steps.trusted.outputs.sha }}",
+    path: ".bunny-gate",
+    "persist-credentials": false,
+  });
+  expect(gate?.steps?.[0]?.run).toContain('gh api "repos/$GITHUB_REPOSITORY/branches/main"');
 
-  for (const job of Object.values(jobs)) {
+  expect(
+    gate?.steps?.find((step) => step.name === "Wait for this commit's Bunny Review")?.run,
+  ).toBe("python3 -I .bunny-gate/scripts/wait_for_bunny.py");
+  expect(
+    gate?.steps?.find((step) => step.name === "Wait for this commit's Bunny Review")?.env,
+  ).toEqual({
+    GH_TOKEN: "${{ github.token }}",
+    PR_NUMBER: "${{ github.event.pull_request.number || inputs.pr_number }}",
+    PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || github.sha }}",
+  });
+
+  for (const [jobId, job] of Object.entries(jobs)) {
     expect(job.uses).toBeUndefined();
-    expect(job.permissions).toBeUndefined();
+    if (jobId !== "bunny_gate") expect(job.permissions).toBeUndefined();
     expect(job.environment).toBeUndefined();
     const steps = job.steps ?? [];
     for (const [setupNodeIndex, step] of steps.entries()) {
@@ -990,6 +1018,32 @@ const addWrongCacheOrderJob = (source: string, jobId: string) =>
 
 const unsafeMutations = [
   {
+    name: "PR-controlled gate script",
+    mutate: (source: string) =>
+      source.replace(
+        "python3 -I .bunny-gate/scripts/wait_for_bunny.py",
+        "python3 -I scripts/wait_for_bunny.py",
+      ),
+  },
+  {
+    name: "PR-controlled gate revision",
+    mutate: (source: string) =>
+      source.replace("ref: ${{ steps.trusted.outputs.sha }}", "ref: ${{ github.sha }}"),
+  },
+  {
+    name: "missing Bunny approval dependency",
+    mutate: (source: string) => source.replace("needs: [validate, bunny_gate]", "needs: validate"),
+  },
+  {
+    name: "bypassed Bunny approval output",
+    mutate: (source: string) =>
+      source.replace("needs.bunny_gate.outputs.approved == 'true'", "true"),
+  },
+  {
+    name: "Bunny gate write permission",
+    mutate: (source: string) => source.replace("statuses: read", "statuses: write"),
+  },
+  {
     name: "unpinned reusable job action",
     mutate: (source: string) =>
       source.replace("jobs:\n", "jobs:\n  attacker:\n    uses: attacker/reusable@main\n\n"),
@@ -1610,7 +1664,7 @@ describe("ReadAny Shlai workflows", () => {
     },
   );
 
-  it("builds secret-free preview APKs after validation", () => {
+  it("builds secret-free preview APKs after validation and Bunny approval", () => {
     expectPreviewWorkflowContract(readWorkflow("shlai-pr.yml"));
   });
 
@@ -1636,7 +1690,9 @@ describe("ReadAny Shlai workflows", () => {
     const source = readWorkflow("shlai-pr.yml");
     expect(source).toContain('if [[ "${{ github.event_name }}" == "pull_request" ]]');
     expect(source).toContain('BASE_SHA="$(git rev-parse HEAD^)"');
-    expect(source).toContain("github.event.pull_request.number || github.run_number");
+    expect(source).toContain(
+      "github.event.pull_request.number || inputs.pr_number || github.run_number",
+    );
   });
 
   it("guards stable signing behind the production environment", () => {

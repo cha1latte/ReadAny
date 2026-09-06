@@ -165,6 +165,13 @@
 (function installReadAnyJustifiedText(root) {
   const MARKER = "data-readany-justify-body";
   const originals = new WeakMap();
+  const PRESERVED_ALIGNMENTS = new Set([
+    "center",
+    "-webkit-center",
+    "right",
+    "end",
+    "-webkit-right",
+  ]);
   const EXCLUDED_TAGS = new Set(
     "pre code kbd samp table caption figcaption form button input textarea select svg math h1 h2 h3 h4 h5 h6 nav ul ol dl blockquote".split(
       " ",
@@ -191,8 +198,8 @@
     if (!enabled || unsupportedLayout) return;
 
     // Snapshot all publisher alignments before changing any inherited styles.
-    // Centered blocks need an explicit override too, so a justified parent
-    // cannot change their originally inherited centering.
+    // Preserved alignments may need an explicit override so a justified
+    // parent cannot change their originally inherited alignment.
     const elements = [];
     const inspecting = policy?.decision === "pending";
     const styles = new Map();
@@ -244,12 +251,8 @@
     for (const { element, alignment, prose } of elements) {
       // Publisher justification already has the desired effect, including when inherited.
       if (alignment === "justify") continue;
-      const centered = ["center", "-webkit-center"].includes(alignment);
-      // In an eligible book, right/end prose is intentionally justified too.
-      // Only centering is exempt; the book policy preserves all alignments
-      // when publisher justification was found in the opening chapter.
-      const target = prose && !centered ? "justify" : alignment;
-      // Preserve non-prose/centered blocks without writes unless a modified
+      const target = prose && !PRESERVED_ALIGNMENTS.has(alignment) ? "justify" : alignment;
+      // Preserve non-prose and intentional alignment without writes unless a modified
       // ancestor could change their inherited alignment.
       if (target === alignment && !element.parentElement?.closest(`[${MARKER}]`)) continue;
       originals.set(element, {

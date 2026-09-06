@@ -52,10 +52,11 @@ describe("reader-side justified text helper", () => {
     const { api, doc, alignment } = fixture();
     expect(alignment("publisher")).toBe("left");
     api.apply(doc, true, false);
-    for (const id of ["publisher", "inline", "prose", "breaks", "right"]) {
+    for (const id of ["publisher", "inline", "prose", "breaks"]) {
       expect(alignment(id), id).toBe("justify");
     }
     expect(alignment("center")).toBe("center");
+    expect(alignment("right")).toBe("right");
     expect(alignment("code")).not.toBe("justify");
   });
 
@@ -191,26 +192,23 @@ describe("reader-side justified text helper", () => {
     expect(alignment("div-prose")).toBe("justify");
   });
 
-  it.each(["right", "end"])(
-    "justifies %s prose unless the opening chapter exempts the book",
-    (authored) => {
-      const { api, doc, alignment } = fixture();
-      doc.body.innerHTML = `<p id="prose" dir="rtl" style="text-align:${authored}">Body prose</p>`;
-      const policy = api.createBookPolicy();
-      for (let i = 0; i < 2; i++) {
-        api.apply(doc, true, false, policy);
-        expect(alignment("prose")).toBe("justify");
-        api.apply(doc, false, false, policy);
-        expect(alignment("prose")).toBe(authored);
-      }
-      doc.body.insertAdjacentHTML(
-        "beforeend",
-        '<p style="text-align:justify">Publisher-justified prose</p>',
-      );
-      const exempt = api.createBookPolicy();
-      api.apply(doc, true, false, exempt);
-      expect(exempt.decision).toBe("preserve");
+  it.each(["right", "end"])("preserves %s prose across repeated toggles", (authored) => {
+    const { api, doc, alignment } = fixture();
+    doc.body.innerHTML = `<p id="prose" dir="rtl" style="text-align:${authored}">Body prose</p>`;
+    const policy = api.createBookPolicy();
+    for (let i = 0; i < 2; i++) {
+      api.apply(doc, true, false, policy);
       expect(alignment("prose")).toBe(authored);
-    },
-  );
+      api.apply(doc, false, false, policy);
+      expect(alignment("prose")).toBe(authored);
+    }
+    doc.body.insertAdjacentHTML(
+      "beforeend",
+      '<p style="text-align:justify">Publisher-justified prose</p>',
+    );
+    const exempt = api.createBookPolicy();
+    api.apply(doc, true, false, exempt);
+    expect(exempt.decision).toBe("preserve");
+    expect(alignment("prose")).toBe(authored);
+  });
 });

@@ -35,7 +35,7 @@ function getAbortError(signal: AbortSignal): Error {
 export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
   const webViewRef = useRef<WebView>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
-  const readyRef = useRef(false);
+  const activeRequestRef = useRef<string | null>(null);
   const generationRef = useRef<number | null>(null);
   const nextGenerationRef = useRef(0);
   const disposedRef = useRef(false);
@@ -46,6 +46,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       new ExtractorRequestBoundary<ChapterData[], Book["format"] | undefined>({
         timeoutMs: EXTRACTION_TIMEOUT_MS,
         sendCancel: (requestId) => {
+          if (activeRequestRef.current !== requestId) return;
           webViewRef.current?.injectJavaScript(`
             window.postMessage(${JSON.stringify(
               JSON.stringify({ type: "cancelExtraction", requestId }),
@@ -64,24 +65,36 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
     return () => {
       disposedRef.current = true;
       generationRef.current = null;
-      readyRef.current = false;
+      activeRequestRef.current = null;
       queuedCommandsRef.current.clear();
       requestBoundary.rejectAll();
     };
   }, [requestBoundary]);
 
+  const startNextRequest = useCallback(() => {
+    if (disposedRef.current || activeRequestRef.current !== null) return;
+    const next = queuedCommandsRef.current.keys().next();
+    if (next.done) return;
+    activeRequestRef.current = next.value;
+    // A fresh document gives this request exclusive ownership of parser state,
+    // even if an earlier book's cancelled async work has not stopped yet.
+    generationRef.current = ++nextGenerationRef.current;
+    setHtmlUri(null);
+    setGeneration(generationRef.current);
+  }, []);
+
   const releaseRequest = useCallback(
     (requestId: string) => {
       queuedCommandsRef.current.delete(requestId);
-      if (requestBoundary.size === 0 && generationRef.current !== null) {
-        // Release the native WebView, document, and parser memory when work ends.
-        generationRef.current = null;
-        readyRef.current = false;
-        setGeneration(null);
-        setHtmlUri(null);
-      }
+      if (activeRequestRef.current !== requestId) return;
+      activeRequestRef.current = null;
+      generationRef.current = null;
+      if (disposedRef.current) return;
+      setGeneration(null);
+      setHtmlUri(null);
+      startNextRequest();
     },
-    [requestBoundary],
+    [startNextRequest],
   );
 
   useEffect(() => {
@@ -111,13 +124,15 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       try {
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === "ready") {
-          readyRef.current = true;
-          for (const [requestId, dispatch] of queuedCommandsRef.current) {
+          const requestId = activeRequestRef.current;
+          if (requestId !== null) {
+            const dispatch = queuedCommandsRef.current.get(requestId);
             queuedCommandsRef.current.delete(requestId);
-            if (requestBoundary.has(requestId)) dispatch();
+            if (requestBoundary.has(requestId)) dispatch?.();
           }
         } else if (msg.type === "loaded") {
-          if (!requestBoundary.has(msg.requestId)) return;
+          if (msg.requestId !== activeRequestRef.current || !requestBoundary.has(msg.requestId))
+            return;
           // Trigger extraction once the book is fully loaded
           webViewRef.current?.injectJavaScript(`
           if (window.handleExtractChapters) {
@@ -128,6 +143,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
           true;
         `);
         } else if (msg.type === "chaptersExtracted") {
+          if (msg.requestId !== activeRequestRef.current) return;
           const classificationFormat = requestBoundary.getContext(msg.requestId);
           if (msg.error) {
             requestBoundary.reject(
@@ -140,7 +156,8 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         } else if (msg.type === "debug") {
           console.log("[ExtractorWebView]", msg.message);
         } else if (msg.type === "error") {
-          if (!requestBoundary.has(msg.requestId)) return;
+          if (msg.requestId !== activeRequestRef.current || !requestBoundary.has(msg.requestId))
+            return;
           console.error("[ExtractorWebView] WebView error:", msg.message);
           const classificationFormat = requestBoundary.getContext(msg.requestId);
           requestBoundary.reject(
@@ -218,15 +235,8 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
             requestBoundary.reject(requestId, toBookExtractionError(error, classificationFormat));
           }
         };
-        if (readyRef.current) {
-          dispatch();
-        } else {
-          queuedCommandsRef.current.set(requestId, dispatch);
-          if (generationRef.current === null) {
-            generationRef.current = ++nextGenerationRef.current;
-            setGeneration(generationRef.current);
-          }
-        }
+        queuedCommandsRef.current.set(requestId, dispatch);
+        startNextRequest();
       });
     },
   }));

@@ -20,7 +20,10 @@ vi.mock("react-native-webview", async () => {
   const React = await import("react");
   return {
     WebView: React.forwardRef((props, ref) => {
-      React.useImperativeHandle(ref, () => ({ injectJavaScript: inject }));
+      const document = React.useRef({ book: "" });
+      React.useImperativeHandle(ref, () => ({
+        injectJavaScript: (code: string) => inject(code, document.current),
+      }));
       return React.createElement("MockWebView", props);
     }),
   };
@@ -64,6 +67,75 @@ afterEach(async () => {
 });
 
 describe("request-scoped extractor WebView", () => {
+  it.each(["before ready", "during load", "during extraction"])(
+    "isolates distinct book contents when the second request arrives %s",
+    async (arrival) => {
+      const opens: Array<{ requestId: string; base64: string; document: { book: string } }> = [];
+      const extractionResults: Array<() => void> = [];
+      inject.mockImplementation((code: string, document: { book: string }) => {
+        if (code.includes("openBook")) {
+          const command = JSON.parse(
+            JSON.parse(code.match(/window\.postMessage\((.*), "\*"\)/s)?.[1] ?? "null"),
+          );
+          opens.push({ ...command, document });
+        } else if (code.includes("handleExtractChapters")) {
+          const requestId = JSON.parse(
+            code.match(/window\.handleExtractChapters\((.*?)\)/)?.[1] ?? "null",
+          );
+          const onMessage = views()[0].props.onMessage;
+          // The extraction callback reads the document's current book, just as
+          // the shared reader does; request IDs do not isolate that state.
+          extractionResults.push(() =>
+            onMessage({
+              nativeEvent: {
+                data: JSON.stringify({
+                  type: "chaptersExtracted",
+                  requestId,
+                  chapters: [{ ...chapters[0], content: document.book }],
+                }),
+              },
+            }),
+          );
+        }
+      });
+      let first!: Promise<unknown>;
+      let second!: Promise<unknown>;
+      const startSecond = () => {
+        second = extractor()
+          .extractChapters("Book B")
+          .catch((e) => e);
+      };
+      await act(async () => {
+        first = extractor()
+          .extractChapters("Book A")
+          .catch((e) => e);
+        if (arrival === "before ready") startSecond();
+      });
+      await act(async () => message("ready"));
+      await act(async () => {
+        if (arrival === "during load") startSecond();
+        opens[0].document.book = opens[0].base64;
+        message("loaded", { requestId: opens[0].requestId });
+        if (arrival === "during extraction") startSecond();
+      });
+      expect(opens).toHaveLength(1);
+      await act(async () => extractionResults[0]());
+      expect(await first).toEqual([{ ...chapters[0], content: "Book A" }]);
+      expect(views()).toHaveLength(1);
+      await act(async () => message("ready"));
+      expect(opens).toHaveLength(2);
+      expect(opens[1].document).not.toBe(opens[0].document);
+      await act(async () => {
+        opens[1].document.book = opens[1].base64;
+        message("loaded", { requestId: opens[1].requestId });
+      });
+      await act(async () => extractionResults[1]());
+      expect(await second).toEqual([{ ...chapters[0], content: "Book B" }]);
+      expect(views()).toHaveLength(0);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
   it("mounts only on demand, waits for ready, and releases after the result", async () => {
     expect(views()).toHaveLength(0);
     expect(download).not.toHaveBeenCalled();
@@ -104,17 +176,86 @@ describe("request-scoped extractor WebView", () => {
     await act(async () => {
       message("ready");
     });
-    const [, requestId] = requestIds();
+    const oldMessage = views()[0].props.onMessage;
     await act(async () => {
       abort.abort();
     });
     expect(await first).toMatchObject({ name: "AbortError" });
     expect(views()).toHaveLength(1);
+    await act(async () => message("ready"));
+    const [, requestId] = requestIds();
     await act(async () => {
+      oldMessage({
+        nativeEvent: {
+          data: JSON.stringify({ type: "chaptersExtracted", requestId, chapters: [] }),
+        },
+      });
       message("chaptersExtracted", { requestId, chapters });
     });
     await expect(second).resolves.toEqual(chapters);
     expect(views()).toHaveLength(0);
+  });
+
+  it("cancels a queued request without disturbing the active document", async () => {
+    const abort = new AbortController();
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    await act(async () => {
+      first = extractor()
+        .extractChapters("A")
+        .catch((e) => e);
+      second = extractor()
+        .extractChapters("B", undefined, "epub", undefined, abort.signal)
+        .catch((e) => e);
+    });
+    await act(async () => message("ready"));
+    const activeView = views()[0];
+    const [requestId] = requestIds();
+    inject.mockClear();
+    await act(async () => abort.abort());
+    expect(await second).toMatchObject({ name: "AbortError" });
+    expect(inject).not.toHaveBeenCalled();
+    expect(views()[0]).toBe(activeView);
+    await act(async () => message("chaptersExtracted", { requestId, chapters }));
+    expect(await first).toEqual(chapters);
+    expect(views()).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("releases all pending requests after native process termination and can restart", async () => {
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    await act(async () => {
+      first = extractor()
+        .extractChapters("A")
+        .catch((e) => e);
+      second = extractor()
+        .extractChapters("B")
+        .catch((e) => e);
+    });
+    const oldError = views()[0].props.onRenderProcessGone;
+    await act(async () => oldError());
+    expect(await first).toMatchObject({ message: expect.stringContaining("process terminated") });
+    expect(await second).toMatchObject({ message: expect.stringContaining("process terminated") });
+    expect(views()).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+    for (let i = 0; i < 3; i++) {
+      let result!: Promise<unknown>;
+      await act(async () => {
+        result = extractor()
+          .extractChapters("new")
+          .catch((e) => e);
+      });
+      await act(async () => {
+        oldError();
+        message("ready");
+      });
+      const requestId = requestIds().at(-1);
+      await act(async () => message("chaptersExtracted", { requestId, chapters }));
+      expect(await result).toEqual(chapters);
+      expect(views()).toHaveLength(0);
+      expect(vi.getTimerCount()).toBe(0);
+    }
   });
 
   it("cancels during asset loading and ignores its late completion", async () => {

@@ -9,6 +9,9 @@ rendered the reader on every timer tick.
 
 - Create the native extraction WebView only while extraction requests are
   pending. Release it after completion, cancellation, timeout, or failure.
+  Serialize concurrent requests, with a fresh document for each book so cancelled
+  asynchronous work cannot overwrite another request's content. Queued requests
+  retain the existing timeout and cancellation boundary.
   Ignore stale events from an earlier request generation and suppress the
   extractor's loading spinner.
 - Subscribe to stable reading-session actions individually. Keep time

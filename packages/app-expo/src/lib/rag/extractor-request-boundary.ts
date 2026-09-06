@@ -54,10 +54,6 @@ export class ExtractorRequestBoundary<Result, Context = unknown> {
     }
   }
 
-  get size(): number {
-    return this.requests.size;
-  }
-
   has(requestId: string): boolean {
     return this.requests.has(requestId);
   }

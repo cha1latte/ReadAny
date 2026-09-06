@@ -73,6 +73,7 @@ export interface ReaderBridgeCallbacks {
   onSelection?: (detail: SelectionEvent) => void;
   onSelectionCleared?: () => void;
   onTap?: () => void;
+  onActivity?: () => void;
   onSearchResult?: (index: number, count: number) => void;
   onSearchComplete?: (count: number) => void;
   onError?: (message: string) => void;
@@ -740,6 +741,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
           break;
         case "selectionCleared":
           cb.onSelectionCleared?.();
+          break;
+        case "activity":
+          cb.onActivity?.();
           break;
         case "tap":
           cb.onTap?.();

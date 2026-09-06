@@ -35,7 +35,12 @@ function getAbortError(signal: AbortSignal): Error {
 export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
   const webViewRef = useRef<WebView>(null);
   const [htmlUri, setHtmlUri] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const readyRef = useRef(false);
+  const generationRef = useRef<number | null>(null);
+  const nextGenerationRef = useRef(0);
+  const disposedRef = useRef(false);
+  const [generation, setGeneration] = useState<number | null>(null);
+  const queuedCommandsRef = useRef(new Map<string, () => void>());
   const [requestBoundary] = useState(
     () =>
       new ExtractorRequestBoundary<ChapterData[], Book["format"] | undefined>({
@@ -55,31 +60,62 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
   );
 
   useEffect(() => {
+    disposedRef.current = false;
     return () => {
+      disposedRef.current = true;
+      generationRef.current = null;
+      readyRef.current = false;
+      queuedCommandsRef.current.clear();
       requestBoundary.rejectAll();
     };
   }, [requestBoundary]);
 
+  const releaseRequest = useCallback(
+    (requestId: string) => {
+      queuedCommandsRef.current.delete(requestId);
+      if (requestBoundary.size === 0 && generationRef.current !== null) {
+        // Release the native WebView, document, and parser memory when work ends.
+        generationRef.current = null;
+        readyRef.current = false;
+        setGeneration(null);
+        setHtmlUri(null);
+      }
+    },
+    [requestBoundary],
+  );
+
   useEffect(() => {
+    if (generation === null) return;
+    let active = true;
     const loadAsset = async () => {
       try {
         const asset = READER_HTML_ASSET;
         await asset.downloadAsync();
         const uri = asset.localUri || asset.uri;
-        setHtmlUri(uri);
+        if (active && generationRef.current === generation) setHtmlUri(uri);
       } catch (err) {
-        console.error("[ExtractorWebView] Failed to load HTML asset:", err);
+        if (active && generationRef.current === generation) {
+          requestBoundary.rejectAll(err instanceof Error ? err : new Error(String(err)));
+        }
       }
     };
-    loadAsset();
-  }, []);
+    void loadAsset();
+    return () => {
+      active = false;
+    };
+  }, [generation, requestBoundary]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
+      if (generation === null || generationRef.current !== generation) return;
       try {
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === "ready") {
-          setReady(true);
+          readyRef.current = true;
+          for (const [requestId, dispatch] of queuedCommandsRef.current) {
+            queuedCommandsRef.current.delete(requestId);
+            if (requestBoundary.has(requestId)) dispatch();
+          }
         } else if (msg.type === "loaded") {
           if (!requestBoundary.has(msg.requestId)) return;
           // Trigger extraction once the book is fully loaded
@@ -116,7 +152,7 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         console.warn("[ExtractorWebView] Failed to parse message:", err);
       }
     },
-    [requestBoundary],
+    [generation, requestBoundary],
   );
 
   useImperativeHandle(ref, () => ({
@@ -138,16 +174,26 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
       const classificationFormat = command.bookFormat ?? undefined;
       return new Promise<ChapterData[]>((resolve, reject) => {
         if (signal?.aborted) return reject(getAbortError(signal));
-        if (!ready || !webViewRef.current) {
+        if (disposedRef.current) {
           return reject(
-            toBookExtractionError(new Error("Extractor WebView not ready"), classificationFormat),
+            toBookExtractionError(new Error("Extractor WebView unmounted"), classificationFormat),
           );
         }
 
         requestBoundary.add({
           requestId,
-          resolve,
-          reject,
+          resolve: (chapters) => {
+            releaseRequest(requestId);
+            resolve(chapters);
+          },
+          reject: (error) => {
+            releaseRequest(requestId);
+            reject(
+              error.name === "AbortError"
+                ? error
+                : toBookExtractionError(error, classificationFormat),
+            );
+          },
           context: classificationFormat,
           signal,
           abortError: () => getAbortError(signal as AbortSignal),
@@ -160,27 +206,40 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
             toBookExtractionError(new Error("Extractor WebView unmounted"), classificationFormat),
         });
 
-        // Command the webview to open the book first.
-        // It will reply with "loaded" when it finishes rendering.
-        try {
-          webViewRef.current.injectJavaScript(`
-            window.postMessage(${JSON.stringify(JSON.stringify(command))}, "*");
-            true;
-          `);
-        } catch (error) {
-          requestBoundary.reject(requestId, toBookExtractionError(error, classificationFormat));
+        if (!requestBoundary.has(requestId)) return;
+        const dispatch = () => {
+          try {
+            if (!webViewRef.current) throw new Error("Extractor WebView unavailable");
+            webViewRef.current.injectJavaScript(`
+              window.postMessage(${JSON.stringify(JSON.stringify(command))}, "*");
+              true;
+            `);
+          } catch (error) {
+            requestBoundary.reject(requestId, toBookExtractionError(error, classificationFormat));
+          }
+        };
+        if (readyRef.current) {
+          dispatch();
+        } else {
+          queuedCommandsRef.current.set(requestId, dispatch);
+          if (generationRef.current === null) {
+            generationRef.current = ++nextGenerationRef.current;
+            setGeneration(generationRef.current);
+          }
         }
       });
     },
   }));
 
-  if (!htmlUri) return null;
+  if (generation === null || !htmlUri) return null;
 
   return (
     <View style={styles.host} pointerEvents="none">
       <WebView
+        key={generation}
         ref={webViewRef}
-        source={{ uri: htmlUri }}
+        // The shared HTML disables loading UI before first paint in extraction mode.
+        source={{ uri: `${htmlUri}#readany-extractor` }}
         style={styles.webView}
         originWhitelist={["*"]}
         javaScriptEnabled
@@ -189,6 +248,16 @@ export const ExtractorWebView = forwardRef<ExtractorRef>((_, ref) => {
         allowFileAccessFromFileURLs
         allowUniversalAccessFromFileURLs
         onMessage={handleMessage}
+        onError={(event) => {
+          if (generationRef.current === generation) {
+            requestBoundary.rejectAll(new Error(event.nativeEvent.description));
+          }
+        }}
+        onRenderProcessGone={() => {
+          if (generationRef.current === generation) {
+            requestBoundary.rejectAll(new Error("Extractor WebView process terminated"));
+          }
+        }}
       />
     </View>
   );

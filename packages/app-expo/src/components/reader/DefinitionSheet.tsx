@@ -57,6 +57,7 @@ export function DefinitionSheet({
     } else {
       controller.close();
     }
+    return () => controller.close();
   }, [controller, text, visible]);
 
   const close = () => onClose();

@@ -89,7 +89,9 @@ def wait_for_bunny(repository, number, sha, *, api=github_api,
             print("No APK: PR is draft, closed, retargeted, or no longer matches this checkout.", flush=True)
             return False
         context = review_context(pr, number, retarget(repository, number))
-        state = bunny_state(api(f"repos/{repository}/commits/{sha}/status"), sha, repository, context)
+        # The combined /status endpoint omits creator; the status list includes it.
+        statuses = api(f"repos/{repository}/commits/{sha}/statuses")
+        state = bunny_state({"sha": sha, "statuses": statuses}, sha, repository, context)
         elapsed = int(clock() - start)
         print(f"Bunny Review for {sha[:8]}: {state}; elapsed {elapsed}s (limit {timeout}s).", flush=True)
         if state == "success":

@@ -88,5 +88,5 @@ should contain Ghostface-inspired prose and concrete observations about the diff
 
 Confirm `Validate` succeeds and `Preview APK` is deliberately skipped. In the
 Bunny run, verify model-call telemetry and a completed review rather than a
-missing-credentials or failed-review report. A workflow dispatch alone does not
+skipped or failed review report. A workflow dispatch alone does not
 prove that the provider accepted a model request or that comments were posted.

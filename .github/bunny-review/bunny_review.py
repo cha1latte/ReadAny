@@ -1098,7 +1098,7 @@ def warn_is_blocking_proof_gap(item):
 
 def finding_summary(findings):
     if not findings:
-        return "No bad machinery found."
+        return "No actionable defects found in the inspected scene."
     counts = {}
     for finding in findings:
         severity = str(finding.severity or "unknown").lower()
@@ -1173,13 +1173,13 @@ def merge_signal(review_obj, findings, nitpicks, pre_merge):
             "label": "READY WITH NOTES",
             "title": "Ready With Notes",
             "admonition": "WARNING",
-            "detail": "No bad machinery found, but non-blocking notes remain on the counter.",
+            "detail": "No actionable defects found; a few non-blocking loose ends remain.",
         }
     return {
         "label": "READY",
         "title": "Ready",
         "admonition": "TIP",
-        "detail": "Aha, no bad machinery found for this head. Expected CI controls paid out clean.",
+        "detail": "No actionable defects found in this scene. Expected CI controls passed.",
     }
 
 
@@ -1234,7 +1234,7 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!CAUTION]",
-                "> **Loot uncounted.** Bunny Review did not complete, so no model findings are available.",
+                "> **Scene unreviewed.** Bunny Review did not complete, so no model findings are available.",
                 "> Repair the failed review control or rerun Bunny before treating this PR as reviewed.",
             ]
         )
@@ -1242,7 +1242,7 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!CAUTION]",
-                f"> **Bad payout.** {summary}",
+                f"> **A failure path is still open.** {summary}",
                 "> Repair blocking/high findings and failed controls before merge.",
             ]
         )
@@ -1250,14 +1250,14 @@ def review_callout(findings, pre_merge):
         return "\n".join(
             [
                 "> [!WARNING]",
-                f"> **Anomalies remain.** {summary}",
+                f"> **Loose ends remain.** {summary}",
                 "> Examine the findings and warning rows before merge.",
             ]
         )
     return "\n".join(
         [
             "> [!TIP]",
-            "> **Jackpot stays clean.** Bunny found no actionable defects in the checked mechanism.",
+            "> **No defects revealed.** Bunny found no actionable defects in the inspected code.",
         ]
     )
 
@@ -1573,7 +1573,7 @@ def ci_status_to_pre_merge_checks(ci_status):
                 "name": "CI Status",
                 "status": "fail",
                 "type": "CI Timing",
-                "detail": "One or more expected CI controls failed or were cancelled; this payout is not fit for merge.",
+                "detail": "One or more expected CI controls failed or were cancelled; resolve those checks before merge.",
             }
         ]
     if "warning:" in lowered or "still running" in lowered:
@@ -1734,10 +1734,10 @@ def render_walkthrough(
         "",
         render_review_metadata(review_obj, head_sha),
         "",
-        "### 🧭 Loot Summary",
+        "### 🧭 Scene Summary",
     ])
     body.extend([f"- {line}" for line in summary[:2]] or ["- No change summary produced."])
-    body.extend(["", "### 🔎 Bad Machinery"])
+    body.extend(["", "### 🔎 Findings"])
     if findings:
         body.extend(
             [
@@ -1763,7 +1763,7 @@ def render_walkthrough(
                 ]
             )
         else:
-            body.extend(["", "> [!TIP]", "> No bad machinery found."])
+            body.extend(["", "> [!TIP]", "> No actionable defects found in the inspected scene."])
     if resolved:
         body.extend(["", "### ✅ Resolved Since Last Review"])
         for item in resolved[:5]:
@@ -1787,7 +1787,7 @@ def render_walkthrough(
     else:
         body.append("- None recorded.")
     agent_prompt = render_agent_prompt_details(
-        findings, "🤖 Copy prompt for Bunny's busted-machine findings"
+        findings, "🤖 Copy prompt for Bunny's reported findings"
     )
     if agent_prompt:
         body.extend(["", agent_prompt])

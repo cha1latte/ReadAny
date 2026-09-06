@@ -49,7 +49,8 @@ Bunny report a skipped review and a failed Bunny status, not a clean review.
   audio, AI privacy, release identity, and [code quality](code-quality.md), including
   pragmatic KISS/YAGNI/SOLID checks.
 - Bunny observes `Validate` and `Preview APK` for up to 15 minutes while reviewing.
-  Missing or running CI is reported as incomplete. Its status reflects review
+  A deliberately skipped `Preview APK` for an automation/docs-only diff counts as
+  satisfied; validation still runs. Missing or running CI is reported as incomplete. Its status reflects review
   completion and blocking/high findings on non-drafts; it does not replace either
   CI check, manual workflow approval, preview testing, or Celia's merge decision.
 
@@ -75,4 +76,5 @@ for the local regression checks:
 
 ```powershell
 python -m unittest discover -s .github/bunny-review -p "test_*.py" -v
+python -m unittest discover -s scripts -p "test_preview_build_scope.py" -v
 ```

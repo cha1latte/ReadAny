@@ -78,3 +78,15 @@ for the local regression checks:
 python -m unittest discover -s .github/bunny-review -p "test_*.py" -v
 python -m unittest discover -s scripts -p "test_preview_build_scope.py" -v
 ```
+
+## First live verification
+
+After the setup reaches `main`, open a documentation-only PR and mark it ready
+for review. Confirm **Bunny Review Auto Dispatch** starts **Bunny Review**, and
+check that its walkthrough identifies the PR's current head commit. The review
+should contain Ghostface-inspired prose and concrete observations about the diff.
+
+Confirm `Validate` succeeds and `Preview APK` is deliberately skipped. In the
+Bunny run, verify model-call telemetry and a completed review rather than a
+missing-credentials or failed-review report. A workflow dispatch alone does not
+prove that the provider accepted a model request or that comments were posted.

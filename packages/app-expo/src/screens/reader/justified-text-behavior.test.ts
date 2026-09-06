@@ -81,4 +81,22 @@ describe("reader-side justified text helper", () => {
     expect(publisher.style.color).toBe("red");
     expect(alignment("publisher")).toBe("center");
   });
+  it("does not mutate already-justified prose when toggled or reapplied", () => {
+    const { api, doc } = fixture();
+    doc.head.innerHTML = "<style>body, p { text-align: justify; }</style>";
+    doc.body.innerHTML =
+      '<p>Publisher-justified prose<br>Next line</p><p style="text-align: justify !important">Inline justification</p>';
+    const original = doc.documentElement.outerHTML;
+    const mutations = new MutationObserver(() => {});
+    mutations.observe(doc.documentElement, { attributes: true, childList: true, subtree: true });
+    try {
+      api.apply(doc, true, false);
+      api.apply(doc, true, false);
+      api.apply(doc, false, false);
+      expect(mutations.takeRecords()).toHaveLength(0);
+      expect(doc.documentElement.outerHTML).toBe(original);
+    } finally {
+      mutations.disconnect();
+    }
+  });
 });

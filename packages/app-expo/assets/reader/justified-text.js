@@ -43,6 +43,8 @@
         excluded: Boolean(element.closest(EXCLUDED_ANCESTORS)),
       }));
     for (const { element, alignment, excluded } of elements) {
+      // Publisher justification already has the desired effect, including when inherited.
+      if (alignment === "justify") continue;
       originals.set(element, {
         value: element.style.getPropertyValue("text-align"),
         priority: element.style.getPropertyPriority("text-align"),

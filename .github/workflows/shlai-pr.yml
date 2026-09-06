@@ -25,9 +25,10 @@ jobs:
           version: 9.15.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20.18.0
+          node-version: 24.15.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter app test
       - run: pnpm --filter @readany/core test
       - run: pnpm --filter @readany/app-expo test
       - run: pnpm exec tsc --noEmit -p packages/app-expo/tsconfig.json
@@ -61,7 +62,7 @@ jobs:
           version: 9.15.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20.18.0
+          node-version: 24.15.0
           cache: pnpm
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:

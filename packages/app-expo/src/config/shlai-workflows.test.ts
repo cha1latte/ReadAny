@@ -283,8 +283,19 @@ const expectPreviewWorkflowContract = (source: string) => {
     statuses: "read",
   });
   expect(gate?.outputs).toEqual({ approved: "${{ steps.bunny.outputs.approved }}" });
-  expect(gate?.steps?.find((step) => step.run)?.run).toBe("python3 -I scripts/wait_for_bunny.py");
-  expect(gate?.steps?.find((step) => step.run)?.env).toEqual({
+  expect(gate?.steps?.find((step) => step.uses?.startsWith("actions/checkout@"))?.with).toEqual({
+    ref: "${{ steps.trusted.outputs.sha }}",
+    path: ".bunny-gate",
+    "persist-credentials": false,
+  });
+  expect(gate?.steps?.[0]?.run).toContain('gh api "repos/$GITHUB_REPOSITORY/branches/main"');
+
+  expect(
+    gate?.steps?.find((step) => step.name === "Wait for this commit's Bunny Review")?.run,
+  ).toBe("python3 -I .bunny-gate/scripts/wait_for_bunny.py");
+  expect(
+    gate?.steps?.find((step) => step.name === "Wait for this commit's Bunny Review")?.env,
+  ).toEqual({
     GH_TOKEN: "${{ github.token }}",
     PR_NUMBER: "${{ github.event.pull_request.number || inputs.pr_number }}",
     PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || github.sha }}",
@@ -1006,6 +1017,19 @@ const addWrongCacheOrderJob = (source: string, jobId: string) =>
   );
 
 const unsafeMutations = [
+  {
+    name: "PR-controlled gate script",
+    mutate: (source: string) =>
+      source.replace(
+        "python3 -I .bunny-gate/scripts/wait_for_bunny.py",
+        "python3 -I scripts/wait_for_bunny.py",
+      ),
+  },
+  {
+    name: "PR-controlled gate revision",
+    mutate: (source: string) =>
+      source.replace("ref: ${{ steps.trusted.outputs.sha }}", "ref: ${{ github.sha }}"),
+  },
   {
     name: "missing Bunny approval dependency",
     mutate: (source: string) => source.replace("needs: [validate, bunny_gate]", "needs: validate"),

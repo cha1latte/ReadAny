@@ -3,7 +3,13 @@ name: Shlai Pull Request
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number (select its head branch as the workflow ref).
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -28,8 +34,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
         run: python3 -I scripts/preview_build_scope.py
-      - name: Check preview build scope
-        run: python3 -I -m unittest discover -s scripts -p 'test_preview_build_scope.py' -v
+      - name: Check preview build scope and review gate
+        run: |
+          python3 -I -m unittest discover -s scripts -p 'test_preview_build_scope.py' -v
+          python3 -I -m unittest discover -s scripts -p 'test_wait_for_bunny.py' -v
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3.0.0
         with:
           version: 9.15.0
@@ -58,10 +66,44 @@ jobs:
           fi
           git diff --check "$BASE_SHA" HEAD
 
+  bunny_gate:
+    name: Await Bunny approval
+    needs: validate
+    if: needs.validate.outputs.apk_required == 'true' && !github.event.pull_request.draft
+    runs-on: ubuntu-22.04
+    timeout-minutes: 32
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      approved: ${{ steps.bunny.outputs.approved }}
+    steps:
+      - name: Resolve trusted gate revision
+        id: trusted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.trusted.outputs.sha }}
+          path: .bunny-gate
+          persist-credentials: false
+      - name: Wait for this commit's Bunny Review
+        id: bunny
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 -I .bunny-gate/scripts/wait_for_bunny.py
+
   preview:
     name: Preview APK
-    needs: validate
-    if: needs.validate.outputs.apk_required == 'true'
+    needs: [validate, bunny_gate]
+    if: needs.validate.outputs.apk_required == 'true' && needs.bunny_gate.outputs.approved == 'true'
     runs-on: ubuntu-22.04
     env:
       APP_VARIANT: preview
@@ -92,10 +134,10 @@ jobs:
       - name: Stage preview APK
         shell: bash
         run: |
-          NUMBER="${{ github.event.pull_request.number || github.run_number }}"
+          NUMBER="${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}"
           cp packages/app-expo/android/app/build/outputs/apk/release/app-release.apk "ReadAny-Shlai-Preview-${NUMBER}.apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || github.run_number }}
+          name: ReadAny-Shlai-Preview-${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}
           path: ReadAny-Shlai-Preview-*.apk
           retention-days: 14

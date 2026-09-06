@@ -90,11 +90,26 @@ Bunny report a skipped review and a failed Bunny status, not a clean review.
 - Rules cover platform boundaries, reading state, imports, persistence, sync,
   audio, AI privacy, release identity, and [code quality](code-quality.md), including
   pragmatic KISS/YAGNI/SOLID checks.
-- Bunny observes `Validate` and `Preview APK` for up to 15 minutes while reviewing.
-  A deliberately skipped `Preview APK` for an automation/docs-only diff counts as
-  satisfied; validation still runs. Missing or running CI is reported as incomplete. Its status reflects review
-  completion and blocking/high findings on non-drafts; it does not replace either
-  CI check, manual workflow approval, preview testing, or Celia's merge decision.
+- Bunny observes `Validate` for up to 15 minutes while reviewing. It does not
+  wait for `Preview APK`: that build depends on a green Bunny result.
+- For build-relevant PRs, validation must pass and `Await Bunny approval` must
+  see the trusted `Bunny Review` success status on the current, non-draft PR
+  head before `Preview APK` starts. Draft reviews with notes do not unlock it.
+  Red reviews skip the APK; pending/missing reviews wait up to 30 minutes with
+  progress logs, then fail closed. Closed, retargeted, or superseded PRs do not build.
+- Docs/automation-only PRs and drafts skip APK builds. Marking a PR ready starts
+  validation and the gate. For authors without automatic review, a maintainer
+  must request Bunny. After a red review is rerun successfully on the same SHA,
+  rerun **Shlai Pull Request** to retry the gate.
+- Manual **Shlai Pull Request** runs require a PR number and its head branch as
+  the selected ref; they use the same gate. Release workflows are unchanged.
+- This ordering takes effect after the configuration and workflows reach `main`,
+  because Bunny deliberately loads trusted configuration from `main`. The PR
+  introducing it is still reviewed with the previous control list; a build-relevant
+  PR using the new gate during that transition may wait for Bunny's old CI timeout.
+  No running workflow is retroactively reordered.
+- Bunny does not replace validation, preview testing, or the owner's merge decision.
+
 
 ## Trust boundary and diagnostics
 

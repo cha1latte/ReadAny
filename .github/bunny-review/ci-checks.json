@@ -3,10 +3,6 @@
     {
       "name": "Validate",
       "required": "always"
-    },
-    {
-      "name": "Preview APK",
-      "required": "always"
     }
   ]
 }

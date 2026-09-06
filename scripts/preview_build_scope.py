@@ -16,6 +16,8 @@ AUTOMATION_FILES = {
     ".github/workflows/shlai-phone-release.yml",
     "scripts/preview_build_scope.py",
     "scripts/test_preview_build_scope.py",
+    "scripts/wait_for_bunny.py",
+    "scripts/test_wait_for_bunny.py",
 }
 
 

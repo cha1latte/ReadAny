@@ -112,6 +112,8 @@ function renderState(
           <Text style={s.statusText}>{t("dictionary.loadingDefinition")}</Text>
         </View>
       );
+    case "verifying":
+      return <Text style={s.statusText}>{t("dictionary.verifying")}</Text>;
     case "unsupported":
       return <Text style={s.statusText}>{t("dictionary.unsupportedSelection")}</Text>;
     case "missing-pack":
@@ -232,15 +234,15 @@ function PackDownload({
 function defaultDependencies(): DefinitionControllerDependencies {
   return {
     lookup: (text) => useDictionaryStore.getState().lookup(text),
-    install: async (descriptor, onProgress) => {
+    install: async (descriptor, onProgress, onVerifying) => {
       const unsubscribe = useDictionaryStore.subscribe((state) => {
         const status = state.packs[descriptor.language];
         if (status.state === "downloading") onProgress(status.progress);
+        if (status.state === "verifying") onVerifying?.();
       });
       onProgress(0);
       try {
         await useDictionaryStore.getState().install(descriptor.language);
-        onProgress(1);
       } finally {
         unsubscribe();
       }

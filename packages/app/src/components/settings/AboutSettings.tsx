@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import {
   checkForUpdate,
   downloadAndInstall,
@@ -138,6 +139,7 @@ export function AboutSettings() {
               {appVersion || "..."}
             </span>
             <button
+              type="button"
               onClick={handleCheckUpdate}
               disabled={status === "checking" || status === "downloading"}
               className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -157,9 +159,7 @@ export function AboutSettings() {
               <span className="text-muted-foreground">{t("settings.downloading")}</span>
               <span className="font-mono text-foreground">{progress}%</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
-            </div>
+            <Progress value={progress} aria-label={t("settings.downloading")} />
           </div>
         </div>
       )}

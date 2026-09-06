@@ -48,6 +48,7 @@ function createController(options?: {
   install?: (
     pack: DictionaryPackDescriptor,
     onProgress: (progress: number) => void,
+    onVerifying?: () => void,
   ) => Promise<void>;
   getDescriptor?: (language: DictionaryLanguage) => DictionaryPackDescriptor | undefined;
 }) {
@@ -88,6 +89,31 @@ describe("DefinitionController", () => {
     expect(controller.state).toEqual({ kind: "missing-pack", language: "en", descriptor });
   });
 
+  it("shows verification separately and discards it after closing", async () => {
+    let verify: (() => void) | undefined;
+    let finish!: () => void;
+    const controller = createController({
+      lookup: async () => {
+        throw lookupError("pack-not-installed");
+      },
+      install: async (_pack, _progress, onVerifying) => {
+        verify = onVerifying;
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    await controller.open("desire");
+    const downloading = controller.download();
+    verify?.();
+    expect(controller.state).toEqual({ kind: "verifying", language: "en" });
+    controller.close();
+    verify?.();
+    finish();
+    await downloading;
+    expect(controller.state).toEqual({ kind: "idle" });
+  });
+
   it("reports install progress then automatically retries the original selection", async () => {
     const lookup = vi
       .fn<(text: string) => Promise<DictionaryEntry[]>>()
@@ -106,7 +132,7 @@ describe("DefinitionController", () => {
     expect(controller.state).toEqual({ kind: "downloading", language: "en", progress: 0.37 });
     await downloading;
 
-    expect(install).toHaveBeenCalledWith(descriptor, expect.any(Function));
+    expect(install).toHaveBeenCalledWith(descriptor, expect.any(Function), expect.any(Function));
     expect(lookup).toHaveBeenNthCalledWith(2, "desire");
     expect(controller.state).toEqual({
       kind: "result",

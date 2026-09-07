@@ -211,4 +211,96 @@ describe("reader-side justified text helper", () => {
     expect(exempt.decision).toBe("preserve");
     expect(alignment("prose")).toBe(authored);
   });
+  it.each([false, true])(
+    "flushes preloaded neighbors after sampling the primary chapter (publisher justified: %s)",
+    (justified) => {
+      document.documentElement.replaceChildren();
+      document.documentElement.innerHTML = "<head></head><body></body>";
+      const makeChapter = (alignment: string) => {
+        const frame = document.createElement("iframe");
+        document.body.appendChild(frame);
+        const doc = frame.contentDocument;
+        if (!doc) throw new Error("Missing chapter document");
+        doc.body.innerHTML = `<p style="text-align:${alignment}">Chapter prose</p>`;
+        return doc;
+      };
+      const neighbor = makeChapter("left");
+      const primary = makeChapter(justified ? "justify" : "left");
+      const context: Record<string, unknown> = {};
+      runInNewContext(source, context);
+      const api = context.ReadAnyJustifiedText as {
+        createBookPolicy: () => BookPolicy;
+        apply: (...args: unknown[]) => void;
+      };
+      const policy = api.createBookPolicy();
+      const apply = vi.spyOn(api, "apply");
+      const handlers: Record<string, (event: unknown) => void> = {};
+      const noop = () => {};
+      const el = {
+        isFixedLayout: false,
+        renderer: {},
+        addEventListener: (name: string, handler: (event: unknown) => void) => {
+          handlers[name] = handler;
+        },
+      };
+      Object.assign(context, {
+        currentJustificationPolicy: policy,
+        currentJustifyBodyText: true,
+        currentBookIsPdf: false,
+        currentSectionIndex: 1,
+        currentCustomFontFaceCSS: "",
+        currentSectionUsesVerticalWriting: false,
+        view: el,
+        el,
+        getRendererContents: () => [
+          { doc: neighbor, index: 0 },
+          { doc: primary, index: 1 },
+        ],
+        isVerticalDoc: () => false,
+        markLoaded: noop,
+        normalizeBrOnlyParagraphs: noop,
+        applyRendererFlowMode: noop,
+        syncCustomFontStylesForDoc: noop,
+        attachTapListener: noop,
+        attachPullBookmarkListener: noop,
+        attachSelectionListener: noop,
+        attachNoteLongPress: noop,
+        refreshUserAnnotations: noop,
+        _rubyMode: false,
+      });
+      const template = readFileSync(
+        resolve(
+          dirname(fileURLToPath(import.meta.url)),
+          "../../../assets/reader/reader.template.html",
+        ),
+        "utf8",
+      );
+      // Execute the production load listener and styling coordination, omitting
+      // unrelated theme/selection styling after the justification step.
+      const sync = template.slice(
+        template.indexOf("    function syncJustifiedTextForAllDocs("),
+        template.indexOf("    function injectCustomFontFace("),
+      );
+      const styling = `${template.slice(
+        template.indexOf("    function applyDocStyles("),
+        template.indexOf(
+          "      if (!verticalDoc) {",
+          template.indexOf("    function applyDocStyles("),
+        ),
+      )}\n}`;
+      const listener = template.slice(
+        template.indexOf("        el.addEventListener('load',"),
+        template.indexOf("        var snippetTimer = null;"),
+      );
+      runInNewContext(sync + styling + listener, context);
+      handlers.load({ detail: { doc: neighbor, index: 0, primary: false } });
+      expect(policy.decision).toBe("pending");
+      expect(apply).not.toHaveBeenCalled();
+      handlers.load({ detail: { doc: primary, index: 1, primary: true } });
+      expect(policy.decision).toBe(justified ? "preserve" : "apply");
+      expect(neighbor.querySelector("p")?.style.textAlign).toBe(justified ? "left" : "justify");
+      expect(apply.mock.calls.filter(([doc]) => doc === primary)).toHaveLength(1);
+      expect(apply.mock.calls.filter(([doc]) => doc === neighbor)).toHaveLength(justified ? 0 : 1);
+    },
+  );
 });

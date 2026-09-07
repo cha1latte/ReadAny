@@ -1742,7 +1742,11 @@
             currentSectionUsesVerticalWriting = !el.isFixedLayout && isVerticalDoc(doc);
             applyRendererFlowMode(el.renderer);
           }
+          const policyWasPending = currentJustificationPolicy?.decision === 'pending';
           applyDocStyles(doc, primary !== false);
+          if (policyWasPending && currentJustificationPolicy?.decision === 'apply') {
+            syncJustifiedTextForAllDocs(doc);
+          }
           if (currentBookIsPdf && typeof index === 'number') {
             pdfDocIndexMap.set(doc, index);
             applyPdfPageThemeFilter(doc, index);
@@ -2338,7 +2342,7 @@
       }
     }
 
-    function syncJustifiedTextForAllDocs() {
+    function syncJustifiedTextForAllDocs(alreadyStyledDoc) {
       const fixedLayout = Boolean(view?.isFixedLayout);
       const policy = currentJustificationPolicy;
       if (!policy || currentBookIsPdf || fixedLayout) return;
@@ -2361,7 +2365,7 @@
         return;
       }
       for (const content of contents) {
-        if (!content?.doc) continue;
+        if (!content?.doc || content.doc === alreadyStyledDoc) continue;
         const unsupportedLayout = isVerticalDoc(content.doc);
         globalThis.ReadAnyJustifiedText?.apply(
           content.doc,

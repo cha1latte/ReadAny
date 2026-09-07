@@ -1,0 +1,37 @@
+{
+  "updates": {
+    "prs": [2, 3],
+    "purpose": "Pilot: release identity, update selection, download/install failure, and version comparisons.",
+    "files": [
+      ".github/workflows/shlai-phone-release.yml",
+      "packages/app-expo/scripts/shlai-preview-release.js",
+      "packages/app-expo/src/components/update/UpdateDialog.tsx",
+      "packages/app-expo/src/hooks/use-update-checker.ts",
+      "packages/app-expo/src/hooks/update-checker-task.ts",
+      "packages/core/src/update/update-checker.ts"
+    ]
+  },
+  "annotations": {
+    "prs": [7, 12],
+    "purpose": "Annotation retrieval, book isolation, fallback extraction cancellation, and timeout recovery.",
+    "files": [
+      "packages/core/src/ai/tools/annotation-tools.ts",
+      "packages/core/src/ai/fallback-content-service.ts",
+      "packages/core/src/ai/fallback-source-resolver.ts",
+      "packages/app-expo/src/lib/rag/mobile-fallback-content-provider.ts",
+      "packages/app-expo/src/components/rag/MobileFallbackExtractorHost.tsx"
+    ]
+  },
+  "reading-state": {
+    "prs": [28],
+    "purpose": "Reading-session persistence, stale session writes, teardown, and mobile control lifecycle. This is not full renderer coverage.",
+    "files": [
+      "packages/core/src/hooks/use-reading-session.ts",
+      "packages/core/src/stores/reading-session-store.ts",
+      "packages/app-expo/src/stores/reading-session-store.ts",
+      "packages/app-expo/src/hooks/use-reader-bridge.ts",
+      "packages/app-expo/src/screens/reader/useReaderControls.ts",
+      "packages/app-expo/src/hooks/use-reading-session.test.ts"
+    ]
+  }
+}

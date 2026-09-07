@@ -54,6 +54,32 @@ def current_pr(pr, sha):
             and pr.get("base", {}).get("ref") == "main")
 
 
+def paginated_bunny_state(repository, sha, context, api, clock, deadline):
+    # GitHub returns newest statuses first. Stop at the first Bunny result,
+    # even when it is untrusted or not approved.
+    first_path = f"repos/{repository}/commits/{sha}/statuses?per_page=100&page=1"
+    page = 1
+    while True:
+        if clock() >= deadline:
+            raise TimeoutError("Bunny status lookup exceeded the review deadline.")
+        statuses = api(f"repos/{repository}/commits/{sha}/statuses?per_page=100&page={page}")
+        if page == 1:
+            first_page = statuses
+        if any(status.get("context") == "Bunny Review" for status in statuses):
+            state = bunny_state({"sha": sha, "statuses": statuses}, sha, repository, context)
+            if page > 1:
+                # Pagination is not an atomic snapshot. New statuses shift page
+                # boundaries; discard this result and poll again if it changed.
+                if clock() >= deadline:
+                    raise TimeoutError("Bunny status lookup exceeded the review deadline.")
+                if api(first_path) != first_page:
+                    return "pending"
+            return state
+        if len(statuses) < 100:
+            return "pending"
+        page += 1
+
+
 def bunny_state(response, sha, repository, context):
     if response.get("sha") != sha:
         return "pending"
@@ -90,8 +116,7 @@ def wait_for_bunny(repository, number, sha, *, api=github_api,
             return False
         context = review_context(pr, number, retarget(repository, number))
         # The combined /status endpoint omits creator; the status list includes it.
-        statuses = api(f"repos/{repository}/commits/{sha}/statuses")
-        state = bunny_state({"sha": sha, "statuses": statuses}, sha, repository, context)
+        state = paginated_bunny_state(repository, sha, context, api, clock, start + timeout)
         elapsed = int(clock() - start)
         print(f"Bunny Review for {sha[:8]}: {state}; elapsed {elapsed}s (limit {timeout}s).", flush=True)
         if state == "success":

@@ -12,6 +12,7 @@ AUTOMATION_FILES = {
     ".github/workflows/bunny-review.yml",
     ".github/workflows/bunny-review-auto.yml",
     ".github/workflows/bunny-review-command.yml",
+    ".github/workflows/bunny-retrospective.yml",
     ".github/workflows/shlai-pr.yml",
     ".github/workflows/shlai-phone-release.yml",
     "scripts/preview_build_scope.py",

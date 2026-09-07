@@ -1,5 +1,9 @@
 # Bunny Review
 
+For bounded audits of already-merged work against current main, see
+[Retrospective Bunny audit](retrospective-audit.md). This is a separate manual,
+artifact-only workflow; it does not update historical PR reviews or approvals.
+
 Bunny reviews ReadAny Shlai pull requests with the custom reviewer ported from
 De-Koi. Its original Ghostface-inspired voice combines restrained phone-call
 suspense, horror-film wit, and a patient search for hidden failure paths. The

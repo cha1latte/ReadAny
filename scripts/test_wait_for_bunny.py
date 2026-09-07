@@ -47,26 +47,60 @@ class BunnyGateTests(unittest.TestCase):
             return gate.wait_for_bunny(REPO, "28", SHA, api=api, clock=lambda: ticks[0], sleep=sleep, timeout=timeout, retarget=lambda *_: "none")
 
     def test_pending_and_missing_wait_for_green(self):
-        self.assertTrue(self.wait([{"sha": SHA, "statuses": []}, status("pending"), status()]))
+        self.assertTrue(self.wait([{"sha": SHA, "statuses": []}, status("pending"), status()], timeout=60))
 
     def paginated_wait(self, pages):
         requested = []
+        ticks = [0]
         def api(path):
             if "/pulls/" in path:
                 return PR
-            page = len(requested) + 1
+            page = int(path.rsplit("=", 1)[1])
             self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/statuses?per_page=100&page={page}")
             requested.append(page)
             return pages[page - 1]
+        def sleep(seconds):
+            ticks[0] += seconds
         with contextlib.redirect_stdout(io.StringIO()):
-            result = gate.wait_for_bunny(REPO, "28", SHA, api=api, timeout=0,
+            result = gate.wait_for_bunny(REPO, "28", SHA, api=api, timeout=20,
+                                         clock=lambda: ticks[0], sleep=sleep,
                                          retarget=lambda *_: "none")
         return result, requested
 
     def test_approval_on_later_page(self):
         unrelated = [{"context": "Other integration"}] * 100
         self.assertEqual(self.paginated_wait([unrelated, unrelated, status()["statuses"]]),
-                         (True, [1, 2, 3]))
+                         (True, [1, 2, 3, 1]))
+
+    def test_new_failure_during_pagination_cannot_approve(self):
+        unrelated = [{"context": "Other integration", "id": i} for i in range(100)]
+        responses = iter([unrelated, status()["statuses"],
+                          status("failure")["statuses"] + unrelated[:99],
+                          status("failure")["statuses"]])
+        ticks = [0]
+        def api(path):
+            return PR if "/pulls/" in path else next(responses)
+        def sleep(seconds):
+            ticks[0] += seconds
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(gate.wait_for_bunny(REPO, "28", SHA, api=api,
+                clock=lambda: ticks[0], sleep=sleep, timeout=40, retarget=lambda *_: "none"))
+
+    def test_page_walk_stops_at_deadline(self):
+        ticks = [0]
+        requests = []
+        def api(path):
+            if "/pulls/" in path:
+                return PR
+            requests.append(path)
+            ticks[0] += 10
+            if len(requests) > 2:
+                self.fail("Requested another page after the deadline")
+            return [{"context": "Other integration"}] * 100
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(TimeoutError):
+            gate.wait_for_bunny(REPO, "28", SHA, api=api, clock=lambda: ticks[0],
+                                timeout=20, retarget=lambda *_: "none")
+        self.assertEqual(len(requests), 2)
 
     def test_newest_bunny_status_blocks_older_approval(self):
         unrelated = [{"context": "Other integration"}] * 100
@@ -123,7 +157,7 @@ class BunnyGateTests(unittest.TestCase):
         self.assertFalse(self.wait([status()], prs=[PR, {**PR, "head": {"sha": "b" * 40}}]))
 
     def test_draft_review_waits_for_non_draft_review(self):
-        self.assertTrue(self.wait([status(description="Draft review posted with notes."), status("pending"), status()]))
+        self.assertTrue(self.wait([status(description="Draft review posted with notes."), status("pending"), status()], timeout=60))
 
     def test_api_failure_cannot_approve(self):
         def failed_api(path):

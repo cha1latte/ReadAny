@@ -1,14 +1,37 @@
 {
-  "updates": {
+  "update-release": {
     "prs": [2, 3],
-    "purpose": "Pilot: release identity, update selection, download/install failure, and version comparisons.",
+    "purpose": "Release/version generation: package identity, monotonic versions, published asset names, and release workflow failure paths.",
     "files": [
       ".github/workflows/shlai-phone-release.yml",
       "packages/app-expo/scripts/shlai-preview-release.js",
-      "packages/app-expo/src/components/update/UpdateDialog.tsx",
+      "packages/app-expo/app.config.js",
+      "packages/app-expo/src/config/shlai-preview-release.test.ts"
+    ]
+  },
+  "update-discovery": {
+    "prs": [2],
+    "purpose": "Update discovery and selection: channel configuration, version comparisons, pagination, throttling, and scheduled-check lifecycle.",
+    "files": [
+      "packages/core/src/update/update-checker.ts",
+      "packages/core/src/update/update-checker.test.ts",
       "packages/app-expo/src/hooks/use-update-checker.ts",
       "packages/app-expo/src/hooks/update-checker-task.ts",
-      "packages/core/src/update/update-checker.ts"
+      "packages/app-expo/src/hooks/use-update-checker.test.ts",
+      "packages/app-expo/src/lib/shlai-release.ts",
+      "packages/app-expo/src/lib/shlai-release.test.ts"
+    ]
+  },
+  "update-install": {
+    "prs": [2],
+    "purpose": "Download and installation: asset selection, checksum verification, install ownership, failure recovery, and dialog lifecycle.",
+    "files": [
+      "packages/app-expo/src/components/update/UpdateDialog.tsx",
+      "packages/app-expo/src/components/update/UpdateDialog.test.tsx",
+      "packages/app-expo/src/lib/shlai-apk-installer.ts",
+      "packages/app-expo/src/lib/shlai-apk-installer.test.ts",
+      "packages/app-expo/src/lib/shlai-release-asset.ts",
+      "packages/app-expo/src/stores/update-store.ts"
     ]
   },
   "annotations": {

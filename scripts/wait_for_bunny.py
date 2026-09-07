@@ -54,6 +54,18 @@ def current_pr(pr, sha):
             and pr.get("base", {}).get("ref") == "main")
 
 
+def commit_statuses(repository, sha, api):
+    # GitHub returns newest statuses first. Consume lazily so bunny_state stops
+    # at the newest Bunny result, even when it is untrusted or not approved.
+    page = 1
+    while True:
+        statuses = api(f"repos/{repository}/commits/{sha}/statuses?per_page=100&page={page}")
+        yield from statuses
+        if len(statuses) < 100:
+            return
+        page += 1
+
+
 def bunny_state(response, sha, repository, context):
     if response.get("sha") != sha:
         return "pending"
@@ -90,7 +102,7 @@ def wait_for_bunny(repository, number, sha, *, api=github_api,
             return False
         context = review_context(pr, number, retarget(repository, number))
         # The combined /status endpoint omits creator; the status list includes it.
-        statuses = api(f"repos/{repository}/commits/{sha}/statuses")
+        statuses = commit_statuses(repository, sha, api)
         state = bunny_state({"sha": sha, "statuses": statuses}, sha, repository, context)
         elapsed = int(clock() - start)
         print(f"Bunny Review for {sha[:8]}: {state}; elapsed {elapsed}s (limit {timeout}s).", flush=True)

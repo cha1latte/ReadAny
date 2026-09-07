@@ -39,7 +39,7 @@ class BunnyGateTests(unittest.TestCase):
         def api(path):
             if "/pulls/" in path:
                 return next(pulls) if pulls else PR
-            self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/statuses")
+            self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/statuses?per_page=100&page=1")
             return next(states)["statuses"]
         def sleep(seconds):
             ticks[0] += seconds
@@ -48,6 +48,47 @@ class BunnyGateTests(unittest.TestCase):
 
     def test_pending_and_missing_wait_for_green(self):
         self.assertTrue(self.wait([{"sha": SHA, "statuses": []}, status("pending"), status()]))
+
+    def paginated_wait(self, pages):
+        requested = []
+        def api(path):
+            if "/pulls/" in path:
+                return PR
+            page = len(requested) + 1
+            self.assertEqual(path, f"repos/{REPO}/commits/{SHA}/statuses?per_page=100&page={page}")
+            requested.append(page)
+            return pages[page - 1]
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = gate.wait_for_bunny(REPO, "28", SHA, api=api, timeout=0,
+                                         retarget=lambda *_: "none")
+        return result, requested
+
+    def test_approval_on_later_page(self):
+        unrelated = [{"context": "Other integration"}] * 100
+        self.assertEqual(self.paginated_wait([unrelated, unrelated, status()["statuses"]]),
+                         (True, [1, 2, 3]))
+
+    def test_newest_bunny_status_blocks_older_approval(self):
+        unrelated = [{"context": "Other integration"}] * 100
+        for newer in [status("failure"), status("error"), status("pending"),
+                      status(creator={"login": "someone", "type": "User"}),
+                      status(target_url="https://github.com/owner/repo/actions/runs/123#stale"),
+                      status(description="Draft review posted with notes.")]:
+            with self.subTest(newer=newer):
+                # A full page ensures the lookup stops at the newest Bunny,
+                # rather than fetching the older success on the following page.
+                pages = [unrelated, newer["statuses"] + unrelated[:99], status()["statuses"]]
+                if newer["statuses"][0]["state"] in {"failure", "error"}:
+                    self.assertEqual(self.paginated_wait(pages), (False, [1, 2]))
+                else:
+                    with self.assertRaises(TimeoutError):
+                        self.paginated_wait(pages[:2])
+
+    def test_pagination_exhausted_without_bunny(self):
+        unrelated = [{"context": "Other integration"}] * 100
+        for last_page in [[], unrelated[:1]]:
+            with self.subTest(last_page=last_page), self.assertRaises(TimeoutError):
+                self.paginated_wait([unrelated, last_page])
 
     def test_red_never_unlocks_preview(self):
         for state in ["failure", "error"]:

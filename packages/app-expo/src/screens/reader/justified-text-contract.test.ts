@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Script } from "node:vm";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..");
@@ -72,5 +73,18 @@ describe("justified EPUB text setting", () => {
     expect(buildScript).toContain('"justified-text.js"');
     expect(buildScript).toContain("JUSTIFIED_TEXT_MARKER");
     expect(builtReader).toContain("data-readany-justify-body");
+  });
+  it("keeps reader scripts valid and scopes the heuristic to each open book", () => {
+    const template = readSource("packages/app-expo/assets/reader/reader.template.html");
+    for (const match of template.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+      expect(() => new Script(match[1])).not.toThrow();
+    }
+    expect(template).toContain("currentJustificationPolicy = null");
+    expect(template).toContain(
+      "currentJustificationPolicy = globalThis.ReadAnyJustifiedText.createBookPolicy()",
+    );
+    expect(template).toContain("applyDocStyles(doc, primary !== false)");
+    expect(template).toContain("content.index === currentSectionIndex");
+    expect(template).toContain("if (policy.decision === 'preserve') return");
   });
 });

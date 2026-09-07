@@ -1,5 +1,12 @@
 # Repository agent notes
 
+## Addressing Bunny review comments
+
+After addressing a Bunny review comment, wait for a subsequent completed Bunny
+review that no longer raises that finding, then resolve the corresponding review
+conversation. Do not resolve it solely because the fix was pushed or local tests
+passed; a failed or incomplete Bunny review does not confirm resolution.
+
 ## Bunny PR reviewer: character, persona, voice, and tone
 
 When asked to change Bunny's character or review voice, edit

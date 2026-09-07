@@ -67,9 +67,9 @@ def paginated_bunny_state(repository, sha, context, api, clock, deadline):
             first_page = statuses
         if any(status.get("context") == "Bunny Review" for status in statuses):
             state = bunny_state({"sha": sha, "statuses": statuses}, sha, repository, context)
-            if state == "success" and page > 1:
+            if page > 1:
                 # Pagination is not an atomic snapshot. New statuses shift page
-                # boundaries; discard this approval and poll again if it changed.
+                # boundaries; discard this result and poll again if it changed.
                 if clock() >= deadline:
                     raise TimeoutError("Bunny status lookup exceeded the review deadline.")
                 if api(first_path) != first_page:

@@ -102,6 +102,20 @@ class BunnyGateTests(unittest.TestCase):
                                 timeout=20, retarget=lambda *_: "none")
         self.assertEqual(len(requests), 2)
 
+    def test_changed_first_page_invalidates_every_later_page_state(self):
+        unrelated = [{"context": "Other integration", "id": i} for i in range(100)]
+        for older in [status("failure"), status("error"), status("pending"),
+                      status(creator={"login": "someone", "type": "User"})]:
+            with self.subTest(older=older):
+                responses = iter([unrelated, older["statuses"], status()["statuses"]])
+                requested = []
+                def api(path):
+                    requested.append(int(path.rsplit("=", 1)[1]))
+                    return next(responses)
+                self.assertEqual(gate.paginated_bunny_state(
+                    REPO, SHA, CONTEXT, api, lambda: 0, 20), "pending")
+                self.assertEqual(requested, [1, 2, 1])
+
     def test_newest_bunny_status_blocks_older_approval(self):
         unrelated = [{"context": "Other integration"}] * 100
         for newer in [status("failure"), status("error"), status("pending"),
@@ -113,7 +127,7 @@ class BunnyGateTests(unittest.TestCase):
                 # rather than fetching the older success on the following page.
                 pages = [unrelated, newer["statuses"] + unrelated[:99], status()["statuses"]]
                 if newer["statuses"][0]["state"] in {"failure", "error"}:
-                    self.assertEqual(self.paginated_wait(pages), (False, [1, 2]))
+                    self.assertEqual(self.paginated_wait(pages), (False, [1, 2, 1]))
                 else:
                     with self.assertRaises(TimeoutError):
                         self.paginated_wait(pages[:2])

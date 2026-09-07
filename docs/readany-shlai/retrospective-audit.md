@@ -88,6 +88,35 @@ codebase is defect-free. `incomplete` means the run, output contract, locations,
 or review controls failed; never count it as coverage. Keep the candidate count,
 confirmed count, request/token usage, and elapsed time with the pilot assessment.
 
+## Provider diagnostic
+
+If an audit stalls, use a single small request before spending on another scope:
+
+```sh
+gh workflow run bunny-retrospective.yml --repo cha1latte/ReadAny --ref main -f diagnostic=true
+```
+
+This ignores the selected audit scope and sends only the current 12-line
+`shlai-release-asset.ts` helper to the same provider/model, asking for a short
+explanation. It is non-streaming, makes one request, and disables SDK retries.
+It logs a waiting heartbeat every 15 seconds. The diagnostic has a 180-second
+request timeout and a four-minute step limit; ordinary retrospective requests
+still have no request timeout and retain the 45-minute job limit.
+
+Download `bunny-retrospective-diagnostic-<run-id>` for `diagnostic.json` and
+`progress.log`. The report distinguishes a nonempty response from failure and
+records elapsed time, exception cause types, HTTP error status when supplied by
+the SDK, and fixed categories such as disconnect-before-response, TLS, DNS, or
+timeout. It does not save provider error messages, headers, URLs, credentials,
+or generated response text. An empty reply is a failure. The source is capped
+at 4,000 characters, so this cannot silently grow into another full audit.
+
+A successful diagnostic demonstrates that the small request completed; it does
+not prove that a large request will succeed. After success, a streaming comparison
+on the discovery scope is the next experiment, not a confirmed transport fix.
+If this small request also fails, investigate the provider/endpoint before another
+large audit. This diagnostic does not provide application-code audit coverage.
+
 ## Offline verification
 
 ```sh

@@ -137,6 +137,50 @@ class RetrospectiveTests(unittest.TestCase):
         self.assertNotIn("GH_TOKEN", text)
         self.assertIn("if: always()", text)
 
+    def test_diagnostic_is_one_small_nonstreaming_request(self):
+        from types import SimpleNamespace
+        received = []
+        def create(**kwargs):
+            received.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="Explanation"))])
+        with tempfile.TemporaryDirectory() as directory, patch.object(audit, "git", side_effect=["a" * 40, "small source"]):
+            report = audit.run_diagnostic(Path(directory), create)
+            self.assertEqual(report["state"], "response-received")
+            self.assertEqual(len(received), 1)
+            self.assertEqual(received[0]["timeout"], 180)
+            self.assertFalse(received[0]["stream"])
+            self.assertEqual(received[0]["messages"][1]["content"], "small source")
+
+    def test_diagnostic_records_safe_failure_categories(self):
+        def fail(**_):
+            try:
+                raise ConnectionError("Server disconnected without sending a response https://secret.invalid/token")
+            except ConnectionError as cause:
+                error = RuntimeError("provider secret body")
+                error.status_code = 502
+                raise error from cause
+        with tempfile.TemporaryDirectory() as directory, patch.object(audit, "git", side_effect=["a" * 40, "small source"]):
+            output = Path(directory)
+            report = audit.run_diagnostic(output, fail)
+            self.assertEqual(report["state"], "failed")
+            self.assertEqual(report["http_status"], 502)
+            self.assertEqual(report["categories"], ["disconnected_before_response"])
+            self.assertEqual(report["error_types"], ["RuntimeError", "ConnectionError"])
+            self.assertNotIn("secret", (output / "diagnostic.json").read_text())
+            self.assertNotIn("secret", (output / "progress.log").read_text())
+
+    def test_empty_diagnostic_response_is_not_success(self):
+        from types import SimpleNamespace
+        empty = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=""))])
+        with tempfile.TemporaryDirectory() as directory, patch.object(audit, "git", side_effect=["a" * 40, "small source"]):
+            report = audit.run_diagnostic(Path(directory), lambda **_: empty)
+            self.assertEqual(report["state"], "failed")
+
+    def test_oversized_diagnostic_source_never_calls_model(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(audit, "git", side_effect=["a" * 40, "x" * 4001]):
+            with self.assertRaises(ValueError):
+                audit.run_diagnostic(Path(directory), lambda **_: self.fail("Unexpected model call"))
+
 
 if __name__ == "__main__":
     unittest.main()

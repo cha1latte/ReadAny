@@ -1,9 +1,13 @@
 name: Bunny Retrospective
-run-name: Bunny retrospective - ${{ inputs.scope }}
+run-name: Bunny retrospective - ${{ inputs.diagnostic && 'provider diagnostic' || inputs.scope }}
 
 on:
   workflow_dispatch:
     inputs:
+      diagnostic:
+        description: Run one small provider request instead of an audit.
+        type: boolean
+        default: false
       scope:
         description: One focused current-main audit (start with update-release).
         type: choice
@@ -40,18 +44,25 @@ jobs:
       - name: Install trusted review dependencies
         run: python -I -m pip install -r .github/bunny-review/requirements.txt
       - name: Audit pinned main snapshot
+        timeout-minutes: ${{ inputs.diagnostic && 4 || 45 }}
         env:
           AUDIT_SCOPE: ${{ inputs.scope }}
+          AUDIT_DIAGNOSTIC: ${{ inputs.diagnostic }}
           LLM_API_KEY: ${{ secrets.SHLAI_BUNNY_LLM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_BASE_URL: ${{ vars.SHLAI_BUNNY_LLM_BASE_URL || secrets.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.SHLAI_BUNNY_LLM_MODEL || 'gpt-5.5' }}
-        run: python -I .github/bunny-review/retrospective.py --scope "$AUDIT_SCOPE" --output "$RUNNER_TEMP/bunny-audit"
+        run: |
+          if [[ "$AUDIT_DIAGNOSTIC" == "true" ]]; then
+            python -I .github/bunny-review/retrospective.py --diagnostic --output "$RUNNER_TEMP/bunny-audit"
+          else
+            python -I .github/bunny-review/retrospective.py --scope "$AUDIT_SCOPE" --output "$RUNNER_TEMP/bunny-audit"
+          fi
       - name: Upload audit evidence even on failure
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: bunny-retrospective-${{ inputs.scope }}-${{ github.run_id }}
+          name: bunny-retrospective-${{ inputs.diagnostic && 'diagnostic' || inputs.scope }}-${{ github.run_id }}
           path: ${{ runner.temp }}/bunny-audit/
           retention-days: 30
           if-no-files-found: warn

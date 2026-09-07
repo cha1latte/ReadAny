@@ -17,6 +17,12 @@
   function apply(doc, enabled, unsupportedLayout, policy) {
     if (policy?.decision === "preserve") return;
     if (!doc || !doc.body || !doc.defaultView) return;
+    // An unsupported opening sample cannot establish safe prose overrides.
+    // Finalize the session conservatively instead of leaving neighbors pending.
+    if (enabled && unsupportedLayout && policy?.decision === "pending") {
+      policy.decision = "preserve";
+      return;
+    }
 
     for (const element of doc.querySelectorAll(`[${MARKER}]`)) {
       const original = originals.get(element);

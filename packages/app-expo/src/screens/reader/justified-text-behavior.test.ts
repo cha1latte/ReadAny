@@ -141,11 +141,14 @@ describe("reader-side justified text helper", () => {
 
   it("decides once using the opening chapter and resets for another book", () => {
     const { api, doc } = fixture();
-    const policy = api.createBookPolicy();
+    let policy = api.createBookPolicy();
     api.apply(doc, false, false, policy);
     expect(policy.decision).toBe("pending");
-    api.apply(doc, true, true, policy);
+    api.apply(doc, false, true, policy);
     expect(policy.decision).toBe("pending");
+    api.apply(doc, true, true, policy);
+    expect(policy.decision).toBe("preserve");
+    policy = api.createBookPolicy();
     api.apply(doc, true, false, policy);
     expect(policy.decision).toBe("apply");
     doc.body.innerHTML =
@@ -211,9 +214,16 @@ describe("reader-side justified text helper", () => {
     expect(exempt.decision).toBe("preserve");
     expect(alignment("prose")).toBe(authored);
   });
-  it.each([false, true])(
-    "flushes preloaded neighbors after sampling the primary chapter (publisher justified: %s)",
-    (justified) => {
+  it.each([
+    { justified: false, vertical: false, fixed: false, excluded: false },
+    { justified: true, vertical: false, fixed: false, excluded: false },
+    { justified: false, vertical: true, fixed: false, excluded: false },
+    { justified: false, vertical: false, fixed: true, excluded: false },
+    { justified: false, vertical: false, fixed: false, excluded: true },
+  ])(
+    "finalizes the opening chapter decision for preloaded neighbors: %j",
+    ({ justified, vertical, fixed, excluded }) => {
+      const preserve = justified || vertical || fixed;
       document.documentElement.replaceChildren();
       document.documentElement.innerHTML = "<head></head><body></body>";
       const makeChapter = (alignment: string) => {
@@ -226,6 +236,7 @@ describe("reader-side justified text helper", () => {
       };
       const neighbor = makeChapter("left");
       const primary = makeChapter(justified ? "justify" : "left");
+      if (excluded) primary.body.innerHTML = "<pre>Code-only chapter</pre>";
       const context: Record<string, unknown> = {};
       runInNewContext(source, context);
       const api = context.ReadAnyJustifiedText as {
@@ -237,7 +248,7 @@ describe("reader-side justified text helper", () => {
       const handlers: Record<string, (event: unknown) => void> = {};
       const noop = () => {};
       const el = {
-        isFixedLayout: false,
+        isFixedLayout: fixed,
         renderer: {},
         addEventListener: (name: string, handler: (event: unknown) => void) => {
           handlers[name] = handler;
@@ -256,7 +267,7 @@ describe("reader-side justified text helper", () => {
           { doc: neighbor, index: 0 },
           { doc: primary, index: 1 },
         ],
-        isVerticalDoc: () => false,
+        isVerticalDoc: (doc: Document) => vertical && doc === primary,
         markLoaded: noop,
         normalizeBrOnlyParagraphs: noop,
         applyRendererFlowMode: noop,
@@ -297,10 +308,10 @@ describe("reader-side justified text helper", () => {
       expect(policy.decision).toBe("pending");
       expect(apply).not.toHaveBeenCalled();
       handlers.load({ detail: { doc: primary, index: 1, primary: true } });
-      expect(policy.decision).toBe(justified ? "preserve" : "apply");
-      expect(neighbor.querySelector("p")?.style.textAlign).toBe(justified ? "left" : "justify");
+      expect(policy.decision).toBe(preserve ? "preserve" : "apply");
+      expect(neighbor.querySelector("p")?.style.textAlign).toBe(preserve ? "left" : "justify");
       expect(apply.mock.calls.filter(([doc]) => doc === primary)).toHaveLength(1);
-      expect(apply.mock.calls.filter(([doc]) => doc === neighbor)).toHaveLength(justified ? 0 : 1);
+      expect(apply.mock.calls.filter(([doc]) => doc === neighbor)).toHaveLength(preserve ? 0 : 1);
     },
   );
 });

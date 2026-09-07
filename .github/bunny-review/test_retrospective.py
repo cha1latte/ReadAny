@@ -34,7 +34,7 @@ class RetrospectiveTests(unittest.TestCase):
                 raise RuntimeError("provider-body") from cause
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
-            report = audit.execute({"snapshot": "a" * 40, "scope": "updates", "files": {}}, "packet", output, fail)
+            report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {}}, "packet", output, fail)
             self.assertEqual(report["state"], "incomplete")
             self.assertEqual(report["error_types"], ["RuntimeError", "ConnectionResetError"])
             self.assertTrue((output / "manifest.json").exists())
@@ -42,7 +42,7 @@ class RetrospectiveTests(unittest.TestCase):
 
     def test_bad_schema_is_incomplete_not_clean(self):
         with tempfile.TemporaryDirectory() as directory:
-            report = audit.execute({"snapshot": "a" * 40, "scope": "updates", "files": {}},
+            report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {}},
                                    "packet", Path(directory), lambda *_: {})
             self.assertEqual(report["state"], "incomplete")
 
@@ -51,7 +51,7 @@ class RetrospectiveTests(unittest.TestCase):
         for findings, expected in [([], "no-candidates"), ([finding], "needs-triage")]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory)
-                report = audit.execute({"snapshot": "a" * 40, "scope": "updates", "files": {"source.ts": 2}},
+                report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {"source.ts": 2}},
                                        "packet", output, lambda *_: self.review(findings))
                 self.assertEqual(report["state"], expected)
                 self.assertEqual(json.loads((output / "report.json").read_text())["candidates"], findings)
@@ -61,7 +61,7 @@ class RetrospectiveTests(unittest.TestCase):
         review = self.review()
         review["pre_merge_checks"] = [{"status": "fail", "name": "Missing context"}]
         with tempfile.TemporaryDirectory() as directory:
-            report = audit.execute({"snapshot": "a" * 40, "scope": "updates", "files": {}},
+            report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {}},
                                    "packet", Path(directory), lambda *_: review)
             self.assertEqual(report["state"], "incomplete")
 
@@ -72,6 +72,20 @@ class RetrospectiveTests(unittest.TestCase):
                 requests.create()
         with self.assertRaisesRegex(RuntimeError, "budget"):
             requests.create()
+
+    def test_retrospective_disables_shared_request_timeout(self):
+        from types import SimpleNamespace
+        received = []
+        def create(**kwargs):
+            received.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="response"))])
+        requests = audit.MeteredRequests(create, lambda _: None)
+        client = SimpleNamespace(chat=SimpleNamespace(completions=requests))
+        original_timeout = audit.bunny.MODEL_REQUEST_TIMEOUT
+        self.assertEqual(audit.bunny.model_call(client, [], audit.bunny.build_stats("")), "response")
+        self.assertIn("timeout", received[0])
+        self.assertIsNone(received[0]["timeout"])
+        self.assertEqual(audit.bunny.MODEL_REQUEST_TIMEOUT, original_timeout)
 
     def test_prepare_uses_pinned_current_content_and_rejects_oversize(self):
         commands = []
@@ -84,15 +98,34 @@ class RetrospectiveTests(unittest.TestCase):
                 return "current source\n"
             return ""
         with patch.object(audit, "git", side_effect=git), patch.object(audit.bunny, "select_guidance", return_value=[]):
-            manifest, packet = audit.prepare("updates")
+            manifest, packet = audit.prepare("update-release")
             self.assertIn("+current source", packet)
             self.assertEqual(manifest["snapshot"], "a" * 40)
             with patch.object(audit, "MAX_PACKET", 1), self.assertRaises(ValueError):
-                audit.prepare("updates")
+                audit.prepare("update-release")
 
     def test_dirty_live_checkout_rejected(self):
         with patch.object(audit, "git", side_effect=["a" * 40, " M source.ts"]), self.assertRaises(ValueError):
-            audit.prepare("updates")
+            audit.prepare("update-release")
+
+    def test_update_chunks_and_workflow_choices_match(self):
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/bunny-retrospective.yml").read_text()
+        for name in audit.SCOPES:
+            self.assertIn(f"          - {name}\n", workflow)
+        self.assertNotIn("updates", audit.SCOPES)
+        chunks = [audit.SCOPES[name]["files"] for name in
+                  ("update-release", "update-discovery", "update-install")]
+        for files in chunks:
+            self.assertTrue(any(".test." in path for path in files))
+        self.assertFalse(set(chunks[0]) & set(chunks[1]) & set(chunks[2]))
+
+    def test_extra_context_requests_have_reduced_limits(self):
+        request = audit.bunny.parse_context_request('CONTEXT_REQUEST ' + json.dumps({
+            "files": ["a", "b", "c"], "searches": ["first", "second"]}))
+        self.assertEqual(request["files"], ["a", "b"])
+        self.assertEqual(request["searches"], ["first"])
+        self.assertEqual(audit.bunny.MAX_CONTEXT_CHARS, 20_000)
+        self.assertEqual(audit.bunny.MAX_CONTEXT_FILE_CHARS, 10_000)
 
     def test_workflow_is_manual_pinned_read_only(self):
         text = (Path(__file__).resolve().parents[1] / "workflows/bunny-retrospective.yml").read_text()

@@ -8,12 +8,16 @@ may already be fixed, and old merge signals must retain their original meaning.
 
 | Order | Scope | Historical PRs | Reason |
 | --- | --- | --- | --- |
-| 1 | `updates` | #2, #3 | Shared phone updates, release identity, version selection, and install failure affect both users. |
-| 2 | `annotations` | #7, #12 | Book isolation, annotation retrieval, and fallback cancellation cross core/mobile boundaries. |
-| 3 | `reading-state` | #28 | Session persistence and teardown can corrupt or lose reading history. |
+| 1 | `update-release` | #2, #3 | Release/version generation, package identity, publication workflow, and focused tests. |
+| 2 | `update-discovery` | #2 | Update selection, channel configuration, scheduling, callers, and focused tests. |
+| 3 | `update-install` | #2 | Download, verification, installation, dialog/store lifecycle, and focused tests. |
+| 4 | `annotations` | #7, #12 | Book isolation, annotation retrieval, and fallback cancellation cross core/mobile boundaries. |
+| 5 | `reading-state` | #28 | Session persistence and teardown can corrupt or lose reading history. |
 
-Start with **one updates run**. Triage every candidate before spending on another
-scope. Continue to annotations and reading-state if the pilot produces a
+Start with **one update-release run**, then update-discovery and update-install.
+Each chunk is a separate dispatch, checkpoint, and report; the old combined
+`updates` option is removed. Triage every candidate before spending on another
+scope. Continue to annotations and reading-state if the update pilot produces a
 reproducible defect or useful, testable coverage gaps. If it produces only stale,
 speculative, or stylistic comments, improve the packet before expanding. Do not
 bulk-review all merged PRs. Desktop lifecycle (#26), imports/storage from #1/#2,
@@ -22,14 +26,14 @@ Recent Bunny-reviewed changes (#31–#35) are lower priority.
 
 The manifest `.github/bunny-review/retrospective-scopes.json` lists the exact files
 and purposes. These scopes are deliberately partial. Reading-state does not cover
-the full renderer, and updates does not cover every unrelated change in PR #2.
+the full renderer, and the update chunks do not cover every unrelated change in PR #2.
 
 ## Run and observe
 
 After the workflow is merged into main:
 
 ```sh
-gh workflow run bunny-retrospective.yml --repo cha1latte/ReadAny --ref main -f scope=updates
+gh workflow run bunny-retrospective.yml --repo cha1latte/ReadAny --ref main -f scope=update-release
 gh run list --repo cha1latte/ReadAny --workflow bunny-retrospective.yml --limit 1
 ```
 
@@ -40,16 +44,22 @@ source; it does not run application scripts, build APKs, post comments or issues
 change commit statuses, or release anything. The standard PR reviewer is unchanged.
 
 One scope runs at a time, without cancelling an active audit. A packet is capped
-at 120,000 characters and rejected rather than silently truncated when oversized.
+at 65,000 characters for each update chunk (120,000 for the other scopes) and
+rejected rather than silently truncated when oversized.
 It contains current source as a synthetic all-added patch for Bunny's existing
 line-based review contract, bounded repository guidance, and recent scoped commit
 history. Historical PR numbers are orientation, not evidence that a bug survives.
-Bunny can request bounded adjacent current code/tests using its existing context
-retrieval. Guidance/context truncation remains visible and limits coverage.
+Bunny can request at most two adjacent current files and one literal search,
+with 10,000 characters per file and 20,000 extra characters total. These reduced
+limits apply only to retrospective audits. Guidance is capped at 6,000 characters
+per document. Guidance/context truncation remains visible and limits coverage.
+Each of the three model passes receives only its selected chunk, not the combined
+update source. The judge additionally receives the two earlier pass results.
 
 Bunny reuses its broad, skeptical, and judge passes. The audit permits at most
-eight model requests, 300 seconds each, with SDK retries disabled; the job has a
-45-minute limit. This bounds calls/time, not a currency amount. Logs mark request
+eight model requests with SDK retries disabled. Each request explicitly disables
+the SDK timeout; the job's 45-minute limit is the overall time bound. A stalled
+request can consume that entire limit. This bounds calls/time, not a currency amount. Logs mark request
 starts/ends and token telemetry. There is no trustworthy percentage or ETA inside
 a model request. A failed request is recorded with its exception cause types;
 provider messages, URLs, and credentials are excluded from error diagnostics.
@@ -83,7 +93,7 @@ confirmed count, request/token usage, and elapsed time with the pilot assessment
 ```sh
 python -I -m unittest discover -s .github/bunny-review -p 'test_*.py'
 python -I -m unittest discover -s scripts -p 'test_*.py'
-python -I .github/bunny-review/retrospective.py --scope updates --prepare-only --output /tmp/bunny-updates-packet
+python -I .github/bunny-review/retrospective.py --scope update-release --prepare-only --output /tmp/bunny-update-release-packet
 ```
 
 Preparation makes no model calls or GitHub writes. Source is read from HEAD;

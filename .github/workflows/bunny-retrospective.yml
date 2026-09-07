@@ -5,13 +5,15 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: Bounded current-main audit area (start with updates).
+        description: One focused current-main audit (start with update-release).
         type: choice
         options:
-          - updates
+          - update-release
+          - update-discovery
+          - update-install
           - annotations
           - reading-state
-        default: updates
+        default: update-release
         required: true
 
 permissions:
@@ -40,7 +42,6 @@ jobs:
       - name: Audit pinned main snapshot
         env:
           AUDIT_SCOPE: ${{ inputs.scope }}
-          BUNNY_MODEL_REQUEST_TIMEOUT_SECONDS: "300"
           LLM_API_KEY: ${{ secrets.SHLAI_BUNNY_LLM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_BASE_URL: ${{ vars.SHLAI_BUNNY_LLM_BASE_URL || secrets.LLM_BASE_URL }}

@@ -15,8 +15,15 @@ spec = importlib.util.spec_from_file_location("retrospective_bunny", HERE / "bun
 bunny = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = bunny
 spec.loader.exec_module(bunny)
+# This is a separately loaded Bunny module; regular PR reviews retain their limits.
+bunny.MAX_CONTEXT_FILES = 2
+bunny.MAX_CONTEXT_SEARCHES = 1
+bunny.MAX_CONTEXT_CHARS = 20_000
+bunny.MAX_CONTEXT_FILE_CHARS = 10_000
 MAX_PACKET = 120_000
+UPDATE_MAX_PACKET = 65_000
 MAX_CALLS = 8
+SCOPES = json.loads((HERE / "retrospective-scopes.json").read_text("utf-8"))
 
 
 def git(*args):
@@ -25,7 +32,7 @@ def git(*args):
 
 
 def prepare(scope_name, *, prepare_only=False):
-    scope = json.loads((HERE / "retrospective-scopes.json").read_text("utf-8"))[scope_name]
+    scope = SCOPES[scope_name]
     sha = git("rev-parse", "HEAD").strip()
     # Live context retrieval reads the checkout: it must match the pinned source.
     if not prepare_only and git("status", "--porcelain", "--untracked-files=no").strip():
@@ -43,15 +50,17 @@ def prepare(scope_name, *, prepare_only=False):
         sections.append(f"diff --git a/{path} b/{path}\n--- /dev/null\n+++ b/{path}\n"
                         f"@@ -0,0 +1,{len(lines)} @@\n" + "\n".join("+" + line for line in lines))
     for path in bunny.select_guidance(scope["files"]):
-        sections.append(f"Guidance: {path}\n" + bunny.read_text(path, 12_000))
+        sections.append(f"Guidance: {path}\n" + bunny.read_text(path, 6_000))
     sections.append(bunny.matching_path_rules(scope["files"]))
     # Recent history identifies subsequent fixes without using historical code as truth.
     sections.append("Recent scoped history:\n" + git("log", "-15", "--format=%h %s", "--", *scope["files"]))
     packet = bunny.redact_for_model("\n\n".join(sections))
-    if len(packet) > MAX_PACKET:
-        raise ValueError(f"Scope is {len(packet)} characters; split it before running (limit {MAX_PACKET}).")
+    limit = min(MAX_PACKET, UPDATE_MAX_PACKET) if scope_name.startswith("update-") else MAX_PACKET
+    if len(packet) > limit:
+        raise ValueError(f"Scope is {len(packet)} characters; split it before running (limit {limit}).")
     return {"snapshot": sha, "scope": scope_name, "prs": scope["prs"],
-            "files": allowed, "packet_chars": len(packet)}, packet
+            "files": allowed, "packet_chars": len(packet), "packet_limit": limit,
+            "extra_context_limit": bunny.MAX_CONTEXT_CHARS}, packet
 
 
 class MeteredRequests:
@@ -67,6 +76,9 @@ class MeteredRequests:
         self.progress(f"Model request {self.calls}/{MAX_CALLS} started")
         started = time.monotonic()
         try:
+            # Override the shared PR reviewer's per-call timeout explicitly.
+            # Retrospective requests are bounded by the workflow's job timeout.
+            kwargs["timeout"] = None
             return self.create_request(**kwargs)
         finally:
             self.progress(f"Model request {self.calls}/{MAX_CALLS} ended after {time.monotonic() - started:.1f}s")
@@ -153,6 +165,8 @@ def live_review(packet, progress):
                 "trigger, impact and proposed regression test in each finding. Do not report historical "
                 "bugs fixed in this snapshot, stylistic nitpicks, or missing tests alone. "
                 "Read adjacent callers/tests with the existing bounded context request when needed. "
+                "Request at most two extra files and one literal search; extra context is limited "
+                "to 20,000 characters total and 10,000 per file. Stay within this chunk's purpose. "
                 "Never claim reproduction or test execution: this run only reads source.\n\n" + packet, stats)
         finally:
             bunny.print_telemetry(stats)
@@ -160,7 +174,7 @@ def live_review(packet, progress):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scope", choices=["updates", "annotations", "reading-state"], default="updates")
+    parser.add_argument("--scope", choices=list(SCOPES), default="update-release")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prepare-only", action="store_true")
     args = parser.parse_args()

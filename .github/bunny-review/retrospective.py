@@ -65,10 +65,11 @@ def prepare(scope_name, *, prepare_only=False):
 
 
 class MeteredRequests:
-    def __init__(self, create, progress):
+    def __init__(self, create, progress, *, streaming=False):
         self.create_request = create
         self.progress = progress
         self.calls = 0
+        self.streaming = streaming
 
     def create(self, **kwargs):
         if self.calls >= MAX_CALLS:
@@ -76,13 +77,63 @@ class MeteredRequests:
         self.calls += 1
         self.progress(f"Model request {self.calls}/{MAX_CALLS} started")
         started = time.monotonic()
+        stop = threading.Event()
+        def heartbeat():
+            while not stop.wait(15):
+                self.progress(f"Model request {self.calls}/{MAX_CALLS} still active: elapsed={time.monotonic() - started:.1f}s")
+        worker = threading.Thread(target=heartbeat, daemon=True)
+        worker.start()
         try:
             # Override the shared PR reviewer's per-call timeout explicitly.
             # Retrospective requests are bounded by the workflow's job timeout.
             kwargs["timeout"] = None
+            if self.streaming:
+                kwargs["stream"] = True
+                kwargs["stream_options"] = {"include_usage": True}
+                with self.create_request(**kwargs) as stream:
+                    return collect_stream(stream, self.progress, started)
             return self.create_request(**kwargs)
         finally:
+            stop.set()
+            worker.join()
             self.progress(f"Model request {self.calls}/{MAX_CALLS} ended after {time.monotonic() - started:.1f}s")
+
+
+def collect_stream(stream, progress, started):
+    parts, usage, finish = [], None, None
+    events, characters = 0, 0
+    last_progress = started
+    for chunk in stream:
+        events += 1
+        now = time.monotonic()
+        if events == 1:
+            progress(f"First stream event after {now - started:.1f}s")
+        if getattr(chunk, "usage", None) is not None:
+            usage = chunk.usage
+        for choice in chunk.choices:
+            if choice.index != 0:
+                raise ValueError("Unexpected additional streamed choice")
+            content = getattr(choice.delta, "content", None)
+            if content:
+                if finish is not None or not isinstance(content, str):
+                    raise ValueError("Invalid streamed content")
+                if characters == 0:
+                    progress(f"First stream text after {now - started:.1f}s")
+                characters += len(content)
+                if characters > 1_000_000:
+                    raise ValueError("Stream response exceeds character budget")
+                parts.append(content)
+            if choice.finish_reason is not None:
+                if finish is not None or choice.finish_reason != "stop":
+                    raise ValueError("Stream did not finish normally")
+                finish = choice.finish_reason
+        if now - last_progress >= 15:
+            progress(f"Stream received: events={events}; response_chars={characters}")
+            last_progress = now
+    if finish != "stop" or not "".join(parts).strip():
+        raise ValueError("Stream ended without a complete text response")
+    progress(f"Stream complete: events={events}; response_chars={characters}; usage_received={usage is not None}")
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="".join(parts)))], usage=usage)
 
 
 def exception_types(exc):
@@ -156,7 +207,8 @@ def live_review(packet, progress):
     if not key:
         raise RuntimeError("Missing model credential")
     with OpenAI(api_key=key, base_url=os.environ.get("LLM_BASE_URL") or None, max_retries=0) as client:
-        requests = MeteredRequests(client.chat.completions.create, progress)
+        requests = MeteredRequests(client.chat.completions.create, progress,
+                                   streaming=os.environ.get("BUNNY_AUDIT_STREAMING") == "true")
         measured = SimpleNamespace(chat=SimpleNamespace(completions=requests))
         stats = bunny.build_stats(packet)
         try:
@@ -264,6 +316,7 @@ def main():
         report = provider_diagnostic(args.output)
         raise SystemExit(0 if report["state"] == "response-received" else 1)
     manifest, packet = prepare(args.scope, prepare_only=args.prepare_only)
+    manifest["stream"] = os.environ.get("BUNNY_AUDIT_STREAMING") == "true"
     if args.prepare_only:
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

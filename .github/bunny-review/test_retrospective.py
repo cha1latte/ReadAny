@@ -151,6 +151,74 @@ class RetrospectiveTests(unittest.TestCase):
             self.assertFalse(received[0]["stream"])
             self.assertEqual(received[0]["messages"][1]["content"], "small source")
 
+    def stream_chunk(self, content=None, finish=None, usage=None, index=0):
+        from types import SimpleNamespace as NS
+        return NS(choices=[] if usage else [NS(index=index, delta=NS(content=content), finish_reason=finish)], usage=usage)
+
+    def streamed_request(self, chunks, logs=None):
+        from types import SimpleNamespace as NS
+        class Stream:
+            closed = False
+            def __enter__(self):
+                return self
+            def __exit__(self, *_):
+                self.closed = True
+            def __iter__(self):
+                for chunk in chunks:
+                    if isinstance(chunk, Exception):
+                        raise chunk
+                    yield chunk
+        stream = Stream()
+        received = []
+        def create(**kwargs):
+            received.append(kwargs)
+            return stream
+        requests = audit.MeteredRequests(create, (logs if logs is not None else []).append, streaming=True)
+        return NS(chat=NS(completions=requests)), stream, received
+
+    def test_stream_assembles_text_and_preserves_final_usage(self):
+        from types import SimpleNamespace as NS
+        usage = NS(prompt_tokens=10, completion_tokens=4, total_tokens=14)
+        logs = []
+        client, stream, received = self.streamed_request([
+            self.stream_chunk(), self.stream_chunk("FINAL_"),
+            self.stream_chunk("REVIEW {}", "stop"), self.stream_chunk(usage=usage)], logs)
+        stats = audit.bunny.build_stats("")
+        self.assertEqual(audit.bunny.model_call(client, [], stats), "FINAL_REVIEW {}")
+        self.assertEqual(stats["total_tokens"], 14)
+        self.assertTrue(received[0]["stream"])
+        self.assertEqual(received[0]["stream_options"], {"include_usage": True})
+        self.assertIsNone(received[0]["timeout"])
+        self.assertTrue(stream.closed)
+        self.assertTrue(any("First stream text" in line for line in logs))
+        self.assertFalse(any("FINAL_REVIEW" in line for line in logs))
+
+    def test_incomplete_or_invalid_streams_fail_and_close(self):
+        for chunks in [[], [self.stream_chunk("partial")], [self.stream_chunk("text", "length")],
+                       [self.stream_chunk("", "stop")], [self.stream_chunk("text", index=1)],
+                       [self.stream_chunk("text", "stop"), self.stream_chunk("late")],
+                       [self.stream_chunk("x" * 1_000_001, "stop")]]:
+            with self.subTest(chunks=len(chunks)):
+                client, stream, _ = self.streamed_request(chunks)
+                with self.assertRaises(ValueError):
+                    audit.bunny.model_call(client, [], audit.bunny.build_stats(""))
+                self.assertTrue(stream.closed)
+
+    def test_stream_transport_failure_never_returns_partial_review(self):
+        client, stream, _ = self.streamed_request([self.stream_chunk("partial"), ConnectionError()])
+        stats = audit.bunny.build_stats("")
+        with self.assertRaises(ConnectionError):
+            audit.bunny.model_call(client, [], stats)
+        self.assertTrue(stream.closed)
+        self.assertEqual(stats["model_calls"], 0)
+
+    def test_complete_stream_without_usage_is_explicit_in_log(self):
+        logs = []
+        client, stream, _ = self.streamed_request([self.stream_chunk("text", "stop")], logs)
+        self.assertEqual(audit.bunny.model_call(client, [], audit.bunny.build_stats("")), "text")
+        self.assertTrue(any("usage_received=False" in line for line in logs))
+        self.assertTrue(stream.closed)
+
     def test_diagnostic_records_safe_failure_categories(self):
         def fail(**_):
             try:

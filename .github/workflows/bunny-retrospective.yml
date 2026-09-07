@@ -4,6 +4,10 @@ run-name: Bunny retrospective - ${{ inputs.diagnostic && 'provider diagnostic' |
 on:
   workflow_dispatch:
     inputs:
+      streaming:
+        description: Stream retrospective model responses (diagnostic stays non-streaming).
+        type: boolean
+        default: false
       diagnostic:
         description: Run one small provider request instead of an audit.
         type: boolean
@@ -48,6 +52,7 @@ jobs:
         env:
           AUDIT_SCOPE: ${{ inputs.scope }}
           AUDIT_DIAGNOSTIC: ${{ inputs.diagnostic }}
+          BUNNY_AUDIT_STREAMING: ${{ inputs.streaming }}
           LLM_API_KEY: ${{ secrets.SHLAI_BUNNY_LLM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_BASE_URL: ${{ vars.SHLAI_BUNNY_LLM_BASE_URL || secrets.LLM_BASE_URL }}

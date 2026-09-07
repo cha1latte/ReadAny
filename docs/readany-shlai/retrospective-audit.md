@@ -88,6 +88,32 @@ codebase is defect-free. `incomplete` means the run, output contract, locations,
 or review controls failed; never count it as coverage. Keep the candidate count,
 confirmed count, request/token usage, and elapsed time with the pilot assessment.
 
+## Streaming comparison
+
+After a successful small diagnostic, run the discovery chunk with streaming:
+
+```sh
+gh workflow run bunny-retrospective.yml --repo cha1latte/ReadAny --ref main -f scope=update-discovery -f streaming=true
+```
+
+Streaming is opt-in and applies to every model pass in that audit. The small
+diagnostic remains non-streaming. The manifest records the selected transport;
+compare source files and packet sizes against the earlier run before attributing
+any outcome to streaming. This is an experiment, not a guaranteed connection fix.
+
+The adapter requests token usage, assembles text deltas, and requires a normal
+`stop` finish. Empty, truncated, filtered, or interrupted streams fail the audit
+instead of producing a partial review. Responses are capped at one million
+characters. Missing usage is explicitly logged; do not interpret zero recorded
+tokens as zero cost when the provider omitted usage. Streams are closed on success
+and failure. SDK retries remain disabled and request timeouts remain disabled;
+the 45-minute job limit still applies.
+
+Logs show first event time, first text time, periodic event/character counts,
+and a 15-second waiting heartbeat, without printing model text. A heartbeat proves
+only that the worker is alive; incoming events/text provide response progress.
+The existing three-pass review and candidate-validation rules still apply.
+
 ## Provider diagnostic
 
 If an audit stalls, use a single small request before spending on another scope:

@@ -67,6 +67,29 @@ describe("useUpdateChecker", () => {
     expect(showDialog).toHaveBeenCalledTimes(1);
   });
 
+  it("does not start an update check when cancelled during version lookup", async () => {
+    const version = createDeferred<string>();
+    const platform = { getAppVersion: vi.fn().mockReturnValue(version.promise) };
+    const checkForUpdate = vi.fn().mockResolvedValue({ hasUpdate: false });
+    const getUpdateState = vi.fn();
+
+    const cancel = scheduleUpdateCheck({
+      getPlatformService: () => platform,
+      checkForUpdate,
+      getReleaseConfig: () => ({}),
+      getUpdateState,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(platform.getAppVersion).toHaveBeenCalledTimes(1);
+    cancel();
+    version.resolve("1.3.5.1");
+    await vi.runAllTimersAsync();
+
+    expect(checkForUpdate).not.toHaveBeenCalled();
+    expect(getUpdateState).not.toHaveBeenCalled();
+  });
+
   it("does no platform or network work when public updates are disabled", async () => {
     const getPlatformService = vi.fn();
     const checkForUpdate = vi.fn();

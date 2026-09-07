@@ -34,6 +34,28 @@ function makeReleasePlatform(release: Record<string, unknown>) {
 }
 
 describe("Shlai update routing", () => {
+  it("skips malformed asset rows while retaining valid downloads", async () => {
+    const platform = makeReleasePlatform({
+      tag_name: "v1.2.3",
+      assets: [
+        null,
+        false,
+        42,
+        "invalid",
+        [],
+        {},
+        { name: "broken.apk" },
+        { name: "valid.apk", browser_download_url: "https://example.test/app.apk", size: 42 },
+      ],
+    });
+
+    const result = await checkForUpdate("1.2.2", platform);
+    expect(result.hasUpdate).toBe(true);
+    expect(result.release?.assets).toEqual([
+      { name: "valid.apk", downloadUrl: "https://example.test/app.apk", size: 42 },
+    ]);
+  });
+
   it("normalizes Shlai release tags and prerelease-style app versions", () => {
     expect(releaseTagToVersion("shlai-v1.3.5.2", "shlai-v")).toBe("1.3.5.2");
     expect(releaseTagToVersion("shlai-preview-v1.3.6.12", "shlai-preview-v")).toBe("1.3.6.12");

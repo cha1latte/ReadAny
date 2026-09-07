@@ -37,6 +37,7 @@ export function scheduleUpdateCheck<
       if (releaseConfig === null) return;
       const platform = options.getPlatformService();
       const version = await platform.getAppVersion();
+      if (cancelled) return;
       const result = await options.checkForUpdate(version, platform, false, releaseConfig);
 
       if (cancelled) return;

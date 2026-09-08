@@ -40,6 +40,24 @@ class RetrospectiveTests(unittest.TestCase):
             self.assertTrue((output / "manifest.json").exists())
             self.assertNotIn("sensitive-url-or-token", (output / "report.json").read_text())
 
+    def test_audit_retains_sanitized_failure_details_in_all_evidence(self):
+        def fail(*_):
+            error = RuntimeError("incomplete chunked read: secret-provider-body")
+            error.status_code = 502
+            raise error
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {}},
+                                   "packet", output, fail)
+            self.assertEqual(report["state"], "incomplete")
+            self.assertEqual(report["categories"], ["incomplete_response_body"])
+            self.assertEqual(report["http_status"], 502)
+            for name in ["report.json", "report.md", "progress.log"]:
+                evidence = (output / name).read_text()
+                self.assertIn("incomplete_response_body", evidence)
+                self.assertIn("502", evidence)
+                self.assertNotIn("secret-provider-body", evidence)
+
     def test_bad_schema_is_incomplete_not_clean(self):
         with tempfile.TemporaryDirectory() as directory:
             report = audit.execute({"snapshot": "a" * 40, "scope": "update-release", "files": {}},

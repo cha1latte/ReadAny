@@ -184,8 +184,12 @@ def execute(manifest, packet, output, review_call):
                        for check in review["pre_merge_checks"] if isinstance(check, dict))):
             report["state"] = "incomplete"
     except Exception as exc:
-        report["error_types"] = exception_types(exc)
+        report.update(diagnostic_error(exc))
         progress("Review failed: " + " -> ".join(report["error_types"]))
+        if report["categories"]:
+            progress("Failure categories: " + ", ".join(report["categories"]))
+        if "http_status" in report:
+            progress(f"HTTP status: {report['http_status']}")
     finally:
         (output / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         lines = [f"# Bunny retrospective: {manifest['scope']}",
@@ -196,6 +200,10 @@ def execute(manifest, packet, output, review_call):
                           "Triage: pending reproduction; check existing issues and later fixes before filing."])
         if report.get("error_types"):
             lines.append("Failure chain: " + " -> ".join(report["error_types"]))
+        if report.get("categories"):
+            lines.append("Failure categories: " + ", ".join(report["categories"]))
+        if "http_status" in report:
+            lines.append(f"HTTP status: {report['http_status']}")
         (output / "report.md").write_text("\n\n".join(lines) + "\n", encoding="utf-8")
         progress(f"Audit ended: {report['state']}")
     return report

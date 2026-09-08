@@ -14,7 +14,7 @@ import {
   useColors,
   withOpacity,
 } from "@/styles/theme";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Linking, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -32,6 +32,8 @@ export function UpdateDialog() {
   const installState = useUpdateStore((s) => s.installState);
   const setInstallState = useUpdateStore((s) => s.setInstallState);
   const installOwner = useRef(createUpdateInstallOwner()).current;
+  const pendingRef = useRef(false);
+  const [pending, setPending] = useState(false);
   const releaseConfig = getShlaiReleaseConfig();
 
   const release = checkResult?.release;
@@ -48,6 +50,7 @@ export function UpdateDialog() {
 
   const downloadUrl = apkAsset?.downloadUrl ?? release?.htmlUrl ?? null;
   const busy =
+    pending ||
     installState.status === "downloading" ||
     installState.status === "verifying" ||
     installState.status === "opening-installer";
@@ -66,17 +69,21 @@ export function UpdateDialog() {
 
   const handleDownload = useCallback(async () => {
     if (!releaseConfig || !release) return;
-    if (releaseConfig.releaseMode === "single") {
-      if (downloadUrl) await Linking.openURL(downloadUrl);
-      hideDialog();
-      return;
-    }
-    if (!apkAsset || !checksumAsset) {
-      setInstallState({ status: "error", message: "Required update files are missing." });
-      return;
-    }
+    if (pendingRef.current) return;
     await installOwner.run(async () => {
+      pendingRef.current = true;
+      setPending(true);
+      setInstallState({ status: "idle" });
       try {
+        if (releaseConfig.releaseMode === "single") {
+          if (!downloadUrl) throw new Error("The update download link is missing.");
+          await Linking.openURL(downloadUrl);
+          hideDialog();
+          return;
+        }
+        if (!apkAsset || !checksumAsset) {
+          throw new Error("Required update files are missing.");
+        }
         await installShlaiPreviewUpdateWithExpo(
           {
             tag: `${releaseConfig.tagPrefix}${release.version}`,
@@ -92,6 +99,9 @@ export function UpdateDialog() {
           status: "error",
           message: error instanceof Error ? error.message : "Update installation failed.",
         });
+      } finally {
+        pendingRef.current = false;
+        setPending(false);
       }
     });
   }, [
@@ -106,7 +116,7 @@ export function UpdateDialog() {
   ]);
 
   const handleLater = useCallback(() => {
-    if (busy) return;
+    if (pendingRef.current || busy) return;
     setInstallState({ status: "idle" });
     if (version) {
       dismissVersion(version);

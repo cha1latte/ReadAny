@@ -68,7 +68,7 @@ const updateStore = vi.hoisted(() => {
   return { listeners, reset, state };
 });
 
-const installer = vi.hoisted(() => ({ install: vi.fn() }));
+const installer = vi.hoisted(() => ({ install: vi.fn(), openURL: vi.fn(), single: false }));
 
 vi.mock("react-native", async () => {
   const ReactModule = await import("react");
@@ -77,7 +77,7 @@ vi.mock("react-native", async () => {
       return ReactModule.createElement(name, props, props.children as React.ReactNode);
     };
   return {
-    Linking: { openURL: vi.fn() },
+    Linking: { openURL: installer.openURL },
     Modal: host("Modal"),
     Pressable: host("Pressable"),
     StyleSheet: { create: (styles: unknown) => styles },
@@ -136,7 +136,7 @@ vi.mock("@/lib/shlai-release", () => ({
     apiUrl: "https://api.github.com/repos/cha1latte/ReadAny/releases?per_page=100",
     assetName: "ReadAny-Shlai-Preview.apk",
     checksumAssetName: "ReadAny-Shlai-Preview.apk.sha256",
-    releaseMode: "canonical-prerelease-list",
+    releaseMode: installer.single ? "single" : "canonical-prerelease-list",
     tagPrefix: "shlai-preview-v",
     throttleKey: "test",
   }),
@@ -194,6 +194,8 @@ describe("UpdateDialog", () => {
     updateStore.state.dismissVersion.mockClear();
     updateStore.state.setInstallState.mockClear();
     installer.install.mockReset();
+    installer.openURL.mockReset();
+    installer.single = false;
   });
 
   it("locks both actions, renders progress and verification, and hides only after install resolves", async () => {
@@ -270,6 +272,30 @@ describe("UpdateDialog", () => {
     expect(updateStore.state.hideDialog).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps URL launch errors visible and allows retry", async () => {
+    installer.single = true;
+    installer.openURL
+      .mockRejectedValueOnce(new Error("Browser unavailable"))
+      .mockResolvedValueOnce(undefined);
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<UpdateDialog />);
+    });
+    await act(async () => {
+      await renderer.root
+        .findAll((node) => isHostType(node, "TouchableOpacity"))[0]
+        .props.onPress();
+    });
+    expect(textContent(renderer)).toContain("Browser unavailable");
+    expect(updateStore.state.hideDialog).not.toHaveBeenCalled();
+    await act(async () => {
+      await renderer.root
+        .findAll((node) => isHostType(node, "TouchableOpacity"))[0]
+        .props.onPress();
+    });
+    expect(updateStore.state.hideDialog).toHaveBeenCalledTimes(1);
+  });
+
   it("owns the install before progress renders and ignores an immediate double tap", async () => {
     const pending = deferred();
     installer.install.mockReturnValue(pending.promise);
@@ -284,8 +310,10 @@ describe("UpdateDialog", () => {
     await act(async () => {
       first = primary.props.onPress();
       second = primary.props.onPress();
+      renderer.root.findAll((node) => isHostType(node, "TouchableOpacity"))[1].props.onPress();
       await Promise.resolve();
     });
+    expect(updateStore.state.dismissVersion).not.toHaveBeenCalled();
     expect(installer.install).toHaveBeenCalledTimes(1);
     expect(updateStore.state.hideDialog).not.toHaveBeenCalled();
 

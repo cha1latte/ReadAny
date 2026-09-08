@@ -3,6 +3,7 @@ import {
   useReadingSession,
   webSessionEventSource,
 } from "@readany/core/hooks/use-reading-session";
+import { useAppStore } from "@readany/core/stores/app-store";
 import { useReadingSessionStore } from "@readany/core/stores/reading-session-store";
 import { createElement } from "react";
 import TestRenderer, { act } from "react-test-renderer";
@@ -19,9 +20,9 @@ vi.mock("@readany/core/stores/sync-store", () => ({
 let renderer: TestRenderer.ReactTestRenderer;
 let renders: number;
 let session: ReturnType<typeof useReadingSession>;
-function Reader() {
+function Reader({ bookId = "test-book", tabId }: { bookId?: string; tabId?: string }) {
   renders += 1;
-  session = useReadingSession("test-book");
+  session = useReadingSession(bookId, tabId);
   return null;
 }
 
@@ -101,4 +102,58 @@ describe("reading-session work while reading", () => {
       pausedTime + 1000,
     );
   });
+});
+
+it("uses the new book after a mounted reader switches books", async () => {
+  await act(async () => {
+    renderer.update(createElement(Reader, { bookId: "B" }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(useReadingSessionStore.getState().currentSession?.bookId).toBe("B");
+  await act(async () => {
+    renderer.unmount();
+  });
+  expect(persist).toHaveBeenLastCalledWith(expect.objectContaining({ bookId: "B" }));
+});
+
+it("keeps inactive mounts and unmounts from replacing the active session", async () => {
+  await act(async () => {
+    renderer.unmount();
+    useAppStore.setState({ activeTabId: "a" });
+    renderer = TestRenderer.create(createElement(Reader, { bookId: "A", tabId: "a" }));
+  });
+  let inactive!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    inactive = TestRenderer.create(createElement(Reader, { bookId: "B", tabId: "b" }));
+  });
+  expect(useReadingSessionStore.getState().currentSession?.bookId).toBe("A");
+  await act(async () => {
+    inactive.unmount();
+  });
+  expect(useReadingSessionStore.getState().currentSession?.bookId).toBe("A");
+});
+
+it("starts the selected book when switching between mounted tabs", async () => {
+  await act(async () => {
+    renderer.unmount();
+    useAppStore.setState({ activeTabId: "a" });
+    renderer = TestRenderer.create(
+      createElement(
+        "readers",
+        null,
+        createElement(Reader, { bookId: "A", tabId: "a" }),
+        createElement(Reader, { bookId: "B", tabId: "b" }),
+      ),
+    );
+  });
+  await act(async () => {
+    useAppStore.setState({ activeTabId: "b" });
+  });
+  expect(useReadingSessionStore.getState().currentSession?.bookId).toBe("B");
+  await act(async () => {
+    useAppStore.setState({ activeTabId: "a" });
+  });
+  expect(useReadingSessionStore.getState().currentSession?.bookId).toBe("A");
 });

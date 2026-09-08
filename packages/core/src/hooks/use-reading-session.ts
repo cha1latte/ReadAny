@@ -72,11 +72,17 @@ export function useReadingSession(bookId: string | null, tabId?: string) {
   const activeTabId = useAppStore((s) => s.activeTabId);
   const isTabActive = tabId ? activeTabId === tabId : true;
 
-  const detectorRef = useRef(
-    createSessionDetector(undefined, (_from, to) => {
+  const dispatchRef = useRef<(event: SessionEvent) => void>(() => {});
+  const sendEvent = useCallback((event: SessionEvent) => dispatchRef.current(event), []);
+
+  useEffect(() => {
+    if (!bookId || !isTabActive) return;
+
+    const isCurrentTabActive = () => !tabId || useAppStore.getState().activeTabId === tabId;
+    const detector = createSessionDetector(undefined, (from, to) => {
       switch (to) {
         case "ACTIVE":
-          if (_from === "STOPPED") startSession(bookId ?? "");
+          if (from === "STOPPED") startSession(bookId);
           else resumeSession();
           break;
         case "PAUSED":
@@ -86,79 +92,58 @@ export function useReadingSession(bookId: string | null, tabId?: string) {
           stopSession();
           break;
       }
-    }),
-  );
-
-  const lastActivityRef = useRef(Date.now());
-  const lastSaveRef = useRef(Date.now());
-
-  const sendEvent = useCallback((event: SessionEvent) => {
-    if (event.type === "activity") {
-      lastActivityRef.current = Date.now();
-    }
-    detectorRef.current.processEvent(event);
-  }, []);
-
-  const wasActiveRef = useRef(isTabActive);
-  useEffect(() => {
-    if (wasActiveRef.current && !isTabActive) {
-      saveCurrentSession();
-      sendEvent({ type: "visibility", visible: false });
-    } else if (!wasActiveRef.current && isTabActive) {
-      sendEvent({ type: "activity" });
-    }
-    wasActiveRef.current = isTabActive;
-  }, [isTabActive, saveCurrentSession, sendEvent]);
-
-  useEffect(() => {
-    if (!bookId) return;
-
-    const source = _sessionEventSource;
-
-    const onActivity = () => {
-      if (useAppStore.getState().activeTabId === tabId || !tabId) {
-        sendEvent({ type: "activity" });
-      }
+    });
+    let lastActivity = Date.now();
+    let lastSave = Date.now();
+    const dispatch = (event: SessionEvent) => {
+      if (!isCurrentTabActive()) return;
+      if (event.type === "activity") lastActivity = Date.now();
+      detector.processEvent(event);
     };
-
-    const unsubActivity = source.subscribeActivity(onActivity);
+    dispatchRef.current = dispatch;
+    const source = _sessionEventSource;
+    const unsubActivity = source.subscribeActivity(() => dispatch({ type: "activity" }));
     const unsubVisibility = source.subscribeVisibility((visible) =>
-      sendEvent({ type: "visibility", visible }),
+      dispatch({ type: "visibility", visible }),
     );
-    const unsubUnload = source.subscribeBeforeUnload(() => stopSession());
-
-    sendEvent({ type: "activity" });
+    const unsubUnload = source.subscribeBeforeUnload(() => dispatch({ type: "close" }));
+    dispatch({ type: "activity" });
 
     const timer = setInterval(() => {
-      const currentTabId = useAppStore.getState().activeTabId;
-      const isCurrentTabActive = tabId ? currentTabId === tabId : true;
-      const currentState = detectorRef.current.currentState;
-
-      const idleDuration = Date.now() - lastActivityRef.current;
-      if (idleDuration >= 30000) {
-        sendEvent({ type: "idle", duration: idleDuration });
-      }
-
-      if (currentState === "ACTIVE" && isCurrentTabActive) {
+      if (!isCurrentTabActive()) return;
+      const currentState = detector.currentState;
+      const idleDuration = Date.now() - lastActivity;
+      if (idleDuration >= 30000) detector.processEvent({ type: "idle", duration: idleDuration });
+      if (currentState === "ACTIVE") {
         updateActiveTime();
-
         const syncStatus = useSyncStore.getState().status;
         const syncInProgress = syncStatus !== "idle" && syncStatus !== "error";
-        if (!syncInProgress && Date.now() - lastSaveRef.current >= AUTO_SAVE_INTERVAL) {
-          lastSaveRef.current = Date.now();
-          saveCurrentSession();
+        if (!syncInProgress && Date.now() - lastSave >= AUTO_SAVE_INTERVAL) {
+          lastSave = Date.now();
+          void saveCurrentSession();
         }
       }
     }, 1000);
 
     return () => {
+      dispatchRef.current = () => {};
       unsubActivity();
       unsubVisibility();
       unsubUnload();
       clearInterval(timer);
-      sendEvent({ type: "close" });
+      detector.processEvent({ type: "close" });
     };
-  }, [bookId, tabId, sendEvent, updateActiveTime, stopSession, saveCurrentSession]);
+  }, [
+    bookId,
+    tabId,
+    isTabActive,
+    startSession,
+    pauseSession,
+    resumeSession,
+    stopSession,
+    updateActiveTime,
+    saveCurrentSession,
+  ]);
 
   return { sendEvent };
 }

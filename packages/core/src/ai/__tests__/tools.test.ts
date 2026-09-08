@@ -1098,7 +1098,7 @@ describe("addCitation tool", () => {
     expect(result.cfi).toBeDefined();
   });
 
-  it("should fallback to AI-provided CFI when refinement fails", async () => {
+  it("should reject an unresolved citation when indexed lookup fails", async () => {
     vi.mocked(getChunks).mockRejectedValue(new Error("DB error"));
 
     const tools = getAvailableTools({ bookId: "book-1", isVectorized: true, enabledSkills: [] });
@@ -1112,7 +1112,8 @@ describe("addCitation tool", () => {
       reasoning: "test",
     })) as any;
 
-    expect(result.cfi).toBe("/4/2/original");
+    expect(result.cfi).toBeUndefined();
+    expect(result.error).toBeTruthy();
   });
 
   it("should use endCfi when quote is in second half (no segmentCfis)", async () => {

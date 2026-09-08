@@ -52,9 +52,11 @@ class FallbackContentService {
   clear(bookId?: string): void {
     if (bookId) {
       this.cache.delete(bookId);
+      this.inFlight.delete(bookId);
       return;
     }
     this.cache.clear();
+    this.inFlight.clear();
   }
 
   async getChapters(book: Book): Promise<FallbackChapter[]> {
@@ -76,7 +78,7 @@ class FallbackContentService {
       PROVIDER_TIMEOUT_MS,
     )
       .then((chapters) => {
-        if (this.provider === provider) {
+        if (this.provider === provider && this.inFlight.get(book.id) === request) {
           this.cache.set(book.id, { chapters, cachedAt: Date.now() });
 
           if (this.cache.size > MAX_CACHE_ENTRIES) {

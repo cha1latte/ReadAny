@@ -89,3 +89,23 @@ describe("fallbackContentService", () => {
     expect(newProvider).toHaveBeenCalledTimes(1);
   });
 });
+
+it.each([true, false])(
+  "invalidates pending reads when clearing (one book: %s)",
+  async (oneBook) => {
+    let resolveOld!: (value: Array<{ index: number; title: string; content: string }>) => void;
+    const old = new Promise<Array<{ index: number; title: string; content: string }>>((resolve) => {
+      resolveOld = resolve;
+    });
+    const fresh = [{ index: 0, title: "New", content: "Fresh" }];
+    const getChapters = vi.fn().mockReturnValueOnce(old).mockResolvedValue(fresh);
+    setFallbackContentProvider({ getChapters });
+    const pending = fallbackContentService.getChapters(book);
+    await Promise.resolve();
+    fallbackContentService.clear(oneBook ? book.id : undefined);
+    resolveOld([{ index: 0, title: "Old", content: "Stale" }]);
+    await pending;
+    await expect(fallbackContentService.getChapters(book)).resolves.toBe(fresh);
+    expect(getChapters).toHaveBeenCalledTimes(2);
+  },
+);

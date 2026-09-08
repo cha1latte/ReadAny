@@ -35,10 +35,10 @@ function extractChapterNumberReference(
   value: string,
 ): { style: "english" | "chinese"; number: string } | undefined {
   const english = value.match(/\bchapter\s*(\d+)\b/iu)?.[1];
-  if (english) return { style: "english", number: english };
+  if (english) return { style: "english", number: english.replace(/^0+(?=\d)/, "") };
 
   const chinese = value.match(/(?:第\s*)?([零〇一二两三四五六七八九十百千万\d]{1,8})\s*章/u)?.[1];
-  if (chinese) return { style: "chinese", number: chinese };
+  if (chinese) return { style: "chinese", number: chinese.replace(/^0+(?=\d)/, "") };
 
   return undefined;
 }
@@ -230,13 +230,10 @@ export function createAddCitationTool(bookId: string): ToolDefinition {
       // beginning of a chunk while the quoted text is in the middle/end.
       // Use segmentCfis (per-paragraph CFIs) for precise navigation when available,
       // falling back to startCfi/endCfi heuristic for older data.
-      let refinedCfi = aiCfi;
-      let hasIndexedChapterChunks = false;
-      let chunkLookupFailed = false;
+      let refinedCfi = "";
       try {
         const chunks = await getChunks(bookId);
         const chapterChunks = chunks.filter((c) => c.chapterIndex === chapterIndex);
-        hasIndexedChapterChunks = chapterChunks.length > 0;
 
         // Find the chunk that contains the quoted text
         const normalizedQuote = quotedText.replace(/\s+/g, "");
@@ -283,7 +280,7 @@ export function createAddCitationTool(bookId: string): ToolDefinition {
               charsBefore += segLen;
             }
             if (!found) {
-              refinedCfi = bestChunk.startCfi || aiCfi;
+              refinedCfi = bestChunk.startCfi || "";
             }
           } else {
             // No segmentCfis (old data): use startCfi/endCfi heuristic
@@ -292,17 +289,15 @@ export function createAddCitationTool(bookId: string): ToolDefinition {
             if (bestPos > contentLen / 2 && bestChunk.endCfi) {
               refinedCfi = bestChunk.endCfi;
             } else {
-              refinedCfi = bestChunk.startCfi || aiCfi;
+              refinedCfi = bestChunk.startCfi || "";
             }
           }
         }
       } catch (e) {
-        // If refinement fails, fall back to AI-provided CFI
-        chunkLookupFailed = true;
-        console.warn("[addCitation] CFI refinement failed, using AI-provided CFI:", e);
+        console.warn("[addCitation] Indexed CFI lookup failed, trying original content:", e);
       }
 
-      if (!hasIndexedChapterChunks && !chunkLookupFailed) {
+      if (!refinedCfi) {
         try {
           const fallbackSource = await resolveFallbackCitationSource({
             bookId,
